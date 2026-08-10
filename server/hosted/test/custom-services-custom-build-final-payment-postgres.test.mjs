@@ -79,6 +79,7 @@ function finalRow(overrides = {}) {
     final_due_minor: String(FINAL_DUE_MINOR),
     credit_minor: "0",
     currency: "USD",
+    tax_mode: "automatic",
     workmanship_correction_days: 30,
     bound_at: "2026-08-06T18:00:00.000Z",
     obligation_digest: "9".repeat(64),
@@ -433,7 +434,8 @@ function createHarness({
         invoice_digest: values[12],
         accepted_quote_digest: values[13],
         accepted_disclosure_digest: values[14],
-        provider_request_expires_at: values[16],
+        tax_mode: values[16],
+        provider_request_expires_at: values[17],
         state: "provider_pending",
         provider_effect_certainty: "ambiguous",
         provider_error_code: null,
@@ -567,7 +569,8 @@ function createHarness({
         subtotal_minor: values[17],
         tax_minor: values[18],
         total_minor: values[19],
-        provider_facts_digest: values[27]
+        tax_mode: values[20],
+        provider_facts_digest: values[29]
       };
       state.attempt.state = "paid";
       if (state.event) {

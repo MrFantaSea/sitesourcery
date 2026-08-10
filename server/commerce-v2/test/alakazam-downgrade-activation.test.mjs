@@ -267,7 +267,7 @@ function fixture({
           ready: true,
           provider: "stripe",
           alakazam: true,
-          taxMode: "disabled_by_owner",
+          taxModes: { alakazam: "disabled_by_owner" },
           livemode: false
         };
       },

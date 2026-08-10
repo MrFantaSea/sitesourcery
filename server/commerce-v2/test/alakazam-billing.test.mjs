@@ -125,7 +125,7 @@ function fixture({
         provider: "stripe",
         alakazam: true,
         livemode: false,
-        taxMode
+        taxModes: { alakazam: taxMode }
       };
     },
     async createAlakazamCustomer(value) {
@@ -350,14 +350,14 @@ test("Alakazam quote readiness requires the exact reviewed provider and tax mode
       provider: "stripe",
       alakazam: false,
       livemode: false,
-      taxMode: "disabled_by_owner"
+      taxModes: { alakazam: "disabled_by_owner" }
     },
     {
       ready: true,
       provider: "stripe",
       alakazam: true,
       livemode: false,
-      taxMode: "automatic"
+      taxModes: { alakazam: "automatic" }
     }
   ]) {
     const { service, calls } = fixture({ providerStatus });

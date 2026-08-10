@@ -300,12 +300,13 @@ async function applyMigrations(pool) {
     "202608080103_alakazam_50_authority.sql",
     "202608080104_publication_control_authority.sql",
     "202608090104_alakazam_retained_premium_state.sql",
-    "202608090105_hosted_joint_legal_v4_authority.sql"
+    "202608090105_hosted_joint_legal_v4_authority.sql",
+    "202608100109_stripe_tax_purpose_authority.sql"
   ];
   assert.equal(
     names.length,
-    58,
-    "migration proof requires exactly 58 migrations through the released joint legal V4 authority"
+    59,
+    "migration proof requires exactly 59 migrations through TAX-PURPOSE-01"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(

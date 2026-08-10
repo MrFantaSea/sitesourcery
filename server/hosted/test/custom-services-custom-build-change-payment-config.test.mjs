@@ -9,7 +9,9 @@ import {
 
 const STRIPE_READY = Object.freeze({
   ready: true,
-  taxMode: "automatic"
+  taxModes: Object.freeze({
+    customBuildChange: "disabled_by_owner"
+  })
 });
 const CUSTOM_BUILD_READY = Object.freeze({
   schema: "sitesourcery.custom-services-custom-build-readiness/v1",
@@ -18,7 +20,8 @@ const CUSTOM_BUILD_READY = Object.freeze({
 const CHANGE_PAYMENT_READY = Object.freeze({
   schema: "sitesourcery.custom-build-change-payment-readiness/v1",
   ready: true,
-  automaticTax: true,
+  taxMode: "disabled_by_owner",
+  exclusiveTaxBehavior: true,
   webhookWakeup: true,
   stripeReadback: true,
   atomicSettlement: true,
@@ -35,7 +38,7 @@ const EXACT_HELD_RELEASE = Object.freeze({
   holdScope: "new_checkout_creation_only",
   providerEffectProcessing:
     "settlement_and_reconciliation_continue",
-  taxMode: "automatic"
+  taxMode: "disabled_by_owner"
 });
 
 test("Custom-build change payment defaults held for new Checkout creation only", () => {
@@ -96,7 +99,7 @@ test("Custom-build change payment release rejects drift and extra authority", ()
       holdScope: "new_checkout_creation_only",
       providerEffectProcessing:
         "settlement_and_reconciliation_continue",
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     },
     Object.create(EXACT_HELD_RELEASE)
   ];
@@ -148,12 +151,19 @@ test("approved Custom-build change payment rejects every readiness mismatch", ()
     });
   const mismatches = [
     [{ ...STRIPE_READY, ready: false }, CUSTOM_BUILD_READY, CHANGE_PAYMENT_READY],
-    [{ ...STRIPE_READY, taxMode: "manual" }, CUSTOM_BUILD_READY, CHANGE_PAYMENT_READY],
+    [
+      {
+        ...STRIPE_READY,
+        taxModes: { customBuildChange: "automatic" }
+      },
+      CUSTOM_BUILD_READY,
+      CHANGE_PAYMENT_READY
+    ],
     [STRIPE_READY, { ...CUSTOM_BUILD_READY, schema: "wrong" }, CHANGE_PAYMENT_READY],
     [STRIPE_READY, { ...CUSTOM_BUILD_READY, ready: false }, CHANGE_PAYMENT_READY],
     [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, schema: "wrong" }],
     [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, ready: false }],
-    [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, automaticTax: false }],
+    [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, exclusiveTaxBehavior: false }],
     [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, webhookWakeup: false }],
     [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, stripeReadback: false }],
     [STRIPE_READY, CUSTOM_BUILD_READY, { ...CHANGE_PAYMENT_READY, atomicSettlement: false }],

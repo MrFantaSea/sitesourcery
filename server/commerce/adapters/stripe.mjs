@@ -173,6 +173,10 @@ const STRIPE_ALAKAZAM_SCHEDULE_SCHEMA =
   ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA;
 const STRIPE_TAX_ATTESTATION_SCHEMA =
   "sitesourcery.stripe-tax-attestation/v1";
+const STRIPE_TAX_PURPOSE_AUTHORITY_SCHEMA =
+  "sitesourcery.stripe-tax-purpose-authority/v1";
+const STRIPE_AUTOMATIC_TAX_ACTIVATION_SCHEMA =
+  "sitesourcery.stripe-automatic-tax-activation/v1";
 const STRIPE_TAX_CODE_FIELDS = Object.freeze([
   "alakazam",
   "customBuildChange",
@@ -182,6 +186,10 @@ const STRIPE_TAX_CODE_FIELDS = Object.freeze([
   "download",
   "serviceAssessment",
   "siteService"
+]);
+const STRIPE_TAX_PURPOSE_MODES = new Set([
+  "automatic",
+  "disabled_by_owner"
 ]);
 const STRIPE_ALAKAZAM_REFUND_EVENTS = new Set([
   "charge.refunded",
@@ -692,7 +700,138 @@ function normalizedTaxCodes(value, domainAuthorization) {
   return Object.freeze(selected);
 }
 
-function normalizedTaxAttestation(value, config) {
+function normalizedTaxPurposeAuthority(value, config) {
+  invariant(
+    exactObjectKeys(value, [
+      "approved",
+      "approvedAt",
+      "authorityId",
+      "automaticActivation",
+      "defaultTaxBehavior",
+      "livemode",
+      "provider",
+      "purposes",
+      "schema"
+    ]) &&
+      exactObjectKeys(
+        value?.purposes,
+        STRIPE_TAX_CODE_FIELDS
+      ),
+    "stripe_tax_purpose_authority_required",
+    "Stripe Tax requires one exact purpose-bound authority",
+    { status: 500 }
+  );
+  const purposes = {};
+  for (const field of STRIPE_TAX_CODE_FIELDS) {
+    const mode = value.purposes[field];
+    invariant(
+      field === "domainRegistration" && mode === null
+        ? config.domainAuthorization === null &&
+            config.taxCodes.domainRegistration === null
+        : STRIPE_TAX_PURPOSE_MODES.has(mode) &&
+            config.taxCodes[field] !== null,
+      "stripe_tax_purpose_authority_invalid",
+      `Stripe Tax purpose ${field} is not exactly authorized`,
+      { status: 500 }
+    );
+    purposes[field] = mode;
+  }
+  invariant(
+    value.schema === STRIPE_TAX_PURPOSE_AUTHORITY_SCHEMA &&
+      value.provider === "stripe" &&
+      value.approved === true &&
+      value.livemode === config.livemode &&
+      value.defaultTaxBehavior === "exclusive" &&
+      typeof value.authorityId === "string" &&
+      SAFE_METADATA_VALUE.test(value.authorityId) &&
+      Number.isFinite(Date.parse(value.approvedAt)) &&
+      (config.domainAuthorization === null
+        ? purposes.domainRegistration === null
+        : STRIPE_TAX_PURPOSE_MODES.has(
+            purposes.domainRegistration
+          )),
+    "stripe_tax_purpose_authority_invalid",
+    "Stripe Tax purpose authority does not match the exact runtime",
+    { status: 500 }
+  );
+  const automaticPurposes = STRIPE_TAX_CODE_FIELDS.filter(
+    (field) => purposes[field] === "automatic"
+  );
+  let automaticActivation = null;
+  if (automaticPurposes.length > 0) {
+    const activation = value.automaticActivation;
+    invariant(
+      exactObjectKeys(activation, [
+        "activationId",
+        "approved",
+        "approvedAt",
+        "effectiveAt",
+        "livemode",
+        "provider",
+        "purposes",
+        "registrationIds",
+        "schema"
+      ]),
+      "stripe_automatic_tax_activation_required",
+      "Automatic Stripe Tax requires a separate exact activation authority",
+      { status: 500 }
+    );
+    const activationPurposes = Array.isArray(
+      activation.purposes
+    )
+      ? [...activation.purposes].sort()
+      : [];
+    const registrationIds = Array.isArray(
+      activation.registrationIds
+    )
+      ? [...activation.registrationIds].sort()
+      : [];
+    invariant(
+      activation.schema ===
+        STRIPE_AUTOMATIC_TAX_ACTIVATION_SCHEMA &&
+        activation.provider === "stripe" &&
+        activation.approved === true &&
+        activation.livemode === config.livemode &&
+        typeof activation.activationId === "string" &&
+        SAFE_METADATA_VALUE.test(activation.activationId) &&
+        Number.isFinite(Date.parse(activation.approvedAt)) &&
+        Number.isFinite(Date.parse(activation.effectiveAt)) &&
+        Date.now() >= Date.parse(activation.effectiveAt) &&
+        JSON.stringify(activationPurposes) ===
+          JSON.stringify(automaticPurposes.sort()) &&
+        registrationIds.length > 0 &&
+        registrationIds.every(
+          (id) =>
+            typeof id === "string" &&
+            TAX_REGISTRATION_ID.test(id)
+        ) &&
+        new Set(registrationIds).size ===
+          registrationIds.length,
+      "stripe_automatic_tax_activation_invalid",
+      "Automatic Stripe Tax activation is not yet effective or does not match the exact purposes",
+      { status: 500 }
+    );
+    automaticActivation = Object.freeze({
+      ...structuredClone(activation),
+      purposes: Object.freeze(activationPurposes),
+      registrationIds: Object.freeze(registrationIds)
+    });
+  } else {
+    invariant(
+      value.automaticActivation === null,
+      "stripe_automatic_tax_activation_unexpected",
+      "Disabled Stripe Tax purposes cannot carry latent automatic activation authority",
+      { status: 500 }
+    );
+  }
+  return Object.freeze({
+    ...structuredClone(value),
+    purposes: Object.freeze(purposes),
+    automaticActivation
+  });
+}
+
+function normalizedTaxAttestation(value, config, taxAuthority) {
   invariant(
     exactObjectKeys(value, [
       "approved",
@@ -719,7 +858,10 @@ function normalizedTaxAttestation(value, config) {
       value.provider === "stripe" &&
       value.approved === true &&
       value.livemode === config.livemode &&
-      value.taxMode === config.taxMode &&
+      value.taxMode ===
+        (taxAuthority.automaticActivation === null
+          ? "disabled_by_owner"
+          : "automatic") &&
       value.defaultTaxBehavior === "exclusive" &&
       typeof value.attestationId === "string" &&
       SAFE_METADATA_VALUE.test(value.attestationId) &&
@@ -743,12 +885,39 @@ function normalizedTaxAttestation(value, config) {
     "Stripe Tax attestation does not match the exact account decision",
     { status: 500 }
   );
+  if (taxAuthority.automaticActivation !== null) {
+    invariant(
+      value.registrationDecision === "registered" &&
+        JSON.stringify([...registrationIds].sort()) ===
+          JSON.stringify(
+            taxAuthority.automaticActivation.registrationIds
+          ),
+      "stripe_automatic_tax_registration_mismatch",
+      "Automatic Stripe Tax activation must bind the exact attested registrations",
+      { status: 500 }
+    );
+  }
   return Object.freeze({
     ...structuredClone(value),
     registrationIds: Object.freeze(
       [...registrationIds].sort()
     )
   });
+}
+
+function taxModeFor(config, field) {
+  const mode = config.taxAuthority.purposes[field];
+  invariant(
+    STRIPE_TAX_PURPOSE_MODES.has(mode),
+    "stripe_tax_purpose_held",
+    `Stripe Tax purpose ${field} is held without exact authority`,
+    { status: 503 }
+  );
+  return mode;
+}
+
+function automaticTaxFor(config, field) {
+  return taxModeFor(config, field) === "automatic";
 }
 
 function normalizedAlakazamConfig(
@@ -901,13 +1070,6 @@ function validateConfig(value, mode) {
     "Every Stripe return URL must use an exact approved origin",
     { status: 500 }
   );
-  invariant(
-    config.taxMode === "automatic" ||
-      config.taxMode === "disabled_by_owner",
-    "stripe_tax_decision_required",
-    "Stripe tax mode requires an explicit owner decision",
-    { status: 500 }
-  );
   const webhookSecret = requiredText(
     config.webhookSecret,
     "webhookSecret",
@@ -1006,9 +1168,18 @@ function validateConfig(value, mode) {
     config.taxCodes,
     domainAuthorization
   );
+  const taxAuthority = normalizedTaxPurposeAuthority(
+    config.taxAuthority,
+    {
+      ...config,
+      domainAuthorization,
+      taxCodes
+    }
+  );
   const taxAttestation = normalizedTaxAttestation(
     config.taxAttestation,
-    config
+    config,
+    taxAuthority
   );
   return Object.freeze({
     apiVersion: STRIPE_API_VERSION,
@@ -1021,7 +1192,7 @@ function validateConfig(value, mode) {
     approvedReturnOrigins: Object.freeze(
       [...approvedReturnOrigins].sort()
     ),
-    taxMode: config.taxMode,
+    taxAuthority,
     taxCodes,
     taxAttestation,
     webhookSecret,
@@ -1807,6 +1978,7 @@ function validateDownloadPurpose(
         "quoteId",
         "quoteSnapshotDigest",
         "schema",
+        "taxMode",
         "tenantId",
         "versionId"
       ]),
@@ -1843,7 +2015,8 @@ function validateDownloadPurpose(
       purpose.price.amountMinor === 500 &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
-      purpose.price.interval === null,
+      purpose.price.interval === null &&
+      STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode),
     "stripe_download_checkout_invalid",
     "Download Checkout permits only the reviewed one-time $5 offer",
     { status: 500 }
@@ -1944,6 +2117,7 @@ function validateServiceAssessmentPurpose(
         "projectId",
         "quoteId",
         "schema",
+        "taxMode",
         "tenantId"
       ]),
     "stripe_service_assessment_checkout_invalid",
@@ -1978,7 +2152,8 @@ function validateServiceAssessmentPurpose(
       purpose.price.amountMinor === 20000 &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
-      purpose.price.taxBehavior === "automatic_exclusive",
+      purpose.price.taxBehavior === "exclusive" &&
+      STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode),
     "stripe_service_assessment_checkout_invalid",
     "Assessment Checkout permits only the reviewed one-time $200 invoice",
     { status: 500 }
@@ -2054,6 +2229,8 @@ function serviceAssessmentCheckoutResponse(
   validated,
   expectedMetadata
 ) {
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkout = checkoutResponse(
     value,
     config,
@@ -2066,7 +2243,7 @@ function serviceAssessmentCheckoutResponse(
       value?.mode === "payment" &&
       value?.currency === "usd" &&
       value?.amount_subtotal === 20000 &&
-      value?.automatic_tax?.enabled === true &&
+      value?.automatic_tax?.enabled === automaticTax &&
       value?.status === "open" &&
       value?.payment_status === "unpaid" &&
       exactObjectKeys(
@@ -2159,6 +2336,8 @@ function serviceAssessmentPaymentFacts(
 ) {
   const code =
     "stripe_service_assessment_payment_mismatch";
+  const taxMode = validated.purpose.taxMode;
+  const automaticTax = taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -2193,8 +2372,12 @@ function serviceAssessmentPaymentFacts(
       value.currency === "usd" &&
       value.amount_subtotal === subtotalMinor &&
       value.amount_total === totalMinor &&
-      value.automatic_tax?.enabled === true &&
-      value.automatic_tax?.status === "complete" &&
+      value.automatic_tax?.enabled === automaticTax &&
+      (automaticTax
+        ? value.automatic_tax?.status === "complete"
+        : (value.automatic_tax?.status === null ||
+            value.automatic_tax?.status === undefined) &&
+          taxMinor === 0) &&
       value.total_details?.amount_discount === 0 &&
       value.total_details?.amount_shipping === 0 &&
       value.status === "complete" &&
@@ -2271,7 +2454,7 @@ function serviceAssessmentPaymentFacts(
     subtotalMinor,
     taxMinor,
     totalMinor,
-    taxMode: "automatic",
+    taxMode,
     currency: "USD",
     purposeDigest: validated.purposeDigest,
     providerPaymentTime:
@@ -2295,6 +2478,8 @@ function serviceAssessmentCheckoutLifecycle(
 ) {
   const code =
     "stripe_service_assessment_checkout_lifecycle_invalid";
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -2314,7 +2499,7 @@ function serviceAssessmentCheckoutLifecycle(
       value.mode === "payment" &&
       value.currency === "usd" &&
       value.amount_subtotal === 20000 &&
-      value.automatic_tax?.enabled === true,
+      value.automatic_tax?.enabled === automaticTax,
     code,
     "Stripe did not return the exact assessment Checkout lifecycle",
     { status: 502 }
@@ -2333,7 +2518,11 @@ function serviceAssessmentCheckoutLifecycle(
   } else if (
     value.status === "complete" &&
     value.payment_status === "paid" &&
-    value.automatic_tax?.status === "complete"
+    (automaticTax
+      ? value.automatic_tax?.status === "complete"
+      : (value.automatic_tax?.status === null ||
+          value.automatic_tax?.status === undefined) &&
+        value.total_details?.amount_tax === 0)
   ) {
     state = "paid";
   } else {
@@ -2388,6 +2577,7 @@ function validateCustomBuildStartPurpose(
         "quoteId",
         "quoteRevisionId",
         "schema",
+        "taxMode",
         "tenantId"
       ]),
     "stripe_custom_build_start_checkout_invalid",
@@ -2436,8 +2626,8 @@ function validateCustomBuildStartPurpose(
       purpose.price.amountMinor <= 99_999_999 &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
-      purpose.price.taxBehavior ===
-        "automatic_exclusive",
+      purpose.price.taxBehavior === "exclusive" &&
+      STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode),
     "stripe_custom_build_start_checkout_invalid",
     "Custom-build Checkout permits only the exact positive first-installment invoice",
     { status: 500 }
@@ -2529,6 +2719,8 @@ function customBuildStartCheckoutResponse(
   validated,
   expectedMetadata
 ) {
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkout = checkoutResponse(
     value,
     config,
@@ -2542,7 +2734,7 @@ function customBuildStartCheckoutResponse(
       value?.currency === "usd" &&
       value?.amount_subtotal ===
         validated.purpose.price.amountMinor &&
-      value?.automatic_tax?.enabled === true &&
+      value?.automatic_tax?.enabled === automaticTax &&
       value?.status === "open" &&
       value?.payment_status === "unpaid" &&
       exactObjectKeys(
@@ -2567,6 +2759,8 @@ function customBuildStartPaymentFacts(
 ) {
   const code =
     "stripe_custom_build_start_payment_mismatch";
+  const taxMode = validated.purpose.taxMode;
+  const automaticTax = taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -2602,8 +2796,12 @@ function customBuildStartPaymentFacts(
       value.currency === "usd" &&
       value.amount_subtotal === subtotalMinor &&
       value.amount_total === totalMinor &&
-      value.automatic_tax?.enabled === true &&
-      value.automatic_tax?.status === "complete" &&
+      value.automatic_tax?.enabled === automaticTax &&
+      (automaticTax
+        ? value.automatic_tax?.status === "complete"
+        : (value.automatic_tax?.status === null ||
+            value.automatic_tax?.status === undefined) &&
+          taxMinor === 0) &&
       value.total_details?.amount_discount === 0 &&
       value.total_details?.amount_shipping === 0 &&
       value.status === "complete" &&
@@ -2680,7 +2878,7 @@ function customBuildStartPaymentFacts(
     subtotalMinor,
     taxMinor,
     totalMinor,
-    taxMode: "automatic",
+    taxMode,
     currency: "USD",
     purposeDigest: validated.purposeDigest,
     providerPaymentTime:
@@ -2704,6 +2902,8 @@ function customBuildStartCheckoutLifecycle(
 ) {
   const code =
     "stripe_custom_build_start_checkout_lifecycle_invalid";
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -2724,7 +2924,7 @@ function customBuildStartCheckoutLifecycle(
       value.currency === "usd" &&
       value.amount_subtotal ===
         validated.purpose.price.amountMinor &&
-      value.automatic_tax?.enabled === true,
+      value.automatic_tax?.enabled === automaticTax,
     code,
     "Stripe did not return the exact Custom-build Checkout lifecycle",
     { status: 502 }
@@ -2743,7 +2943,11 @@ function customBuildStartCheckoutLifecycle(
   } else if (
     value.status === "complete" &&
     value.payment_status === "paid" &&
-    value.automatic_tax?.status === "complete"
+    (automaticTax
+      ? value.automatic_tax?.status === "complete"
+      : (value.automatic_tax?.status === null ||
+          value.automatic_tax?.status === undefined) &&
+        value.total_details?.amount_tax === 0)
   ) {
     state = "paid";
   } else {
@@ -2801,6 +3005,7 @@ function validateCustomBuildChangePurpose(
         "schema",
         "scopeBoundaryDigest",
         "targetCompletionDate",
+        "taxMode",
         "tenantId"
       ]),
     "stripe_custom_build_change_checkout_invalid",
@@ -2873,8 +3078,8 @@ function validateCustomBuildChangePurpose(
           purpose.price.quantity &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
-      purpose.price.taxBehavior ===
-        "automatic_exclusive" &&
+      purpose.price.taxBehavior === "exclusive" &&
+      STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode) &&
       Number.isSafeInteger(purpose.changeNumber) &&
       purpose.changeNumber > 0 &&
       purpose.changeNumber <= 100000,
@@ -3019,6 +3224,8 @@ function customBuildChangeCheckoutResponse(
   validated,
   expectedMetadata
 ) {
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkout = checkoutResponse(
     value,
     config,
@@ -3041,7 +3248,7 @@ function customBuildChangeCheckoutResponse(
       value?.currency === "usd" &&
       value?.amount_subtotal ===
         validated.purpose.price.amountMinor &&
-      value?.automatic_tax?.enabled === true &&
+      value?.automatic_tax?.enabled === automaticTax &&
       value?.status === "open" &&
       value?.payment_status === "unpaid" &&
       (
@@ -3070,6 +3277,8 @@ function customBuildChangePaymentFacts(
 ) {
   const code =
     "stripe_custom_build_change_payment_mismatch";
+  const taxMode = validated.purpose.taxMode;
+  const automaticTax = taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -3105,8 +3314,12 @@ function customBuildChangePaymentFacts(
       value.currency === "usd" &&
       value.amount_subtotal === subtotalMinor &&
       value.amount_total === totalMinor &&
-      value.automatic_tax?.enabled === true &&
-      value.automatic_tax?.status === "complete" &&
+      value.automatic_tax?.enabled === automaticTax &&
+      (automaticTax
+        ? value.automatic_tax?.status === "complete"
+        : (value.automatic_tax?.status === null ||
+            value.automatic_tax?.status === undefined) &&
+          taxMinor === 0) &&
       value.total_details?.amount_discount === 0 &&
       value.total_details?.amount_shipping === 0 &&
       value.status === "complete" &&
@@ -3192,7 +3405,7 @@ function customBuildChangePaymentFacts(
     subtotalMinor,
     taxMinor,
     totalMinor,
-    taxMode: "automatic",
+    taxMode,
     currency: "USD",
     purposeDigest: validated.purposeDigest,
     providerPaymentTime:
@@ -3216,6 +3429,8 @@ function customBuildChangeCheckoutLifecycle(
 ) {
   const code =
     "stripe_custom_build_change_checkout_lifecycle_invalid";
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -3236,7 +3451,7 @@ function customBuildChangeCheckoutLifecycle(
       value.currency === "usd" &&
       value.amount_subtotal ===
         validated.purpose.price.amountMinor &&
-      value.automatic_tax?.enabled === true,
+      value.automatic_tax?.enabled === automaticTax,
     code,
     "Stripe did not return the exact Custom-build change Checkout lifecycle",
     { status: 502 }
@@ -3255,7 +3470,11 @@ function customBuildChangeCheckoutLifecycle(
   } else if (
     value.status === "complete" &&
     value.payment_status === "paid" &&
-    value.automatic_tax?.status === "complete"
+    (automaticTax
+      ? value.automatic_tax?.status === "complete"
+      : (value.automatic_tax?.status === null ||
+          value.automatic_tax?.status === undefined) &&
+        value.total_details?.amount_tax === 0)
   ) {
     const taxMinor = serviceAssessmentProviderMinor(
       value?.total_details?.amount_tax,
@@ -3333,6 +3552,7 @@ function validateCustomBuildFinalPurpose(
         "quoteId",
         "quoteRevisionId",
         "schema",
+        "taxMode",
         "tenantId",
         "workmanshipCorrectionDays"
       ]),
@@ -3400,8 +3620,8 @@ function validateCustomBuildFinalPurpose(
       purpose.price.amountMinor <= 99_999_999 &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
-      purpose.price.taxBehavior ===
-        "automatic_exclusive",
+      purpose.price.taxBehavior === "exclusive" &&
+      STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode),
     "stripe_custom_build_final_checkout_invalid",
     "Custom-build final Checkout permits only one exact positive second installment",
     { status: 500 }
@@ -3575,6 +3795,8 @@ function customBuildFinalCheckoutResponse(
   validated,
   expectedMetadata
 ) {
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkout = checkoutResponse(
     value,
     config,
@@ -3597,7 +3819,7 @@ function customBuildFinalCheckoutResponse(
       value?.currency === "usd" &&
       value?.amount_subtotal ===
         validated.purpose.price.amountMinor &&
-      value?.automatic_tax?.enabled === true &&
+      value?.automatic_tax?.enabled === automaticTax &&
       value?.status === "open" &&
       value?.payment_status === "unpaid" &&
       (
@@ -3626,6 +3848,8 @@ function customBuildFinalPaymentFacts(
 ) {
   const code =
     "stripe_custom_build_final_payment_mismatch";
+  const taxMode = validated.purpose.taxMode;
+  const automaticTax = taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -3661,8 +3885,12 @@ function customBuildFinalPaymentFacts(
       value.currency === "usd" &&
       value.amount_subtotal === subtotalMinor &&
       value.amount_total === totalMinor &&
-      value.automatic_tax?.enabled === true &&
-      value.automatic_tax?.status === "complete" &&
+      value.automatic_tax?.enabled === automaticTax &&
+      (automaticTax
+        ? value.automatic_tax?.status === "complete"
+        : (value.automatic_tax?.status === null ||
+            value.automatic_tax?.status === undefined) &&
+          taxMinor === 0) &&
       value.total_details?.amount_discount === 0 &&
       value.total_details?.amount_shipping === 0 &&
       value.status === "complete" &&
@@ -3796,7 +4024,7 @@ function customBuildFinalPaymentFacts(
     subtotalMinor,
     taxMinor,
     totalMinor,
-    taxMode: "automatic",
+    taxMode,
     currency: "USD",
     purposeDigest: validated.purposeDigest,
     providerPaymentTime:
@@ -3820,6 +4048,8 @@ function customBuildFinalCheckoutLifecycle(
 ) {
   const code =
     "stripe_custom_build_final_checkout_lifecycle_invalid";
+  const automaticTax =
+    validated.purpose.taxMode === "automatic";
   const checkoutId = providerId(
     value?.id,
     "cs",
@@ -3840,7 +4070,7 @@ function customBuildFinalCheckoutLifecycle(
       value.currency === "usd" &&
       value.amount_subtotal ===
         validated.purpose.price.amountMinor &&
-      value.automatic_tax?.enabled === true,
+      value.automatic_tax?.enabled === automaticTax,
     code,
     "Stripe did not return the exact Custom-build final Checkout lifecycle",
     { status: 502 }
@@ -3859,7 +4089,11 @@ function customBuildFinalCheckoutLifecycle(
   } else if (
     value.status === "complete" &&
     value.payment_status === "paid" &&
-    value.automatic_tax?.status === "complete"
+    (automaticTax
+      ? value.automatic_tax?.status === "complete"
+      : (value.automatic_tax?.status === null ||
+          value.automatic_tax?.status === undefined) &&
+        value.total_details?.amount_tax === 0)
   ) {
     const taxMinor = serviceAssessmentProviderMinor(
       value?.total_details?.amount_tax,
@@ -3923,8 +4157,8 @@ function downloadCheckoutFacts(
     value.metadata,
     expectedMetadata
   );
-  const automaticTax =
-    config.taxMode === "automatic";
+  const taxMode = validated.purpose.taxMode;
+  const automaticTax = taxMode === "automatic";
   const taxMinor = automaticTax
     ? integer(
         value.total_details?.amount_tax,
@@ -3995,7 +4229,7 @@ function downloadCheckoutFacts(
     amountMinor: 500,
     taxMinor,
     totalMinor,
-    taxMode: config.taxMode,
+    taxMode,
     currency: "USD",
     purposeDigest: validated.purposeDigest
   });
@@ -4081,7 +4315,8 @@ function alakazamPaymentFacts(
     value.metadata,
     expectedMetadata
   );
-  const automaticTax = config.taxMode === "automatic";
+  const taxMode = taxModeFor(config, "alakazam");
+  const automaticTax = taxMode === "automatic";
   const discountMinor =
     validated.downloadCredit?.amountMinor ?? 0;
   const listSubtotalMinor =
@@ -4358,7 +4593,7 @@ function alakazamPaymentFacts(
     netSubtotalMinor,
     taxMinor,
     totalMinor,
-    taxMode: config.taxMode,
+    taxMode,
     currency: "USD",
     paymentStatus: "paid",
     purposeDigest: validated.purposeDigest,
@@ -4395,7 +4630,7 @@ function downloadCheckoutLifecycle(
       value.currency === "usd" &&
       value.amount_subtotal === 500 &&
       value.automatic_tax?.enabled ===
-        (config.taxMode === "automatic"),
+        (validated.purpose.taxMode === "automatic"),
     "stripe_download_checkout_response_invalid",
     "Stripe did not return the exact Download Checkout lifecycle",
     { status: 502 }
@@ -5316,7 +5551,7 @@ function alakazamSubscriptionFacts(
       value.livemode === config.livemode &&
       value.collection_method === "charge_automatically" &&
       value.automatic_tax?.enabled ===
-        (config.taxMode === "automatic") &&
+        automaticTaxFor(config, "alakazam") &&
       value.pending_update === null &&
       value.pause_collection === null &&
       [
@@ -5492,7 +5727,7 @@ function alakazamScheduleFacts(
       phases[0].collection_method ===
         "charge_automatically" &&
       phases[0].automatic_tax?.enabled ===
-        (config.taxMode === "automatic") &&
+        automaticTaxFor(config, "alakazam") &&
       phases[1].start_date === effectiveAt &&
       Number.isSafeInteger(phases[1].end_date) &&
       phases[1].end_date > effectiveAt &&
@@ -5500,7 +5735,7 @@ function alakazamScheduleFacts(
       phases[1].collection_method ===
         "charge_automatically" &&
       phases[1].automatic_tax?.enabled ===
-        (config.taxMode === "automatic") &&
+        automaticTaxFor(config, "alakazam") &&
       schedulePhasePriceId(
         phases[0],
         "Stripe Alakazam current schedule phase"
@@ -6027,8 +6262,8 @@ export function createStripeProviderAdapter(options = {}) {
         ) === subscriptionId &&
         invoice.collection_method === "charge_automatically" &&
         invoice.automatic_tax?.enabled ===
-          (config.taxMode === "automatic") &&
-        (config.taxMode !== "automatic" ||
+          automaticTaxFor(config, "alakazam") &&
+        (!automaticTaxFor(config, "alakazam") ||
           invoice.automatic_tax?.status === "complete") &&
         Array.isArray(invoice.lines?.data) &&
         invoice.lines.data.length === 1 &&
@@ -6184,7 +6419,7 @@ export function createStripeProviderAdapter(options = {}) {
       totalMinor: invoice.total,
       amountPaidMinor: invoice.amount_paid,
       amountRemainingMinor: invoice.amount_remaining,
-      taxMode: config.taxMode,
+      taxMode: taxModeFor(config, "alakazam"),
       currency: "USD",
       periodStartsAt: readback.periodStartsAt,
       periodEndsAt: readback.periodEndsAt,
@@ -6735,7 +6970,10 @@ export function createStripeProviderAdapter(options = {}) {
             Boolean(config.domainAuthorization),
           webhookVerification: true,
           webhookEndpoint: true,
-          taxMode: config.taxMode,
+          taxModes: config.taxAuthority.purposes,
+          taxPurposeAuthority: true,
+          automaticTaxActivation:
+            config.taxAuthority.automaticActivation !== null,
           taxAttestation: true,
           ...(config.alakazam
             ? { alakazam: true }
@@ -6868,7 +7106,7 @@ export function createStripeProviderAdapter(options = {}) {
         config.alakazam,
         "start",
         ["idempotencyKey", "purpose", "purposeDigest"],
-        config.taxMode
+        taxModeFor(config, "alakazam")
       );
       await verifyAlakazamConfiguration();
       const providerMetadata =
@@ -6912,9 +7150,9 @@ export function createStripeProviderAdapter(options = {}) {
         metadata: providerMetadata,
         expires_at: expiresAt,
         automatic_tax: {
-          enabled: config.taxMode === "automatic"
+          enabled: automaticTaxFor(config, "alakazam")
         },
-        ...(config.taxMode === "automatic"
+        ...(automaticTaxFor(config, "alakazam")
           ? {
               billing_address_collection: "required",
               customer_update: { address: "auto" }
@@ -6938,7 +7176,7 @@ export function createStripeProviderAdapter(options = {}) {
         config.alakazam,
         "upgrade",
         ["idempotencyKey", "purpose", "purposeDigest"],
-        config.taxMode
+        taxModeFor(config, "alakazam")
       );
       await verifyAlakazamConfiguration();
       const providerMetadata =
@@ -6977,9 +7215,9 @@ export function createStripeProviderAdapter(options = {}) {
         metadata: providerMetadata,
         expires_at: expiresAt,
         automatic_tax: {
-          enabled: config.taxMode === "automatic"
+          enabled: automaticTaxFor(config, "alakazam")
         },
-        ...(config.taxMode === "automatic"
+        ...(automaticTaxFor(config, "alakazam")
           ? {
               billing_address_collection: "required",
               customer_update: { address: "auto" }
@@ -7015,7 +7253,7 @@ export function createStripeProviderAdapter(options = {}) {
           "purpose",
           "purposeDigest"
         ],
-        config.taxMode
+        taxModeFor(config, "alakazam")
       );
       alakazamProviderClient(client);
       const checkoutSessionId = providerId(
@@ -7142,7 +7380,7 @@ export function createStripeProviderAdapter(options = {}) {
           "purpose",
           "purposeDigest"
         ],
-        config.taxMode
+        taxModeFor(config, "alakazam")
       );
       invariant(
         exactObjectKeys(request.paymentEvidence, [
@@ -7316,7 +7554,7 @@ export function createStripeProviderAdapter(options = {}) {
         config.alakazam,
         "downgrade",
         ["purpose", "purposeDigest", "stripeScheduleId"],
-        config.taxMode
+        taxModeFor(config, "alakazam")
       );
       const stripeScheduleId = providerId(
         request.stripeScheduleId,
@@ -7359,7 +7597,7 @@ export function createStripeProviderAdapter(options = {}) {
           "purposeDigest",
           "stripeScheduleId"
         ],
-        config.taxMode
+        taxModeFor(config, "alakazam")
       );
       const expectedScheduleId =
         request.stripeScheduleId === null
@@ -7496,7 +7734,7 @@ export function createStripeProviderAdapter(options = {}) {
             start_date: currentStart,
             end_date: effectiveAt,
             automatic_tax: {
-              enabled: config.taxMode === "automatic"
+              enabled: automaticTaxFor(config, "alakazam")
             },
             collection_method: "charge_automatically",
             items: [
@@ -7519,7 +7757,7 @@ export function createStripeProviderAdapter(options = {}) {
               interval_count: 1
             },
             automatic_tax: {
-              enabled: config.taxMode === "automatic"
+              enabled: automaticTaxFor(config, "alakazam")
             },
             collection_method: "charge_automatically",
             items: [
@@ -7627,7 +7865,7 @@ export function createStripeProviderAdapter(options = {}) {
         metadata: providerMetadata,
         expires_at: expiresAt,
         automatic_tax: {
-          enabled: config.taxMode === "automatic"
+          enabled: automaticTaxFor(config, "siteService")
         },
         ...(validated.stripeCustomerId
           ? { customer: validated.stripeCustomerId }
@@ -7691,6 +7929,15 @@ export function createStripeProviderAdapter(options = {}) {
       requireCapability("checkout:create");
       const validated =
         validateDownloadPurpose(request);
+      invariant(
+        validated.purpose.taxMode ===
+          taxModeFor(config, "download"),
+        "stripe_download_tax_authority_mismatch",
+        "Download Checkout tax mode does not match its current purpose authority",
+        { status: 503 }
+      );
+      const automaticTax =
+        validated.purpose.taxMode === "automatic";
       const providerMetadata =
         downloadMetadata(validated);
       const expiresAt =
@@ -7729,12 +7976,12 @@ export function createStripeProviderAdapter(options = {}) {
         metadata: providerMetadata,
         expires_at: expiresAt,
         automatic_tax: {
-          enabled: config.taxMode === "automatic"
+          enabled: automaticTax
         },
         ...(validated.stripeCustomerId
           ? { customer: validated.stripeCustomerId }
           : { customer_creation: "always" }),
-        ...(config.taxMode === "automatic"
+        ...(automaticTax
           ? {
               billing_address_collection: "required",
               ...(validated.stripeCustomerId
@@ -7801,14 +8048,17 @@ export function createStripeProviderAdapter(options = {}) {
       let stripeIdempotencyKey;
       try {
         requireCapability("checkout:create");
-        invariant(
-          config.taxMode === "automatic",
-          "stripe_service_assessment_tax_required",
-          "Assessment Checkout requires automatic tax",
-          { status: 503 }
-        );
         validated =
           validateServiceAssessmentPurpose(request);
+        invariant(
+          validated.purpose.taxMode ===
+            taxModeFor(config, "serviceAssessment"),
+          "stripe_service_assessment_tax_authority_mismatch",
+          "Assessment Checkout tax mode does not match its current purpose authority",
+          { status: 503 }
+        );
+        const automaticTax =
+          validated.purpose.taxMode === "automatic";
         providerMetadata =
           serviceAssessmentMetadata(validated);
         expiresAt =
@@ -7847,12 +8097,16 @@ export function createStripeProviderAdapter(options = {}) {
             validated.identity.invoiceId,
           metadata: providerMetadata,
           expires_at: expiresAt,
-          automatic_tax: { enabled: true },
-          billing_address_collection: "required",
+          automatic_tax: { enabled: automaticTax },
+          ...(automaticTax
+            ? { billing_address_collection: "required" }
+            : {}),
           ...(validated.stripeCustomerId
             ? {
                 customer: validated.stripeCustomerId,
-                customer_update: { address: "auto" }
+                ...(automaticTax
+                  ? { customer_update: { address: "auto" } }
+                  : {})
               }
             : { customer_creation: "always" }),
           payment_intent_data: {
@@ -8007,14 +8261,17 @@ export function createStripeProviderAdapter(options = {}) {
       let stripeIdempotencyKey;
       try {
         requireCapability("checkout:create");
-        invariant(
-          config.taxMode === "automatic",
-          "stripe_custom_build_start_tax_required",
-          "Custom-build Checkout requires automatic tax",
-          { status: 503 }
-        );
         validated =
           validateCustomBuildStartPurpose(request);
+        invariant(
+          validated.purpose.taxMode ===
+            taxModeFor(config, "customBuildStart"),
+          "stripe_custom_build_start_tax_authority_mismatch",
+          "Custom-build Checkout tax mode does not match its current purpose authority",
+          { status: 503 }
+        );
+        const automaticTax =
+          validated.purpose.taxMode === "automatic";
         providerMetadata =
           customBuildStartMetadata(validated);
         expiresAt =
@@ -8053,12 +8310,16 @@ export function createStripeProviderAdapter(options = {}) {
             validated.identity.invoiceId,
           metadata: providerMetadata,
           expires_at: expiresAt,
-          automatic_tax: { enabled: true },
-          billing_address_collection: "required",
+          automatic_tax: { enabled: automaticTax },
+          ...(automaticTax
+            ? { billing_address_collection: "required" }
+            : {}),
           ...(validated.stripeCustomerId
             ? {
                 customer: validated.stripeCustomerId,
-                customer_update: { address: "auto" }
+                ...(automaticTax
+                  ? { customer_update: { address: "auto" } }
+                  : {})
               }
             : { customer_creation: "always" }),
           payment_intent_data: {
@@ -8213,14 +8474,17 @@ export function createStripeProviderAdapter(options = {}) {
       let stripeIdempotencyKey;
       try {
         requireCapability("checkout:create");
-        invariant(
-          config.taxMode === "automatic",
-          "stripe_custom_build_change_tax_required",
-          "Custom-build change Checkout requires automatic tax",
-          { status: 503 }
-        );
         validated =
           validateCustomBuildChangePurpose(request);
+        invariant(
+          validated.purpose.taxMode ===
+            taxModeFor(config, "customBuildChange"),
+          "stripe_custom_build_change_tax_authority_mismatch",
+          "Custom-build change Checkout tax mode does not match its current purpose authority",
+          { status: 503 }
+        );
+        const automaticTax =
+          validated.purpose.taxMode === "automatic";
         providerMetadata =
           customBuildChangeMetadata(validated);
         expiresAt = validated.checkoutExpiresAtSeconds;
@@ -8252,12 +8516,16 @@ export function createStripeProviderAdapter(options = {}) {
             validated.identity.invoiceId,
           metadata: providerMetadata,
           expires_at: expiresAt,
-          automatic_tax: { enabled: true },
-          billing_address_collection: "required",
+          automatic_tax: { enabled: automaticTax },
+          ...(automaticTax
+            ? { billing_address_collection: "required" }
+            : {}),
           ...(validated.stripeCustomerId
             ? {
                 customer: validated.stripeCustomerId,
-                customer_update: { address: "auto" }
+                ...(automaticTax
+                  ? { customer_update: { address: "auto" } }
+                  : {})
               }
             : { customer_creation: "always" }),
           payment_intent_data: {
@@ -8412,14 +8680,17 @@ export function createStripeProviderAdapter(options = {}) {
       let stripeIdempotencyKey;
       try {
         requireCapability("checkout:create");
-        invariant(
-          config.taxMode === "automatic",
-          "stripe_custom_build_final_tax_required",
-          "Custom-build final Checkout requires automatic tax",
-          { status: 503 }
-        );
         validated =
           validateCustomBuildFinalPurpose(request);
+        invariant(
+          validated.purpose.taxMode ===
+            taxModeFor(config, "customBuildFinal"),
+          "stripe_custom_build_final_tax_authority_mismatch",
+          "Custom-build final Checkout tax mode does not match its current purpose authority",
+          { status: 503 }
+        );
+        const automaticTax =
+          validated.purpose.taxMode === "automatic";
         providerMetadata =
           customBuildFinalMetadata(validated);
         expiresAt = validated.checkoutExpiresAtSeconds;
@@ -8450,12 +8721,16 @@ export function createStripeProviderAdapter(options = {}) {
             validated.identity.invoiceId,
           metadata: providerMetadata,
           expires_at: expiresAt,
-          automatic_tax: { enabled: true },
-          billing_address_collection: "required",
+          automatic_tax: { enabled: automaticTax },
+          ...(automaticTax
+            ? { billing_address_collection: "required" }
+            : {}),
           ...(validated.stripeCustomerId
             ? {
                 customer: validated.stripeCustomerId,
-                customer_update: { address: "auto" }
+                ...(automaticTax
+                  ? { customer_update: { address: "auto" } }
+                  : {})
               }
             : { customer_creation: "always" }),
           payment_intent_data: {
@@ -8741,7 +9016,10 @@ export function createStripeProviderAdapter(options = {}) {
         expires_at: expiresAt,
         customer_creation: "always",
         automatic_tax: {
-          enabled: config.taxMode === "automatic"
+          enabled: automaticTaxFor(
+            config,
+            "domainRegistration"
+          )
         },
         payment_intent_data: {
           capture_method: "manual",

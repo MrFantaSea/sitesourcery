@@ -34,8 +34,60 @@ const ALAKAZAM_PERIOD_END =
   "2026-09-01T12:00:00.000Z";
 
 function configuration(overrides = {}) {
+  const {
+    taxMode: selectedTaxMode = "disabled_by_owner",
+    ...selectedOverrides
+  } = overrides;
+  const selectedLivemode = overrides.livemode ?? false;
+  const taxCodes = overrides.taxCodes ?? {
+    alakazam: "txcd_10701100",
+    customBuildChange: "txcd_10701200",
+    customBuildFinal: "txcd_10701200",
+    customBuildStart: "txcd_10701200",
+    domainRegistration: "txcd_contractdomainonly",
+    download: "txcd_10701200",
+    serviceAssessment: "txcd_10701200",
+    siteService: "txcd_10701200"
+  };
+  const domainHeld =
+    overrides.domainAuthorization === null ||
+    taxCodes.domainRegistration === null;
+  const purposes = Object.fromEntries(
+    [
+      "alakazam",
+      "customBuildChange",
+      "customBuildFinal",
+      "customBuildStart",
+      "domainRegistration",
+      "download",
+      "serviceAssessment",
+      "siteService"
+    ].map((purpose) => [
+      purpose,
+      purpose === "domainRegistration" && domainHeld
+        ? null
+        : selectedTaxMode
+    ])
+  );
+  const automaticActivation =
+    selectedTaxMode === "automatic"
+      ? {
+          schema:
+            "sitesourcery.stripe-automatic-tax-activation/v1",
+          provider: "stripe",
+          approved: true,
+          activationId: "tax-activation-contract",
+          approvedAt: "2026-08-09T12:00:00.000Z",
+          effectiveAt: "2026-08-09T12:00:00.000Z",
+          livemode: selectedLivemode,
+          purposes: Object.entries(purposes)
+            .filter(([, mode]) => mode === "automatic")
+            .map(([purpose]) => purpose),
+          registrationIds: ["taxreg_contract"]
+        }
+      : null;
   return {
-    livemode: false,
+    livemode: selectedLivemode,
     successUrl:
       "https://account.sitesourcery.test/billing/success?session_id={CHECKOUT_SESSION_ID}",
     cancelUrl:
@@ -49,18 +101,18 @@ function configuration(overrides = {}) {
     approvedReturnOrigins: [
       "https://account.sitesourcery.test"
     ],
-    taxMode: "disabled_by_owner",
-    taxCodes: {
-      alakazam: "txcd_10701100",
-      customBuildChange: "txcd_10701200",
-      customBuildFinal: "txcd_10701200",
-      customBuildStart: "txcd_10701200",
-      // Contract-only sentinel. Production keeps domains held until
-      // the owner approves an exact Stripe Tax classification.
-      domainRegistration: "txcd_contractdomainonly",
-      download: "txcd_10701200",
-      serviceAssessment: "txcd_10701200",
-      siteService: "txcd_10701200"
+    taxCodes,
+    taxAuthority: {
+      schema:
+        "sitesourcery.stripe-tax-purpose-authority/v1",
+      provider: "stripe",
+      approved: true,
+      authorityId: "tax-purpose-authority-contract",
+      approvedAt: "2026-08-09T12:00:00.000Z",
+      livemode: selectedLivemode,
+      defaultTaxBehavior: "exclusive",
+      purposes,
+      automaticActivation
     },
     taxAttestation: {
       schema: "sitesourcery.stripe-tax-attestation/v1",
@@ -68,13 +120,18 @@ function configuration(overrides = {}) {
       approved: true,
       attestationId: "tax-attestation-contract",
       approvedAt: "2026-08-09T12:00:00.000Z",
-      livemode: overrides.livemode ?? false,
-      taxMode:
-        overrides.taxMode ?? "disabled_by_owner",
+      livemode: selectedLivemode,
+      taxMode: selectedTaxMode,
       headOfficeCountry: "US",
       defaultTaxBehavior: "exclusive",
-      registrationDecision: "none_registered",
-      registrationIds: []
+      registrationDecision:
+        selectedTaxMode === "automatic"
+          ? "registered"
+          : "none_registered",
+      registrationIds:
+        selectedTaxMode === "automatic"
+          ? ["taxreg_contract"]
+          : []
     },
     webhookSecret: "whsec_contract_test",
     webhookEndpointId: "we_contract_test",
@@ -110,7 +167,7 @@ function configuration(overrides = {}) {
         }
       }
     ],
-    ...overrides
+    ...selectedOverrides
   };
 }
 
@@ -250,6 +307,7 @@ function downloadPurpose(overrides = {}) {
     acceptedDisclosureDigest: "d".repeat(64),
     offerId: "spark_download",
     entitlementKind: "spark_download",
+    taxMode: "disabled_by_owner",
     price: {
       amountMinor: 500,
       currency: "USD",
@@ -313,11 +371,12 @@ function serviceAssessmentPurpose(overrides = {}) {
       "50000000-0000-4000-8000-000000000001",
     acceptedDisclosureDigest: "e".repeat(64),
     invoiceDigest: "f".repeat(64),
+    taxMode: "automatic",
     price: {
       amountMinor: 20000,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     },
     ...overrides
   };
@@ -466,11 +525,12 @@ function customBuildStartPurpose(overrides = {}) {
     acceptedQuoteDigest: "1".repeat(64),
     acceptedDisclosureDigest: "2".repeat(64),
     invoiceDigest: "3".repeat(64),
+    taxMode: "automatic",
     price: {
       amountMinor: 12500,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     },
     ...overrides
   };
@@ -624,13 +684,14 @@ function customBuildChangePurpose(overrides = {}) {
     scopeBoundaryDigest: "8".repeat(64),
     targetCompletionDate: "2026-09-30",
     invoiceDigest: "7".repeat(64),
+    taxMode: "automatic",
     price: {
       amountMinor: 25000,
       unitAmountMinor: 12500,
       quantity: 2,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     },
     ...overrides
   };
@@ -808,11 +869,12 @@ function customBuildFinalPurpose(overrides = {}) {
     completionPackageDigest: "c".repeat(64),
     finalObligationDigest: "e".repeat(64),
     invoiceDigest: "f".repeat(64),
+    taxMode: "automatic",
     price: {
       amountMinor: 32500,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     },
     ...overrides
   };
@@ -2467,6 +2529,68 @@ test("construction rejects an unapproved or mode-mismatched Stripe Tax attestati
   }
 });
 
+test("purpose tax authority fails closed on scalar fallback, latent activation, future activation, and Domain drift", () => {
+  const missing = configuration();
+  delete missing.taxAuthority;
+  missing.taxMode = "disabled_by_owner";
+  assert.throws(
+    () => adapterFixture({ config: missing }),
+    (error) =>
+      error.code ===
+      "stripe_tax_purpose_authority_required"
+  );
+
+  const latent = configuration();
+  latent.taxAuthority = {
+    ...latent.taxAuthority,
+    automaticActivation: {
+      schema:
+        "sitesourcery.stripe-automatic-tax-activation/v1"
+    }
+  };
+  assert.throws(
+    () => adapterFixture({ config: latent }),
+    (error) =>
+      error.code ===
+      "stripe_automatic_tax_activation_unexpected"
+  );
+
+  const future = configuration({ taxMode: "automatic" });
+  future.taxAuthority = {
+    ...future.taxAuthority,
+    automaticActivation: {
+      ...future.taxAuthority.automaticActivation,
+      effectiveAt: "2999-10-21T04:00:00.000Z"
+    }
+  };
+  assert.throws(
+    () => adapterFixture({ config: future }),
+    (error) =>
+      error.code ===
+      "stripe_automatic_tax_activation_invalid"
+  );
+
+  const domainDrift = configuration({
+    domainAuthorization: null,
+    taxCodes: {
+      ...configuration().taxCodes,
+      domainRegistration: null
+    }
+  });
+  domainDrift.taxAuthority = {
+    ...domainDrift.taxAuthority,
+    purposes: {
+      ...domainDrift.taxAuthority.purposes,
+      domainRegistration: "disabled_by_owner"
+    }
+  };
+  assert.throws(
+    () => adapterFixture({ config: domainDrift }),
+    (error) =>
+      error.code === "stripe_tax_purpose_authority_invalid"
+  );
+});
+
 test("readiness reads back every exact owner-approved Price", async () => {
   const { adapter, calls } = adapterFixture();
   assert.deepEqual(await adapter.readiness(), {
@@ -2480,7 +2604,9 @@ test("readiness reads back every exact owner-approved Price", async () => {
     domainAuthorization: true,
     webhookVerification: true,
     webhookEndpoint: true,
-    taxMode: "disabled_by_owner",
+    taxModes: configuration().taxAuthority.purposes,
+    taxPurposeAuthority: true,
+    automaticTaxActivation: false,
     taxAttestation: true
   });
   assert.deepEqual(calls.prices, [
@@ -2574,7 +2700,9 @@ test("Alakazam readiness proves all three Product-bound Prices, the exact $5 Cou
     domainAuthorization: true,
     webhookVerification: true,
     webhookEndpoint: true,
-    taxMode: "disabled_by_owner",
+    taxModes: config.taxAuthority.purposes,
+    taxPurposeAuthority: true,
+    automaticTaxActivation: false,
     taxAttestation: true,
     alakazam: true
   });
@@ -3958,7 +4086,7 @@ test("assessment invoice creates one exact automatic-tax $200 Checkout", async (
   );
 });
 
-test("assessment Checkout rejects changed price and disabled automatic tax before Stripe", async () => {
+test("assessment Checkout rejects changed price and accepts the exact disabled purpose tax policy", async () => {
   let fixture = adapterFixture({
     config: configuration({ taxMode: "automatic" })
   });
@@ -3970,7 +4098,7 @@ test("assessment Checkout rejects changed price and disabled automatic tax befor
             amountMinor: 19999,
             currency: "USD",
             billing: "one_time",
-            taxBehavior: "automatic_exclusive"
+            taxBehavior: "exclusive"
           }
         }
       })
@@ -3983,16 +4111,26 @@ test("assessment Checkout rejects changed price and disabled automatic tax befor
   assert.equal(fixture.calls.checkouts.length, 0);
 
   fixture = adapterFixture();
-  await assert.rejects(
-    fixture.adapter.createServiceAssessmentCheckout(
-      serviceAssessmentRequest()
-    ),
-    (error) =>
-      error.code ===
-        "stripe_service_assessment_tax_required" &&
-      error.certainty === "not_submitted"
+  await fixture.adapter.createServiceAssessmentCheckout(
+    serviceAssessmentRequest({
+      purpose: { taxMode: "disabled_by_owner" }
+    })
   );
-  assert.equal(fixture.calls.checkouts.length, 0);
+  assert.equal(fixture.calls.checkouts.length, 1);
+  assert.deepEqual(
+    fixture.calls.checkouts[0].params.automatic_tax,
+    { enabled: false }
+  );
+  assert.equal(
+    fixture.calls.checkouts[0].params.line_items[0]
+      .price_data.tax_behavior,
+    "exclusive"
+  );
+  assert.equal(
+    "billing_address_collection" in
+      fixture.calls.checkouts[0].params,
+    false
+  );
 });
 
 test("assessment Checkout treats every wrong-but-valid Stripe Session as ambiguous", async () => {
@@ -4436,7 +4574,7 @@ test("Custom-build Checkout rejects purpose tampering before Stripe and response
           amountMinor: 0,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -4446,7 +4584,7 @@ test("Custom-build Checkout rejects purpose tampering before Stripe and response
           amountMinor: 100_000_000,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -4469,17 +4607,16 @@ test("Custom-build Checkout rejects purpose tampering before Stripe and response
     assert.equal(fixture.calls.checkouts.length, 0);
   }
 
-  const heldByTax = adapterFixture();
-  await assert.rejects(
-    heldByTax.adapter.createCustomBuildStartCheckout(
-      customBuildStartRequest()
-    ),
-    (error) =>
-      error.code ===
-        "stripe_custom_build_start_tax_required" &&
-      error.certainty === "not_submitted"
+  const disabledTax = adapterFixture();
+  await disabledTax.adapter.createCustomBuildStartCheckout(
+    customBuildStartRequest({
+      purpose: { taxMode: "disabled_by_owner" }
+    })
   );
-  assert.equal(heldByTax.calls.checkouts.length, 0);
+  assert.deepEqual(
+    disabledTax.calls.checkouts[0].params.automatic_tax,
+    { enabled: false }
+  );
 
   for (const drift of [
     (params) => ({
@@ -4522,7 +4659,7 @@ test("Custom-build settlement returns frozen exact facts for variable subtotal a
         amountMinor,
         currency: "USD",
         billing: "one_time",
-        taxBehavior: "automatic_exclusive"
+        taxBehavior: "exclusive"
       }
     });
     const fake = fakeStripe({
@@ -4895,7 +5032,7 @@ test("Custom-build change Checkout rejects purpose crossover and tampering with 
           quantity: 2,
           currency: "EUR",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -4907,7 +5044,7 @@ test("Custom-build change Checkout rejects purpose crossover and tampering with 
           quantity: 2,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -4919,7 +5056,7 @@ test("Custom-build change Checkout rejects purpose crossover and tampering with 
           quantity: 3,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -4931,7 +5068,7 @@ test("Custom-build change Checkout rejects purpose crossover and tampering with 
           quantity: 41,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -4975,17 +5112,16 @@ test("Custom-build change Checkout rejects purpose crossover and tampering with 
       error.certainty === "not_submitted"
   );
 
-  const heldByTax = adapterFixture();
-  await assert.rejects(
-    heldByTax.adapter.createCustomBuildChangeCheckout(
-      customBuildChangeRequest()
-    ),
-    (error) =>
-      error.code ===
-        "stripe_custom_build_change_tax_required" &&
-      error.certainty === "not_submitted"
+  const disabledTax = adapterFixture();
+  await disabledTax.adapter.createCustomBuildChangeCheckout(
+    customBuildChangeRequest({
+      purpose: { taxMode: "disabled_by_owner" }
+    })
   );
-  assert.equal(heldByTax.calls.checkouts.length, 0);
+  assert.deepEqual(
+    disabledTax.calls.checkouts[0].params.automatic_tax,
+    { enabled: false }
+  );
 
   for (const drift of [
     (params) => ({
@@ -5065,7 +5201,7 @@ test("Custom-build change settlement returns exact provider-readback facts", asy
       quantity: 3,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     }
   });
   const taxMinor = 2719;
@@ -5533,7 +5669,7 @@ test("Custom-build final Checkout rejects zero balance, accepted-change crossove
           amountMinor: 0,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -5543,7 +5679,7 @@ test("Custom-build final Checkout rejects zero balance, accepted-change crossove
           amountMinor: 32500,
           currency: "USD",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive",
+          taxBehavior: "exclusive",
           quantity: 2
         }
       }
@@ -5554,7 +5690,7 @@ test("Custom-build final Checkout rejects zero balance, accepted-change crossove
           amountMinor: 32500,
           currency: "EUR",
           billing: "one_time",
-          taxBehavior: "automatic_exclusive"
+          taxBehavior: "exclusive"
         }
       }
     }),
@@ -5618,17 +5754,16 @@ test("Custom-build final Checkout rejects zero balance, accepted-change crossove
       error.certainty === "not_submitted"
   );
 
-  const heldByTax = adapterFixture();
-  await assert.rejects(
-    heldByTax.adapter.createCustomBuildFinalCheckout(
-      customBuildFinalRequest()
-    ),
-    (error) =>
-      error.code ===
-        "stripe_custom_build_final_tax_required" &&
-      error.certainty === "not_submitted"
+  const disabledTax = adapterFixture();
+  await disabledTax.adapter.createCustomBuildFinalCheckout(
+    customBuildFinalRequest({
+      purpose: { taxMode: "disabled_by_owner" }
+    })
   );
-  assert.equal(heldByTax.calls.checkouts.length, 0);
+  assert.deepEqual(
+    disabledTax.calls.checkouts[0].params.automatic_tax,
+    { enabled: false }
+  );
 
   for (const drift of [
     (params) => ({
@@ -5701,7 +5836,7 @@ test("Custom-build final settlement returns exact provider-confirmed facts", asy
       amountMinor: 45000,
       currency: "USD",
       billing: "one_time",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     }
   });
   const taxMinor = 3263;
@@ -6174,7 +6309,7 @@ test("expired Download Checkout readback proves unpaid before another payment ca
 });
 
 test("automatic tax Download collects an address and reconciles item, tax, and total separately", async () => {
-  const purpose = downloadPurpose();
+  const purpose = downloadPurpose({ taxMode: "automatic" });
   const metadata = downloadMetadata(purpose);
   const config = configuration({ taxMode: "automatic" });
   const fake = fakeStripe({
@@ -6217,7 +6352,9 @@ test("automatic tax Download collects an address and reconciles item, tax, and t
     fake
   });
   await adapter.createDownloadCheckout({
-    ...downloadRequest(),
+    ...downloadRequest({
+      purpose: { taxMode: "automatic" }
+    }),
     stripeCustomerId: "cus_test_account_1"
   });
   const [{ params }] = calls.checkouts;

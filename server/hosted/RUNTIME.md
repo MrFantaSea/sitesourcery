@@ -197,8 +197,20 @@ Approved composition requires every item below:
   `SITESOURCERY_STRIPE_PORTAL_TERMS_OF_SERVICE_URL`. Alakazam readiness reads
   the Portal configuration back and requires both exact legal URLs plus the
   direct Portal login page disabled.
-- `SITESOURCERY_STRIPE_TAX_MODE`: exactly `automatic` or
-  `disabled_by_owner`.
+- `SITESOURCERY_STRIPE_TAX_PURPOSE_AUTHORITY_JSON`: one exact approved
+  `sitesourcery.stripe-tax-purpose-authority/v1` object. Its `purposes` map has
+  exactly `download`, `serviceAssessment`, `customBuildStart`,
+  `customBuildChange`, `customBuildFinal`, `alakazam`, `siteService`, and
+  `domainRegistration`. Each enabled purpose is independently
+  `automatic` or `disabled_by_owner`; Domain is exactly `null` while Domain
+  payment remains held. The current pre-effective website-service decision is
+  `disabled_by_owner`. `defaultTaxBehavior` remains `exclusive` in either
+  mode, so collection mode cannot weaken Price tax behavior.
+- `automaticActivation` in that authority is exactly `null` while no purpose
+  collects automatically. Any future `automatic` purpose requires a separate
+  approved `sitesourcery.stripe-automatic-tax-activation/v1` object whose
+  purpose set and `taxreg_` IDs match exactly and whose `effectiveAt` has
+  arrived. A scheduled registration alone never activates collection.
 - `SITESOURCERY_STRIPE_TAX_CODES_JSON`: the exact purpose map. Download,
   assessment, Custom first/change/final payments, and website service use the
   reviewed Website Design code; Alakazam uses the reviewed Website Hosting
@@ -206,11 +218,19 @@ Approved composition requires every item below:
   Product tax code. `domainRegistration` must remain `null` while domain
   authorization is held and becomes mandatory before domain capability can be
   approved.
-- `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON`: a dated, mode-matched owner
+- `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON`: a dated, authority-matched owner
   attestation of the full Stripe Tax settings/registration readback. Startup
   requires an approved attestation, an exact head-office country, default
   exclusive behavior, and either exact `taxreg_` IDs or an explicit
-  `none_registered` decision. Missing account setup is never inferred.
+  `none_registered` decision. An automatic activation must bind the same
+  attested registrations. Missing account setup is never inferred.
+
+Integration ordering is append-only: Engagement migration
+`202608100106_customer_engagement_bootstrap.sql`, Mail migration
+`202608100107_durable_mail_lifecycle.sql`, professional-services reversals
+`202608100108_professional_services_reversals.sql`, then TAX-PURPOSE-01
+`202608100109_stripe_tax_purpose_authority.sql`. This isolated lane contains
+only migration 109; the integration verifier must seal the exact 62-file union.
 
 The approval must include all hosted capabilities: `checkout:create`,
 `billing_portal:create`, `prices:read`, `subscriptions:cancel`,
@@ -234,19 +254,21 @@ Price IDs, approval IDs, and return URLs are never serialized.
 The `$200` custom-services assessment has a separate release switch:
 `SITESOURCERY_CUSTOM_SERVICES_ASSESSMENT_PAYMENT_MODE` defaults to `held` and
 accepts only `held` or `approved`. `approved` refuses startup unless the shared
-Stripe adapter is ready with automatic tax and the assessment-specific webhook,
-readback, and atomic-settlement boundary reports its exact readiness schema.
+Stripe adapter is ready with the exact `serviceAssessment` purpose decision and
+the assessment-specific webhook, readback, and atomic-settlement boundary
+reports its exact readiness schema.
 The invoice projection and payment command consume the same immutable release
 object, so a held runtime exposes no pay button and performs no provider payment
 effect.
 
 The accepted Custom-build first installment has its own release switch:
 `SITESOURCERY_CUSTOM_BUILD_PAYMENT_MODE` also defaults to `held` and accepts only
-`held` or `approved`. Approved startup requires ready automatic-tax Stripe,
-Custom-build quote storage, and the exact payment boundary that verifies Stripe
-readback, atomically settles the reserved `$200` assessment credit, and opens one
-build job. The customer submits only the retained invoice digest; subtotal,
-credit, deadline, tax policy, and final handoff amount remain server-owned.
+`held` or `approved`. Approved startup requires ready Stripe with the exact
+`customBuildStart` purpose decision, Custom-build quote storage, and the exact
+payment boundary that verifies Stripe readback, atomically settles the reserved
+`$200` assessment credit, and opens one build job. The customer submits only the
+retained invoice digest; subtotal, credit, deadline, tax policy, and final
+handoff amount remain server-owned.
 Neither switch authorizes a deployment, public release, DNS change, or production
 credential change.
 

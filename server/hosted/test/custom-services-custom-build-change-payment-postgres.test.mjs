@@ -75,6 +75,7 @@ function invoiceRow(overrides = {}) {
     target_completion_date: "2026-10-01",
     subtotal_minor: "25000",
     currency: "USD",
+    tax_mode: "automatic",
     invoice_digest: "5".repeat(64),
     issued_at: "2026-08-06T18:00:00.000Z",
     unit_count: 2,
@@ -386,7 +387,8 @@ function createServiceProofHarness({
         invoice_digest: values[10],
         accepted_quote_digest: values[11],
         accepted_disclosure_digest: values[12],
-        provider_request_expires_at: values[14],
+        tax_mode: values[14],
+        provider_request_expires_at: values[15],
         state: "provider_pending",
         provider_effect_certainty: "ambiguous",
         provider_error_code: null,
@@ -513,7 +515,8 @@ function createServiceProofHarness({
         subtotal_minor: values[16],
         tax_minor: values[17],
         total_minor: values[18],
-        provider_facts_digest: values[24]
+        tax_mode: values[19],
+        provider_facts_digest: values[25]
       };
       state.attempt.state = "paid";
       if (state.event) {

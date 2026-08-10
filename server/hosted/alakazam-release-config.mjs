@@ -69,7 +69,7 @@ export function assertApprovedAlakazamReady(
       readiness?.ready === true &&
       readiness.provider === "stripe" &&
       readiness.alakazam === true &&
-      readiness.taxMode ===
+      readiness.taxModes?.alakazam ===
         composition.release.taxMode &&
       typeof readiness.livemode === "boolean"
     )

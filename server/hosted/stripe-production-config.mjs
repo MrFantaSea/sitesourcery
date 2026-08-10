@@ -635,14 +635,13 @@ export function createConfiguredStripeProvider({
       "SITESOURCERY_STRIPE_PORTAL_TERMS_OF_SERVICE_URL"
     ),
     approvedReturnOrigins,
-    taxMode: text(
-      environment,
-      "SITESOURCERY_STRIPE_TAX_MODE",
-      100
-    ),
     taxCodes: json(
       environment,
       "SITESOURCERY_STRIPE_TAX_CODES_JSON"
+    ),
+    taxAuthority: json(
+      environment,
+      "SITESOURCERY_STRIPE_TAX_PURPOSE_AUTHORITY_JSON"
     ),
     taxAttestation: json(
       environment,
@@ -738,11 +737,33 @@ export function redactStripeReadiness(
       value.webhookVerification === true,
     webhookEndpoint:
       value.webhookEndpoint === true,
-    taxMode:
-      value.taxMode === "automatic" ||
-      value.taxMode === "disabled_by_owner"
-        ? value.taxMode
-        : "unconfigured",
+    taxModes: Object.freeze(
+      Object.fromEntries(
+        [
+          "alakazam",
+          "customBuildChange",
+          "customBuildFinal",
+          "customBuildStart",
+          "domainRegistration",
+          "download",
+          "serviceAssessment",
+          "siteService"
+        ].map((purpose) => [
+          purpose,
+          value.taxModes?.[purpose] === "automatic" ||
+          value.taxModes?.[purpose] ===
+            "disabled_by_owner" ||
+          (purpose === "domainRegistration" &&
+            value.taxModes?.[purpose] === null)
+            ? value.taxModes[purpose]
+            : "unconfigured"
+        ])
+      )
+    ),
+    taxPurposeAuthority:
+      value.taxPurposeAuthority === true,
+    automaticTaxActivation:
+      value.automaticTaxActivation === true,
     taxAttestation:
       value.taxAttestation === true,
     code: safeToken(

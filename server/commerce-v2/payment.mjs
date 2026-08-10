@@ -593,7 +593,7 @@ export function createDownloadPaymentService({
       ![
         "automatic",
         "disabled_by_owner"
-      ].includes(status.taxMode)
+      ].includes(status.taxModes?.download)
     ) {
       return deepFreeze({
         ready: false,
@@ -607,7 +607,7 @@ export function createDownloadPaymentService({
       payment: true,
       state: "ready",
       provider: "stripe",
-      taxMode: status.taxMode
+      taxMode: status.taxModes.download
     });
   }
 

@@ -746,7 +746,7 @@ export function createAlakazamRenewalService({
       status?.ready !== true ||
       status.provider !== "stripe" ||
       status.alakazam !== true ||
-      status.taxMode !== authority.taxMode ||
+      status.taxModes?.alakazam !== authority.taxMode ||
       typeof status.livemode !== "boolean"
     ) {
       return deepFreeze({

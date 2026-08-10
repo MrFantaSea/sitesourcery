@@ -261,9 +261,11 @@ function validateRelease(value) {
       value.holdScope === "new_checkout_creation_only" &&
       value.providerEffectProcessing ===
         "settlement_and_reconciliation_continue" &&
-      value.taxMode === "automatic",
+      ["automatic", "disabled_by_owner"].includes(
+        value.taxMode
+      ),
     "RUNTIME_CONFIGURATION_ERROR",
-    "Custom-build final payment must preserve automatic-tax USD billing.",
+    "Custom-build final payment must preserve exact purpose-bound USD tax billing.",
     { status: 500 }
   );
   return Object.freeze({ ...value });
@@ -394,7 +396,7 @@ async function discoverAndLockJob(
   return jobId;
 }
 
-function positivePurposeFromRow(row) {
+function positivePurposeFromRow(row, taxMode = row?.tax_mode) {
   invariant(
     row &&
       [
@@ -435,7 +437,8 @@ function positivePurposeFromRow(row) {
       Number(row.invoice_subtotal_minor) === amountMinor &&
       Number(row.invoice_credit_minor) === 0 &&
       Number(row.workmanship_correction_days) === 30 &&
-      row.currency === "USD",
+      row.currency === "USD" &&
+      ["automatic", "disabled_by_owner"].includes(taxMode),
     "CUSTOM_BUILD_FINAL_PAYMENT_CONFLICT",
     "The final invoice must contain only immutable quote installment 2.",
     { status: 500 }
@@ -461,13 +464,14 @@ function positivePurposeFromRow(row) {
       amountMinor,
       billing: "one_time",
       currency: "USD",
-      taxBehavior: "automatic_exclusive"
+      taxBehavior: "exclusive"
     },
     projectId: row.project_id,
     quoteAcceptanceId: row.quote_acceptance_id,
     quoteId: row.quote_id,
     quoteRevisionId: row.quote_revision_id,
     schema: CUSTOM_BUILD_FINAL_PURPOSE_SCHEMA,
+    taxMode,
     tenantId: row.organization_id,
     workmanshipCorrectionDays: 30
   });
@@ -722,7 +726,10 @@ function customerProjection(row, release, clock, scope = null) {
     });
   }
 
-  positivePurposeFromRow(row);
+  positivePurposeFromRow(
+    row,
+    row.tax_mode ?? release.taxMode
+  );
   const lines = Array.isArray(row.lines) ? row.lines : [];
   invariant(
     row.zero_balance_clearance_id === null &&
@@ -880,6 +887,7 @@ const FINAL_STATE_SELECT = `
     clearance.clearance_digest as zero_balance_clearance_digest,
     clearance.cleared_at as zero_balance_cleared_at,
     attempt.id as checkout_attempt_id,
+    attempt.tax_mode,
     attempt.state as checkout_state,
     attempt.provider_effect_certainty,
     attempt.provider_error_code,
@@ -912,6 +920,8 @@ const FINAL_STATE_SELECT = `
       and not receipt.disputed
       and receipt.subtotal_minor = obligation.final_due_minor
       and receipt.currency = obligation.currency
+      and receipt.tax_mode = attempt.tax_mode
+      and (receipt.tax_mode = 'automatic' or receipt.tax_minor = 0)
       and receipt.purpose_digest = attempt.purpose_digest
       and receipt.completion_package_digest =
         obligation.completion_package_digest
@@ -1162,7 +1172,11 @@ function exactPaymentFacts(value, resolution) {
       Number.isSafeInteger(value.taxMinor) &&
       value.taxMinor >= 0 &&
       value.totalMinor === value.subtotalMinor + value.taxMinor &&
-      value.taxMode === "automatic" &&
+      ["automatic", "disabled_by_owner"].includes(
+        value.taxMode
+      ) &&
+      (value.taxMode === "automatic" ||
+        value.taxMinor === 0) &&
       value.currency === "USD" &&
       value.purposeDigest === resolution.purposeDigest &&
       SHA256.test(String(retainedDigest ?? "")) &&
@@ -1761,7 +1775,10 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
           );
         }
 
-        const purpose = positivePurposeFromRow(invoice);
+        const purpose = positivePurposeFromRow(
+          invoice,
+          paymentRelease.taxMode
+        );
         const purposeDigest = digest(purpose);
         const providerRequestExpiresAt =
           checkoutRequestExpiration(paymentClock);
@@ -1809,7 +1826,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
            ) values (
              $1, $2, $3, $4, $5, $6, $7, $8, $9,
              'stripe', 'custom_build_final', $10, $11, $12, $13,
-             $14, $15, $16, 'USD', 'automatic', $17,
+             $14, $15, $16, 'USD', $17, $18,
              'provider_pending', 'ambiguous'
            )`,
           [
@@ -1829,6 +1846,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
             invoice.accepted_quote_digest,
             invoice.accepted_disclosure_digest,
             invoice.final_due_minor,
+            paymentRelease.taxMode,
             providerRequestExpiresAt
           ]
         );
@@ -2028,6 +2046,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              attempt.invoice_id,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              attempt.state as attempt_state,
              obligation.case_id,
              obligation.quote_id,
@@ -2290,6 +2309,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              attempt.state as attempt_state,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              receipt.id as receipt_id,
              receipt.checkout_session_id as receipt_checkout_session_id,
              receipt.payment_intent_id as receipt_payment_intent_id,
@@ -2486,9 +2506,9 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              ) values (
                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                $11, $12, $13, 'stripe', $14, $15, $16, $17, 'paid',
-               true, 0, false, $18, $19, $20, 'automatic', 'USD',
-               'custom_build_final', $21, $22, $23, $24, $25, $26,
-               $27::jsonb, $28, $29, $30
+               true, 0, false, $18, $19, $20, $21, 'USD',
+               'custom_build_final', $22, $23, $24, $25, $26, $27,
+               $28::jsonb, $29, $30, $31
              )`,
             [
               receiptId,
@@ -2511,6 +2531,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
               payment.subtotalMinor,
               payment.taxMinor,
               payment.totalMinor,
+              payment.taxMode,
               payment.purposeDigest,
               row.obligation_digest,
               row.completion_package_digest,
@@ -2720,6 +2741,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              attempt.command_id as customer_command_id,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              attempt.provider_request_expires_at,
              attempt.state as attempt_state,
              obligation.case_id,
@@ -3254,6 +3276,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
              attempt.invoice_id,
              attempt.checkout_session_id,
              attempt.purpose_digest,
+             attempt.tax_mode,
              obligation.case_id,
              obligation.quote_id,
              obligation.quote_revision_id,
@@ -3434,7 +3457,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
             assessmentCreditExcluded: true,
             zeroBalanceClearance: true,
             globalProviderEffectFence: true,
-            automaticTax: true,
+            taxMode: paymentRelease.taxMode,
+            exclusiveTaxBehavior: true,
             webhookWakeup: true,
             stripeReadback: true,
             atomicSettlement: true,

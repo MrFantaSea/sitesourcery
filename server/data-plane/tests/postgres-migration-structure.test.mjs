@@ -36,6 +36,56 @@ test("PostgreSQL migrations never repeat a column inside one UNIQUE constraint",
   }
 });
 
+test("TAX-PURPOSE-01 is additive at migration 109 and fails closed for disabled tax receipts", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) =>
+      name ===
+      "202608100109_stripe_tax_purpose_authority.sql"
+  );
+  assert.ok(migration, "missing TAX-PURPOSE-01 migration 109");
+  assert.match(migration.sql, /^-- TAX-PURPOSE-01[\s\S]*\bbegin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  for (const table of [
+    "service_assessment_checkout_attempts",
+    "service_assessment_payment_receipts",
+    "service_custom_build_checkout_attempts",
+    "service_custom_build_payment_receipts",
+    "service_custom_build_change_checkout_attempts",
+    "service_custom_build_change_payment_receipts",
+    "service_custom_build_final_checkout_attempts",
+    "service_custom_build_final_payment_receipts"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`alter table ss\\.${table}\\b`, "iu")
+    );
+  }
+  assert.equal(
+    [...migration.sql.matchAll(
+      /check \(tax_mode in \('automatic', 'disabled_by_owner'\)\)/giu
+    )].length,
+    8
+  );
+  assert.equal(
+    [...migration.sql.matchAll(
+      /check \(tax_mode = 'automatic' or tax_minor = 0\)/giu
+    )].length,
+    4
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /create table|drop table|provider_effects_authorized|commercial_cutover/u
+  );
+  const names = selected.map(({ name }) => name);
+  assert.equal(
+    names.filter((name) =>
+      /^20260810010[6-9]_/u.test(name)
+    ).at(-1),
+    "202608100109_stripe_tax_purpose_authority.sql"
+  );
+});
+
 test("Alakazam 35 migration is additive, held, append-only, and exact-authority bound", async () => {
   const migration = (await migrations()).find(
     ({ name }) => name ===

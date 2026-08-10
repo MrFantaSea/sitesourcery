@@ -113,8 +113,28 @@ function productionEnvironment(overrides = {}) {
       "we_sitesourcery_contract_only",
     SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_URL:
       "https://sitesourcery.com/api/v1/webhooks/stripe",
-    SITESOURCERY_STRIPE_TAX_MODE:
-      "disabled_by_owner",
+    SITESOURCERY_STRIPE_TAX_PURPOSE_AUTHORITY_JSON:
+      JSON.stringify({
+        schema:
+          "sitesourcery.stripe-tax-purpose-authority/v1",
+        provider: "stripe",
+        approved: true,
+        authorityId: "tax-purpose-authority-contract-only",
+        approvedAt: "2026-08-09T12:00:00.000Z",
+        livemode: selectedApproval.livemode,
+        defaultTaxBehavior: "exclusive",
+        purposes: {
+          alakazam: "disabled_by_owner",
+          customBuildChange: "disabled_by_owner",
+          customBuildFinal: "disabled_by_owner",
+          customBuildStart: "disabled_by_owner",
+          domainRegistration: null,
+          download: "disabled_by_owner",
+          serviceAssessment: "disabled_by_owner",
+          siteService: "disabled_by_owner"
+        },
+        automaticActivation: null
+      }),
     SITESOURCERY_STRIPE_TAX_CODES_JSON:
       JSON.stringify({
         alakazam: "txcd_10701100",
@@ -335,7 +355,8 @@ test("complete Alakazam approval binds one exact Product, tier ladder, Coupon, a
         constructed.liveApproval.apiVersion,
       configuredApiVersion:
         constructed.config.apiVersion,
-      taxMode: constructed.config.taxMode,
+      taxModes:
+        constructed.config.taxAuthority.purposes,
       successUrl: constructed.config.successUrl,
       cancelUrl: constructed.config.cancelUrl,
       portalReturnUrl:
@@ -349,7 +370,16 @@ test("complete Alakazam approval binds one exact Product, tier ladder, Coupon, a
         STRIPE_PRODUCTION_CONTRACT.apiVersion,
       configuredApiVersion:
         STRIPE_PRODUCTION_CONTRACT.apiVersion,
-      taxMode: "disabled_by_owner",
+      taxModes: {
+        alakazam: "disabled_by_owner",
+        customBuildChange: "disabled_by_owner",
+        customBuildFinal: "disabled_by_owner",
+        customBuildStart: "disabled_by_owner",
+        domainRegistration: null,
+        download: "disabled_by_owner",
+        serviceAssessment: "disabled_by_owner",
+        siteService: "disabled_by_owner"
+      },
       successUrl:
         environment.SITESOURCERY_STRIPE_CHECKOUT_SUCCESS_URL,
       cancelUrl:
@@ -1019,7 +1049,18 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
       domainAuthorization: true,
       webhookVerification: true,
       webhookEndpoint: true,
-      taxMode: "automatic",
+      taxModes: {
+        alakazam: "disabled_by_owner",
+        customBuildChange: "disabled_by_owner",
+        customBuildFinal: "disabled_by_owner",
+        customBuildStart: "disabled_by_owner",
+        domainRegistration: null,
+        download: "disabled_by_owner",
+        serviceAssessment: "disabled_by_owner",
+        siteService: "disabled_by_owner"
+      },
+      taxPurposeAuthority: true,
+      automaticTaxActivation: false,
       taxAttestation: true,
       code: "stripe_price_mismatch",
       secretKey: SECRET_KEY,
@@ -1032,6 +1073,7 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
   );
   assert.deepEqual(Object.keys(redacted).sort(), [
     "apiVersion",
+    "automaticTaxActivation",
     "code",
     "domainAuthorization",
     "environment",
@@ -1041,7 +1083,8 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
     "provider",
     "ready",
     "taxAttestation",
-    "taxMode",
+    "taxModes",
+    "taxPurposeAuthority",
     "webhookEndpoint",
     "webhookVerification"
   ]);
@@ -1078,7 +1121,7 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
         code: SECRET_KEY,
         mode: WEBHOOK_SECRET,
         environment: "price_live_secret",
-        taxMode: "approval-secret"
+        taxModes: { download: "approval-secret" }
       },
       composition
     ).code,
