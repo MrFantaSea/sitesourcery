@@ -762,10 +762,10 @@ test("registration stages no active identity until exact token activation, then 
         call.values[0] === "recovery"
     )
     .map((call) => call.values[1]);
-  assert.equal(recoveryRateDigests.length, 2);
+  assert.equal(recoveryRateDigests.length, 6);
   assert.equal(
     new Set(recoveryRateDigests).size,
-    1
+    3
   );
   assert.ok(
     model.calls.some(
@@ -773,5 +773,77 @@ test("registration stages no active identity until exact token activation, then 
         call.authorityOptions?.isolation ===
         "read-committed"
     )
+  );
+});
+
+test("recovery enforces HMAC-only client and global buckets before account lookup", async () => {
+  const model = createIdentityAuthorityModel();
+  const identity = createPostgresIdentityBridge({
+    pool: model.pool,
+    authority: model.authority,
+    pepper: PEPPER,
+    clock: () => new Date(NOW),
+    registrationMailPort: createDevelopmentRegistrationMailSink({
+      clock: { now: () => NOW }
+    }),
+    rateLimit: { attempts: 100, windowMs: 60_000, blockMs: 60_000 },
+    registrationRecoveryRateLimit: {
+      perIp: { attempts: 1, windowMs: 60_000, blockMs: 60_000 },
+      global: { attempts: 100, windowMs: 60_000, blockMs: 60_000 }
+    }
+  });
+  await identity.issueRecoveryForDelivery(
+    "first-unknown@example.test",
+    { commandId: "recovery-client-limit-001" },
+    { clientAddress: "203.0.113.11" }
+  );
+  const queryCount = model.calls.length;
+  await assert.rejects(
+    identity.issueRecoveryForDelivery(
+      "second-unknown@example.test",
+      { commandId: "recovery-client-limit-002" },
+      { clientAddress: "203.0.113.11" }
+    ),
+    (error) =>
+      error?.code === "RECOVERY_RATE_LIMITED" && error?.status === 429
+  );
+  const laterCalls = model.calls.slice(queryCount);
+  assert.equal(
+    laterCalls.some((call) => call.sql?.includes("from auth.users users")),
+    false
+  );
+  assert.doesNotMatch(JSON.stringify(model.calls), /203\.0\.113\.11/u);
+});
+
+test("recovery global bucket spans distinct client addresses", async () => {
+  const model = createIdentityAuthorityModel();
+  const identity = createPostgresIdentityBridge({
+    pool: model.pool,
+    authority: model.authority,
+    pepper: PEPPER,
+    clock: () => new Date(NOW),
+    registrationMailPort: createDevelopmentRegistrationMailSink({
+      clock: { now: () => NOW }
+    }),
+    rateLimit: { attempts: 100, windowMs: 60_000, blockMs: 60_000 },
+    registrationRecoveryRateLimit: {
+      perIp: { attempts: 100, windowMs: 60_000, blockMs: 60_000 },
+      global: { attempts: 2, windowMs: 60_000, blockMs: 60_000 }
+    }
+  });
+  for (let index = 1; index <= 2; index += 1) {
+    await identity.issueRecoveryForDelivery(
+      `global-${index}@example.test`,
+      { commandId: `recovery-global-limit-00${index}` },
+      { clientAddress: `203.0.113.${20 + index}` }
+    );
+  }
+  await assert.rejects(
+    identity.issueRecoveryForDelivery(
+      "global-3@example.test",
+      { commandId: "recovery-global-limit-003" },
+      { clientAddress: "203.0.113.23" }
+    ),
+    (error) => error?.code === "RECOVERY_RATE_LIMITED"
   );
 });

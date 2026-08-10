@@ -29,6 +29,9 @@ test("Cloudflare origin is loopback-only, no-store, and exact-host routed", asyn
     /@sitesourcery_internal path \/_sitesourcery \/_sitesourcery\/\*/u
   );
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8788/u);
+  assert.match(caddy, /request_body \{\s+max_size 1MB/u);
+  assert.match(caddy, /dial_timeout 3s/u);
+  assert.match(caddy, /response_header_timeout 20s/u);
   assert.match(
     caddy,
     /root \* \/opt\/sitesourcery\/current\/_hosted/u

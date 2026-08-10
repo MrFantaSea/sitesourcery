@@ -8,7 +8,10 @@ const ACTOR = Object.freeze({
   userId: "00000000-0000-4000-8000-000000000001"
 });
 
-function createService(catalogPort) {
+function createService(catalogPort, {
+  authorityService = null,
+  compiler = null
+} = {}) {
   let authorityServiceCalls = 0;
   const service = createCanonicalPostgresService({
     authority: {
@@ -16,8 +19,9 @@ function createService(catalogPort) {
       async readiness() {
         return { ready: true, database: "test" };
       },
-      async service() {
+      async service(...args) {
         authorityServiceCalls += 1;
+        if (authorityService) return authorityService(...args);
         throw new Error("unexpected authority service call");
       }
     },
@@ -38,7 +42,7 @@ function createService(catalogPort) {
       completeRecovery() {},
       requireRecentReauthentication() {}
     },
-    compiler: {
+    compiler: compiler ?? {
       schema: "sitesourcery.spark-compiler/v1",
       revision: "test-revision",
       compile() {}
@@ -76,6 +80,98 @@ function createService(catalogPort) {
     authorityServiceCalls: () => authorityServiceCalls
   };
 }
+
+test("version compilation cannot run before authoritative project ownership", async () => {
+  let compileCalls = 0;
+  const context = createService(createHeldCatalogPort(), {
+    authorityService: async (_options, work) => work({
+      async query() {
+        return { rowCount: 0, rows: [] };
+      }
+    }),
+    compiler: {
+      revision: "test-revision",
+      compile() {
+        compileCalls += 1;
+        throw new Error("compiler must not run");
+      }
+    }
+  });
+  await assert.rejects(
+    context.service.createVersion(
+      ACTOR,
+      "00000000-0000-4000-8000-000000000003",
+      {
+        rawFacts: {},
+        reviewAttested: true,
+        previewDigest: "a".repeat(64),
+        commandId: "authority-before-compile-001"
+      }
+    ),
+    (error) => error?.code === "NOT_FOUND" && error?.status === 404
+  );
+  assert.equal(compileCalls, 0);
+});
+
+test("compile quota is authoritative and runs before compiler work", async () => {
+  let compileCalls = 0;
+  const organizationId = "00000000-0000-4000-8000-000000000002";
+  const context = createService(createHeldCatalogPort(), {
+    authorityService: async (_options, work) => work({
+      async query(statement) {
+        const sql = String(statement).replace(/\s+/gu, " ").trim();
+        if (sql.includes("from ss.projects project")) {
+          return { rowCount: 1, rows: [{ organization_id: organizationId }] };
+        }
+        if (sql.includes("from ss.organization_memberships")) {
+          return {
+            rowCount: 1,
+            rows: [{ role: "owner", state: "active" }]
+          };
+        }
+        if (sql.startsWith("select request_digest, state, response_body")) {
+          return { rowCount: 0, rows: [] };
+        }
+        if (sql.startsWith("insert into ss.idempotency_keys")) {
+          return { rowCount: 1, rows: [] };
+        }
+        if (sql.includes("pg_advisory_xact_lock")) {
+          return { rowCount: 1, rows: [{ locked: true }] };
+        }
+        if (sql.includes("select count(*)::integer as count")) {
+          return {
+            rowCount: 1,
+            rows: [{
+              count: sql.includes("route_key = 'project.version.create'") ? 21 : 1
+            }]
+          };
+        }
+        throw new Error(`unexpected query: ${sql}`);
+      }
+    }),
+    compiler: {
+      revision: "test-revision",
+      compile() {
+        compileCalls += 1;
+        throw new Error("compiler must not run");
+      }
+    }
+  });
+  await assert.rejects(
+    context.service.createVersion(
+      ACTOR,
+      "00000000-0000-4000-8000-000000000003",
+      {
+        rawFacts: {},
+        reviewAttested: true,
+        previewDigest: "a".repeat(64),
+        commandId: "compile-quota-before-work-001"
+      }
+    ),
+    (error) => error?.code === "COMPILE_RATE_LIMITED" && error?.status === 429
+  );
+  assert.equal(compileCalls, 0);
+});
 
 test("an explicit catalog hold keeps the account and project runtime ready", async () => {
   const context = createService(createHeldCatalogPort());

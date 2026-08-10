@@ -182,6 +182,7 @@ import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
+import { ingressPolicyFromEnvironment } from "../ingress-policy.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
@@ -660,6 +661,7 @@ async function start() {
     });
   const domainRuntime =
     createHeldDomainRuntime();
+  const ingressPolicy = ingressPolicyFromEnvironment(process.env);
 
   const identityPepper = secret(
     "SITESOURCERY_IDENTITY_PEPPER"
@@ -671,6 +673,11 @@ async function start() {
     authority,
     pepper: identityPepper,
     registrationMailPort,
+    rateLimit: ingressPolicy.identity.subject,
+    registrationRecoveryRateLimit: {
+      perIp: ingressPolicy.identity.perIp,
+      global: ingressPolicy.identity.global
+    },
     pepperVersion:
       process.env.SITESOURCERY_IDENTITY_PEPPER_VERSION ??
       "v1"
@@ -756,7 +763,8 @@ async function start() {
     domainRuntime,
     projectLegalAuthority: projectLegalAuthorityConfig.authority,
     projectLegalAuthorityDiagnostic: projectLegalAuthorityConfig.diagnostic,
-    licensedBaseDomain
+    licensedBaseDomain,
+    resourceLimits: ingressPolicy.writes
   });
 
   const readiness = await service.readiness();
@@ -857,15 +865,19 @@ async function start() {
             customBuildChangePayment,
           customBuildFinalCommerce:
             customBuildFinalPayment
-        })
-      })
+        }),
+        ingressPolicy
+      }),
+      ingressPolicy
     )
   );
   tenantServer = createServer(
     createTenantNodeHandler(tenantRuntime)
   );
+  apiServer.requestTimeout =
+    ingressPolicy.node.requestDeadlineMs;
+  tenantServer.requestTimeout = 15_000;
   for (const server of [apiServer, tenantServer]) {
-    server.requestTimeout = 15_000;
     server.headersTimeout = 10_000;
     server.keepAliveTimeout = 5_000;
     server.maxHeadersCount = 100;

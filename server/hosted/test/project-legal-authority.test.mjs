@@ -539,6 +539,12 @@ test("project creation rejects rogue product and website artifact mappings", asy
     const context = createLegalService({
       projectLegalAuthority: authority,
       async query(text) {
+        if (text.includes("pg_advisory_xact_lock")) {
+          return { rows: [{ locked: true }], rowCount: 1 };
+        }
+        if (text.includes("select count(*)::integer as count")) {
+          return { rows: [{ count: 1 }], rowCount: 1 };
+        }
         if (text.includes("from ss.organization_memberships membership")) {
           return {
             rows: [{ role: "owner", state: "active" }],
