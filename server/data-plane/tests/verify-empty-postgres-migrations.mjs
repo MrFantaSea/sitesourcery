@@ -300,12 +300,13 @@ async function applyMigrations(pool) {
     "202608080103_alakazam_50_authority.sql",
     "202608080104_publication_control_authority.sql",
     "202608090104_alakazam_retained_premium_state.sql",
-    "202608090105_hosted_joint_legal_v4_authority.sql"
+    "202608090105_hosted_joint_legal_v4_authority.sql",
+    "202608100108_professional_services_reversals.sql"
   ];
   assert.equal(
     names.length,
-    58,
-    "migration proof requires exactly 58 migrations through the released joint legal V4 authority"
+    59,
+    "migration proof requires exactly 59 migrations through professional-services reversals"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -4422,6 +4423,101 @@ async function verifyPlatformSchema(pool) {
   }
 }
 
+async function verifyProfessionalServicesReversalState(pool) {
+  const proof = await pool.query(`
+    select
+      ss.hosted_runtime_contract_v108() =
+        'canonical-ss-v108-professional-services-reversals'
+        as exact_runtime_contract,
+      to_regclass('ss.service_professional_payment_lifecycles') is not null
+        and to_regclass('ss.service_professional_reversal_evidence') is not null
+        and to_regclass(
+          'ss.service_professional_reversal_reconciliations'
+        ) is not null as exact_tables,
+      to_regprocedure(
+        'ss.service_professional_payment_binding_by_intent(uuid,text)'
+      ) is not null
+        and to_regprocedure(
+          'ss.record_service_professional_reversal(uuid,uuid,text,uuid,text,text,text,text,text,text,bigint,bigint,text,jsonb,ss.sha256_hex,timestamptz,timestamptz)'
+        ) is not null
+        and to_regprocedure(
+          'ss.reconcile_service_professional_reversal(uuid,uuid,uuid,uuid,text,bigint,text,jsonb,ss.sha256_hex,timestamptz,text,timestamptz)'
+        ) is not null as exact_entry_points,
+      (
+        select count(*) = 4
+        from pg_constraint constraint_record
+        where constraint_record.conrelid =
+          'ss.service_professional_payment_lifecycles'::regclass
+          and constraint_record.contype = 'f'
+          and constraint_record.confrelid in (
+            'ss.service_assessment_payment_receipts'::regclass,
+            'ss.service_custom_build_payment_receipts'::regclass,
+            'ss.service_custom_build_change_payment_receipts'::regclass,
+            'ss.service_custom_build_final_payment_receipts'::regclass
+          )
+      ) as exact_receipt_foreign_keys,
+      not exists (
+        select 1
+        from pg_class table_record
+        where table_record.oid in (
+          'ss.service_professional_payment_lifecycles'::regclass,
+          'ss.service_professional_reversal_evidence'::regclass,
+          'ss.service_professional_reversal_reconciliations'::regclass
+        ) and not (
+          table_record.relrowsecurity and table_record.relforcerowsecurity
+        )
+      ) as exact_forced_rls,
+      has_table_privilege(
+        'service_role',
+        'ss.service_professional_payment_lifecycles',
+        'SELECT'
+      ) and not has_table_privilege(
+        'service_role',
+        'ss.service_professional_payment_lifecycles',
+        'INSERT,UPDATE,DELETE'
+      ) and not has_table_privilege(
+        'authenticated',
+        'ss.service_professional_reversal_evidence',
+        'SELECT'
+      ) and not has_table_privilege(
+        'anon',
+        'ss.service_professional_reversal_reconciliations',
+        'SELECT'
+      ) as exact_privileges,
+      exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_professional_payment_lifecycles'::regclass
+          and trigger_record.tgname = 'service_professional_lifecycle_guard'
+          and not trigger_record.tgisinternal
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_professional_reversal_evidence'::regclass
+          and trigger_record.tgname =
+            'service_professional_reversal_evidence_immutable'
+          and not trigger_record.tgisinternal
+      ) and exists (
+        select 1
+        from pg_trigger trigger_record
+        where trigger_record.tgrelid =
+          'ss.service_professional_reversal_reconciliations'::regclass
+          and trigger_record.tgname =
+            'service_professional_reconciliation_immutable'
+          and not trigger_record.tgisinternal
+      ) as exact_guards
+  `);
+  for (const [name, ready] of Object.entries(proof.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Professional-services reversal migration contract failed: ${name}`
+    );
+  }
+}
+
 export async function runMigrationVerification({
   environment = process.env,
   PoolImpl = Pool,
@@ -4473,6 +4569,7 @@ export async function runMigrationVerification({
     );
     await verifyJointLegalV4ReleaseState(pool);
     await verifyPlatformSchema(pool);
+    await verifyProfessionalServicesReversalState(pool);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
     await verifyV4ReceiptRejectsFourthAcceptance(pool);

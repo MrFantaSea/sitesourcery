@@ -3011,3 +3011,98 @@ test("generic publication controls persist exact fulfilled authority and stay Pr
     /on delete cascade|provider_effects_authorized\s*=\s*true|stripe|create table ss\.releases/iu
   );
 });
+
+test("professional reversals are additive, evidence-first, monotonic, and provider-effect free", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608100108_professional_services_reversals.sql"
+  );
+  assert.ok(migration, "missing professional-services reversal migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v47\(\)[\s\S]*hosted_runtime_contract_v53\(\)/iu
+  );
+  for (const paymentTable of [
+    "service_assessment_payment_receipts",
+    "service_custom_build_payment_receipts",
+    "service_custom_build_change_payment_receipts",
+    "service_custom_build_final_payment_receipts"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`references ss\\.${paymentTable}\\(`, "iu"),
+      `missing exact receipt FK ${paymentTable}`
+    );
+  }
+  for (const table of [
+    "service_professional_payment_lifecycles",
+    "service_professional_reversal_evidence",
+    "service_professional_reversal_reconciliations"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+  }
+  assert.match(
+    migration.sql,
+    /state text not null default 'active'[\s\S]*state in \('active', 'held', 'terminated'\)[\s\S]*revision bigint not null default 0/iu
+  );
+  assert.match(
+    migration.sql,
+    /new\.severity < old\.severity/iu
+  );
+  assert.match(
+    migration.sql,
+    /state_rank\(new\.state\)[\s\S]*< ss\.service_professional_state_rank\(old\.state\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /evidence_certainty in \('verified', 'ambiguous'\)[\s\S]*reconciliation_required[\s\S]*expected_lifecycle_revision/iu
+  );
+  for (const consequence of [
+    "preserve_records_hold_new_work",
+    "preserve_records_terminate_new_work",
+    "block_unapplied_credit",
+    "freeze_reserved_credit_no_reissue",
+    "preserve_settled_credit_no_reissue",
+    "hold_effective_quote_authority",
+    "terminate_effective_quote_authority"
+  ]) {
+    assert.match(migration.sql, new RegExp(consequence, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /service_payment_reconcile/iu
+  );
+  assert.match(
+    migration.sql,
+    /unique \(evidence_id\)[\s\S]*unique \(operator_user_id, command_id\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /provider_event_id text not null unique[\s\S]*event replay changed evidence/iu
+  );
+  assert.match(
+    migration.sql,
+    /left join lateral \([\s\S]*service_custom_build_quotes[\s\S]*order by selected\.created_at desc, selected\.id desc[\s\S]*limit 1[\s\S]*\) quote on true/iu
+  );
+  assert.match(
+    migration.sql,
+    /target_confirmed_outcome like 'refund_%'[\s\S]*evidence\.provider_event_type not in[\s\S]*target_confirmed_outcome like 'dispute_%'[\s\S]*evidence\.provider_event_type not like 'charge\.dispute\.%'/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*grant select on table ss\.%I to service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.hosted_runtime_contract_v108\(\)[\s\S]*canonical-ss-v108-professional-services-reversals[\s\S]*grant execute on function ss\.hosted_runtime_contract_v108\(\)\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /refunds[.]create|charges[.]create|payment_intents[.]create|provider_effect_authorized\s*=\s*true|on delete cascade|grant all privileges/iu
+  );
+});
