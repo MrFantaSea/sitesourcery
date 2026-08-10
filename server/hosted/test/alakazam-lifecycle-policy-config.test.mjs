@@ -9,11 +9,11 @@ import {
 const COMPLETE = Object.freeze({
   SITESOURCERY_ALAKAZAM_LIFECYCLE_MODE: "approved",
   SITESOURCERY_ALAKAZAM_LIFECYCLE_VERSION:
-    "alakazam-lifecycle.2026-08-08.v1",
-  SITESOURCERY_ALAKAZAM_LIFECYCLE_GRACE_HOURS: "72",
+    "alakazam-lifecycle.2026-08-10.v1",
+  SITESOURCERY_ALAKAZAM_LIFECYCLE_GRACE_HOURS: "168",
   SITESOURCERY_ALAKAZAM_LIFECYCLE_SUSPEND_AFTER_GRACE_HOURS: "0",
   SITESOURCERY_ALAKAZAM_LIFECYCLE_RETENTION_HOURS: "720",
-  SITESOURCERY_ALAKAZAM_LIFECYCLE_EXPORT_WINDOW_HOURS: "336",
+  SITESOURCERY_ALAKAZAM_LIFECYCLE_EXPORT_WINDOW_HOURS: "720",
   SITESOURCERY_ALAKAZAM_LIFECYCLE_GRACE_CONSEQUENCE:
     "restrict_publication",
   SITESOURCERY_ALAKAZAM_LIFECYCLE_SUSPENSION_CONSEQUENCE:
@@ -21,7 +21,7 @@ const COMPLETE = Object.freeze({
   SITESOURCERY_ALAKAZAM_LIFECYCLE_REFUND_CONSEQUENCE:
     "owner_review",
   SITESOURCERY_ALAKAZAM_LIFECYCLE_DISPUTE_CONSEQUENCE:
-    "suspend_service"
+    "owner_review"
 });
 
 test(
@@ -90,6 +90,16 @@ test(
       () =>
         createConfiguredAlakazamLifecyclePolicy({
           environment: {
+            ...COMPLETE,
+            SITESOURCERY_ALAKAZAM_LIFECYCLE_GRACE_HOURS: "72"
+          }
+        }),
+      { code: "ALAKAZAM_LIFECYCLE_POLICY_NOT_CANONICAL" }
+    );
+    assert.throws(
+      () =>
+        createConfiguredAlakazamLifecyclePolicy({
+          environment: {
             SITESOURCERY_ALAKAZAM_LIFECYCLE_MODE: "maybe"
           }
         }),
@@ -109,15 +119,15 @@ test(
     assert.deepEqual(composition.policy, {
       schema: "sitesourcery.alakazam-lifecycle-policy/v1",
       approved: true,
-      policyVersion: "alakazam-lifecycle.2026-08-08.v1",
-      graceHours: 72,
+      policyVersion: "alakazam-lifecycle.2026-08-10.v1",
+      graceHours: 168,
       suspendAfterGraceHours: 0,
       retentionHours: 720,
-      exportWindowHours: 336,
+      exportWindowHours: 720,
       graceConsequence: "restrict_publication",
       suspensionConsequence: "suspend_service",
       refundConsequence: "owner_review",
-      disputeConsequence: "suspend_service",
+      disputeConsequence: "owner_review",
       openDecisions: []
     });
   }

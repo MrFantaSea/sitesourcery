@@ -852,19 +852,18 @@ const FAILED_AT = "2026-08-02T12:00:20.000Z";
 const FAILED_VERIFIED_AT = "2026-08-02T12:00:25.000Z";
 const FAILED_OBSERVED_AT = "2026-08-02T12:00:30.000Z";
 
-// A hypothetical ruling used only to exercise the machinery. The owner
-// has not made this ruling; nothing ships it.
+// The exact canonical ruling used to exercise the legacy lifecycle adapter.
 const EXAMPLE_POLICY = createAlakazamLifecyclePolicy({
   approved: true,
-  policyVersion: "alakazam-lifecycle.2026-08-08.v1",
-  graceHours: 72,
+  policyVersion: "alakazam-lifecycle.2026-08-10.v1",
+  graceHours: 168,
   suspendAfterGraceHours: 0,
   retentionHours: 720,
-  exportWindowHours: 336,
+  exportWindowHours: 720,
   graceConsequence: "restrict_publication",
   suspensionConsequence: "suspend_service",
   refundConsequence: "owner_review",
-  disputeConsequence: "suspend_service"
+  disputeConsequence: "owner_review"
 });
 
 function incidentInvoiceFacts(overrides = {}) {
@@ -1141,7 +1140,7 @@ test(
       assert.equal(subscription.rows[0].revision, "3");
       assert.equal(
         subscription.rows[0].grace_ends_at.toISOString(),
-        "2026-08-05T12:00:20.000Z"
+        "2026-08-09T12:00:20.000Z"
       );
 
       // 2. The ruled boundary passes and the subscription suspends.
@@ -1157,7 +1156,7 @@ test(
           policy: EXAMPLE_POLICY,
           from: "grace",
           signal: "grace_expired",
-          observedAt: "2026-08-05T12:00:21.000Z",
+          observedAt: "2026-08-09T12:00:21.000Z",
           firstFailedAt: inGrace.subscription.firstFailedAt,
           graceEndsAt: inGrace.subscription.graceEndsAt
         });
@@ -1166,13 +1165,13 @@ test(
         subscription: inGrace.subscription,
         event: incidentEvent({
           stripeEventId: "evt_alakazam_lifecycle_failed_2",
-          occurredAt: "2026-08-05T12:00:21.000Z",
-          signatureVerifiedAt: "2026-08-05T12:00:26.000Z"
+          occurredAt: "2026-08-09T12:00:21.000Z",
+          signatureVerifiedAt: "2026-08-09T12:00:26.000Z"
         }),
         invoice: incidentInvoiceFacts({
           attemptCount: 2,
           nextPaymentAttemptAt: null,
-          providerObservedAt: "2026-08-05T12:00:31.000Z"
+          providerObservedAt: "2026-08-09T12:00:31.000Z"
         }),
         decision: suspendDecision,
         eventRowId: randomUUID(),
@@ -1208,7 +1207,7 @@ test(
           policy: EXAMPLE_POLICY,
           from: "suspended",
           signal: "payment_recovered",
-          observedAt: "2026-08-06T09:00:00.000Z",
+          observedAt: "2026-08-10T09:00:00.000Z",
           firstFailedAt:
             beforeRecovery.subscription.firstFailedAt,
           graceEndsAt:
@@ -1224,15 +1223,15 @@ test(
           stripeInvoiceId: INCIDENT_INVOICE_ID,
           stripeSubscriptionId: "sub_alakazam_lifecycle",
           payloadDigest: digest("recovered payload"),
-          signatureVerifiedAt: "2026-08-06T09:00:05.000Z",
-          occurredAt: "2026-08-06T09:00:00.000Z"
+          signatureVerifiedAt: "2026-08-10T09:00:05.000Z",
+          occurredAt: "2026-08-10T09:00:00.000Z"
         },
         invoice: renewalInvoiceFacts({
           stripeInvoiceId: INCIDENT_INVOICE_ID,
-          providerPaymentTime: "2026-08-06T09:00:00.000Z",
-          providerObservedAt: "2026-08-06T09:00:09.000Z",
+          providerPaymentTime: "2026-08-10T09:00:00.000Z",
+          providerObservedAt: "2026-08-10T09:00:09.000Z",
           subscription: renewedSubscriptionFacts({
-            providerObservedAt: "2026-08-06T09:00:09.000Z"
+            providerObservedAt: "2026-08-10T09:00:09.000Z"
           })
         }),
         decision: recoveryDecision,

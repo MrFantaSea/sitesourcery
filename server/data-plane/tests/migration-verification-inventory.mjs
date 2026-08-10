@@ -20,7 +20,8 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608100112_operator_work_queue.sql",
   "202608100113_custom_direct_opportunity.sql",
   "202608100114_commerce_transition_notifications.sql",
-  "202608100115_accounting_purpose_journal.sql"
+  "202608100115_accounting_purpose_journal.sql",
+  "202608100116_alakazam_policy_authority.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(

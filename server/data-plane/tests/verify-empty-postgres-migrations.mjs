@@ -30,6 +30,8 @@ import { createCommerceTransitionNotifications } from
   "../../hosted/commerce-transition-notifications.mjs";
 import { createPostgresCommerceTransitionNotificationRepository } from
   "../../hosted/commerce-transition-notifications-postgres.mjs";
+import { createPostgresAlakazamPolicyAuthorityRepository } from
+  "../../hosted/alakazam-policy-authority-postgres.mjs";
 import { resolveMigrationVerificationInventory } from
   "./migration-verification-inventory.mjs";
 import { createPostgresCustomServicesCustomBuild } from
@@ -5883,6 +5885,162 @@ async function verifyPlatformSchema(pool) {
   }
 }
 
+async function verifyAlakazamPolicyAuthority(pool) {
+  const before = await pool.query(`
+    select
+      (select count(*) from ss.commerce_v2_download_dispatches)::text
+        as download_count,
+      (select count(*) from ss.service_custom_build_quotes)::text
+        as custom_count
+  `);
+  const subscriptionId = randomUUID();
+  const organizationId = randomUUID();
+  const projectId = randomUUID();
+  const customerId = randomUUID();
+  const stripeCustomerRowId = randomUUID();
+  const initialQuoteId = randomUUID();
+  const observedAt = "2026-08-10T12:00:00.000Z";
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("set local session_replication_role = replica");
+    await client.query(
+      `insert into ss.alakazam_subscriptions (
+         id, organization_id, project_id, customer_user_id,
+         stripe_customer_row_id, stripe_subscription_id,
+         stripe_subscription_item_id, stripe_price_id,
+         initial_quote_id, tier_id, status, currency, amount_minor,
+         provider_observed_at, provider_facts_digest, revision
+       ) values (
+         $1, $2, $3, $4, $5, $6, $7, $8, $9,
+         'alakazam_25', 'pending', 'USD', 2500,
+         $10::timestamptz, $11, 1
+       )`,
+      [
+        subscriptionId,
+        organizationId,
+        projectId,
+        customerId,
+        stripeCustomerRowId,
+        `sub_policy_${subscriptionId.replaceAll("-", "")}`,
+        `si_policy_${subscriptionId.replaceAll("-", "")}`,
+        "price_policy_alakazam_25",
+        initialQuoteId,
+        observedAt,
+        "a".repeat(64)
+      ]
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  const policy = await pool.query(`
+    select
+      policy_id,
+      policy_digest,
+      policy_digest = ss.project_legal_json_digest(policy_document)
+        as digest_ready,
+      state = 'held'
+        and not commercial_effects
+        and not provider_effects
+        and not publication_effects
+        and not automatic_recovery_from_reversal_evidence
+        as effects_held,
+      has_table_privilege(
+        'service_role', 'ss.alakazam_policy_authorities', 'SELECT'
+      )
+        and not has_table_privilege(
+          'service_role', 'ss.alakazam_policy_authorities',
+          'INSERT,UPDATE,DELETE'
+        )
+        and not has_table_privilege(
+          'anon', 'ss.alakazam_policy_authorities', 'SELECT'
+        )
+        and not has_table_privilege(
+          'authenticated', 'ss.alakazam_policy_authorities', 'SELECT'
+        ) as grants_ready,
+      ss.hosted_alakazam_policy_authority_contract_v1() =
+        'canonical-alakazam-policy-authority-v1-held'
+        as contract_ready
+    from ss.alakazam_policy_authorities
+  `);
+  assert.deepEqual(policy.rows, [{
+    policy_id: "SS-ALAKAZAM-POLICY-2026-08-10-V1",
+    policy_digest:
+      "8b7562daef4b3d91fff1bea04da5cdd982755b901e58f0e60a780fde17ce9bb1",
+    digest_ready: true,
+    effects_held: true,
+    grants_ready: true,
+    contract_ready: true
+  }]);
+
+  const selectProjection = () => pool.query(
+    `select
+       organization_id, project_id, customer_user_id, subscription_id,
+       source_subscription_revision::text,
+       source_subscription_status, transition_event_id,
+       lifecycle_state, legacy_evidence_compatible,
+       policy_id, authority_digest, state, hold_reason,
+       commercial_effects, provider_effects, publication_effects,
+       automatic_recovery_from_reversal_evidence,
+       observed_at
+     from ss.alakazam_policy_subscription_authority_v1
+     where subscription_id = $1`,
+    [subscriptionId]
+  );
+  const first = await selectProjection();
+  const replay = await selectProjection();
+  assert.deepEqual(replay.rows, first.rows);
+  assert.equal(first.rowCount, 1);
+  assert.equal(first.rows[0].lifecycle_state, "pending");
+  assert.equal(first.rows[0].legacy_evidence_compatible, true);
+  assert.equal(first.rows[0].state, "held");
+  assert.equal(first.rows[0].commercial_effects, false);
+  assert.equal(first.rows[0].provider_effects, false);
+  assert.equal(first.rows[0].publication_effects, false);
+  assert.equal(
+    first.rows[0].automatic_recovery_from_reversal_evidence,
+    false
+  );
+
+  const repository = createPostgresAlakazamPolicyAuthorityRepository({
+    authority: createCanonicalPostgresAuthority({ pool })
+  });
+  const readiness = await repository.readiness();
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.providerEffects, false);
+  assert.equal(readiness.automaticRecoveryFromReversalEvidence, false);
+  const canonicalPolicy = await repository.policy();
+  assert.equal(
+    canonicalPolicy.policyId,
+    "SS-ALAKAZAM-POLICY-2026-08-10-V1"
+  );
+  const repositoryInput = {
+    tenantId: organizationId,
+    projectId,
+    customerId,
+    subscriptionId
+  };
+  const firstRepositoryRead = await repository.read(repositoryInput);
+  const replayRepositoryRead = await repository.read(repositoryInput);
+  assert.deepEqual(replayRepositoryRead, firstRepositoryRead);
+  assert.equal(firstRepositoryRead.lifecycleState, "pending");
+  assert.equal(firstRepositoryRead.providerEffects, false);
+
+  const after = await pool.query(`
+    select
+      (select count(*) from ss.commerce_v2_download_dispatches)::text
+        as download_count,
+      (select count(*) from ss.service_custom_build_quotes)::text
+        as custom_count
+  `);
+  assert.deepEqual(after.rows, before.rows);
+}
+
 async function verifyProfessionalServicesReversalState(pool) {
   const proof = await pool.query(`
     select
@@ -6032,6 +6190,7 @@ export async function runMigrationVerification({
     await verifyCustomerEngagementBootstrapState(pool);
     await verifyCustomerEngagementBootstrapJourney(pool);
     await verifyPlatformSchema(pool);
+    await verifyAlakazamPolicyAuthority(pool);
     await verifyProfessionalServicesReversalState(pool);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
@@ -6067,6 +6226,7 @@ export async function runMigrationVerification({
     writeOutput("operatorWorkQueuePostgresProof true\n");
     writeOutput("accountingPurposeJournalHeldPostgresProof true\n");
     writeOutput("commerceTransitionNotificationPostgresProof true\n");
+    writeOutput("alakazamPolicyAuthorityPostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
