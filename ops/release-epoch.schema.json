@@ -1,0 +1,424 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sitesourcery.com/schemas/release-epoch-v1.json",
+  "title": "Site Sourcery release epoch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "epochId",
+    "binding",
+    "installedIdentity",
+    "publicMode",
+    "providerPurposes",
+    "proofs",
+    "assurance"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sitesourcery.release-epoch/v1"
+    },
+    "epochId": {
+      "const": "shape-epoch-20260810"
+    },
+    "binding": {
+      "const": {
+        "source": {
+          "coreReleaseCommitSha": "84aca6b757a806b428ae0cce8115c12dcc6486cd",
+          "githubMainCommitSha": "614e971458ef5d14b9179c0fe17edcf3ce2acc09",
+          "legalPreparationCommitSha": "c246068edbee7755f2972252c43a77e8fc9c9625",
+          "legalCandidateCommitSha": "69ad11c682dda9d6f792492d322b662dcbc98b4b",
+          "requiredProductionPredecessorCommitSha": "eff8195640db58390d03eefbe863248220994e37"
+        },
+        "artifact": {
+          "publicArtifactCommitSha": "69ad11c682dda9d6f792492d322b662dcbc98b4b",
+          "contentSealSha256": "53f6d6cbbf26f2df59849fbeb8afaab8ca5377ad67a66d6aa506cb01a64706d3",
+          "privacySha256": "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+          "privacyByteCount": 31451,
+          "websiteTermsSha256": "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+          "websiteTermsByteCount": 26215,
+          "legalCenterSha256": "e9e3026d5e97b764b523f46e01ee5ce9b86e471cf427254f83e97f61457ab4d2",
+          "legalCenterByteCount": 4980
+        },
+        "legal": {
+          "authoritySchema": "sitesourcery.project-legal-authority/v4",
+          "acceptanceSchema": "sitesourcery.project-legal-acceptance/v4",
+          "authorityDigest": "ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968",
+          "effectiveAt": "2026-08-09T21:42:11.000Z",
+          "privacyVersion": "SS-HOSTED-PRIVACY-2026-08-09-V4",
+          "websiteTermsVersion": "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4"
+        },
+        "database": {
+          "migrationCount": 58,
+          "latestMigration": "202608090105_hosted_joint_legal_v4_authority.sql"
+        },
+        "sha256": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+      }
+    },
+    "installedIdentity": {
+      "$ref": "#/$defs/installedIdentity"
+    },
+    "publicMode": {
+      "const": {
+        "state": "held",
+        "allowsDeployment": false,
+        "allowsDnsMutation": false,
+        "allowsOriginTraffic": false,
+        "allowsProviderEffects": false
+      }
+    },
+    "providerPurposes": {
+      "const": {
+        "cloudflare": {
+          "dnsAuthority": "held",
+          "edgePublication": "held",
+          "tunnelRouting": "held"
+        },
+        "github": {
+          "pagesPublication": "held"
+        },
+        "resend": {
+          "operationsAlerts": "held",
+          "recoveryMail": "held",
+          "registrationMail": "held"
+        },
+        "spaceship": {
+          "dnsDelegation": "held",
+          "registrarMutation": "held"
+        },
+        "stripe": {
+          "alakazamBilling": "held",
+          "alakazamLifecycle": "held",
+          "automaticTaxCollection": "held",
+          "customBuildChangePayment": "held",
+          "customBuildFinalPayment": "held",
+          "customBuildInitialPayment": "held",
+          "downloadPayment": "held",
+          "providerAccess": "held",
+          "websiteAssessmentPayment": "held",
+          "webhookConfiguration": "held"
+        }
+      }
+    },
+    "proofs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backup", "monitor", "rollback"],
+      "properties": {
+        "backup": {
+          "$ref": "#/$defs/boundProof"
+        },
+        "monitor": {
+          "$ref": "#/$defs/boundProof"
+        },
+        "rollback": {
+          "$ref": "#/$defs/rollbackProof"
+        }
+      }
+    },
+    "assurance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "liveness",
+        "dependencyReadiness",
+        "customerCapability"
+      ],
+      "properties": {
+        "liveness": {
+          "$ref": "#/$defs/liveness"
+        },
+        "dependencyReadiness": {
+          "$ref": "#/$defs/dependencyReadiness"
+        },
+        "customerCapability": {
+          "const": {
+            "state": "held",
+            "bindingSha256": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6",
+            "allowsCustomerEffects": false,
+            "enabledCapabilities": []
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "isoTimestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "boundProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bindingSha256",
+        "receiptSha256",
+        "observedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["not_proven", "verified"]
+        },
+        "bindingSha256": {
+          "const": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+        },
+        "receiptSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "observedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "not_proven" },
+            "receiptSha256": { "type": "null" },
+            "observedAt": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "verified" },
+            "receiptSha256": { "$ref": "#/$defs/sha256" },
+            "observedAt": { "$ref": "#/$defs/isoTimestamp" }
+          }
+        }
+      ]
+    },
+    "installedIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "hostRole",
+        "expectedReleaseCommitSha",
+        "expectedMigrationCount",
+        "observedReleaseCommitSha",
+        "observedMigrationCount",
+        "bindingSha256",
+        "receiptSha256",
+        "observedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["not_proven", "verified"]
+        },
+        "hostRole": {
+          "const": "dell_origin_hq_database"
+        },
+        "expectedReleaseCommitSha": {
+          "const": "84aca6b757a806b428ae0cce8115c12dcc6486cd"
+        },
+        "expectedMigrationCount": {
+          "const": 58
+        },
+        "observedReleaseCommitSha": {
+          "oneOf": [
+            { "$ref": "#/$defs/commitSha" },
+            { "type": "null" }
+          ]
+        },
+        "observedMigrationCount": {
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "null" }
+          ]
+        },
+        "bindingSha256": {
+          "const": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+        },
+        "receiptSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "observedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "not_proven" },
+            "observedReleaseCommitSha": { "type": "null" },
+            "observedMigrationCount": { "type": "null" },
+            "receiptSha256": { "type": "null" },
+            "observedAt": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "verified" },
+            "observedReleaseCommitSha": {
+              "const": "84aca6b757a806b428ae0cce8115c12dcc6486cd"
+            },
+            "observedMigrationCount": { "const": 58 },
+            "receiptSha256": { "$ref": "#/$defs/sha256" },
+            "observedAt": { "$ref": "#/$defs/isoTimestamp" }
+          }
+        }
+      ]
+    },
+    "rollbackProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bindingSha256",
+        "receiptSha256",
+        "observedAt",
+        "targetPublicCommitSha"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["not_proven", "verified"]
+        },
+        "bindingSha256": {
+          "const": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+        },
+        "receiptSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "observedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        },
+        "targetPublicCommitSha": {
+          "const": "eff8195640db58390d03eefbe863248220994e37"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "not_proven" },
+            "receiptSha256": { "type": "null" },
+            "observedAt": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "verified" },
+            "receiptSha256": { "$ref": "#/$defs/sha256" },
+            "observedAt": { "$ref": "#/$defs/isoTimestamp" }
+          }
+        }
+      ]
+    },
+    "liveness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "bindingSha256",
+        "proofSha256",
+        "observedAt"
+      ],
+      "properties": {
+        "state": {
+          "enum": ["not_observed", "observed"]
+        },
+        "bindingSha256": {
+          "const": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+        },
+        "proofSha256": {
+          "oneOf": [
+            { "$ref": "#/$defs/sha256" },
+            { "type": "null" }
+          ]
+        },
+        "observedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/isoTimestamp" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "not_observed" },
+            "proofSha256": { "type": "null" },
+            "observedAt": { "type": "null" }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "observed" },
+            "proofSha256": { "$ref": "#/$defs/sha256" },
+            "observedAt": { "$ref": "#/$defs/isoTimestamp" }
+          }
+        }
+      ]
+    },
+    "dependencyReadiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "bindingSha256", "blockers"],
+      "properties": {
+        "state": {
+          "enum": ["blocked", "ready"]
+        },
+        "bindingSha256": {
+          "const": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+        },
+        "blockers": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "installed_identity",
+              "backup_proof",
+              "monitor_proof",
+              "rollback_proof"
+            ]
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "state": { "const": "blocked" },
+            "blockers": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "properties": {
+            "state": { "const": "ready" },
+            "blockers": {
+              "type": "array",
+              "maxItems": 0
+            }
+          }
+        }
+      ]
+    }
+  }
+}
