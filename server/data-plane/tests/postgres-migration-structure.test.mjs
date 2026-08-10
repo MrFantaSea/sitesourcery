@@ -2905,7 +2905,7 @@ test("customer engagement bootstrap is additive, actor-bound, and default-deny",
   );
   assert.match(
     migration.sql,
-    /create function ss\.hosted_runtime_contract_v54\(\)[\s\S]*canonical-ss-v54-customer-engagement-bootstrap[\s\S]*grant execute on function ss\.hosted_runtime_contract_v54\(\)\s+to service_role/iu
+    /create function ss\.hosted_runtime_contract_v106\(\)[\s\S]*canonical-ss-v106-customer-engagement-bootstrap[\s\S]*grant execute on function ss\.hosted_runtime_contract_v106\(\)\s+to service_role/iu
   );
   assert.doesNotMatch(
     migration.sql,

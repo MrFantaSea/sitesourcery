@@ -446,18 +446,18 @@ from public, anon, authenticated, service_role;
 revoke all on function ss.guard_customer_engagement()
 from public, anon, authenticated, service_role;
 
-create function ss.hosted_runtime_contract_v54()
+create function ss.hosted_runtime_contract_v106()
 returns text
 language sql
 stable
 set search_path = pg_catalog
 as $$
-select 'canonical-ss-v54-customer-engagement-bootstrap'
+select 'canonical-ss-v106-customer-engagement-bootstrap'
 $$;
 
-revoke all on function ss.hosted_runtime_contract_v54()
+revoke all on function ss.hosted_runtime_contract_v106()
 from public, anon, authenticated, service_role;
-grant execute on function ss.hosted_runtime_contract_v54()
+grant execute on function ss.hosted_runtime_contract_v106()
 to service_role;
 
 commit;
