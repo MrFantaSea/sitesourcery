@@ -349,12 +349,13 @@ async function applyMigrations(pool) {
     "202608100108_professional_services_reversals.sql",
     "202608100109_stripe_tax_purpose_authority.sql",
     "202608100110_support_privacy_case_lifecycle.sql",
-    "202608100112_operator_work_queue.sql"
+    "202608100112_operator_work_queue.sql",
+    "202608100115_accounting_purpose_journal.sql"
   ];
   assert.equal(
     names.length,
-    64,
-    "migration proof requires exactly 64 migrations through purpose tax, support/privacy cases, and the held operator work queue"
+    65,
+    "migration proof requires exactly 65 migrations through the held accounting purpose journal"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -1187,6 +1188,53 @@ async function verifyOperatorWorkQueue(pool) {
   assert.equal(secondEvidenceItem.revision, firstEvidenceItem.revision);
   assert.equal(secondEvidenceItem.digest, firstEvidenceItem.digest);
   assert.deepEqual(await queue.list(scope), second);
+}
+
+async function verifyAccountingPurposeJournal(pool) {
+  const proof = await pool.query(`
+    select
+      ss.hosted_accounting_purpose_journal_contract_v1() =
+        'canonical-accounting-purpose-journal-v1-projection-only-held'
+        as contract_ready,
+      (
+        select relation.relrowsecurity and relation.relforcerowsecurity
+          from pg_class relation
+         where relation.oid = 'ss.accounting_purpose_journal'::regclass
+      ) as forced_rls,
+      has_table_privilege(
+        'service_role', 'ss.accounting_purpose_journal', 'SELECT'
+      ) and not has_table_privilege(
+        'service_role', 'ss.accounting_purpose_journal',
+        'INSERT,UPDATE,DELETE'
+      ) as exact_service_privileges,
+      not has_table_privilege(
+        'authenticated', 'ss.accounting_purpose_journal', 'SELECT'
+      ) and not has_table_privilege(
+        'anon', 'ss.accounting_purpose_journal', 'SELECT'
+      ) as customer_read_denied,
+      to_regprocedure(
+        'ss.project_accounting_purpose_journal_v1()'
+      ) is not null as projection_ready,
+      (select count(*) = 0 from ss.accounting_purpose_journal)
+        as held_empty_default,
+      not exists (
+        select 1
+          from information_schema.columns
+         where table_schema = 'ss'
+           and table_name = 'accounting_purpose_journal'
+           and column_name in (
+             'customer_email', 'customer_phone', 'provider_customer_id',
+             'provider_payment_intent_id', 'raw_payload', 'secret'
+           )
+      ) as unsafe_columns_absent
+  `);
+  for (const [name, ready] of Object.entries(proof.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `accounting purpose journal contract failed: ${name}`
+    );
+  }
 }
 
 async function verifyJointLegalV4ReleaseState(pool) {
@@ -5763,6 +5811,7 @@ export async function runMigrationVerification({
     await verifyDurableMailLifecycle(pool);
     await verifySupportPrivacyCaseLifecycle(pool);
     await verifyOperatorWorkQueue(pool);
+    await verifyAccountingPurposeJournal(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -5787,6 +5836,7 @@ export async function runMigrationVerification({
     writeOutput("durableMailLifecyclePostgresProof true\n");
     writeOutput("supportPrivacyCaseLifecyclePostgresProof true\n");
     writeOutput("operatorWorkQueuePostgresProof true\n");
+    writeOutput("accountingPurposeJournalHeldPostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
