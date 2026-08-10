@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sitesourcery.com/schemas/origin-release-input-v1.json",
+  "title": "Site Sourcery Dell/HQ origin successor release input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "releaseId", "epoch", "digest"],
+  "properties": {
+    "schema": {
+      "const": "sitesourcery.origin-release-input/v1"
+    },
+    "releaseId": {
+      "$ref": "#/$defs/safeIdentifier"
+    },
+    "epoch": {
+      "$ref": "#/$defs/epoch"
+    },
+    "digest": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "safeIdentifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))[A-Za-z0-9._/-]+$"
+    },
+    "manifestReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256"],
+      "properties": {
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "latest", "manifestSha256"],
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latest": {
+          "type": "string",
+          "pattern": "^[0-9]{12}_[a-z0-9_]+\\.sql$"
+        },
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "legal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorityDigest",
+        "privacyVersion",
+        "privacySha256",
+        "privacyByteCount",
+        "websiteTermsVersion",
+        "websiteTermsSha256",
+        "websiteTermsByteCount",
+        "manifestSha256"
+      ],
+      "properties": {
+        "authorityDigest": {
+          "$ref": "#/$defs/sha256"
+        },
+        "privacyVersion": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 127
+        },
+        "privacySha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "privacyByteCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "websiteTermsVersion": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 127
+        },
+        "websiteTermsSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "websiteTermsByteCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "authority": {
+      "const": {
+        "state": "held",
+        "allowsCapabilities": false,
+        "allowsCustomerEffects": false,
+        "allowsProviderEffects": false,
+        "allowsDnsMutation": false,
+        "allowsDeployment": false,
+        "enabledCapabilities": []
+      }
+    },
+    "epoch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "epochId",
+        "supersedes",
+        "basis",
+        "layout",
+        "source",
+        "artifact",
+        "units",
+        "environmentSchema",
+        "migration",
+        "legal",
+        "ingress",
+        "rollback",
+        "authority",
+        "bindingSha256"
+      ],
+      "properties": {
+        "schema": {
+          "const": "sitesourcery.release-epoch-successor-input/v1"
+        },
+        "epochId": {
+          "$ref": "#/$defs/safeIdentifier"
+        },
+        "supersedes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["epochId", "bindingSha256"],
+          "properties": {
+            "epochId": {
+              "const": "shape-epoch-20260810"
+            },
+            "bindingSha256": {
+              "const": "50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6"
+            }
+          }
+        },
+        "basis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["unionBaseCommitSha"],
+          "properties": {
+            "unionBaseCommitSha": {
+              "const": "5458d9641fd42c9a1b436c6af6bb6600b60bce74"
+            }
+          }
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifactRoot",
+            "migrationRoot",
+            "legalConstantsPath"
+          ],
+          "properties": {
+            "artifactRoot": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "migrationRoot": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "legalConstantsPath": {
+              "$ref": "#/$defs/relativePath"
+            }
+          }
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commitSha", "treeSha"],
+          "properties": {
+            "commitSha": {
+              "$ref": "#/$defs/commitSha"
+            },
+            "treeSha": {
+              "$ref": "#/$defs/commitSha"
+            }
+          }
+        },
+        "artifact": {
+          "$ref": "#/$defs/manifestReference"
+        },
+        "units": {
+          "$ref": "#/$defs/manifestReference"
+        },
+        "environmentSchema": {
+          "$ref": "#/$defs/manifestReference"
+        },
+        "migration": {
+          "$ref": "#/$defs/migration"
+        },
+        "legal": {
+          "$ref": "#/$defs/legal"
+        },
+        "ingress": {
+          "$ref": "#/$defs/manifestReference"
+        },
+        "rollback": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "predecessorCommitSha",
+            "predecessorTreeSha",
+            "predecessorArtifactManifestSha256"
+          ],
+          "properties": {
+            "predecessorCommitSha": {
+              "$ref": "#/$defs/commitSha"
+            },
+            "predecessorTreeSha": {
+              "$ref": "#/$defs/commitSha"
+            },
+            "predecessorArtifactManifestSha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "authority": {
+          "$ref": "#/$defs/authority"
+        },
+        "bindingSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}
