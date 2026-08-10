@@ -48,8 +48,22 @@ Both Spaceship authorities continued returning that same delegation.
 Do not change nameservers before `2026-08-10T23:48:36Z`. That is one full
 old-DS TTL (`86400` seconds) after confirmed parent removal.
 
-At or after that time, re-prove DS absence and the exact seven-record
-Cloudflare fallback, then change only the registrar nameservers to:
+At or after that time, the release owner must run the read-only fail-closed
+preflight from the installed release:
+
+```sh
+npm run ops:dns-preflight
+```
+
+Do not run the live command before the cutoff. Its canonical receipt covers
+all 13 `.com` authorities, the three named public resolvers, and both assigned
+Cloudflare authorities. It verifies DS absence, exact current and pending
+delegations, the four fallback A answers, and the exact MX/SPF/DKIM answers.
+The receipt is evidence only and always contains `mutationAuthorized:false`;
+success does not authorize or perform a DNS change.
+
+Only after preserving and independently reviewing a successful receipt,
+change only the registrar nameservers under a separate owner authorization to:
 
 - `jasmine.ns.cloudflare.com`
 - `nash.ns.cloudflare.com`
