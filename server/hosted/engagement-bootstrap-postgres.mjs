@@ -285,16 +285,80 @@ export function createPostgresEngagementBootstrapRepository({
               ss.hosted_runtime_contract_v106() =
                 'canonical-ss-v106-customer-engagement-bootstrap'
                 as contract_ready,
-              to_regclass('ss.customer_engagement_invitations') is not null
-                as invitations_ready,
-              to_regclass('ss.customer_engagements') is not null
-                as engagements_ready
+              invitation.relrowsecurity
+                and invitation.relforcerowsecurity
+                and engagement.relrowsecurity
+                and engagement.relforcerowsecurity
+                as rls_ready,
+              has_table_privilege(
+                'service_role',
+                'ss.customer_engagement_invitations',
+                'SELECT,INSERT,UPDATE'
+              )
+                and not has_table_privilege(
+                  'service_role',
+                  'ss.customer_engagement_invitations',
+                  'DELETE'
+                )
+                and has_table_privilege(
+                  'service_role',
+                  'ss.customer_engagements',
+                  'SELECT,INSERT'
+                )
+                and not has_table_privilege(
+                  'service_role',
+                  'ss.customer_engagements',
+                  'UPDATE,DELETE'
+                )
+                and not has_table_privilege(
+                  'anon',
+                  'ss.customer_engagement_invitations',
+                  'SELECT,INSERT,UPDATE,DELETE'
+                )
+                and not has_table_privilege(
+                  'authenticated',
+                  'ss.customer_engagement_invitations',
+                  'SELECT,INSERT,UPDATE,DELETE'
+                )
+                and has_table_privilege(
+                  'authenticated',
+                  'ss.customer_engagements',
+                  'SELECT'
+                )
+                and not has_table_privilege(
+                  'authenticated',
+                  'ss.customer_engagements',
+                  'INSERT,UPDATE,DELETE'
+                ) as grants_ready,
+              exists (
+                select 1
+                  from pg_catalog.pg_trigger trigger
+                 where trigger.tgrelid = invitation.oid
+                   and trigger.tgname =
+                     'customer_engagement_invitations_guard'
+                   and trigger.tgenabled <> 'D'
+              )
+                and exists (
+                  select 1
+                    from pg_catalog.pg_trigger trigger
+                   where trigger.tgrelid = engagement.oid
+                     and trigger.tgname =
+                       'customer_engagements_guard'
+                     and trigger.tgenabled <> 'D'
+                ) as triggers_ready
+              from pg_catalog.pg_class invitation
+              join pg_catalog.pg_class engagement
+                on engagement.oid =
+                  to_regclass('ss.customer_engagements')
+             where invitation.oid =
+               to_regclass('ss.customer_engagement_invitations')
           `)
         );
         const row = result.rows[0];
         const ready = row?.contract_ready === true &&
-          row?.invitations_ready === true &&
-          row?.engagements_ready === true;
+          row?.rls_ready === true &&
+          row?.grants_ready === true &&
+          row?.triggers_ready === true;
         return Object.freeze({
           ready,
           kind: "canonical-postgres-engagement-bootstrap",

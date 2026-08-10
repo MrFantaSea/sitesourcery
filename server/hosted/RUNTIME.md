@@ -58,6 +58,7 @@ registrant-contact commands before the customer journey is complete.
   existing ten-connection ceiling and admits at most eight API transactions so
   two physical slots remain reserved for the future WORKERS-01 process split.
 - `SITESOURCERY_IDENTITY_PEPPER`, base64 for at least 32 bytes
+- `SITESOURCERY_ENGAGEMENT_TOKEN_SECRET`, independent base64 for at least 32 bytes
 - `SITESOURCERY_IDENTITY_PEPPER_CONFIG`, the exact versioned v1 metadata
   contract naming the current writer and zero to three prior verifier-only
   versions. It contains no secret material; startup fails closed when the

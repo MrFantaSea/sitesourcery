@@ -157,6 +157,10 @@ import {
 } from "../download-payment-postgres.mjs";
 import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
 import {
+  assertProductionEngagementReady,
+  createProductionEngagementBootstrap
+} from "../engagement-production-composition.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -722,6 +726,19 @@ async function start() {
       : configuredRecoveryMailPort;
   const projectLegalAuthorityConfig =
     createProjectLegalAuthorityFromEnvironment();
+  const engagementBootstrap =
+    createProductionEngagementBootstrap({
+      authority,
+      legalAuthority: projectLegalAuthorityConfig.authority,
+      identityPepperConfiguration,
+      tokenSecret: projectLegalAuthorityConfig.authority
+        ? secret("SITESOURCERY_ENGAGEMENT_TOKEN_SECRET")
+        : null
+    });
+  await assertProductionEngagementReady({
+    legalAuthority: projectLegalAuthorityConfig.authority,
+    engagementBootstrap
+  });
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -814,6 +831,7 @@ async function start() {
         alakazamBilling,
         alakazamBillingSurfaces,
         customServicesAccount,
+        engagementBootstrap,
         customServicesAssessmentWork,
         customServicesCustomBuild,
         customServicesCustomBuildChangeCompletion,
