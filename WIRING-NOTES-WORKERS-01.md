@@ -10,13 +10,14 @@ The supervisor recognizes only the four existing purposes and performs every
 dependency readback before starting any. The Alakazam fulfillment factory owns
 the existing publication stage and the retained lifecycle factory owns the
 existing grace/retention loop. Both reuse their unchanged repositories and
-state machines. Their loop errors now use bounded exponential backoff.
+state machines. Their loop errors use bounded exponential backoff.
 
-Export and cancellation production factories are deliberately absent until
-their exact processing ports can be extracted from the monolithic hosted
-service after MAIL-COMPOSE-FINAL-03. This entrypoint imports no identity or mail
-module, and an activated config requesting either purpose fails closed before
-starting the composed Alakazam purposes.
+WORKERS-02 closes the earlier export/cancellation composition residual. The
+PostgreSQL service now projects exact worker-only ports over the unchanged
+cancellation lease and export fence implementations. The external entrypoint
+composes those ports without identity, registration, recovery-mail, or Resend
+composition. Stripe and export switches remain independently held and every
+selected purpose still fails closed unless its dependency readback is ready.
 
 The held unit, environment template, activation/readback steps, and rollback are
 in `ops/SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md`. This packet performs none of

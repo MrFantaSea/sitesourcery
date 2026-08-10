@@ -50,7 +50,7 @@ registrant-contact commands before the customer journey is complete.
   lock, and idle-transaction limits are transaction-local; canonical
   acquisition is deadline-bound. The default held example preserves the
   existing ten-connection ceiling and admits at most eight API transactions so
-  two physical slots remain reserved for the future WORKERS-01 process split.
+  two physical slots remain reserved for the external worker process.
 - `SITESOURCERY_IDENTITY_PEPPER`, base64 for at least 32 bytes
 - `SITESOURCERY_IDENTITY_PEPPER_CONFIG`, the exact versioned v1 metadata
   contract naming the current writer and zero to three prior verifier-only
@@ -288,18 +288,19 @@ Only a durable job with an implemented lease or exact idempotent lifecycle
 fence and effect-certainty contract may be started automatically. The API
 process starts no worker loop. The separately held `bin/worker.mjs` process is
 the sole production background-loop start authority; its exact purpose
-allowlist, currently unavailable narrow ports, and independent PostgreSQL
-reserve are documented in the WORKERS-01 runbook.
+allowlist, narrow ports, and independent PostgreSQL reserve are documented in
+the WORKERS-01 and WORKERS-02 notes.
 
 | Work | Production behavior | Recovery truth |
 | --- | --- | --- |
-| Subscription cancellation | The API starts no polling loop. The purpose remains fail-closed in the worker process until its narrow port is extracted after MAIL-COMPOSE-FINAL-03; its existing `FOR UPDATE SKIP LOCKED` lease is unchanged. | Confirmed effects settle once. Known no-effect failures retain the service-owned delay. Ambiguous effects remain held at PostgreSQL `infinity`; no new retry policy exists. |
-| Project export | The API starts no export loop. The purpose remains fail-closed in the worker process until its narrow port is extracted after MAIL-COMPOSE-FINAL-03. Existing attempt, lease, worker identity, and fence-token authority is unchanged. | A worker may reclaim only an expired lease. Immutable object keys and stale-worker fencing remain authoritative. |
+| Subscription cancellation | The API starts no polling loop. The external process receives only the exact cancellation readiness and `processPaymentOutbox` port. A held or unverified Stripe readback prevents every worker from starting; its existing `FOR UPDATE SKIP LOCKED` lease is unchanged. | Confirmed effects settle once. Known no-effect failures retain the service-owned delay. Ambiguous effects remain held at PostgreSQL `infinity`; no new retry policy exists. |
+| Project export | The API starts no export loop. The external process receives only the exact export readiness and `processQueuedExports` port. `SITESOURCERY_EXPORT_WORKER_MODE` remains held by default. Existing attempt, lease, worker identity, and fence-token authority is unchanged. | A worker may reclaim only an expired lease. Immutable object keys and stale-worker fencing remain authoritative. |
 | Alakazam fulfillment/publication | The separate worker process uses the existing leased fulfillment state machine only after exact release, compiler, repository, address, and publication-hold readback. | Publication remains a stage of the fulfillment lease; dark compensation and exact retry evidence are unchanged. There is no generic publication job engine. |
 | Alakazam lifecycle/retention | The separate worker process uses the existing exact seven-day grace and retained-expiry state machine only after release, policy, and repository readback. | Retained exit and purge remain exact-evidence, deterministic-idempotency operations. No earlier purge authority is added. |
 
-The existing cancellation worker polling options remain bounded for its future
-narrow composition:
+The existing cancellation worker polling options remain bounded in its
+external narrow composition. If an old purpose-specific interval/backoff
+variable is present, it must equal the supervisor's versioned loop values:
 
 - `SITESOURCERY_PAYMENT_WORKER_BATCH_LIMIT` (default `10`, maximum `100`);
 - `SITESOURCERY_PAYMENT_WORKER_INTERVAL_MS` (default `5000`);

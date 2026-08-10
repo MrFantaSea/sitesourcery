@@ -14,6 +14,9 @@ import {
   createAlakazamWorkerFactories
 } from "../worker-alakazam-composition.mjs";
 import {
+  createCoreWorkerFactories
+} from "../worker-core-composition.mjs";
+import {
   workerConfigurationFromEnvironment
 } from "../worker-config.mjs";
 import { createWorkerSupervisor } from "../worker-supervisor.mjs";
@@ -76,10 +79,18 @@ if (selected.configuration.activation === "held") {
       workload: "worker"
     });
     await authority.assertReady();
-    const factories = createAlakazamWorkerFactories({
-      authority,
-      environment: process.env,
-      log: write
+    const factories = Object.freeze({
+      ...createCoreWorkerFactories({
+        authority,
+        purposes: selected.configuration.purposes,
+        environment: process.env,
+        log: write
+      }),
+      ...createAlakazamWorkerFactories({
+        authority,
+        environment: process.env,
+        log: write
+      })
     });
     supervisor = createWorkerSupervisor({
       configuration: selected.configuration,
