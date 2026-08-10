@@ -30,8 +30,13 @@ import {
 import { JOINT_LEGAL_V3_RELEASE } from "../hosted-truth/joint-legal-v3-artifacts.mjs";
 import { JOINT_LEGAL_V4_RELEASE } from "../hosted-truth/joint-legal-v4-artifacts.mjs";
 import {
+  DOMAIN_HERO_ASSETS,
+} from "../generate-domain-hero-assets.mjs";
+import {
   sourceManifestFromGit,
   PublicTruthVerificationError,
+  sha256,
+  stableStringify,
 } from "../verify-public-truth-release.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -40,6 +45,24 @@ const CANDIDATE = "22".repeat(20);
 const NOW = Date.parse("2026-08-10T12:15:00.000Z");
 const SOURCE = "33".repeat(32);
 const ARTIFACT = "44".repeat(32);
+
+async function candidateSourceManifest() {
+  const manifest = sourceManifestFromGit(ROOT, "HEAD");
+  const entries = manifest.entries.map((entry) => ({ ...entry }));
+  const knownPaths = new Set(entries.map(({ path: file }) => file));
+  for (const { file } of DOMAIN_HERO_ASSETS) {
+    const source = `assets/${file}`;
+    if (knownPaths.has(source)) continue;
+    const bytes = await readFile(path.join(ROOT, source));
+    entries.push({ mode: "100644", path: source, sha256: sha256(bytes), size: bytes.length });
+  }
+  entries.sort((left, right) => Buffer.from(left.path).compare(Buffer.from(right.path)));
+  return {
+    count: entries.length,
+    entries,
+    sha256: sha256(stableStringify(entries)),
+  };
+}
 
 function receipt() {
   const value = {
@@ -178,10 +201,10 @@ test("v2 receipt is owner-only, one-shot, and short-lived", () => {
   }
 });
 
-test("v2 artifact projection is an exact 80-file V4-current and V2/V3/V4-versioned ledger", () => {
-  const source = sourceManifestFromGit(ROOT, "HEAD");
+test("v2 artifact projection is an exact 94-file V4-current and V2/V3/V4-versioned ledger", async () => {
+  const source = await candidateSourceManifest();
   const entries = expectedArtifactEntriesV2(source);
-  assert.equal(entries.length, 80);
+  assert.equal(entries.length, 94);
   assert.deepEqual(entries.map(({ path: file }) => file), REVIEWED_PUBLIC_ARTIFACT_PATHS_V2);
   assert.equal(
     entries.find(({ path: file }) => file === "legal/privacy/index.html").sha256,

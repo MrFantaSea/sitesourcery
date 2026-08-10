@@ -33,7 +33,7 @@ export const POSTDEPLOY_REQUEST_CONCURRENCY = 8;
 export const POSTDEPLOY_REQUIRED_EXACT_SNAPSHOTS = 2;
 export const PRODUCTION_ORIGIN = "https://sitesourcery.com";
 export const AUTHORITY_STATEMENT = "Authorize one exact inquiry-open, checkout-disabled public-truth reconciliation; deny automated checkout, payment-provider, containment, customer-data, and general deployment authority.";
-export const OG_PNG_SHA256 = "66b8985aff38fe4809037b89e9e153594ed5682ffe3ed33a9bf19127bb501c0b";
+export const OG_PNG_SHA256 = "be7dce2ece4f570f1cdcd48f0288f95c490d19462dfcb55c18c47757a66c2e36";
 export const OG_SOURCE_SHA256 = "61c324f7c5b18ac2eed19d65b3510b8730654e8718c490966c79ee3195751868";
 export const CARD_V9_PDF_SHA256 = "8b27ed01cec1dc005718af350a19bbe87a77b824acd1d73caf99029c5b3605fc";
 export const REVIEWED_DOMAIN_PREFLIGHT_SHA256 = "50c2b271a8a879f27b9b10f4580196c27df3714ed2d2f3766b5b76ea538d1c5f";
@@ -238,7 +238,21 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "assets/site-sourcery-archive-room-v1.webp",
   "assets/site-sourcery-hive-orchestra-v4.webp",
   "assets/site-sourcery-index-room-v1.webp",
-  "assets/site-sourcery-main-street-v2.webp",
+  "assets/site-sourcery-main-street-v2-landscape-1280.avif",
+  "assets/site-sourcery-main-street-v2-landscape-1280.jpg",
+  "assets/site-sourcery-main-street-v2-landscape-1280.webp",
+  "assets/site-sourcery-main-street-v2-landscape-1672.avif",
+  "assets/site-sourcery-main-street-v2-landscape-1672.jpg",
+  "assets/site-sourcery-main-street-v2-landscape-1672.webp",
+  "assets/site-sourcery-main-street-v2-landscape-960.avif",
+  "assets/site-sourcery-main-street-v2-landscape-960.jpg",
+  "assets/site-sourcery-main-street-v2-landscape-960.webp",
+  "assets/site-sourcery-main-street-v2-portrait-360.avif",
+  "assets/site-sourcery-main-street-v2-portrait-360.jpg",
+  "assets/site-sourcery-main-street-v2-portrait-360.webp",
+  "assets/site-sourcery-main-street-v2-portrait-529.avif",
+  "assets/site-sourcery-main-street-v2-portrait-529.jpg",
+  "assets/site-sourcery-main-street-v2-portrait-529.webp",
   "assets/site-sourcery-one-person-studio-v1.webp",
   "assets/site-sourcery-signal-room-v1.webp",
   "assets/site-sourcery-storm-atelier-v4.webp",

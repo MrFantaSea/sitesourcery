@@ -535,8 +535,8 @@ test("artifact exclusion contract covers generated, server, workflow, governance
   }
 });
 
-test("verifier publication ledger independently matches the reviewed 76-file held builder ledger", () => {
-  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 76);
+test("verifier publication ledger independently matches the reviewed 90-file held builder ledger", () => {
+  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 90);
   assert.deepEqual(REVIEWED_PUBLIC_ARTIFACT_PATHS, publicFileAllowlist);
   assert.deepEqual(
     [...REVIEWED_PUBLIC_ARTIFACT_PATHS].sort(),
@@ -1472,11 +1472,11 @@ test("postdeploy route fixture proves canonical pages, custom 404, redirects, an
   });
 });
 
-test("real reviewed 76-file artifact satisfies the production manifest and byte-level route contract", async () => {
+test("real reviewed 90-file artifact satisfies the production manifest and byte-level route contract", async () => {
   const files = reviewedArtifactFiles();
   const manifest = artifactManifestFor(files);
   assert.equal(manifest.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
-  assert.equal(manifest.count, 76);
+  assert.equal(manifest.count, 90);
   assert.equal(validateProductionRouteManifest(manifest), manifest);
 
   const { fetchImpl } = liveFixtureFetch(files);
