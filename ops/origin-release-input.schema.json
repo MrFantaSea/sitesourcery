@@ -48,6 +48,32 @@
         }
       }
     },
+    "workerReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256", "contractSha256"],
+      "properties": {
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "contractSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "environmentReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestSha256", "classificationSha256"],
+      "properties": {
+        "manifestSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "classificationSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
     "migration": {
       "type": "object",
       "additionalProperties": false,
@@ -136,6 +162,7 @@
         "artifact",
         "units",
         "environmentSchema",
+        "worker",
         "migration",
         "legal",
         "ingress",
@@ -213,7 +240,10 @@
           "$ref": "#/$defs/manifestReference"
         },
         "environmentSchema": {
-          "$ref": "#/$defs/manifestReference"
+          "$ref": "#/$defs/environmentReference"
+        },
+        "worker": {
+          "$ref": "#/$defs/workerReference"
         },
         "migration": {
           "$ref": "#/$defs/migration"

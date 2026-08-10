@@ -15,11 +15,21 @@ import {
   SHAPE_EPOCH_BINDING
 } from "./release-epoch.mjs";
 import {
+  ORIGIN_WORKER_CONTRACT_SCHEMA,
+  ORIGIN_WORKER_PATHS,
   ORIGIN_UNION_BASE_COMMIT,
   createOriginSeal,
+  originEnvironmentClassificationSha256,
   originFileManifestSha256,
+  originWorkerContractSha256,
   validateOriginReleaseInput
 } from "./origin-seal-runtime.mjs";
+import {
+  createPostgresBudgetConfiguration
+} from "../server/hosted/postgres-budget-config.mjs";
+import {
+  createWorkerConfiguration
+} from "../server/hosted/worker-config.mjs";
 
 const executeFile = promisify(execFile);
 const MAXIMUM_FILES = 100_000;
@@ -28,13 +38,19 @@ const MAXIMUM_TOTAL_BYTES = 4 * 1024 * 1024 * 1024;
 export const ORIGIN_UNIT_PATHS = Object.freeze([
   "ops/production-rehearsal/sitesourcery-cloudflared.user.service",
   "ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service",
-  "ops/sitesourcery-hosted.service.held"
+  "ops/sitesourcery-hosted.service.held",
+  ORIGIN_WORKER_PATHS.unit
 ]);
 
 export const ORIGIN_ENVIRONMENT_SCHEMA_PATHS = Object.freeze([
   "ops/caddy.env.example",
-  "ops/hosted.env.example"
+  "ops/hosted.env.example",
+  ORIGIN_WORKER_PATHS.environmentSchema
 ]);
+
+export const ORIGIN_WORKER_RUNTIME_PATHS = Object.freeze(
+  Object.values(ORIGIN_WORKER_PATHS)
+);
 
 export const ORIGIN_INGRESS_PATHS = Object.freeze([
   "ops/Caddyfile.cloudflare-tunnel.candidate.held",
@@ -290,6 +306,211 @@ async function collectLegal(projectRoot, constantsPath) {
   });
 }
 
+function environmentJson(source, name) {
+  const prefix = `${name}=`;
+  const matches = source
+    .split(/\r?\n/u)
+    .filter((line) => line.startsWith(prefix));
+  if (matches.length !== 1) {
+    fail(`Origin worker environment must declare ${name} exactly once.`);
+  }
+  const serialized = matches[0].slice(prefix.length);
+  if (
+    serialized.length < 3 ||
+    serialized[0] !== "'" ||
+    serialized.at(-1) !== "'" ||
+    serialized.slice(1, -1).includes("'")
+  ) {
+    fail(`Origin worker ${name} must be one exact single-quoted JSON value.`);
+  }
+  return serialized.slice(1, -1);
+}
+
+export function classifyOriginEnvironmentName(name) {
+  if (
+    typeof name !== "string" ||
+    !/^[A-Z][A-Z0-9_]{2,127}$/u.test(name)
+  ) {
+    fail("Origin environment variable name is invalid.");
+  }
+  return /(?:_API_KEY|_DATABASE_URL|_PASSWORD|_PEPPER(?:_PRIOR_[1-9][0-9]*)?|_SECRET|_TOKEN|_VAULT_KEY)$/u.test(
+    name
+  )
+    ? "secret"
+    : "non-secret-configuration";
+}
+
+function environmentVariableNames(source, sourcePath) {
+  const names = source
+    .split(/\r?\n/u)
+    .map((line) => /^([A-Z][A-Z0-9_]*)=/u.exec(line)?.[1] ?? null)
+    .filter((name) => name !== null);
+  if (new Set(names).size !== names.length) {
+    fail(`Origin environment schema ${sourcePath} repeats a variable name.`);
+  }
+  return names.map((name) => ({
+    source: sourcePath,
+    name,
+    classification: classifyOriginEnvironmentName(name)
+  }));
+}
+
+export async function collectOriginEnvironmentSchema(projectRoot) {
+  const manifest = await collectOriginPathManifest({
+    projectRoot,
+    domain: "origin-environment-schema",
+    relativePaths: [...ORIGIN_ENVIRONMENT_SCHEMA_PATHS]
+  });
+  const variables = (
+    await Promise.all(
+      manifest.files.map(async ({ path: sourcePath }) =>
+        environmentVariableNames(
+          await readFile(
+            inside(projectRoot, sourcePath, "Origin environment schema"),
+            "utf8"
+          ),
+          sourcePath
+        )
+      )
+    )
+  )
+    .flat()
+    .sort((left, right) =>
+      `${left.source}\u0000${left.name}`.localeCompare(
+        `${right.source}\u0000${right.name}`
+      )
+    );
+  if (variables.length < 1) {
+    fail("Origin environment schema has no named configuration boundary.");
+  }
+  const projected = Object.freeze(
+    variables.map((entry) => Object.freeze(entry))
+  );
+  return Object.freeze({
+    ...manifest,
+    variables: projected,
+    classificationSha256: originEnvironmentClassificationSha256({
+      variables: projected
+    })
+  });
+}
+
+function workerFileBinding(manifest, field) {
+  const selected = manifest.files.find(
+    (entry) => entry.path === ORIGIN_WORKER_PATHS[field]
+  );
+  if (!selected) fail(`Origin worker ${field} file is missing.`);
+  return Object.freeze({
+    path: selected.path,
+    sha256: selected.sha256
+  });
+}
+
+export async function collectOriginWorkerRuntime(projectRoot) {
+  const manifest = await collectOriginPathManifest({
+    projectRoot,
+    domain: "origin-worker-runtime",
+    relativePaths: [...ORIGIN_WORKER_RUNTIME_PATHS]
+  });
+  const [apiSource, workerSource, workerUnit, workerEnvironment] =
+    await Promise.all([
+      readFile(
+        inside(projectRoot, ORIGIN_WORKER_PATHS.apiEntrypoint, "Origin API entrypoint"),
+        "utf8"
+      ),
+      readFile(
+        inside(projectRoot, ORIGIN_WORKER_PATHS.workerEntrypoint, "Origin worker entrypoint"),
+        "utf8"
+      ),
+      readFile(
+        inside(projectRoot, ORIGIN_WORKER_PATHS.unit, "Origin worker unit"),
+        "utf8"
+      ),
+      readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.environmentSchema,
+          "Origin worker environment schema"
+        ),
+        "utf8"
+      )
+    ]);
+  const worker = createWorkerConfiguration({
+    configurationJson: environmentJson(
+      workerEnvironment,
+      "SITESOURCERY_WORKER_CONFIG"
+    )
+  });
+  const postgres = createPostgresBudgetConfiguration({
+    configurationJson: environmentJson(
+      workerEnvironment,
+      "SITESOURCERY_POSTGRES_BUDGET_CONFIG"
+    )
+  });
+  if (
+    worker.configuration.activation !== "held" ||
+    worker.configuration.approvalPath !== "/etc/sitesourcery/WORKERS_APPROVED"
+  ) {
+    fail("Origin worker configuration must remain exactly held.");
+  }
+  for (const token of [
+    "ConditionPathExists=/etc/sitesourcery/WORKERS_APPROVED",
+    "ConditionPathExists=!/etc/sitesourcery/WORKERS_HOLD",
+    "EnvironmentFile=/etc/sitesourcery/workers.env",
+    "server/hosted/bin/worker.mjs"
+  ]) {
+    if (!workerUnit.includes(token)) {
+      fail("Origin worker unit lost its held entrypoint or environment fence.");
+    }
+  }
+  if (
+    !apiSource.includes("postgresBudgetConfiguration.policy.pool.apiConnections") ||
+    !apiSource.includes('backgroundWorkers: "external_process_required"') ||
+    /createWorkerSupervisor|createAlakazamWorkerFactories|workerConfigurationFromEnvironment|supervisor\.start\s*\(/u.test(
+      apiSource
+    )
+  ) {
+    fail("Origin API no longer proves zero in-process worker loops.");
+  }
+  if (
+    !workerSource.includes("postgres.policy.pool.workerReservedConnections") ||
+    !workerSource.includes('workload: "worker"') ||
+    !workerSource.includes("createWorkerSupervisor") ||
+    !workerSource.includes("selected.configuration.activation === \"held\"") ||
+    /createServer\s*\(|\.listen\s*\(/u.test(workerSource)
+  ) {
+    fail("Origin external worker entrypoint lost its isolated held boundary.");
+  }
+  for (const line of [
+    "SITESOURCERY_DATABASE_SSL=require",
+    "SITESOURCERY_ALAKAZAM_MODE=held",
+    "SITESOURCERY_ALAKAZAM_LIFECYCLE_MODE=held"
+  ]) {
+    if (!workerEnvironment.includes(line)) {
+      fail("Origin worker environment schema lost a held provider fence.");
+    }
+  }
+  const contract = Object.freeze({
+    schema: ORIGIN_WORKER_CONTRACT_SCHEMA,
+    activation: "held",
+    apiEntrypoint: workerFileBinding(manifest, "apiEntrypoint"),
+    workerEntrypoint: workerFileBinding(manifest, "workerEntrypoint"),
+    unit: workerFileBinding(manifest, "unit"),
+    environmentSchema: workerFileBinding(manifest, "environmentSchema"),
+    selectedPurposes: Object.freeze([...worker.configuration.purposes]),
+    postgresPool: Object.freeze({ ...postgres.policy.pool }),
+    apiWorkerMode: "external_process_required",
+    apiWorkerLoopCount: 0,
+    workerOwnsPublicListener: false,
+    allowsProviderEffects: false
+  });
+  return Object.freeze({
+    ...manifest,
+    contract,
+    contractSha256: originWorkerContractSha256(contract)
+  });
+}
+
 async function verifyIngressAndHolds(projectRoot) {
   const read = async (relativePath) =>
     readFile(inside(projectRoot, relativePath, "Origin authority file"), "utf8");
@@ -382,7 +603,15 @@ export async function collectOriginRepositorySnapshot({
   layout
 }) {
   await verifyIngressAndHolds(projectRoot);
-  const [artifact, units, environmentSchema, migration, legal, ingress] =
+  const [
+    artifact,
+    units,
+    environmentSchema,
+    worker,
+    migration,
+    legal,
+    ingress
+  ] =
     await Promise.all([
       collectOriginTreeManifest({
         projectRoot,
@@ -394,11 +623,8 @@ export async function collectOriginRepositorySnapshot({
         domain: "origin-units",
         relativePaths: [...ORIGIN_UNIT_PATHS]
       }),
-      collectOriginPathManifest({
-        projectRoot,
-        domain: "origin-environment-schema",
-        relativePaths: [...ORIGIN_ENVIRONMENT_SCHEMA_PATHS]
-      }),
+      collectOriginEnvironmentSchema(projectRoot),
+      collectOriginWorkerRuntime(projectRoot),
       collectMigrations(projectRoot, layout.migrationRoot),
       collectLegal(projectRoot, layout.legalConstantsPath),
       collectOriginPathManifest({
@@ -411,6 +637,7 @@ export async function collectOriginRepositorySnapshot({
     artifact,
     units,
     environmentSchema,
+    worker,
     migration,
     legal,
     ingress
