@@ -36,10 +36,14 @@ import {
   createConfiguredAlakazamLifecyclePolicy
 } from "./alakazam-lifecycle-policy-config.mjs";
 import {
+  createPostgresAlakazamPolicyAuthorityRepository
+} from "./alakazam-policy-authority-postgres.mjs";
+import {
   createPostgresAlakazamRepository
 } from "./alakazam-postgres.mjs";
 import {
-  createConfiguredAlakazamRelease
+  createConfiguredAlakazamRelease,
+  isReleasedAlakazamPolicyReadiness
 } from "./alakazam-release-config.mjs";
 import {
   createAlakazamRetainedPremiumLifecycle
@@ -55,6 +59,35 @@ import { createSparkCompilerPort } from "./spark-compiler-port.mjs";
 const moduleRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(moduleRoot, "../..");
 
+export const ALAKAZAM_WORKER_POLICY_READINESS_SCHEMA =
+  "sitesourcery.alakazam-worker-policy-readiness/v1";
+
+export function alakazamWorkerPolicyReadiness(value) {
+  const released = isReleasedAlakazamPolicyReadiness(value);
+  return Object.freeze({
+    schema: ALAKAZAM_WORKER_POLICY_READINESS_SCHEMA,
+    ready: released,
+    state: released ? "released" : "held",
+    code: released
+      ? "READY"
+      : "ALAKAZAM_WORKER_POLICY_NOT_RELEASED",
+    commercialEffects: released,
+    providerEffects: released,
+    publicationEffects: released,
+    automaticRestoration: false
+  });
+}
+
+async function readWorkerPolicy(repository) {
+  try {
+    return alakazamWorkerPolicyReadiness(
+      await repository.readiness()
+    );
+  } catch {
+    return alakazamWorkerPolicyReadiness(null);
+  }
+}
+
 function requiredEnvironment(environment, name) {
   const value = environment?.[name];
   if (typeof value !== "string" || value.length === 0) {
@@ -68,7 +101,9 @@ function requiredEnvironment(environment, name) {
 export function createAlakazamWorkerFactories({
   authority,
   environment = process.env,
-  log = () => {}
+  log = () => {},
+  policyRepositoryFactory =
+    createPostgresAlakazamPolicyAuthorityRepository
 } = {}) {
   let commonPromise = null;
   let fulfillmentPromise = null;
@@ -76,13 +111,16 @@ export function createAlakazamWorkerFactories({
 
   async function common() {
     if (!commonPromise) {
-      commonPromise = Promise.resolve().then(() => {
+      commonPromise = Promise.resolve().then(async () => {
         const commerce = createPostgresCommerceV2Adapter({ authority });
+        const policyRepository = policyRepositoryFactory({ authority });
+        const workerPolicy = await readWorkerPolicy(policyRepository);
         return Object.freeze({
           commerce,
           release: createConfiguredAlakazamRelease({ environment }),
           lifecyclePolicy:
-            createConfiguredAlakazamLifecyclePolicy({ environment })
+            createConfiguredAlakazamLifecyclePolicy({ environment }),
+          workerPolicy
         });
       });
     }
@@ -161,6 +199,7 @@ export function createAlakazamWorkerFactories({
         });
         const enabled =
           shared.release.mode === "approved" &&
+          shared.workerPolicy.ready === true &&
           publicationHeld() === false;
         return Object.freeze({
           worker: createAlakazamFulfillmentWorker({
@@ -185,9 +224,11 @@ export function createAlakazamWorkerFactories({
                 tier50?.ready === true,
               purpose: "alakazam-fulfillment",
               release: shared.release.mode,
+              policy: shared.workerPolicy.state,
+              policyCode: shared.workerPolicy.code,
               publication: publicationHeld() ? "held" : "approved",
               providerEffects:
-                publicationHeld() ? "held" : "owner-approved"
+                enabled ? "owner-approved" : "held"
             });
           }
         });
@@ -206,6 +247,7 @@ export function createAlakazamWorkerFactories({
           });
         const enabled =
           shared.release.mode === "approved" &&
+          shared.workerPolicy.ready === true &&
           shared.lifecyclePolicy.mode === "approved";
         return Object.freeze({
           worker: createAlakazamRetainedPremiumLifecycle({
@@ -222,6 +264,8 @@ export function createAlakazamWorkerFactories({
                 enabled && repositoryStatus?.ready === true,
               purpose: "alakazam-retained-lifecycle",
               release: shared.release.mode,
+              policy: shared.workerPolicy.state,
+              policyCode: shared.workerPolicy.code,
               lifecyclePolicy: shared.lifecyclePolicy.mode,
               providerEffects: "none"
             });

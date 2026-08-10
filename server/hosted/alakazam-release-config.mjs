@@ -59,6 +59,23 @@ export function createConfiguredAlakazamRelease({
   });
 }
 
+export function isReleasedAlakazamPolicyReadiness(value) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      value.schema ===
+        "sitesourcery.alakazam-policy-readiness/v1" &&
+      value.ready === true &&
+      value.verified === true &&
+      value.state === "released" &&
+      value.commercialEffects === true &&
+      value.providerEffects === true &&
+      value.publicationEffects === true &&
+      value.automaticRecoveryFromReversalEvidence === false
+  );
+}
+
 export function assertApprovedAlakazamReady(
   composition,
   readiness,
@@ -73,16 +90,7 @@ export function assertApprovedAlakazamReady(
       readiness.taxModes?.alakazam ===
         composition.release.taxMode &&
       typeof readiness.livemode === "boolean" &&
-      policyReadiness?.schema ===
-        "sitesourcery.alakazam-policy-readiness/v1" &&
-      policyReadiness.ready === true &&
-      policyReadiness.verified === true &&
-      policyReadiness.state === "released" &&
-      policyReadiness.commercialEffects === true &&
-      policyReadiness.providerEffects === true &&
-      policyReadiness.publicationEffects === true &&
-      policyReadiness.automaticRecoveryFromReversalEvidence ===
-        false
+      isReleasedAlakazamPolicyReadiness(policyReadiness)
     )
   ) {
     throw configurationError(

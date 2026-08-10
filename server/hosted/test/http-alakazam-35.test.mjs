@@ -272,7 +272,7 @@ test("production F03 composition remains the base of F04 without changing the co
   );
   assert.match(
     workerSource,
-    /const enabled =\s*shared\.release\.mode === "approved" &&\s*publicationHeld\(\) === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
+    /const enabled =\s*shared\.release\.mode === "approved" &&\s*shared\.workerPolicy\.ready === true &&\s*publicationHeld\(\) === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
   );
   assert.match(workerSource, /tier35Repository\.readiness\(\)/u);
   assert.doesNotMatch(
