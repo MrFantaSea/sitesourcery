@@ -37,6 +37,10 @@ import {
   createHeldCustomServicesOwner
 } from "./custom-services-owner-postgres.mjs";
 import {
+  createHeldHostedEngagementBootstrap,
+  ENGAGEMENT_HTTP_ROUTES
+} from "./engagement-bootstrap.mjs";
+import {
   createHeldCustomServicesAssessmentWork
 } from "./custom-services-assessment-work-postgres.mjs";
 import {
@@ -73,6 +77,7 @@ const MAXIMUM_PRIVATE_EVIDENCE_BYTES = 700 * 1024;
 const SESSIONLESS_IDENTITY_WRITES = new Set([
   "/api/v1/auth/register",
   "/api/v1/auth/register/complete",
+  "/api/v1/auth/engagement-claim",
   "/api/v1/auth/sessions",
   "/api/v1/auth/recovery",
   "/api/v1/auth/recovery/complete"
@@ -437,6 +442,7 @@ export function createHostedApi(
     customServicesCustomBuildProgress = null,
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
+    engagementBootstrap = null,
     stripeWebhook = null
   } = {}
 ) {
@@ -466,6 +472,16 @@ export function createHostedApi(
         "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted custom-services owner boundary is invalid.",
+    { status: 500 }
+  );
+  const engagementBootstrapBoundary =
+    engagementBootstrap ??
+    createHeldHostedEngagementBootstrap();
+  invariant(
+    typeof engagementBootstrapBoundary.issueInvitation === "function" &&
+      typeof engagementBootstrapBoundary.claimInvitation === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted customer engagement bootstrap boundary is invalid.",
     { status: 500 }
   );
   const customServicesAssessmentWorkBoundary =
@@ -1037,6 +1053,33 @@ export function createHostedApi(
           pathname === "/api/v1/auth/recovery/complete"
         ) {
           result = await service.completeRecovery(write);
+        } else if (
+          method === "POST" &&
+          pathname === ENGAGEMENT_HTTP_ROUTES.claim.path
+        ) {
+          const claimed =
+            await engagementBootstrapBoundary.claimInvitation({
+              ...exactRouteBody(
+                write,
+                ENGAGEMENT_HTTP_ROUTES.claim.bodyKeys,
+                "INVALID_ENGAGEMENT_CLAIM",
+                "The customer engagement claim is invalid."
+              ),
+              userAgentDigest: digestUserAgent(
+                request.headers.get("user-agent")
+              )
+            });
+          const sessionToken = claimed?.sessionToken;
+          invariant(
+            typeof sessionToken === "string" &&
+              sessionToken.length >= 32,
+            "RUNTIME_CONFIGURATION_ERROR",
+            "The customer engagement claim did not create a valid session.",
+            { status: 500 }
+          );
+          result = publicAuthenticationResult(claimed);
+          status = 201;
+          headers["Set-Cookie"] = sessionCookie(sessionToken);
         } else if (method === "GET" && pathname === "/api/v1/me") {
           const csrfToken = currentCsrfToken(cookies, nextCsrfToken);
           result = actor ? await service.me(actor) : { user: null };
@@ -1044,6 +1087,26 @@ export function createHostedApi(
           headers["Set-Cookie"] = csrfCookie(csrfToken);
         } else if (method === "GET" && pathname === "/api/v1/organizations") {
           result = await service.listOrganizations(actor);
+        } else if (
+          method === "POST" &&
+          pathname === ENGAGEMENT_HTTP_ROUTES.issue.path
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before issuing a customer engagement invitation.",
+            { status: 401 }
+          );
+          result = await engagementBootstrapBoundary.issueInvitation(
+            actor,
+            exactRouteBody(
+              write,
+              ENGAGEMENT_HTTP_ROUTES.issue.bodyKeys,
+              "INVALID_ENGAGEMENT_INVITATION",
+              "The customer engagement invitation is invalid."
+            )
+          );
+          status = 201;
         } else if (
           method === "GET" &&
           pathname ===

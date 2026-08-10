@@ -8,6 +8,12 @@ import pg from "pg";
 
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
+import { createHostedEngagementBootstrap } from
+  "../../hosted/engagement-bootstrap.mjs";
+import { createPostgresEngagementBootstrapRepository } from
+  "../../hosted/engagement-bootstrap-postgres.mjs";
+import { createProjectLegalAuthorityV4 } from
+  "../../hosted/project-legal-authority.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -146,6 +152,31 @@ const JOINT_LEGAL_V4_RELEASE_AUTHORITY = Object.freeze({
   ]),
   authorityDigest: JOINT_LEGAL_V4_RELEASE_AUTHORITY_DIGEST
 });
+
+function releasedJointLegalV4Authority() {
+  const [privacy, , website] = JOINT_LEGAL_V4_RELEASE_AUTHORITY.documents;
+  const [privacyArtifact, , websiteArtifact] =
+    JOINT_LEGAL_V4_RELEASE_AUTHORITY.artifactBindings;
+  return createProjectLegalAuthorityV4({
+    privacyV4: {
+      version: privacy.version,
+      contentDigest: privacy.contentDigest,
+      contentUri: privacy.contentUri,
+      effectiveAt: privacy.effectiveAt,
+      byteCount: privacyArtifact.byteCount,
+      artifactUri: privacyArtifact.artifactUri
+    },
+    websiteTermsV4: {
+      version: website.version,
+      contentDigest: website.contentDigest,
+      contentUri: websiteArtifact.artifactUri,
+      effectiveAt: website.effectiveAt,
+      byteCount: websiteArtifact.byteCount,
+      artifactUri: websiteArtifact.artifactUri
+    },
+    authorityDigest: JOINT_LEGAL_V4_RELEASE_AUTHORITY_DIGEST
+  });
+}
 
 function optionalEnvironmentValue(environment, name) {
   const value = environment?.[name];
@@ -300,12 +331,13 @@ async function applyMigrations(pool) {
     "202608080103_alakazam_50_authority.sql",
     "202608080104_publication_control_authority.sql",
     "202608090104_alakazam_retained_premium_state.sql",
-    "202608090105_hosted_joint_legal_v4_authority.sql"
+    "202608090105_hosted_joint_legal_v4_authority.sql",
+    "202608100106_customer_engagement_bootstrap.sql"
   ];
   assert.equal(
     names.length,
-    58,
-    "migration proof requires exactly 58 migrations through the released joint legal V4 authority"
+    59,
+    "migration proof requires exactly 59 migrations through the customer engagement bootstrap"
   );
   assert.equal(releaseIndex, 47);
   assert.deepEqual(
@@ -474,6 +506,348 @@ async function verifyJointLegalV4ReleaseState(pool) {
   for (const [name, ready] of Object.entries(result.rows[0])) {
     assert.equal(ready, true, `Joint legal V4 release state failed: ${name}`);
   }
+}
+
+async function verifyCustomerEngagementBootstrapState(pool) {
+  const result = await pool.query(`
+    select
+      ss.hosted_runtime_contract_v54() =
+        'canonical-ss-v54-customer-engagement-bootstrap'
+        as v54_contract_ready,
+      to_regclass('ss.customer_engagement_invitations') is not null
+        as invitations_ready,
+      to_regclass('ss.customer_engagements') is not null
+        as engagements_ready,
+      (
+        select relrowsecurity and relforcerowsecurity
+          from pg_class
+         where oid = 'ss.customer_engagement_invitations'::regclass
+      ) as invitations_default_deny,
+      (
+        select relrowsecurity and relforcerowsecurity
+          from pg_class
+         where oid = 'ss.customer_engagements'::regclass
+      ) as engagements_default_deny,
+      not has_table_privilege(
+        'anon', 'ss.customer_engagement_invitations', 'SELECT'
+      ) as anonymous_invitation_denied,
+      not has_table_privilege(
+        'authenticated', 'ss.customer_engagement_invitations', 'SELECT'
+      ) as authenticated_invitation_denied,
+      has_table_privilege(
+        'service_role', 'ss.customer_engagement_invitations',
+        'SELECT,INSERT,UPDATE'
+      ) as service_invitation_contract_ready,
+      has_table_privilege(
+        'service_role', 'ss.customer_engagements', 'SELECT,INSERT'
+      ) as service_engagement_contract_ready,
+      not has_table_privilege(
+        'service_role', 'ss.customer_engagements', 'UPDATE,DELETE'
+      ) as service_engagement_immutable,
+      exists (
+        select 1 from pg_trigger
+         where tgrelid = 'ss.customer_engagement_invitations'::regclass
+           and tgname = 'customer_engagement_invitations_guard'
+           and not tgisinternal
+      ) as invitation_guard_ready,
+      exists (
+        select 1 from pg_trigger
+         where tgrelid = 'ss.customer_engagements'::regclass
+           and tgname = 'customer_engagements_guard'
+           and not tgisinternal
+      ) as engagement_guard_ready
+  `);
+  for (const [name, ready] of Object.entries(result.rows[0])) {
+    assert.equal(
+      ready,
+      true,
+      `Customer engagement bootstrap contract failed: ${name}`
+    );
+  }
+}
+
+async function verifyCustomerEngagementBootstrapJourney(pool) {
+  const operatorUserId = randomUUID();
+  const authorizerUserId = randomUUID();
+  await pool.query(
+    `insert into auth.users (id, email) values
+       ($1, $2), ($3, $4)`,
+    [
+      operatorUserId,
+      `engagement-operator-${operatorUserId}@example.test`,
+      authorizerUserId,
+      `engagement-authorizer-${authorizerUserId}@example.test`
+    ]
+  );
+  await pool.query(
+    `insert into ss.hosted_account_profiles (
+       user_id, display_name, state
+     ) values
+       ($1, 'Engagement Operator', 'active'),
+       ($2, 'Engagement Authorizer', 'active')`,
+    [operatorUserId, authorizerUserId]
+  );
+  await pool.query(
+    `insert into ss.operator_profiles (
+       user_id, display_label, state,
+       authorized_by_user_id, authorized_at
+     ) values ($1, 'Engagement Operator', 'held', $2, $3)`,
+    [operatorUserId, authorizerUserId, "2026-08-10T00:00:00.000Z"]
+  );
+  await pool.query(
+    `insert into ss.operator_permissions (
+       operator_user_id, capability, state,
+       granted_by_user_id, granted_at
+     ) values (
+       $1, 'service_case_manage', 'held', $2, $3
+     )`,
+    [operatorUserId, authorizerUserId, "2026-08-10T00:00:00.000Z"]
+  );
+  await pool.query(
+    `insert into ss.service_operator_authority_events (
+       operator_user_id, capability, event_sequence,
+       event_kind, predecessor_event_id, recorded_by_kind,
+       effective_at, expires_at, created_at
+     ) values (
+       $1, 'service_case_manage', 99, 'grant', null,
+       'deployment_control', $2, $3, $2
+     )`,
+    [
+      operatorUserId,
+      "2026-08-10T00:00:00.000Z",
+      "2026-08-20T00:00:00.000Z"
+    ]
+  );
+
+  const invitationStart = Date.now() + 60_000;
+  let currentTime = new Date(invitationStart).toISOString();
+  const legalAuthority = releasedJointLegalV4Authority();
+  const database = createCanonicalPostgresAuthority({ pool });
+  const repository = createPostgresEngagementBootstrapRepository({
+    authority: database,
+    legalAuthority,
+    pepper: Buffer.alloc(32, 41),
+    pepperVersion: "engagement-proof-v1",
+    clock: () => new Date(currentTime)
+  });
+  const engagement = createHostedEngagementBootstrap({
+    repository,
+    legalAuthority,
+    tokenSecret: Buffer.alloc(32, 42),
+    clock: () => new Date(currentTime)
+  });
+  const legalAcceptance = {
+    schema: legalAuthority.acceptanceSchema,
+    acceptanceStatement: legalAuthority.acceptanceStatement,
+    authorityDigest: legalAuthority.authorityDigest,
+    documents: legalAuthority.documents.map((document) => ({ ...document }))
+  };
+  const issue = {
+    commandId: "pg-engagement-issue-001",
+    customerEmail: "pg-engagement-customer@example.test",
+    customerName: "PG Engagement Customer",
+    organizationId: null,
+    organizationName: "PG Engagement Company",
+    projectName: "PG Canonical New Site",
+    provenance: "direct_custom_inquiry",
+    site: { kind: "new_site" },
+    sourceAssessmentReportId: null
+  };
+  const invitation = await engagement.issueInvitation(
+    { userId: operatorUserId },
+    issue
+  );
+  const issueReplay = await engagement.issueInvitation(
+    { userId: operatorUserId },
+    issue
+  );
+  assert.equal(issueReplay.claimToken, invitation.claimToken);
+  assert.equal(issueReplay.invitationId, invitation.invitationId);
+  assert.equal(issueReplay.replayed, true);
+  const beforeClaim = await pool.query(
+    `select count(*)::integer as project_count
+       from ss.projects where id = $1`,
+    [invitation.project.id]
+  );
+  assert.equal(beforeClaim.rows[0].project_count, 0);
+
+  const expiredInvitation = await engagement.issueInvitation(
+    { userId: operatorUserId },
+    {
+      ...issue,
+      commandId: "pg-engagement-issue-expired",
+      customerEmail: "pg-engagement-expired@example.test",
+      customerName: "Expired Engagement Customer",
+      organizationName: "Expired Engagement Company",
+      projectName: "Expired Engagement Site"
+    }
+  );
+  currentTime = new Date(
+    invitationStart + 4 * 24 * 60 * 60 * 1000
+  ).toISOString();
+  const claimBase = {
+    commandId: "pg-engagement-claim-001",
+    legalAcceptance,
+    password: "a correct engagement proof password",
+    userAgentDigest: "d".repeat(64)
+  };
+  const publicFailures = [];
+  for (const token of [expiredInvitation.claimToken, "Z".repeat(43)]) {
+    try {
+      await engagement.claimInvitation({ ...claimBase, token });
+      assert.fail("invalid engagement claim unexpectedly succeeded");
+    } catch (error) {
+      publicFailures.push({
+        code: error.code,
+        status: error.status,
+        message: error.message
+      });
+    }
+  }
+  assert.deepEqual(publicFailures[0], publicFailures[1]);
+  assert.equal(publicFailures[0].code, "ENGAGEMENT_CLAIM_FAILED");
+
+  currentTime = new Date(
+    invitationStart + 60 * 60 * 1000
+  ).toISOString();
+  const claim = await engagement.claimInvitation({
+    ...claimBase,
+    token: invitation.claimToken
+  });
+  const claimReplay = await engagement.claimInvitation({
+    ...claimBase,
+    token: invitation.claimToken
+  });
+  assert.equal(claimReplay.engagementId, claim.engagementId);
+  assert.equal(claimReplay.sessionToken, claim.sessionToken);
+  assert.equal(claimReplay.replayed, true);
+  assert.equal(claim.project.id, invitation.project.id);
+  assert.equal(claim.organization.id, invitation.organization.id);
+  assert.equal(claim.provenance, "direct_custom_inquiry");
+
+  currentTime = new Date(
+    invitationStart + 2 * 60 * 60 * 1000
+  ).toISOString();
+  const existingInvitation = await engagement.issueInvitation(
+    { userId: operatorUserId },
+    {
+      ...issue,
+      commandId: "pg-engagement-issue-existing",
+      organizationId: claim.organization.id,
+      organizationName: null,
+      projectName: "PG Canonical External Site",
+      site: {
+        kind: "external_site",
+        publicUrl: "https://customer.example.test/"
+      }
+    }
+  );
+  assert.equal(existingInvitation.accountMode, "existing_account");
+  const existingClaim = await engagement.claimInvitation({
+    ...claimBase,
+    commandId: "pg-engagement-claim-existing",
+    token: existingInvitation.claimToken
+  });
+  assert.equal(existingClaim.user.id, claim.user.id);
+  assert.equal(existingClaim.organization.id, claim.organization.id);
+  const externalProfile = await pool.query(
+    `select origin, observed_hostname
+       from ss.service_project_profiles
+      where project_id = $1`,
+    [existingClaim.project.id]
+  );
+  assert.deepEqual(externalProfile.rows[0], {
+    origin: "external",
+    observed_hostname: "customer.example.test"
+  });
+
+  const stored = await pool.query(
+    `select
+       invitation.state,
+       invitation.token_digest,
+       invitation.claim_receipt_digest,
+       engagement.engagement_digest,
+       project.lifecycle,
+       profile.origin,
+       profile.observed_hostname,
+       receipt.authority_digest,
+       count(acceptance.id)::integer as acceptance_count,
+       count(required.acceptance_id)::integer as required_count
+     from ss.customer_engagement_invitations invitation
+     join ss.customer_engagements engagement
+       on engagement.invitation_id = invitation.id
+     join ss.projects project on project.id = engagement.project_id
+     join ss.service_project_profiles profile
+       on profile.project_id = project.id
+     join ss.project_legal_acceptance_receipts receipt
+       on receipt.id = engagement.project_legal_receipt_id
+     join ss.term_acceptances acceptance
+       on acceptance.legal_receipt_id = receipt.id
+     join ss.project_required_terms required
+       on required.acceptance_id = acceptance.id
+    where invitation.id = $1
+    group by
+      invitation.state, invitation.token_digest,
+      invitation.claim_receipt_digest, engagement.engagement_digest,
+      project.lifecycle, profile.origin, profile.observed_hostname,
+      receipt.authority_digest`,
+    [invitation.invitationId]
+  );
+  assert.deepEqual(
+    {
+      state: stored.rows[0].state,
+      lifecycle: stored.rows[0].lifecycle,
+      origin: stored.rows[0].origin,
+      observedHostname: stored.rows[0].observed_hostname,
+      authorityDigest: stored.rows[0].authority_digest,
+      acceptanceCount: stored.rows[0].acceptance_count,
+      requiredCount: stored.rows[0].required_count
+    },
+    {
+      state: "claimed",
+      lifecycle: "active",
+      origin: "sitesourcery_custom",
+      observedHostname: null,
+      authorityDigest: legalAuthority.authorityDigest,
+      acceptanceCount: 3,
+      requiredCount: 3
+    }
+  );
+  assert.match(stored.rows[0].token_digest, /^[a-f0-9]{64}$/u);
+  assert.match(stored.rows[0].claim_receipt_digest, /^[a-f0-9]{64}$/u);
+  assert.match(stored.rows[0].engagement_digest, /^[a-f0-9]{64}$/u);
+  assert.equal(
+    await database.tenant(
+      {
+        userId: claim.user.id,
+        organizationId: claim.organization.id,
+        readOnly: true
+      },
+      async (client) => {
+        const visible = await client.query(
+          `select count(*)::integer as count
+             from ss.customer_engagements
+            where id = $1`,
+          [claim.engagementId]
+        );
+        return visible.rows[0].count;
+      }
+    ),
+    1
+  );
+  await assert.rejects(
+    database.tenant(
+      {
+        userId: claim.user.id,
+        organizationId: claim.organization.id,
+        readOnly: true
+      },
+      (client) => client.query(
+        "select id from ss.customer_engagement_invitations limit 1"
+      )
+    ),
+    /permission denied/iu
+  );
 }
 
 async function v2AuthorityFingerprint(pool) {
@@ -4472,6 +4846,8 @@ export async function runMigrationVerification({
       postPrivacyNames
     );
     await verifyJointLegalV4ReleaseState(pool);
+    await verifyCustomerEngagementBootstrapState(pool);
+    await verifyCustomerEngagementBootstrapJourney(pool);
     await verifyPlatformSchema(pool);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
@@ -4496,6 +4872,7 @@ export async function runMigrationVerification({
     );
     writeOutput("rogueFourthAcceptanceRejected true\n");
     writeOutput("jointLegalV4ReceiptAcceptedAndFourthRejected true\n");
+    writeOutput("customerEngagementBootstrapJourney true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,

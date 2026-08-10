@@ -2875,6 +2875,44 @@ test("joint legal V4 authority is additive, paired, and exact-receipt released",
   );
 });
 
+test("customer engagement bootstrap is additive, actor-bound, and default-deny", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) =>
+      name === "202608100106_customer_engagement_bootstrap.sql"
+  );
+  assert.ok(migration, "missing customer engagement bootstrap migration");
+  assert.match(migration.sql, /^begin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /hosted_runtime_contract_v53\(\)[\s\S]*canonical-ss-v53-joint-legal-v4-authority/iu
+  );
+  assert.match(
+    migration.sql,
+    /create table ss\.customer_engagement_invitations[\s\S]*direct_custom_inquiry[\s\S]*delivered_assessment_successor[\s\S]*legal_authority_digest ss\.sha256_hex[\s\S]*token_digest ss\.sha256_hex[\s\S]*issue_request_digest ss\.sha256_hex/iu
+  );
+  assert.match(
+    migration.sql,
+    /create table ss\.customer_engagements[\s\S]*project_legal_receipt_id uuid not null[\s\S]*engagement_digest ss\.sha256_hex[\s\S]*references ss\.project_legal_acceptance_receipts/iu
+  );
+  assert.match(
+    migration.sql,
+    /guard_customer_engagement_invitation[\s\S]*current_service_actor_kind\(\) not in \('operator', 'system'\)[\s\S]*service_case_manage[\s\S]*old\.state <> 'active'[\s\S]*new\.state <> 'claimed'/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security;[\s\S]*force row level security;[\s\S]*revoke all on[\s\S]*customer_engagement_invitations[\s\S]*from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.hosted_runtime_contract_v54\(\)[\s\S]*canonical-ss-v54-customer-engagement-bootstrap[\s\S]*grant execute on function ss\.hosted_runtime_contract_v54\(\)\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /alter table ss\.legal_documents|update ss\.legal_documents|delete from ss\.legal_documents|stripe|credit_application|amount_minor/iu
+  );
+});
+
 test("Alakazam customer publication controls store only exact held revision-bound authorization", async () => {
   const migration = (await migrations()).find(
     ({ name }) =>
