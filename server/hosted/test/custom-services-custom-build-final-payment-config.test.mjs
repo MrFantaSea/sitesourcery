@@ -6,6 +6,9 @@ import {
   createConfiguredCustomBuildFinalPaymentRelease,
   validateCustomBuildFinalPaymentRelease
 } from "../custom-services-custom-build-final-payment-config.mjs";
+import {
+  PROFESSIONAL_LIFECYCLE_READY
+} from "./professional-lifecycle-readiness-fixture.mjs";
 
 const STRIPE_READY = Object.freeze({
   ready: true,
@@ -147,7 +150,8 @@ test("approved Custom-build final payment preserves the exact v46 purpose contra
       approved,
       STRIPE_READY,
       CUSTOM_BUILD_READY,
-      FINAL_PAYMENT_READY
+      FINAL_PAYMENT_READY,
+      PROFESSIONAL_LIFECYCLE_READY
     ),
     STRIPE_READY
   );
@@ -196,13 +200,30 @@ test("approved Custom-build final payment rejects every readiness mismatch", () 
           approved,
           stripe,
           customBuild,
-          finalPayment
+          finalPayment,
+          PROFESSIONAL_LIFECYCLE_READY
         ),
       (error) =>
         error.code ===
           "CUSTOM_BUILD_FINAL_PAYMENT_NOT_READY"
     );
   }
+
+  assert.throws(
+    () => assertApprovedCustomBuildFinalPaymentReady(
+      approved,
+      STRIPE_READY,
+      CUSTOM_BUILD_READY,
+      FINAL_PAYMENT_READY,
+      {
+        ...PROFESSIONAL_LIFECYCLE_READY,
+        genericRepair: true
+      }
+    ),
+    (error) =>
+      error.code ===
+        "CUSTOM_BUILD_FINAL_PAYMENT_NOT_READY"
+  );
 
   assert.throws(
     () =>
@@ -216,7 +237,8 @@ test("approved Custom-build final payment rejects every readiness mismatch", () 
         },
         STRIPE_READY,
         CUSTOM_BUILD_READY,
-        FINAL_PAYMENT_READY
+        FINAL_PAYMENT_READY,
+        PROFESSIONAL_LIFECYCLE_READY
       ),
     (error) =>
       error.code ===

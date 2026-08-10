@@ -73,6 +73,85 @@ function harness(handler) {
   return { repository, calls };
 }
 
+test("readiness proves the exact monotonic provider-free contract", async () => {
+  const ready = harness((text, values) => {
+    assert.match(text, /hosted_runtime_contract_v108/u);
+    assert.match(
+      text,
+      /direct_custom_reversal_normalization_contract_v1/u
+    );
+    assert.match(
+      text,
+      /canonical-direct-custom-reversal-normalization-v1-held/u
+    );
+    assert.deepEqual(values, [[
+      "service_professional_payment_lifecycles",
+      "service_professional_reversal_evidence",
+      "service_professional_reversal_reconciliations"
+    ]]);
+    return {
+      rows: [{
+        contract_ready: true,
+        direct_normalization_ready: true,
+        tables_ready: true,
+        rls_ready: true,
+        grants_ready: true
+      }]
+    };
+  });
+  assert.deepEqual(await ready.repository.readiness(), {
+    ready: true,
+    verified: true,
+    kind: "professional-services-reversal-postgres",
+    code: null,
+    sourceAuthoritative: true,
+    monotonic: true,
+    directNormalization: "held",
+    providerEffects: false,
+    automaticRestoration: false
+  });
+  assert.deepEqual(ready.calls[0].context, {
+    actorKind: "system",
+    readOnly: true
+  });
+
+  const directMissing = harness(() => ({
+    rows: [{
+      contract_ready: true,
+      direct_normalization_ready: false,
+      tables_ready: true,
+      rls_ready: true,
+      grants_ready: true
+    }]
+  }));
+  assert.deepEqual(await directMissing.repository.readiness(), {
+    ready: false,
+    verified: false,
+    kind: "professional-services-reversal-postgres",
+    code: "PROFESSIONAL_REVERSAL_NOT_MIGRATED",
+    sourceAuthoritative: true,
+    monotonic: true,
+    directNormalization: "not_ready",
+    providerEffects: false,
+    automaticRestoration: false
+  });
+
+  const unavailable = harness(() => {
+    throw new Error("database unavailable");
+  });
+  assert.deepEqual(await unavailable.repository.readiness(), {
+    ready: false,
+    verified: false,
+    kind: "professional-services-reversal-postgres",
+    code: "PROFESSIONAL_REVERSAL_DATABASE_UNAVAILABLE",
+    sourceAuthoritative: true,
+    monotonic: true,
+    directNormalization: "not_ready",
+    providerEffects: false,
+    automaticRestoration: false
+  });
+});
+
 test("payment lookup is organization-bound and rejects multiple matches", async () => {
   const { repository, calls } = harness(() => ({
     rows: [paymentRow()],

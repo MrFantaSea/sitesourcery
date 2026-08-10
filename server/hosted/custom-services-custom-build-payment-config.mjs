@@ -1,3 +1,7 @@
+import {
+  isExactProfessionalLifecycleReadiness
+} from "./professional-lifecycle-production-composition.mjs";
+
 const MODES = new Set(["held", "approved"]);
 
 function configurationError(code, message) {
@@ -34,7 +38,8 @@ export function assertApprovedCustomBuildPaymentReady(
   composition,
   stripeReadiness,
   customBuildReadiness,
-  paymentReadiness
+  paymentReadiness,
+  professionalLifecycleReadiness = null
 ) {
   if (
     composition?.mode === "approved" &&
@@ -53,12 +58,15 @@ export function assertApprovedCustomBuildPaymentReady(
       paymentReadiness?.exclusiveTaxBehavior === true &&
       paymentReadiness?.stripeReadback === true &&
       paymentReadiness?.atomicCreditSettlement === true &&
-      paymentReadiness?.opensBuildJob === true
+      paymentReadiness?.opensBuildJob === true &&
+      isExactProfessionalLifecycleReadiness(
+        professionalLifecycleReadiness
+      )
     )
   ) {
     throw configurationError(
       "CUSTOM_BUILD_PAYMENT_NOT_READY",
-      "Approved Custom-build payment requires the exact purpose-bound Stripe tax decision, quote storage, and payment settlement."
+      "Approved Custom-build payment requires the exact purpose-bound Stripe tax decision, quote storage, payment settlement, and held professional lifecycle contracts."
     );
   }
   return stripeReadiness;

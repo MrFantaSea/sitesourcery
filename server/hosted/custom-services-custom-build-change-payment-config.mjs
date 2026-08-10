@@ -1,3 +1,7 @@
+import {
+  isExactProfessionalLifecycleReadiness
+} from "./professional-lifecycle-production-composition.mjs";
+
 const MODES = new Set(["held", "approved"]);
 const RELEASE_KEYS = Object.freeze([
   "approved",
@@ -79,7 +83,8 @@ export function assertApprovedCustomBuildChangePaymentReady(
   composition,
   stripeReadiness,
   customBuildReadiness,
-  changePaymentReadiness
+  changePaymentReadiness,
+  professionalLifecycleReadiness = null
 ) {
   if (
     composition?.mode === "approved" &&
@@ -103,12 +108,15 @@ export function assertApprovedCustomBuildChangePaymentReady(
       changePaymentReadiness?.ownerReconciliation === true &&
       changePaymentReadiness?.holdScope === HOLD_SCOPE &&
       changePaymentReadiness?.providerEffectProcessing ===
-        PROVIDER_EFFECT_PROCESSING
+        PROVIDER_EFFECT_PROCESSING &&
+      isExactProfessionalLifecycleReadiness(
+        professionalLifecycleReadiness
+      )
     )
   ) {
     throw configurationError(
       "CUSTOM_BUILD_CHANGE_PAYMENT_NOT_READY",
-      "Approved Custom-build change payment requires the exact purpose-bound Stripe tax decision, provider readback settlement, atomic change activation, and reconciliation that remains active while new Checkout creation is held."
+      "Approved Custom-build change payment requires the exact purpose-bound Stripe tax decision, provider readback settlement, atomic change activation, held professional lifecycle contracts, and reconciliation that remains active while new Checkout creation is held."
     );
   }
   return stripeReadiness;

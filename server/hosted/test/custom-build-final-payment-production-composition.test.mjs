@@ -30,7 +30,7 @@ test("production composes v47 completion, final payment, and handoff as separate
   );
   assert.match(
     source,
-    /assertApprovedCustomBuildFinalPaymentReady\(\s*customBuildFinalPaymentComposition,\s*readiness\.payments,\s*await customServicesCustomBuild\.readiness\(\),\s*await customBuildFinalPayment\.readiness\(\)\s*\)/u
+    /assertApprovedCustomBuildFinalPaymentReady\(\s*customBuildFinalPaymentComposition,\s*readiness\.payments,\s*await customServicesCustomBuild\.readiness\(\),\s*await customBuildFinalPayment\.readiness\(\),\s*professionalLifecycleReadiness\s*\)/u
   );
   assert.match(
     source,

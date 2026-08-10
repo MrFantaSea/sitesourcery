@@ -1,5 +1,9 @@
 # ENGAGEMENT-01 protected-root and UI wiring notes — 2026-08-10
 
+PRO-LIFECYCLE-COMPOSE-02 status: Engagement production composition is present
+and its provider-free readiness is now one mandatory field of the held
+professional-lifecycle approval contract. The UI follow-on remains held.
+
 This packet adds the PostgreSQL, repository, domain, and exact HTTP request
 contracts for customer engagement invitations. It deliberately does not edit
 `server/hosted/repository-postgres.mjs`, `server/hosted/bin/server.mjs`, or the

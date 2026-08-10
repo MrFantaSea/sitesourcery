@@ -1,5 +1,13 @@
 # PRO-REVERSALS-01 L4 wiring notes
 
+PRO-LIFECYCLE-COMPOSE-02 status: the repository/domain boundary and its exact
+v108 plus direct-normalization-v117 readiness are now constructed in the
+hosted production root through the held professional-lifecycle aggregate. It
+is available only to the existing bounded operator-queue reconciliation port.
+The shared Stripe-router registration, customer capability, and mutation gates
+described below remain held; no raw Stripe event is routed to this service.
+This supersedes only the earlier constructor residual.
+
 This packet intentionally does not edit the shared HTTP, server-composition,
 Stripe-router, account-projection, or Custom-work roots. Migration 108 and the
 new modules remain inert until L4 applies every gate below. No provider method
@@ -8,41 +16,18 @@ PaymentIntent.
 
 ## Server composition
 
-In `server/hosted/bin/server.mjs`, beside the Custom-service imports currently
-at lines 103-168, add:
-
-```js
-import {
-  createProfessionalServicesReversalService
-} from "../../commerce-v2/professional-services-reversal.mjs";
-import {
-  createPostgresProfessionalServicesReversalRepository
-} from "../professional-services-reversal-postgres.mjs";
-```
-
-Immediately after `customBuildPayment` is created at current lines 543-550,
-construct only the local evidence boundary:
-
-```js
-const professionalServicesReversal =
-  createProfessionalServicesReversalService({
-    repository: createPostgresProfessionalServicesReversalRepository({
-      authority
-    }),
-    clock: commerceV2.clock,
-    ids: commerceV2.ids
-  });
-```
+`server/hosted/bin/server.mjs` now constructs the local evidence boundary only
+through `createProfessionalLifecycleProductionComposition`. Preserve that one
+aggregate owner rather than constructing a duplicate reversal service.
 
 Do not pass `stripeComposition.adapter` to this constructor. The absence of a
 provider port is the no-refund/no-charge invariant.
 
-Add `ss.hosted_runtime_contract_v108()` and the three migration-108 tables to
-the canonical readiness query owned by `server/hosted/postgres-service.mjs`.
-Liveness must not depend on v108. Professional-payment dependency readiness
-must be false when v108 is absent. Customer and operator reversal capability
-must remain false until all access/credit/quote gates below and the verified
-event adapter are integrated.
+Professional dependency readiness requires `ss.hosted_runtime_contract_v108()`,
+the three forced-RLS migration-108 tables, their exact grants, and the held
+`ss.direct_custom_reversal_normalization_contract_v1()` marker from migration
+117. Liveness does not depend on these checks. Customer reversal capability
+remains false until all access/credit/quote gates below are integrated.
 
 ## Verified Stripe evidence
 

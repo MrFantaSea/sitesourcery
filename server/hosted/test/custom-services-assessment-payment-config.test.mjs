@@ -8,6 +8,9 @@ import {
 import {
   createPostgresCustomServicesAssessmentPayment
 } from "../custom-services-assessment-payment-postgres.mjs";
+import {
+  PROFESSIONAL_LIFECYCLE_READY
+} from "./professional-lifecycle-readiness-fixture.mjs";
 
 const PAYMENT_SCOPE = Object.freeze({
   actorId: "20000000-0000-4000-8000-000000000001",
@@ -101,12 +104,38 @@ test("approved assessment payment requires its exact purpose tax authority and s
         webhookWakeup: true,
         stripeReadback: true,
         atomicSettlement: true
-      }
+      },
+      PROFESSIONAL_LIFECYCLE_READY
     ),
     {
       ready: true,
       taxModes: { serviceAssessment: "disabled_by_owner" }
     }
+  );
+  assert.throws(
+    () =>
+      assertApprovedCustomServicesAssessmentPaymentReady(
+        approved,
+        {
+          ready: true,
+          taxModes: { serviceAssessment: "disabled_by_owner" }
+        },
+        {
+          schema:
+            "sitesourcery.custom-services-assessment-settlement-readiness/v1",
+          ready: true,
+          webhookWakeup: true,
+          stripeReadback: true,
+          atomicSettlement: true
+        },
+        {
+          ...PROFESSIONAL_LIFECYCLE_READY,
+          notifications: "delivered"
+        }
+      ),
+    (error) =>
+      error.code ===
+        "CUSTOM_SERVICES_ASSESSMENT_PAYMENT_NOT_READY"
   );
   assert.doesNotThrow(() =>
     assertApprovedCustomServicesAssessmentPaymentReady(

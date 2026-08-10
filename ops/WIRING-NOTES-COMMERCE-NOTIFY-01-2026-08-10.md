@@ -1,9 +1,11 @@
 # COMMERCE-NOTIFY-01 held wiring notes
 
 Status: held. This packet creates durable, source-authoritative transition
-notification reservations. It does not compose a transition hook, HTTP route,
-template renderer, provider adapter, worker, customer UI, operator UI, or live
-alert.
+notification reservations. PRO-LIFECYCLE-COMPOSE-02 now constructs the narrow
+repository/domain boundary in the hosted root and requires its exact held
+readiness for professional payment approval. It still does not compose a
+transition hook, HTTP route, template renderer, provider adapter, worker,
+customer UI, operator UI, delivery claim, or live alert.
 
 ## Exact authority
 
@@ -46,9 +48,7 @@ authorities remain unchanged.
 
 ## Later composition
 
-1. Construct `createPostgresCommerceTransitionNotificationRepository` with the
-   canonical PostgreSQL authority, then construct
-   `createCommerceTransitionNotifications` with the canonical server clock.
+1. Preserve the current canonical PostgreSQL repository/domain construction.
 2. After and only after a listed authoritative transition commits, pass its
    exact source reference and reviewed routing/content digests to `reserve`.
    Never reconstruct money or state from a browser request or provider payload.
@@ -64,8 +64,5 @@ authorities remain unchanged.
 
 ## Migration union
 
-On this exact base, append `202608100114` after `202608100112`; the verifier
-expects 65 migrations. `202608100113` belongs to CUSTOM-DIRECT-01. If 113 lands
-first, the order is `.../112/113/114` and the expected total becomes 66. Re-run
-the source-registry proof to confirm direct-Custom quote revisions retain the
-same exact revision/digest authority.
+The current integration successor includes the additive union through
+migration 117 and totals 70 migrations. PRO-LIFECYCLE-COMPOSE-02 adds none.

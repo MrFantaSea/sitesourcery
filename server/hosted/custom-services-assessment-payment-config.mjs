@@ -1,3 +1,7 @@
+import {
+  isExactProfessionalLifecycleReadiness
+} from "./professional-lifecycle-production-composition.mjs";
+
 const MODES = new Set(["held", "approved"]);
 
 function configurationError(code, message) {
@@ -62,7 +66,8 @@ export function createConfiguredCustomServicesAssessmentPaymentRelease({
 export function assertApprovedCustomServicesAssessmentPaymentReady(
   composition,
   readiness,
-  settlementReadiness = null
+  settlementReadiness = null,
+  professionalLifecycleReadiness = null
 ) {
   if (
     composition?.mode === "approved" &&
@@ -75,12 +80,15 @@ export function assertApprovedCustomServicesAssessmentPaymentReady(
       settlementReadiness?.ready === true &&
       settlementReadiness?.webhookWakeup === true &&
       settlementReadiness?.stripeReadback === true &&
-      settlementReadiness?.atomicSettlement === true
+      settlementReadiness?.atomicSettlement === true &&
+      isExactProfessionalLifecycleReadiness(
+        professionalLifecycleReadiness
+      )
     )
   ) {
     throw configurationError(
       "CUSTOM_SERVICES_ASSESSMENT_PAYMENT_NOT_READY",
-      "Approved assessment payment requires the exact purpose-bound Stripe tax decision and assessment settlement."
+      "Approved assessment payment requires the exact purpose-bound Stripe tax decision, assessment settlement, and held professional lifecycle contracts."
     );
   }
   return readiness;
