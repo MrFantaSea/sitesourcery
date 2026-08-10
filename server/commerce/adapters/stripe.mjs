@@ -123,6 +123,7 @@ const PROVIDER_ID = /^(bpc|bps|ch|cs|cus|dp|in|pi|price|prod|re|si|sub_sched|sub
 const SAFE_METADATA_VALUE = /^[A-Za-z0-9._:-]+$/u;
 const TAX_CODE = /^txcd_[A-Za-z0-9]+$/u;
 const TAX_REGISTRATION_ID = /^taxreg_[A-Za-z0-9_]+$/u;
+const STRIPE_ACCOUNT_ID = /^acct_[A-Za-z0-9_]+$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
@@ -181,8 +182,11 @@ const STRIPE_ALAKAZAM_PAYMENT_SCHEMA =
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA;
 const STRIPE_ALAKAZAM_SCHEDULE_SCHEMA =
   ALAKAZAM_SCHEDULE_PROVIDER_FACTS_SCHEMA;
-const STRIPE_TAX_ATTESTATION_SCHEMA =
-  "sitesourcery.stripe-tax-attestation/v1";
+export const STRIPE_TAX_READBACK_ATTESTATION_SCHEMA =
+  "sitesourcery.stripe-tax-provider-readback-attestation/v1";
+export const STRIPE_TAX_READBACK_EVIDENCE_SCHEMA =
+  "sitesourcery.stripe-tax-provider-readback-evidence/v1";
+export const STRIPE_TAX_READBACK_MAX_AGE_MS = 15 * 60 * 1000;
 const STRIPE_TAX_PURPOSE_AUTHORITY_SCHEMA =
   "sitesourcery.stripe-tax-purpose-authority/v1";
 const STRIPE_AUTOMATIC_TAX_ACTIVATION_SCHEMA =
@@ -806,7 +810,8 @@ function normalizedTaxPurposeAuthority(value, config) {
         SAFE_METADATA_VALUE.test(activation.activationId) &&
         Number.isFinite(Date.parse(activation.approvedAt)) &&
         Number.isFinite(Date.parse(activation.effectiveAt)) &&
-        Date.now() >= Date.parse(activation.effectiveAt) &&
+        new Date(activation.effectiveAt).toISOString() ===
+          activation.effectiveAt &&
         JSON.stringify(activationPurposes) ===
           JSON.stringify(automaticPurposes.sort()) &&
         registrationIds.length > 0 &&
@@ -841,77 +846,149 @@ function normalizedTaxPurposeAuthority(value, config) {
   });
 }
 
-function normalizedTaxAttestation(value, config, taxAuthority) {
+function normalizedTaxAttestation(
+  value,
+  config,
+  taxAuthority,
+  observedNow
+) {
+  if (taxAuthority.automaticActivation === null) {
+    invariant(
+      value === null || value === undefined,
+      "stripe_tax_readback_attestation_unexpected",
+      "Disabled Stripe Tax purposes cannot carry latent provider-readback authority",
+      { status: 500 }
+    );
+    return null;
+  }
   invariant(
     exactObjectKeys(value, [
-      "approved",
-      "approvedAt",
+      "accountId",
       "attestationId",
-      "defaultTaxBehavior",
-      "headOfficeCountry",
+      "evidence",
+      "evidenceDigest",
       "livemode",
+      "observedAt",
       "provider",
-      "registrationDecision",
-      "registrationIds",
-      "schema",
-      "taxMode"
+      "purposePolicyDigest",
+      "schema"
     ]),
-    "stripe_tax_attestation_required",
-    "Stripe Tax requires one exact owner attestation",
+    "stripe_tax_readback_attestation_required",
+    "Automatic Stripe Tax requires one exact provider-readback attestation",
     { status: 500 }
   );
-  const registrationIds = Array.isArray(value.registrationIds)
-    ? value.registrationIds
-    : [];
+  const evidence = value.evidence;
   invariant(
-    value.schema === STRIPE_TAX_ATTESTATION_SCHEMA &&
+    exactObjectKeys(evidence, [
+      "accountId",
+      "defaultTaxBehavior",
+      "headOffice",
+      "livemode",
+      "provider",
+      "registrations",
+      "schema",
+      "taxStatus"
+    ]) &&
+      exactObjectKeys(evidence?.headOffice, [
+        "country",
+        "state"
+      ]) &&
+      Array.isArray(evidence?.registrations),
+    "stripe_tax_readback_attestation_invalid",
+    "Stripe Tax provider evidence must contain the exact reviewed fields",
+    { status: 500 }
+  );
+  const registrations = evidence.registrations.map(
+    (registration) => {
+      invariant(
+        exactObjectKeys(registration, [
+          "country",
+          "effectiveAt",
+          "id",
+          "jurisdiction",
+          "state",
+          "type"
+        ]),
+        "stripe_tax_readback_attestation_invalid",
+        "Stripe Tax registration evidence is not exact",
+        { status: 500 }
+      );
+      return Object.freeze(structuredClone(registration));
+    }
+  );
+  const nowMilliseconds = Date.parse(observedNow);
+  const observedAtMilliseconds = Date.parse(value.observedAt);
+  const effectiveAtMilliseconds = Date.parse(
+    taxAuthority.automaticActivation.effectiveAt
+  );
+  const registrationIds = registrations
+    .map(({ id }) => id)
+    .sort();
+  invariant(
+    value.schema === STRIPE_TAX_READBACK_ATTESTATION_SCHEMA &&
       value.provider === "stripe" &&
-      value.approved === true &&
       value.livemode === config.livemode &&
-      value.taxMode ===
-        (taxAuthority.automaticActivation === null
-          ? "disabled_by_owner"
-          : "automatic") &&
-      value.defaultTaxBehavior === "exclusive" &&
+      typeof value.accountId === "string" &&
+      STRIPE_ACCOUNT_ID.test(value.accountId) &&
       typeof value.attestationId === "string" &&
       SAFE_METADATA_VALUE.test(value.attestationId) &&
-      Number.isFinite(Date.parse(value.approvedAt)) &&
-      typeof value.headOfficeCountry === "string" &&
-      /^[A-Z]{2}$/u.test(value.headOfficeCountry) &&
-      ["registered", "none_registered"].includes(
-        value.registrationDecision
-      ) &&
-      registrationIds.every(
-        (id) =>
-          typeof id === "string" &&
-          TAX_REGISTRATION_ID.test(id)
+      typeof observedNow === "string" &&
+      Number.isFinite(nowMilliseconds) &&
+      new Date(nowMilliseconds).toISOString() ===
+        observedNow &&
+      Number.isFinite(observedAtMilliseconds) &&
+      new Date(observedAtMilliseconds).toISOString() ===
+        value.observedAt &&
+      observedAtMilliseconds >= effectiveAtMilliseconds &&
+      nowMilliseconds >= effectiveAtMilliseconds &&
+      observedAtMilliseconds <= nowMilliseconds &&
+      nowMilliseconds - observedAtMilliseconds <=
+        STRIPE_TAX_READBACK_MAX_AGE_MS &&
+      value.purposePolicyDigest === digest(taxAuthority) &&
+      SHA256.test(value.purposePolicyDigest) &&
+      value.evidenceDigest === digest(evidence) &&
+      SHA256.test(value.evidenceDigest) &&
+      evidence.schema === STRIPE_TAX_READBACK_EVIDENCE_SCHEMA &&
+      evidence.provider === "stripe" &&
+      evidence.accountId === value.accountId &&
+      evidence.livemode === value.livemode &&
+      evidence.taxStatus === "active" &&
+      evidence.defaultTaxBehavior === "exclusive" &&
+      /^[A-Z]{2}$/u.test(evidence.headOffice.country) &&
+      /^[A-Z]{2}$/u.test(evidence.headOffice.state) &&
+      registrations.length > 0 &&
+      registrations.every(
+        (registration) =>
+          typeof registration.id === "string" &&
+          TAX_REGISTRATION_ID.test(registration.id) &&
+          registration.country ===
+            evidence.headOffice.country &&
+          registration.state === evidence.headOffice.state &&
+          registration.jurisdiction ===
+            `${registration.country}-${registration.state}` &&
+          registration.type === "state_sales_tax" &&
+          registration.effectiveAt ===
+            taxAuthority.automaticActivation.effectiveAt
       ) &&
       new Set(registrationIds).size ===
         registrationIds.length &&
-      (value.registrationDecision === "registered"
-        ? registrationIds.length > 0
-        : registrationIds.length === 0),
-    "stripe_tax_attestation_invalid",
-    "Stripe Tax attestation does not match the exact account decision",
+      JSON.stringify(registrationIds) ===
+        JSON.stringify(
+          taxAuthority.automaticActivation.registrationIds
+        ),
+    "stripe_tax_readback_attestation_invalid",
+    "Stripe Tax provider readback is stale, inactive, pre-effective, or does not match the exact account, jurisdiction, registration, and purpose policy",
     { status: 500 }
   );
-  if (taxAuthority.automaticActivation !== null) {
-    invariant(
-      value.registrationDecision === "registered" &&
-        JSON.stringify([...registrationIds].sort()) ===
-          JSON.stringify(
-            taxAuthority.automaticActivation.registrationIds
-          ),
-      "stripe_automatic_tax_registration_mismatch",
-      "Automatic Stripe Tax activation must bind the exact attested registrations",
-      { status: 500 }
-    );
-  }
   return Object.freeze({
     ...structuredClone(value),
-    registrationIds: Object.freeze(
-      [...registrationIds].sort()
-    )
+    evidence: Object.freeze({
+      ...structuredClone(evidence),
+      headOffice: Object.freeze({
+        ...evidence.headOffice
+      }),
+      registrations: Object.freeze(registrations)
+    })
   });
 }
 
@@ -923,6 +1000,14 @@ function taxModeFor(config, field) {
     `Stripe Tax purpose ${field} is held without exact authority`,
     { status: 503 }
   );
+  if (mode === "automatic") {
+    normalizedTaxAttestation(
+      config.taxAttestation,
+      config,
+      config.taxAuthority,
+      config.taxClock.now()
+    );
+  }
   return mode;
 }
 
@@ -1020,7 +1105,7 @@ function normalizedAlakazamConfig(
   });
 }
 
-function validateConfig(value, mode) {
+function validateConfig(value, mode, taxClock) {
   const config = value && typeof value === "object" ? value : {};
   invariant(
     typeof config.livemode === "boolean",
@@ -1189,7 +1274,8 @@ function validateConfig(value, mode) {
   const taxAttestation = normalizedTaxAttestation(
     config.taxAttestation,
     config,
-    taxAuthority
+    taxAuthority,
+    taxClock.now()
   );
   return Object.freeze({
     apiVersion: STRIPE_API_VERSION,
@@ -1205,6 +1291,7 @@ function validateConfig(value, mode) {
     taxAuthority,
     taxCodes,
     taxAttestation,
+    taxClock,
     webhookSecret,
     webhookEndpointId,
     webhookEndpointUrl,
@@ -5941,7 +6028,11 @@ export function createStripeProviderAdapter(options = {}) {
       verifyWebhook: reject
     });
   }
-  const config = validateConfig(options.config, mode);
+  const clock =
+    typeof options.clock?.now === "function"
+      ? options.clock
+      : { now: () => new Date().toISOString() };
+  const config = validateConfig(options.config, mode, clock);
   if (mode === "contract_test") {
     invariant(
       options.testOnly === true &&
@@ -6019,11 +6110,6 @@ export function createStripeProviderAdapter(options = {}) {
     );
   }
   const client = validateClient(selectedClient);
-  const clock =
-    typeof options.clock?.now === "function"
-      ? options.clock
-      : { now: () => new Date().toISOString() };
-
   function requireCapability(capability) {
     invariant(
       capabilities.has(capability),
@@ -6955,6 +7041,17 @@ export function createStripeProviderAdapter(options = {}) {
   }
 
   function readinessProjection({ purpose = null } = {}) {
+    const taxPurposes =
+      purpose === null
+        ? STRIPE_TAX_CODE_FIELDS
+        : [purpose];
+    for (const taxPurpose of taxPurposes) {
+      if (
+        config.taxAuthority.purposes[taxPurpose] !== null
+      ) {
+        taxModeFor(config, taxPurpose);
+      }
+    }
     return {
       ready: true,
       provider: "stripe",
@@ -6980,7 +7077,7 @@ export function createStripeProviderAdapter(options = {}) {
       taxPurposeAuthority: true,
       automaticTaxActivation:
         config.taxAuthority.automaticActivation !== null,
-      taxAttestation: true,
+      taxAttestation: config.taxAttestation !== null,
       ...(purpose === "alakazam" ||
       (purpose === null && config.alakazam)
         ? { alakazam: true }

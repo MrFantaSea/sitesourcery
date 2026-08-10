@@ -179,21 +179,22 @@ local and needs no Stripe API permission.
 
 ### Stripe Tax attestation
 
-S-01 uses sealed account attestation rather than giving the runtime Tax API
-permissions. After an authenticated operator completes exact account setup:
+S-01 uses a secret-free, short-lived provider-readback attestation rather than
+giving the runtime Tax API permissions. Disabled-by-owner purposes require no
+attestation. Immediately before a future automatic-tax activation:
 
 1. read Tax Settings and the complete registration list in the same mode;
-2. verify the full head-office address, default `exclusive` behavior, and the
-   account's registration decision;
-3. record either every exact `taxreg_` ID with `registrationDecision=registered`
-   or an owner-approved empty list with
-   `registrationDecision=none_registered`;
-4. seal `sitesourcery.stripe-tax-attestation/v1` with approval ID, approval time,
-   livemode, tax mode, country, and those registration IDs;
-5. store it only in `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON`.
+2. verify active Tax status, mode-matched account ID, default `exclusive`
+   behavior, exact head-office country/state, and every exact registered
+   jurisdiction, `taxreg_` ID, type, and effective time;
+3. seal `sitesourcery.stripe-tax-provider-readback-attestation/v1` with the
+   canonical evidence digest and current purpose-policy digest;
+4. store it only in `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON` and start within
+   its 15-minute freshness window.
 
-This is configuration evidence, not tax or legal advice. It cannot be inferred
-from the absence of registrations.
+The runtime revalidates freshness and requires current time at or after the
+activation/registration effective time. This is provider evidence, not tax or
+legal advice; no registration fact is inferred from absence.
 
 ## Least-privilege keys
 

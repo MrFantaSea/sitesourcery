@@ -142,6 +142,19 @@ function json(environment, name) {
   }
 }
 
+function optionalJson(environment, name) {
+  const source = optionalText(environment, name, 100_000);
+  if (source === null) return null;
+  try {
+    return JSON.parse(source);
+  } catch {
+    fail(
+      "STRIPE_PRODUCTION_JSON_INVALID",
+      `${name} must contain valid JSON.`
+    );
+  }
+}
+
 function exactObject(value, fields, code, message) {
   if (
     !value ||
@@ -650,7 +663,7 @@ export function createConfiguredStripeProvider({
       environment,
       "SITESOURCERY_STRIPE_TAX_PURPOSE_AUTHORITY_JSON"
     ),
-    taxAttestation: json(
+    taxAttestation: optionalJson(
       environment,
       "SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON"
     ),

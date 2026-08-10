@@ -78,8 +78,8 @@ function configuration(overrides = {}) {
           provider: "stripe",
           approved: true,
           activationId: "tax-activation-contract",
-          approvedAt: "2026-08-09T12:00:00.000Z",
-          effectiveAt: "2026-08-09T12:00:00.000Z",
+          approvedAt: "2026-07-28T11:30:00.000Z",
+          effectiveAt: "2026-07-28T11:30:00.000Z",
           livemode: selectedLivemode,
           purposes: Object.entries(purposes)
             .filter(([, mode]) => mode === "automatic")
@@ -87,6 +87,55 @@ function configuration(overrides = {}) {
           registrationIds: ["taxreg_contract"]
         }
       : null;
+  const taxAuthority = {
+    schema:
+      "sitesourcery.stripe-tax-purpose-authority/v1",
+    provider: "stripe",
+    approved: true,
+    authorityId: "tax-purpose-authority-contract",
+    approvedAt: "2026-07-28T11:30:00.000Z",
+    livemode: selectedLivemode,
+    defaultTaxBehavior: "exclusive",
+    purposes,
+    automaticActivation
+  };
+  const taxEvidence =
+    selectedTaxMode === "automatic"
+      ? {
+          schema:
+            "sitesourcery.stripe-tax-provider-readback-evidence/v1",
+          provider: "stripe",
+          accountId: "acct_contract",
+          livemode: selectedLivemode,
+          taxStatus: "active",
+          defaultTaxBehavior: "exclusive",
+          headOffice: { country: "US", state: "NJ" },
+          registrations: [{
+            id: "taxreg_contract",
+            country: "US",
+            state: "NJ",
+            jurisdiction: "US-NJ",
+            type: "state_sales_tax",
+            effectiveAt:
+              automaticActivation.effectiveAt
+          }]
+        }
+      : null;
+  const taxAttestation =
+    taxEvidence === null
+      ? null
+      : {
+          schema:
+            "sitesourcery.stripe-tax-provider-readback-attestation/v1",
+          provider: "stripe",
+          attestationId: "tax-readback-contract",
+          accountId: "acct_contract",
+          livemode: selectedLivemode,
+          observedAt: "2026-07-28T11:55:00.000Z",
+          evidence: taxEvidence,
+          evidenceDigest: digest(taxEvidence),
+          purposePolicyDigest: digest(taxAuthority)
+        };
   return {
     livemode: selectedLivemode,
     successUrl:
@@ -103,37 +152,8 @@ function configuration(overrides = {}) {
       "https://account.sitesourcery.test"
     ],
     taxCodes,
-    taxAuthority: {
-      schema:
-        "sitesourcery.stripe-tax-purpose-authority/v1",
-      provider: "stripe",
-      approved: true,
-      authorityId: "tax-purpose-authority-contract",
-      approvedAt: "2026-08-09T12:00:00.000Z",
-      livemode: selectedLivemode,
-      defaultTaxBehavior: "exclusive",
-      purposes,
-      automaticActivation
-    },
-    taxAttestation: {
-      schema: "sitesourcery.stripe-tax-attestation/v1",
-      provider: "stripe",
-      approved: true,
-      attestationId: "tax-attestation-contract",
-      approvedAt: "2026-08-09T12:00:00.000Z",
-      livemode: selectedLivemode,
-      taxMode: selectedTaxMode,
-      headOfficeCountry: "US",
-      defaultTaxBehavior: "exclusive",
-      registrationDecision:
-        selectedTaxMode === "automatic"
-          ? "registered"
-          : "none_registered",
-      registrationIds:
-        selectedTaxMode === "automatic"
-          ? ["taxreg_contract"]
-          : []
-    },
+    taxAuthority,
+    taxAttestation,
     webhookSecret: "whsec_contract_test",
     webhookEndpointId: "we_contract_test",
     webhookEndpointUrl:
@@ -1741,7 +1761,10 @@ function adapterFixture({
       client: fake.client,
       config,
       clock: {
-        now: () => clockNow
+        now: () =>
+          typeof clockNow === "function"
+            ? clockNow()
+            : clockNow
       }
     })
   };
@@ -2506,25 +2529,34 @@ test("construction requires an approved purpose tax code for every enabled inlin
   }
 });
 
-test("construction rejects an unapproved or mode-mismatched Stripe Tax attestation", () => {
-  for (const override of [
-    { approved: false },
-    { livemode: true },
-    { defaultTaxBehavior: "inclusive" },
-    {
-      registrationDecision: "registered",
-      registrationIds: []
+test("automatic Tax rejects missing, stale, inactive, mode-mismatched, or digest-drifted provider readback", () => {
+  const mutations = [
+    (config) => { config.taxAttestation = null; },
+    (config) => { config.taxAttestation.livemode = true; },
+    (config) => {
+      config.taxAttestation.observedAt =
+        "2026-07-28T11:44:59.000Z";
     },
-    {
-      registrationDecision: "none_registered",
-      registrationIds: ["taxreg_unapproved"]
+    (config) => {
+      config.taxAttestation.evidence.taxStatus = "inactive";
+      config.taxAttestation.evidenceDigest =
+        digest(config.taxAttestation.evidence);
+    },
+    (config) => {
+      config.taxAttestation.evidence.registrations[0]
+        .jurisdiction = "US-NY";
+      config.taxAttestation.evidenceDigest =
+        digest(config.taxAttestation.evidence);
+    },
+    (config) => {
+      config.taxAttestation.purposePolicyDigest = "f".repeat(64);
     }
-  ]) {
-    const config = configuration();
-    config.taxAttestation = {
-      ...config.taxAttestation,
-      ...override
-    };
+  ];
+  for (const mutate of mutations) {
+    const config = structuredClone(
+      configuration({ taxMode: "automatic" })
+    );
+    mutate(config);
     assert.throws(
       () =>
         adapterFixture({
@@ -2532,7 +2564,10 @@ test("construction rejects an unapproved or mode-mismatched Stripe Tax attestati
           fake: fakeStripe({ config })
         }),
       (error) =>
-        error.code === "stripe_tax_attestation_invalid"
+        [
+          "stripe_tax_readback_attestation_required",
+          "stripe_tax_readback_attestation_invalid"
+        ].includes(error.code)
     );
   }
 });
@@ -2571,11 +2606,17 @@ test("purpose tax authority fails closed on scalar fallback, latent activation, 
       effectiveAt: "2999-10-21T04:00:00.000Z"
     }
   };
+  future.taxAttestation.purposePolicyDigest =
+    digest(future.taxAuthority);
+  future.taxAttestation.evidence.registrations[0]
+    .effectiveAt = "2999-10-21T04:00:00.000Z";
+  future.taxAttestation.evidenceDigest =
+    digest(future.taxAttestation.evidence);
   assert.throws(
     () => adapterFixture({ config: future }),
     (error) =>
       error.code ===
-      "stripe_automatic_tax_activation_invalid"
+      "stripe_tax_readback_attestation_invalid"
   );
 
   const domainDrift = configuration({
@@ -2615,7 +2656,7 @@ test("readiness reads back every exact owner-approved Price", async () => {
     taxModes: configuration().taxAuthority.purposes,
     taxPurposeAuthority: true,
     automaticTaxActivation: false,
-    taxAttestation: true
+    taxAttestation: false
   });
   assert.deepEqual(calls.prices, [
     "price_site_once",
@@ -2651,7 +2692,7 @@ test("Download readiness is isolated from Alakazam Product, Coupon, Portal, subs
       taxModes: config.taxAuthority.purposes,
       taxPurposeAuthority: true,
       automaticTaxActivation: false,
-      taxAttestation: true
+      taxAttestation: false
     }
   );
   assert.deepEqual(fake.calls.webhookEndpoints, [
@@ -2665,6 +2706,43 @@ test("Download readiness is isolated from Alakazam Product, Coupon, Portal, subs
     fake.calls.subscriptionReads,
     fake.calls.scheduleReads
   ]) assert.deepEqual(calls, []);
+});
+
+test("fresh provider readback gates automatic Download, assessment, Custom, and Alakazam consumers", async () => {
+  const config = alakazamConfiguration({
+    taxMode: "automatic"
+  });
+  const fake = fakeStripe({ config });
+  let currentTime = "2026-07-28T12:00:00.000Z";
+  const { adapter } = adapterFixture({
+    config,
+    fake,
+    clockNow: () => currentTime
+  });
+  for (const purpose of [
+    "download",
+    "serviceAssessment",
+    "customBuildStart",
+    "customBuildChange",
+    "customBuildFinal",
+    "alakazam"
+  ]) {
+    const readiness =
+      await adapter.readinessForPurpose(purpose);
+    assert.equal(readiness.ready, true);
+    assert.equal(readiness.taxAttestation, true);
+    assert.equal(
+      readiness.taxModes[purpose],
+      "automatic"
+    );
+  }
+  currentTime = "2026-07-28T12:10:01.000Z";
+  const stale = await adapter.readinessForPurpose("download");
+  assert.equal(stale.ready, false);
+  assert.equal(
+    stale.code,
+    "stripe_tax_readback_attestation_invalid"
+  );
 });
 
 test("purpose readiness accepts only the exact reviewed purpose registry", async () => {
@@ -2782,7 +2860,7 @@ test("Alakazam readiness proves all three Product-bound Prices, the exact $5 Cou
     taxModes: config.taxAuthority.purposes,
     taxPurposeAuthority: true,
     automaticTaxActivation: false,
-    taxAttestation: true,
+    taxAttestation: false,
     alakazam: true
   });
   assert.deepEqual(fake.calls.coupons, [
@@ -5027,7 +5105,7 @@ test("Custom-build change order creates one distinct exact automatic-tax Checkou
   assert.equal(preboundParams.customer_creation, undefined);
 });
 
-test("Custom-build change delayed same-key retry preserves exact Stripe parameters and cached expiration", async () => {
+test("Custom-build change delayed retry requires fresh automatic-Tax readback before Stripe", async () => {
   const config = configuration({ taxMode: "automatic" });
   const request = customBuildChangeRequest();
   const retainedExpiresAt =
@@ -5044,26 +5122,21 @@ test("Custom-build change delayed same-key retry preserves exact Stripe paramete
     fake,
     clockNow: "2026-07-28T12:00:00.000Z"
   }).adapter.createCustomBuildChangeCheckout(request);
-  const delayed = await adapterFixture({
-    config,
-    fake,
-    clockNow: "2026-08-01T12:00:00.000Z"
-  }).adapter.createCustomBuildChangeCheckout(request);
-
-  assert.deepEqual(delayed, initial);
+  assert.throws(
+    () => adapterFixture({
+      config,
+      fake,
+      clockNow: "2026-08-01T12:00:00.000Z"
+    }).adapter.createCustomBuildChangeCheckout(request),
+    (error) =>
+      error.code ===
+      "stripe_tax_readback_attestation_invalid"
+  );
   assert.equal(
-    delayed.expiresAt,
+    initial.expiresAt,
     request.checkoutExpiresAt
   );
-  assert.equal(fake.calls.checkouts.length, 2);
-  assert.deepEqual(
-    fake.calls.checkouts[1],
-    fake.calls.checkouts[0]
-  );
-  assert.equal(
-    JSON.stringify(fake.calls.checkouts[1]),
-    JSON.stringify(fake.calls.checkouts[0])
-  );
+  assert.equal(fake.calls.checkouts.length, 1);
 });
 
 test("Custom-build change Checkout rejects purpose crossover and tampering with exact effect certainty", async () => {
@@ -5657,7 +5730,7 @@ test("Custom-build final payment creates one distinct exact automatic-tax instal
   assert.equal(preboundParams.customer_creation, undefined);
 });
 
-test("Custom-build final delayed same-key retry preserves exact Stripe parameters and retained expiration", async () => {
+test("Custom-build final delayed retry requires fresh automatic-Tax readback before Stripe", async () => {
   const config = configuration({ taxMode: "automatic" });
   const request = customBuildFinalRequest();
   const retainedExpiresAt =
@@ -5674,26 +5747,21 @@ test("Custom-build final delayed same-key retry preserves exact Stripe parameter
     fake,
     clockNow: "2026-07-28T12:00:00.000Z"
   }).adapter.createCustomBuildFinalCheckout(request);
-  const delayed = await adapterFixture({
-    config,
-    fake,
-    clockNow: "2026-08-07T12:00:00.000Z"
-  }).adapter.createCustomBuildFinalCheckout(request);
-
-  assert.deepEqual(delayed, initial);
+  assert.throws(
+    () => adapterFixture({
+      config,
+      fake,
+      clockNow: "2026-08-07T12:00:00.000Z"
+    }).adapter.createCustomBuildFinalCheckout(request),
+    (error) =>
+      error.code ===
+      "stripe_tax_readback_attestation_invalid"
+  );
   assert.equal(
-    delayed.expiresAt,
+    initial.expiresAt,
     request.checkoutExpiresAt
   );
-  assert.equal(fake.calls.checkouts.length, 2);
-  assert.deepEqual(
-    fake.calls.checkouts[1],
-    fake.calls.checkouts[0]
-  );
-  assert.equal(
-    JSON.stringify(fake.calls.checkouts[1]),
-    JSON.stringify(fake.calls.checkouts[0])
-  );
+  assert.equal(fake.calls.checkouts.length, 1);
 });
 
 test("Custom-build final Checkout rejects zero balance, accepted-change crossover, and authority tampering before Stripe", async () => {

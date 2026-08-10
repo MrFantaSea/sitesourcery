@@ -235,12 +235,16 @@ Approved composition requires every item below:
   Product tax code. `domainRegistration` must remain `null` while domain
   authorization is held and becomes mandatory before domain capability can be
   approved.
-- `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON`: a dated, authority-matched owner
-  attestation of the full Stripe Tax settings/registration readback. Startup
-  requires an approved attestation, an exact head-office country, default
-  exclusive behavior, and either exact `taxreg_` IDs or an explicit
-  `none_registered` decision. An automatic activation must bind the same
-  attested registrations. Missing account setup is never inferred.
+- `SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON`: absent while every enabled purpose
+  is `disabled_by_owner`. A future `automatic` purpose requires an exact
+  `sitesourcery.stripe-tax-provider-readback-attestation/v1`: mode-matched
+  Stripe account ID, active Tax setting, exclusive default behavior, exact
+  head-office country/state, exact state-sales-tax registration jurisdiction
+  and `effectiveAt`, and canonical evidence/purpose-policy SHA-256 digests. Its
+  canonical `observedAt` must be post-effective, not in the future, and no more
+  than 15 minutes old whenever readiness or an automatic-tax path evaluates.
+  Retained provisioning evidence and a scheduled registration cannot activate
+  collection. Missing or stale provider evidence holds the automatic purpose.
 
 Integration ordering is append-only: Engagement migration
 `202608100106_customer_engagement_bootstrap.sql`, Mail migration

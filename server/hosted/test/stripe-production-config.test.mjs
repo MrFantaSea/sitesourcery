@@ -149,20 +149,6 @@ function productionEnvironment(overrides = {}) {
         serviceAssessment: "txcd_10701200",
         siteService: "txcd_10701200"
       }),
-    SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON:
-      JSON.stringify({
-        schema: "sitesourcery.stripe-tax-attestation/v1",
-        provider: "stripe",
-        approved: true,
-        attestationId: "tax-attestation-contract-only",
-        approvedAt: "2026-08-09T12:00:00.000Z",
-        livemode: selectedApproval.livemode,
-        taxMode: "disabled_by_owner",
-        headOfficeCountry: "US",
-        defaultTaxBehavior: "exclusive",
-        registrationDecision: "none_registered",
-        registrationIds: []
-      })
   };
   return { ...environment, ...environmentOverrides };
 }
