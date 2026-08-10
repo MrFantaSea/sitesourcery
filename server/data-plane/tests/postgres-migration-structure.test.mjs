@@ -3274,16 +3274,17 @@ test("ACCOUNTING-01 reserves migration 115 as a held projection-only journal", a
 
 test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity delivery", async () => {
   const selected = await migrations();
-  assert.equal(selected.length, 68);
+  assert.equal(selected.length, 69);
   assert.deepEqual(
-    selected.slice(-6).map(({ name }) => name),
+    selected.slice(-7).map(({ name }) => name),
     [
       "202608100110_support_privacy_case_lifecycle.sql",
       "202608100111_hosted_identity_delivery_acceptance.sql",
       "202608100112_operator_work_queue.sql",
       "202608100113_custom_direct_opportunity.sql",
       "202608100114_commerce_transition_notifications.sql",
-      "202608100115_accounting_purpose_journal.sql"
+      "202608100115_accounting_purpose_journal.sql",
+      "202608100116_alakazam_policy_authority.sql"
     ]
   );
   const migration = selected.find(
