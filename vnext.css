@@ -4406,10 +4406,26 @@ body.vnext-page.domains-page::after {
       rgba(8, 7, 12, 0.10) 0%,
       rgba(8, 7, 12, 0.34) 56%,
       rgba(8, 7, 12, 0.68) 100%),
-    radial-gradient(circle at 50% 28%, rgba(242, 206, 131, 0.10), transparent 40rem),
-    url("/assets/site-sourcery-main-street-v2.webp") center top / cover no-repeat,
-    var(--void);
+    radial-gradient(circle at 50% 28%, rgba(242, 206, 131, 0.10), transparent 40rem);
   filter: brightness(1.14) saturate(1.08);
+}
+
+.domains-page .domain-hero-art {
+  position: fixed;
+  z-index: -3;
+  inset: 0;
+  overflow: hidden;
+  background: var(--void);
+  pointer-events: none;
+  filter: brightness(1.14) saturate(1.08);
+}
+
+.domains-page .domain-hero-art img {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
 }
 
 /* The Responder's orchestration room is its environment, not another card

@@ -2170,7 +2170,7 @@ async function compareArtifact(root, routeResult, errors) {
           ? "css"
           : extension === ".js"
             ? "javascript"
-            : [".ico", ".png", ".svg", ".webp"].includes(extension)
+            : [".avif", ".ico", ".jpeg", ".jpg", ".png", ".svg", ".webp"].includes(extension)
               ? "image"
               : null;
       if (category && artifactBytes.length > ARTIFACT_SIZE_BUDGETS[category]) {
