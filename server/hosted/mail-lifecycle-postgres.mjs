@@ -274,6 +274,12 @@ export function createPostgresMailLifecycleRepository({ authority } = {}) {
                to_regprocedure('ss.hosted_runtime_contract_v54()') is not null
                  and ss.hosted_runtime_contract_v54() =
                    'canonical-ss-v54-durable-mail-lifecycle' as contract_ready,
+               to_regprocedure(
+                 'ss.hosted_identity_delivery_acceptance_contract_v1()'
+               ) is not null
+                 and ss.hosted_identity_delivery_acceptance_contract_v1() =
+                   'canonical-ss-hosted-identity-delivery-acceptance-v1'
+                 as identity_delivery_ready,
                count(*) = 5 as tables_ready,
                bool_and(c.relrowsecurity and c.relforcerowsecurity) as rls_ready
              from pg_class c
@@ -291,6 +297,7 @@ export function createPostgresMailLifecycleRepository({ authority } = {}) {
         );
         const row = result.rows[0] ?? {};
         const ready = row.contract_ready === true &&
+          row.identity_delivery_ready === true &&
           row.tables_ready === true && row.rls_ready === true;
         return deepFreeze({
           ready,

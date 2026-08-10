@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   BRIDGED_MAIL_LIFECYCLE_STATES,
+  createDurableRegistrationMailPort,
   createHeldBridgedMailComposition,
   createHeldMailDeliveryBridge
 } from "../mail-delivery-bridge.mjs";
@@ -222,7 +223,7 @@ test("acceptance is distinct from delivery: only a real provider event reaches a
   assert.equal(row.state, "bounced");
   // The acceptance receipt the bridge already returned still says accepted,
   // never delivered — acceptance and delivery are separate facts.
-  assert.equal(receipt.state, "accepted-by-provider");
+  assert.equal(receipt.state, "provider_accepted");
 });
 
 test("token and recipient are never present; only digests are recorded", async () => {
@@ -316,7 +317,53 @@ test("recovery requires a customer account reference; registration refuses one",
     (error) => error?.code === "REGISTRATION_DELIVERY_INVALID"
   );
   const ok = await bridge.recovery.deliver(RECOVERY);
-  assert.equal(ok.state, "accepted-by-provider");
+  assert.equal(ok.state, "provider_accepted");
+});
+
+test("production bridge reserves before provider effect and records acceptance after it", async () => {
+  const repository = createDurableDouble();
+  const lifecycle = createMailLifecycle({ repository, clock: CLOCK });
+  const providerPort = Object.freeze({
+    kind: "registration-mail",
+    mode: "production",
+    providerEffects: true,
+    async readiness() {
+      return {
+        ready: true,
+        verified: true,
+        kind: "registration-mail",
+        mode: "production",
+        provider: "test_mail"
+      };
+    },
+    async deliver(input) {
+      assert.deepEqual(repository.log, ["reserve"]);
+      repository.log.push("provider");
+      return {
+        state: "provider_accepted",
+        mode: "production",
+        provider: "test_mail",
+        providerEffects: true,
+        providerMessageId: "message_0001",
+        idempotencyKey: input.idempotencyKey,
+        payloadDigest: digest("provider-payload"),
+        acceptedAt: NOW,
+        expiresAt: input.expiresAt,
+        receiptId: digest("provider-receipt")
+      };
+    }
+  });
+  const port = createDurableRegistrationMailPort({
+    lifecycle,
+    providerPort,
+    clock: CLOCK
+  });
+  const receipt = await port.deliver(REGISTRATION);
+  assert.deepEqual(repository.log, ["reserve", "provider", "accept"]);
+  assert.equal(receipt.state, "provider_accepted");
+  assert.equal(receipt.mode, "production");
+  assert.equal(receipt.providerEffects, true);
+  assert.notEqual(receipt.state, "delivered");
 });
 
 test("held composition refuses any real provider effect (no switch lift, no transport)", () => {

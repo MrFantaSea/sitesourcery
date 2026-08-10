@@ -79,6 +79,14 @@ import {
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
+import {
+  createDurableRecoveryMailPort,
+  createDurableRegistrationMailPort
+} from "../mail-delivery-bridge.mjs";
+import { createMailLifecycle } from "../mail-lifecycle.mjs";
+import {
+  createPostgresMailLifecycleRepository
+} from "../mail-lifecycle-postgres.mjs";
 import { createNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import {
@@ -90,7 +98,8 @@ import {
   createProductionRecoveryMailPort
 } from "../recovery-mail-port.mjs";
 import {
-  createDevelopmentRegistrationMailSink
+  createDevelopmentRegistrationMailSink,
+  createProductionRegistrationMailPort
 } from "../registration-mail-port.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
@@ -1255,6 +1264,21 @@ test(
       path.join(os.tmpdir(), "sitesourcery-pg-service-")
     );
     const clock = { now: () => NOW };
+    const mailLifecycle = createMailLifecycle({
+      repository: createPostgresMailLifecycleRepository({
+        authority
+      }),
+      clock
+    });
+    const productionRecoveryPort = (transport) =>
+      createDurableRecoveryMailPort({
+        lifecycle: mailLifecycle,
+        providerPort: createProductionRecoveryMailPort({
+          clock,
+          transport
+        }),
+        clock
+      });
     const registrationSink =
       createDevelopmentRegistrationMailSink({
         registrationBaseUrl:
@@ -1580,6 +1604,126 @@ test(
     const otherActor = await service.authenticate(
       otherRegistered.sessionToken
     );
+    const productionRegistrationSends = [];
+    const productionRegistrationPort =
+      createDurableRegistrationMailPort({
+        lifecycle: mailLifecycle,
+        providerPort: createProductionRegistrationMailPort({
+          clock,
+          transport: {
+            async readiness() {
+              return {
+                ready: true,
+                verified: true,
+                provider: "integration-mail"
+              };
+            },
+            async sendRegistration(input) {
+              productionRegistrationSends.push(input);
+              return {
+                accepted: true,
+                provider: "integration-mail",
+                providerMessageId:
+                  "registration_message_integration_1",
+                idempotencyKey: input.idempotencyKey,
+                payloadDigest: input.payloadDigest,
+                acceptedAt: NOW
+              };
+            }
+          }
+        }),
+        clock
+      });
+    const productionRegistrationIdentity =
+      createPostgresIdentityBridge({
+        pool,
+        authority,
+        pepper: randomBytes(32),
+        pepperVersion: "production-test-v1",
+        clock: () => new Date(NOW),
+        registrationMailPort: productionRegistrationPort
+      });
+    const productionRegistrationService =
+      createCanonicalPostgresService({
+        ...serviceOptions,
+        identity: productionRegistrationIdentity,
+        recoveryMailPort: recoverySink
+      });
+    const productionRegistrationEmail =
+      `production-owner-${randomUUID()}@example.test`;
+    await productionRegistrationService.register({
+      name: "Production Test Owner",
+      organizationName: "Production Test Organization",
+      email: productionRegistrationEmail,
+      password: "production correct horse battery staple",
+      commandId: "registration-production-owner-001"
+    });
+    assert.equal(productionRegistrationSends.length, 1);
+    const acceptedRegistration = (
+      await pool.query(
+        `select
+           request.state,
+           request.mail_delivery_id,
+           request.delivered_at,
+           request.possession_proven_at,
+           mail.state as mail_state,
+           (select count(*)::integer
+              from auth.users
+             where lower(email) = $1) as account_count,
+           (select count(*)::integer
+              from ss.hosted_sessions session
+              join auth.users account
+                on account.id = session.user_id
+             where lower(account.email) = $1) as session_count
+         from ss.hosted_registration_requests request
+         join ss.hosted_mail_deliveries mail
+           on mail.id = request.mail_delivery_id
+        where request.command_id = $2`,
+        [
+          productionRegistrationEmail,
+          "registration-production-owner-001"
+        ]
+      )
+    ).rows[0];
+    assert.equal(acceptedRegistration.state, "provider_accepted");
+    assert.equal(acceptedRegistration.mail_state, "provider_accepted");
+    assert.equal(acceptedRegistration.delivered_at, null);
+    assert.equal(acceptedRegistration.possession_proven_at, null);
+    assert.equal(acceptedRegistration.account_count, 0);
+    assert.equal(acceptedRegistration.session_count, 0);
+    await assert.rejects(
+      productionRegistrationService.completeRegistration({
+        token: "m".repeat(43),
+        commandId: "registration-production-wrong-001"
+      }),
+      (error) => error?.code === "REGISTRATION_TOKEN_INVALID"
+    );
+    const productionRegistrationToken = decodeURIComponent(
+      new URL(
+        productionRegistrationSends[0].verificationUrl
+      ).hash.slice("#verify-registration=".length)
+    );
+    await productionRegistrationService.completeRegistration({
+      token: productionRegistrationToken,
+      commandId: "registration-production-activate-001"
+    });
+    const activatedRegistration = (
+      await pool.query(
+        `select
+           state, delivered_at,
+           possession_evidence_digest,
+           possession_proven_at
+         from ss.hosted_registration_requests
+        where command_id = $1`,
+        ["registration-production-owner-001"]
+      )
+    ).rows[0];
+    assert.equal(activatedRegistration.state, "activated");
+    assert.ok(activatedRegistration.possession_evidence_digest);
+    assert.deepEqual(
+      activatedRegistration.delivered_at,
+      activatedRegistration.possession_proven_at
+    );
     const recoveryResponse = await service.requestRecovery({
       email: registered.user.email,
       commandId: "recovery-request-001"
@@ -1623,9 +1767,7 @@ test(
     const verifiedRecoveryService =
       createCanonicalPostgresService({
         ...serviceOptions,
-        recoveryMailPort: createProductionRecoveryMailPort({
-          clock,
-          transport: {
+        recoveryMailPort: productionRecoveryPort({
             async readiness() {
               return {
                 ready: true,
@@ -1644,7 +1786,7 @@ test(
                 acceptedAt: NOW
               };
             }
-          }
+
         })
       });
     const emailRecovery =
@@ -1674,35 +1816,77 @@ test(
       emailRecovery
     );
     assert.equal(productionSends.length, 1);
-    const deliveredRecovery = (
+    const acceptedRecovery = (
       await pool.query(
         `select
            state, delivery_mode, delivery_provider,
-           provider_receipt_id, failure_code
+           provider_receipt_id, failure_code,
+           mail_delivery_id, possession_proven_at
          from ss.hosted_recovery_delivery_requests
         where command_id = $1`,
         ["recovery-request-002"]
       )
     ).rows[0];
-    assert.equal(deliveredRecovery.state, "delivered");
+    assert.equal(acceptedRecovery.state, "provider_accepted");
     assert.equal(
-      deliveredRecovery.delivery_mode,
+      acceptedRecovery.delivery_mode,
       "production"
     );
     assert.equal(
-      deliveredRecovery.delivery_provider,
+      acceptedRecovery.delivery_provider,
       "integration-mail"
     );
-    assert.ok(deliveredRecovery.provider_receipt_id);
-    assert.equal(deliveredRecovery.failure_code, null);
+    assert.ok(acceptedRecovery.provider_receipt_id);
+    assert.ok(acceptedRecovery.mail_delivery_id);
+    assert.equal(acceptedRecovery.possession_proven_at, null);
+    assert.equal(acceptedRecovery.failure_code, null);
+    const productionRecoveryToken = decodeURIComponent(
+      new URL(productionSends[0].recoveryUrl).hash.slice(
+        "#recovery=".length
+      )
+    );
+    assert.deepEqual(
+      await verifiedRecoveryService.completeRecovery({
+        token: productionRecoveryToken,
+        password: "rotated correct horse battery staple"
+      }),
+      { completed: true }
+    );
+    const completedRecovery = (
+      await pool.query(
+        `select
+           request.state,
+           request.delivered_at,
+           request.possession_evidence_digest,
+           request.possession_proven_at,
+           mail.state as mail_state
+         from ss.hosted_recovery_delivery_requests request
+         join ss.hosted_mail_deliveries mail
+           on mail.id = request.mail_delivery_id
+        where request.command_id = $1`,
+        ["recovery-request-002"]
+      )
+    ).rows[0];
+    assert.equal(completedRecovery.state, "delivered");
+    assert.equal(completedRecovery.mail_state, "provider_accepted");
+    assert.ok(completedRecovery.possession_evidence_digest);
+    assert.deepEqual(
+      completedRecovery.delivered_at,
+      completedRecovery.possession_proven_at
+    );
+    await assert.rejects(
+      verifiedRecoveryService.completeRecovery({
+        token: productionRecoveryToken,
+        password: "another correct horse battery staple"
+      }),
+      (error) => error?.code === "RECOVERY_TOKEN_INVALID"
+    );
 
     const restartedProductionSends = [];
     const restartedRecoveryService =
       createCanonicalPostgresService({
         ...serviceOptions,
-        recoveryMailPort: createProductionRecoveryMailPort({
-          clock,
-          transport: {
+        recoveryMailPort: productionRecoveryPort({
             async readiness() {
               return {
                 ready: true,
@@ -1716,7 +1900,7 @@ test(
                 "a durable delivered recovery must not be sent again after restart"
               );
             }
-          }
+
         })
       });
     assert.deepEqual(
@@ -1761,9 +1945,7 @@ test(
     const ambiguousRecoveryService =
       createCanonicalPostgresService({
         ...serviceOptions,
-        recoveryMailPort: createProductionRecoveryMailPort({
-          clock,
-          transport: {
+        recoveryMailPort: productionRecoveryPort({
             async readiness() {
               return {
                 ready: true,
@@ -1779,7 +1961,7 @@ test(
               error.code = "provider_response_lost";
               throw error;
             }
-          }
+
         })
       });
     await assert.rejects(
@@ -1812,9 +1994,7 @@ test(
     const restartedAmbiguousService =
       createCanonicalPostgresService({
         ...serviceOptions,
-        recoveryMailPort: createProductionRecoveryMailPort({
-          clock,
-          transport: {
+        recoveryMailPort: productionRecoveryPort({
             async readiness() {
               return {
                 ready: true,
@@ -1828,7 +2008,7 @@ test(
                 "an ambiguous recovery effect must never retry automatically"
               );
             }
-          }
+
         })
       });
     await assert.rejects(
@@ -1878,6 +2058,34 @@ test(
         }
       );
     }
+    assert.deepEqual(
+      await service.requestRecovery({
+        email: "unknown-owner@example.test",
+        commandId: "unknown-recovery-001"
+      }),
+      {
+        accepted: true,
+        delivery: "manual_operator",
+        emailSent: false
+      }
+    );
+    assert.equal(
+      recoverySink.readForTest(
+        "unknown-owner@example.test"
+      ).length,
+      0
+    );
+    assert.equal(
+      (
+        await pool.query(
+          `select state
+             from ss.hosted_recovery_delivery_requests
+            where command_id = $1`,
+          ["unknown-recovery-001"]
+        )
+      ).rows[0].state,
+      "recipient_unresolved"
+    );
     await assert.rejects(
       service.requestRecovery({
         email: "unknown-owner@example.test",

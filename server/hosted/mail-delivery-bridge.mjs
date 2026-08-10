@@ -32,7 +32,7 @@ import { digest } from "./security.mjs";
 
 export const BRIDGED_MAIL_LIFECYCLE_STATES = Object.freeze({
   RESERVED: "reserved",
-  ACCEPTED_BY_PROVIDER: "accepted-by-provider",
+  ACCEPTED_BY_PROVIDER: "provider_accepted",
   // Only a real provider delivery/bounce signal may set these; the held bridge
   // never reaches them.
   DELIVERED: "delivered",
@@ -221,18 +221,30 @@ function normalizeRequest(input, contract, { baseUrl, clock }) {
   });
 }
 
-function acceptanceReceipt(contract, request, { messageId, acceptedAt }) {
+function acceptanceReceipt(
+  contract,
+  request,
+  {
+    messageId,
+    acceptedAt,
+    mode,
+    provider,
+    providerMessageId,
+    providerEffects,
+    payloadDigest
+  }
+) {
   const facts = {
     schema: "sitesourcery.bridged-mail-acceptance-receipt/v1",
     contract: contract.kind,
-    mode: "held",
-    providerEffects: false,
-    // Honest lifecycle state. Acceptance is NEVER delivery.
+    mode,
+    providerEffects,
     state: BRIDGED_MAIL_LIFECYCLE_STATES.ACCEPTED_BY_PROVIDER,
-    provider: HELD_PROVIDER,
+    provider,
+    providerMessageId,
     messageId,
     idempotencyKey: request.idempotencyKey,
-    payloadDigest: request.payloadDigest,
+    payloadDigest,
     acceptedAt,
     expiresAt: request.expiresAt
   };
@@ -264,22 +276,61 @@ function validateLifecycle(lifecycle) {
   return lifecycle;
 }
 
-function createContractPort(contract, { lifecycle, baseUrl, clock }) {
+function validateProviderPort(providerPort, contract) {
+  if (providerPort === null) return null;
+  invariant(
+    providerPort &&
+      providerPort.kind === contract.kind &&
+      providerPort.mode === "production" &&
+      providerPort.providerEffects === true &&
+      typeof providerPort.readiness === "function" &&
+      typeof providerPort.deliver === "function",
+    "MAIL_BRIDGE_CONFIGURATION_REQUIRED",
+    "A production mail provider port is required.",
+    { status: 500 }
+  );
+  return providerPort;
+}
+
+function createContractPort(
+  contract,
+  { lifecycle, baseUrl, clock, providerPort = null }
+) {
   // Process-local idempotency mirror of the durable ledger: a replay of the
   // same key returns the same receipt; the same key with different evidence is
   // a conflict. The durable ledger independently rejects a second effect.
   const receiptsByKey = new Map();
 
   async function readiness() {
-    const status = await lifecycle.readiness();
-    const ready = status?.ready === true && status?.verified === true;
+    const [lifecycleStatus, providerStatus] = await Promise.all([
+      lifecycle.readiness(),
+      providerPort
+        ? providerPort.readiness()
+        : Promise.resolve(null)
+    ]);
+    const lifecycleReady =
+      lifecycleStatus?.ready === true &&
+      lifecycleStatus?.verified === true;
+    const providerReady = providerPort
+      ? providerStatus?.ready === true &&
+        providerStatus?.verified === true &&
+        typeof providerStatus.provider === "string"
+      : true;
+    const ready = lifecycleReady && providerReady;
     return deepFreeze({
       ready,
       verified: ready,
       kind: contract.kind,
-      mode: "held-bridge",
-      providerEffects: false,
-      code: ready ? null : status?.code ?? contract.heldCode
+      mode: providerPort ? "production" : "held-bridge",
+      provider: providerPort
+        ? providerStatus?.provider ?? null
+        : HELD_PROVIDER,
+      providerEffects: providerPort !== null,
+      code: ready
+        ? null
+        : lifecycleStatus?.code ??
+          providerStatus?.code ??
+          contract.heldCode
     });
   }
 
@@ -314,26 +365,67 @@ function createContractPort(contract, { lifecycle, baseUrl, clock }) {
       { status: 500 }
     );
 
-    // 2) Record provider acceptance — HELD. No network, held provider marker,
-    // digest-only evidence. This can move the message to
-    // 'provider_accepted' and NOTHING beyond it.
-    const acceptedAt = currentTime(clock, contract);
+    const providerReceipt = providerPort
+      ? await providerPort.deliver(input)
+      : null;
+    const acceptedAt = providerPort
+      ? instant(
+          providerReceipt?.acceptedAt,
+          "Provider acceptance time",
+          contract
+        )
+      : currentTime(clock, contract);
+    const provider = providerPort
+      ? text(
+          providerReceipt?.provider,
+          "Provider",
+          contract,
+          40,
+          2
+        )
+      : HELD_PROVIDER;
+    const providerMessageId = providerPort
+      ? text(
+          providerReceipt?.providerMessageId,
+          "Provider message ID",
+          contract,
+          500
+        )
+      : `held_${messageId}`;
+    const payloadDigest = providerPort
+      ? text(
+          providerReceipt?.payloadDigest,
+          "Payload digest",
+          contract,
+          64,
+          64
+        )
+      : request.payloadDigest;
+    if (providerPort) {
+      invariant(
+        providerReceipt?.state === "provider_accepted" &&
+          providerReceipt.mode === "production" &&
+          providerReceipt.idempotencyKey === request.idempotencyKey &&
+          /^[a-f0-9]{64}$/u.test(payloadDigest),
+        contract.invalidCode,
+        "The production provider returned invalid acceptance evidence.",
+        { status: 502 }
+      );
+    }
     const acceptance = await lifecycle.recordProviderAcceptance({
       commandId: commandId("mailbridge-accept", contract, request.idempotencyKey),
       messageId,
-      provider: HELD_PROVIDER,
-      providerMessageIdDigest: digest({
-        schema: "sitesourcery.bridged-mail-held-provider-message/v1",
-        contract: contract.kind,
-        messageId,
-        idempotencyKey: request.idempotencyKey
-      }),
+      provider,
+      providerMessageIdDigest: digest(providerMessageId),
       evidenceDigest: digest({
-        schema: "sitesourcery.bridged-mail-held-acceptance-evidence/v1",
+        schema: "sitesourcery.bridged-mail-acceptance-evidence/v1",
         contract: contract.kind,
         messageId,
         idempotencyKey: request.idempotencyKey,
-        providerEffects: false,
+        provider,
+        providerMessageIdDigest: digest(providerMessageId),
+        payloadDigest,
+        providerEffects: providerPort !== null,
         acceptedAt
       }),
       acceptedAt
@@ -347,7 +439,15 @@ function createContractPort(contract, { lifecycle, baseUrl, clock }) {
       { status: 500 }
     );
 
-    const receipt = acceptanceReceipt(contract, request, { messageId, acceptedAt });
+    const receipt = acceptanceReceipt(contract, request, {
+      messageId,
+      acceptedAt,
+      mode: providerPort ? "production" : "held",
+      provider,
+      providerMessageId,
+      providerEffects: providerPort !== null,
+      payloadDigest
+    });
     receiptsByKey.set(request.idempotencyKey, {
       payloadDigest: request.payloadDigest,
       receipt
@@ -357,8 +457,8 @@ function createContractPort(contract, { lifecycle, baseUrl, clock }) {
 
   return Object.freeze({
     kind: contract.kind,
-    mode: "held-bridge",
-    providerEffects: false,
+    mode: providerPort ? "production" : "held-bridge",
+    providerEffects: providerPort !== null,
     readiness,
     deliver
   });
@@ -389,6 +489,82 @@ export function createHeldMailDeliveryBridge({
       baseUrl: safeBaseUrl(recoveryBaseUrl, CONTRACTS.recovery),
       clock
     })
+  });
+}
+
+export function createDurableMailDeliveryBridge({
+  lifecycle,
+  registrationProviderPort,
+  recoveryProviderPort,
+  registrationBaseUrl = "https://sitesourcery.com/abracadabra/app/",
+  recoveryBaseUrl = "https://sitesourcery.com/abracadabra/app/",
+  clock = { now: () => new Date().toISOString() }
+} = {}) {
+  const durable = validateLifecycle(lifecycle);
+  const registration = validateProviderPort(
+    registrationProviderPort,
+    CONTRACTS.registration
+  );
+  const recovery = validateProviderPort(
+    recoveryProviderPort,
+    CONTRACTS.recovery
+  );
+  return Object.freeze({
+    kind: "durable-mail-delivery-bridge",
+    mode: "production",
+    providerEffects: true,
+    registration: createContractPort(CONTRACTS.registration, {
+      lifecycle: durable,
+      baseUrl: safeBaseUrl(
+        registrationBaseUrl,
+        CONTRACTS.registration
+      ),
+      clock,
+      providerPort: registration
+    }),
+    recovery: createContractPort(CONTRACTS.recovery, {
+      lifecycle: durable,
+      baseUrl: safeBaseUrl(recoveryBaseUrl, CONTRACTS.recovery),
+      clock,
+      providerPort: recovery
+    })
+  });
+}
+
+export function createDurableRegistrationMailPort({
+  lifecycle,
+  providerPort,
+  registrationBaseUrl = "https://sitesourcery.com/abracadabra/app/",
+  clock = { now: () => new Date().toISOString() }
+} = {}) {
+  return createContractPort(CONTRACTS.registration, {
+    lifecycle: validateLifecycle(lifecycle),
+    baseUrl: safeBaseUrl(
+      registrationBaseUrl,
+      CONTRACTS.registration
+    ),
+    clock,
+    providerPort: validateProviderPort(
+      providerPort,
+      CONTRACTS.registration
+    )
+  });
+}
+
+export function createDurableRecoveryMailPort({
+  lifecycle,
+  providerPort,
+  recoveryBaseUrl = "https://sitesourcery.com/abracadabra/app/",
+  clock = { now: () => new Date().toISOString() }
+} = {}) {
+  return createContractPort(CONTRACTS.recovery, {
+    lifecycle: validateLifecycle(lifecycle),
+    baseUrl: safeBaseUrl(recoveryBaseUrl, CONTRACTS.recovery),
+    clock,
+    providerPort: validateProviderPort(
+      providerPort,
+      CONTRACTS.recovery
+    )
   });
 }
 

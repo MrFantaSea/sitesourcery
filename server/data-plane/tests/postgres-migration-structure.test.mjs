@@ -3272,6 +3272,54 @@ test("ACCOUNTING-01 reserves migration 115 as a held projection-only journal", a
   );
 });
 
+test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity delivery", async () => {
+  const selected = await migrations();
+  assert.equal(selected.length, 68);
+  assert.deepEqual(
+    selected.slice(-6).map(({ name }) => name),
+    [
+      "202608100110_support_privacy_case_lifecycle.sql",
+      "202608100111_hosted_identity_delivery_acceptance.sql",
+      "202608100112_operator_work_queue.sql",
+      "202608100113_custom_direct_opportunity.sql",
+      "202608100114_commerce_transition_notifications.sql",
+      "202608100115_accounting_purpose_journal.sql"
+    ]
+  );
+  const migration = selected.find(
+    ({ name }) =>
+      name ===
+      "202608100111_hosted_identity_delivery_acceptance.sql"
+  );
+  assert.ok(migration);
+  assert.match(migration.sql, /^begin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  assert.match(
+    migration.sql,
+    /hosted_registration_requests[\s\S]*mail_delivery_id uuid unique[\s\S]*hosted_mail_deliveries\(id\)[\s\S]*state in \([\s\S]*'provider_accepted'/u
+  );
+  assert.match(
+    migration.sql,
+    /hosted_recovery_delivery_requests[\s\S]*recovery_token_id uuid unique[\s\S]*mail_delivery_id uuid unique/u
+  );
+  assert.match(
+    migration.sql,
+    /provider acceptance cannot claim registration delivery[\s\S]*provider acceptance cannot claim recovery delivery/u
+  );
+  assert.match(
+    migration.sql,
+    /registration activation lacks possession evidence[\s\S]*recovery completion lacks possession evidence/u
+  );
+  assert.match(
+    migration.sql,
+    /hosted_identity_delivery_acceptance_contract_v1\(\)[\s\S]*canonical-ss-hosted-identity-delivery-acceptance-v1/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects_authorized\s*=\s*true|create table auth\.users|create table ss\.hosted_sessions/iu
+  );
+});
+
 test("commerce notifications are committed-source-bound, MAIL-reserved, and held", async () => {
   const migration = (await migrations()).find(
     ({ name }) => name ===
