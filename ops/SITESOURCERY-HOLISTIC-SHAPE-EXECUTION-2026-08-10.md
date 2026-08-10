@@ -20,6 +20,12 @@ authority.
   registration effective 2026-10-21T04:00:00Z.
 - Cloudflare delegation must not occur before the retained DS-safety deadline
   and fresh fail-closed preflight.
+- The previously pasted Stripe Standard live key is treated as compromised
+  until an authenticated Dashboard roll proves the old key expired. It is not
+  used by this integration line.
+- The current integrated union applies 63 migrations cleanly on fresh
+  PostgreSQL 16 after separating Engagement's `v106` marker from Mail's `v54`
+  marker. The generated proof database was removed and absence-proven.
 
 ## Target shape
 
@@ -216,7 +222,12 @@ legal, entitlement, or service authority.
   - Keep Domains null/held until classified.
   - Dependencies: none; P0 for assessment/Custom.
 
-- [ ] **STRIPE-SLICES-01 — capability/purpose-aware readiness**
+- [x] **STRIPE-SLICES-01 — capability/purpose-aware readiness**
+  - Completed at `b5ff3d2` and merged. Download now requires exact
+    `readinessForPurpose("download")`, which proves webhook/tax readiness
+    without reading Alakazam Product, Prices, Coupon, Portal, Subscriptions, or
+    Schedules. The base hosted capability set no longer includes Portal or
+    subscription cancellation.
   - Download readiness must not depend on Portal/subscription capabilities.
   - Keep least privilege, exact endpoint/coupon/catalog readback, and current
     runtime key until a deliberate split is justified.
@@ -232,8 +243,9 @@ legal, entitlement, or service authority.
 
 - [x] **MAIL-01 — transactional delivery lifecycle**
   - Durable held lifecycle completed at `43a121a`; migration 107 is merged.
-  - MAIL-WIRING-02 is active to replace legacy provider-accepted-as-delivered
-    wording before production composition.
+  - MAIL-WIRING-02 completed at `d8a93cd` and is merged. MAIL-COMPOSE-03 is
+    active to replace legacy provider-accepted-as-delivered call-site behavior
+    before production composition.
   - Model pending → provider accepted → delivered | bounced | complained |
     suppressed | expired.
   - Add webhook/event ingestion, exception queue, and fallback recovery path.
@@ -370,7 +382,9 @@ legal, entitlement, or service authority.
 
 1. Parallel foundation: IA-01, ENGAGEMENT-01, TAX-PURPOSE-01,
    SHAPE-EPOCH-01, INGRESS-01, MAIL-01.
-2. Integrate foundation and run exact 58-migration/full browser/ops proof.
+2. Integrate foundation and run exact final-union migration/full browser/ops
+   proof. The current 63-migration checkpoint is green; later 112/113 packets
+   require a final successor proof.
 3. Complete Legal publication, origin seal, current restore, monitoring, and
    Cloudflare cutover.
 4. Launch Download alone after exact Stripe test/live readiness proof.
