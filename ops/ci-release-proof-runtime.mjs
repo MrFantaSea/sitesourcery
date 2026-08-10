@@ -17,7 +17,6 @@ export const CI_RELEASE_FINAL_RECEIPT_SCHEMA =
 export const CI_RELEASE_PROTECTED_ENVIRONMENT =
   "ci-release-proof-held";
 export const CI_RELEASE_PINNED_NODE = "24.18.0";
-export const CI_RELEASE_LEGAL_V4_FILE_COUNT = 80;
 export const CI_RELEASE_BROWSER_WIDTHS = Object.freeze([
   320,
   390,
@@ -227,9 +226,10 @@ export function validateCiReleaseSuccessorInput(value) {
     ["fileCount", "manifestSha256"],
     "CI Legal V4 Pages artifact"
   );
-  if (value.legalV4Pages.fileCount !== CI_RELEASE_LEGAL_V4_FILE_COUNT) {
-    fail("CI Legal V4 Pages artifact must contain exactly 80 files.");
-  }
+  positiveInteger(
+    value.legalV4Pages.fileCount,
+    "CI Legal V4 Pages file count"
+  );
   digest(
     value.legalV4Pages.manifestSha256,
     "CI Legal V4 Pages manifest"
@@ -290,9 +290,7 @@ function validateDetails(step, details) {
       ["fileCount", "manifestSha256"],
       "CI Legal V4 proof details"
     );
-    if (details.fileCount !== CI_RELEASE_LEGAL_V4_FILE_COUNT) {
-      fail("CI Legal V4 proof file count is invalid.");
-    }
+    positiveInteger(details.fileCount, "CI Legal V4 proof file count");
     digest(details.manifestSha256, "CI Legal V4 proof manifest");
     return;
   }
@@ -473,6 +471,7 @@ export function createCiReleaseFinalReceipt({
   const postgres = selected.get("postgres").details;
   const cleanup = selected.get("cleanup").details;
   if (
+    legal.fileCount !== input.legalV4Pages.fileCount ||
     legal.manifestSha256 !== input.legalV4Pages.manifestSha256 ||
     browser.artifactManifestSha256 !==
       input.legalV4Pages.manifestSha256 ||

@@ -130,12 +130,15 @@ function migrationInventory() {
   };
 }
 
-function successorInput(legalManifestSha256 = "f".repeat(64)) {
+function successorInput(
+  legalManifestSha256 = "f".repeat(64),
+  legalFileCount = 94
+) {
   return createCiReleaseSuccessorInput({
     originReleaseInput: releaseInput(),
     migrationInventory: migrationInventory(),
     legalV4Pages: {
-      fileCount: 80,
+      fileCount: legalFileCount,
       manifestSha256: legalManifestSha256
     }
   });
@@ -185,7 +188,7 @@ function receipts(input) {
       ...common,
       step: "legal-v4",
       details: {
-        fileCount: 80,
+        fileCount: input.legalV4Pages.fileCount,
         manifestSha256: input.legalV4Pages.manifestSha256
       }
     }),
@@ -213,6 +216,7 @@ test("successor input binds exact dynamic migrations and held authority", () => 
   assert.equal(input.migrationInventory.count, snapshot.migration.count);
   assert.equal(input.nodeVersion, "24.18.0");
   assert.deepEqual(input.authority, ORIGIN_HELD_AUTHORITY);
+  assert.equal(input.legalV4Pages.fileCount, 94);
 
   const drift = structuredClone(input);
   drift.migrationInventory.count += 1;
@@ -220,6 +224,23 @@ test("successor input binds exact dynamic migrations and held authority", () => 
     () => validateCiReleaseSuccessorInput(drift),
     /supplied count|digest/u
   );
+});
+
+test("successor input requires an explicit positive integer Legal file count and manifest", () => {
+  const mutations = [
+    (input) => { delete input.legalV4Pages.fileCount; },
+    (input) => { delete input.legalV4Pages.manifestSha256; },
+    (input) => { input.legalV4Pages.fileCount = 0; },
+    (input) => { input.legalV4Pages.fileCount = 94.5; }
+  ];
+  for (const mutate of mutations) {
+    const input = structuredClone(successorInput());
+    mutate(input);
+    assert.throws(
+      () => validateCiReleaseSuccessorInput(input),
+      /exact fields|positive safe integer/u
+    );
+  }
 });
 
 test("successor inventory admits later migrations without a count constant", () => {
@@ -289,12 +310,46 @@ test("final receipt requires every exact proof and grants no authority", async (
   );
 });
 
-test("Legal V4 proof requires the exact successor-authorized 80-file tree", async () => {
+test("final receipt rejects Legal count or manifest drift from successor authority", () => {
+  const input = successorInput();
+  const selectedContext = context(input);
+  for (const details of [
+    {
+      fileCount: input.legalV4Pages.fileCount + 1,
+      manifestSha256: input.legalV4Pages.manifestSha256
+    },
+    {
+      fileCount: input.legalV4Pages.fileCount,
+      manifestSha256: "a".repeat(64)
+    }
+  ]) {
+    const proofReceipts = receipts(input).map((receipt) =>
+      receipt.step === "legal-v4"
+        ? createCiReleaseStepReceipt({
+            step: "legal-v4",
+            context: selectedContext,
+            observedAt: "2026-08-10T22:00:00.000Z",
+            details
+          })
+        : receipt
+    );
+    assert.throws(
+      () => createCiReleaseFinalReceipt({
+        successorInput: input,
+        context: selectedContext,
+        receipts: proofReceipts
+      }),
+      /evidence drifted from its successor authority/u
+    );
+  }
+});
+
+test("Legal V4 proof requires the current successor-authorized 94-file tree", async () => {
   const fixture = await mkdtemp(path.join(os.tmpdir(), "ss-ci-legal-v4-"));
   try {
     const artifact = path.join(fixture, "_site");
     await mkdir(artifact);
-    for (let index = 0; index < 80; index += 1) {
+    for (let index = 0; index < 94; index += 1) {
       await writeFile(
         path.join(artifact, `legal-${String(index).padStart(2, "0")}.html`),
         `legal fixture ${index}\n`,
@@ -306,13 +361,30 @@ test("Legal V4 proof requires the exact successor-authorized 80-file tree", asyn
       domain: "ci-legal-v4-pages",
       relativeRoot: "_site"
     });
-    const input = successorInput(manifest.sha256);
+    const input = successorInput(manifest.sha256, 94);
     const verified = await verifyCiLegalV4Artifact({
       projectRoot: fixture,
       artifactRoot: artifact,
       successorInput: input
     });
-    assert.equal(verified.fileCount, 80);
+    assert.equal(verified.fileCount, 94);
+
+    await assert.rejects(
+      verifyCiLegalV4Artifact({
+        projectRoot: fixture,
+        artifactRoot: artifact,
+        successorInput: successorInput(manifest.sha256, 93)
+      }),
+      /drifted from exact successor authority/u
+    );
+    await assert.rejects(
+      verifyCiLegalV4Artifact({
+        projectRoot: fixture,
+        artifactRoot: artifact,
+        successorInput: successorInput("a".repeat(64), 94)
+      }),
+      /drifted from exact successor authority/u
+    );
     await writeFile(path.join(artifact, "unexpected.html"), "drift\n", "utf8");
     await assert.rejects(
       verifyCiLegalV4Artifact({
@@ -320,8 +392,39 @@ test("Legal V4 proof requires the exact successor-authorized 80-file tree", asyn
         artifactRoot: artifact,
         successorInput: input
       }),
-      /80-file artifact drifted/u
+      /drifted from exact successor authority/u
     );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("Legal V4 proof accepts a different exact successor file count", async () => {
+  const fixture = await mkdtemp(
+    path.join(os.tmpdir(), "ss-ci-legal-successor-")
+  );
+  try {
+    const artifact = path.join(fixture, "_site");
+    await mkdir(artifact);
+    for (let index = 0; index < 7; index += 1) {
+      await writeFile(
+        path.join(artifact, `successor-${index}.html`),
+        `successor fixture ${index}\n`,
+        "utf8"
+      );
+    }
+    const manifest = await collectOriginTreeManifest({
+      projectRoot: fixture,
+      domain: "ci-legal-v4-pages",
+      relativeRoot: "_site"
+    });
+    const verified = await verifyCiLegalV4Artifact({
+      projectRoot: fixture,
+      artifactRoot: artifact,
+      successorInput: successorInput(manifest.sha256, 7)
+    });
+    assert.equal(verified.fileCount, 7);
+    assert.equal(verified.sha256, manifest.sha256);
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }
@@ -379,4 +482,15 @@ test("workflow is manual protected held and has no effect-bearing action", async
   assert.doesNotMatch(source, /\b(?:deploy-pages|configure-pages)@/u);
   assert.doesNotMatch(source, /\b(?:stripe|cloudflare|resend)\b/iu);
   assert.doesNotMatch(source, /migration(?:Count| count)[^\n]*63/u);
+});
+
+test("CI implementation contains no fixed Legal V4 file-count authority", async () => {
+  const sources = await Promise.all([
+    "ops/ci-release-proof-runtime.mjs",
+    "ops/ci-release-proof-repository.mjs",
+    ".github/workflows/ci-release-proof-held.yml"
+  ].map((relativePath) => readFile(path.join(projectRoot, relativePath), "utf8")));
+  const combined = sources.join("\n");
+  assert.doesNotMatch(combined, /CI_RELEASE_LEGAL_V4_FILE_COUNT/u);
+  assert.doesNotMatch(combined, /(?:80|94)-file|exactly (?:80|94) files/iu);
 });

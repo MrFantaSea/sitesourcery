@@ -16,7 +16,6 @@ import {
   verifyOriginReleaseRepository
 } from "./origin-seal-repository.mjs";
 import {
-  CI_RELEASE_LEGAL_V4_FILE_COUNT,
   CI_RELEASE_PINNED_NODE,
   ciReleaseProofSteps,
   createCiReleaseFinalReceipt,
@@ -161,11 +160,10 @@ export async function verifyCiLegalV4Artifact({
     relativeRoot
   });
   if (
-    manifest.fileCount !== CI_RELEASE_LEGAL_V4_FILE_COUNT ||
     manifest.fileCount !== input.legalV4Pages.fileCount ||
     manifest.sha256 !== input.legalV4Pages.manifestSha256
   ) {
-    fail("CI Legal V4 80-file artifact drifted from successor authority.");
+    fail("CI Legal V4 artifact drifted from exact successor authority.");
   }
   return manifest;
 }

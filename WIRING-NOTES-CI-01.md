@@ -10,7 +10,10 @@ release input, run PostgreSQL, push, deploy, or grant release authority.
    exact candidate and whose migration authority is derived from its final
    ordered migration bytes. Never copy a retained migration count forward.
 2. Build the candidate's Legal V4 Pages projection and collect the exact
-   `ci-legal-v4-pages` manifest. It must contain exactly 80 regular files.
+   `ci-legal-v4-pages` manifest. Supply its exact positive file count and
+   manifest digest to the successor input. The current reviewed projection is
+   94 files, but later successors must derive their own exact count rather than
+   copying that checkpoint.
 3. Construct the CI successor input with
    `createCiReleaseSuccessorInput`; write its canonical bytes at
    `ops/releases/ci-successor-inputs/<candidate-sha>.json` in a successor

@@ -24,7 +24,8 @@ The successor input must bind all of the following to the same candidate:
   identities;
 - the final ordered migration names, byte counts, individual digests, derived
   count, latest filename, and manifest digest;
-- the exact 80-file Legal V4 Pages manifest;
+- the exact positive Legal V4 Pages file count and manifest supplied by the
+  successor input;
 - Node `24.18.0` and wholly held authority.
 
 Missing, stale, reordered, extra, or changed evidence fails closed. There is no
@@ -41,8 +42,11 @@ default migration count and no branch-tip fallback.
 4. It installs only lockfile dependencies and the repository's exact reviewed
    browser, then runs `npm test` and records the full-suite receipt.
 5. It independently runs `npm run check:ops` and records the ops receipt.
-6. It builds and checks the Legal V4 Pages projection, verifies exactly 80
-   files against the supplied manifest, and records the legal receipt.
+6. It builds and checks the Legal V4 Pages projection, verifies the rebuilt
+   artifact against both the successor's exact positive file count and supplied
+   manifest, and records the legal receipt. The current reviewed projection is
+   94 files; that number belongs only in its explicit successor evidence and is
+   not a workflow or runtime constant.
 7. It audits the exact projection at 320, 390, and 1440 CSS pixels with Google
    Chrome for Testing `149.0.7827.55`, then records route and view counts.
 8. It starts a runner-local PostgreSQL 16 cluster on loopback and creates only

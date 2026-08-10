@@ -122,7 +122,7 @@ jobs:
         working-directory: target
         run: npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
 
-      - name: Record exact Legal V4 80-file proof
+      - name: Record successor-bound Legal V4 manifest proof
         run: node target/ops/ci-release-proof.mjs legal-v4 --root target --artifact-root target/_site
 
       - name: Run and record three-width browser proof
