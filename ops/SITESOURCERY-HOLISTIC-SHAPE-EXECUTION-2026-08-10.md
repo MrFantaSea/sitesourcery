@@ -149,6 +149,9 @@ legal, entitlement, or service authority.
   - Dependencies: final schema from integration.
 
 - [ ] **OPS-SECRETS-01 — provider credential topology**
+  - Secret-blind topology contract/verifier/runbook completed at `5d86201` and
+    is merged. It grants no effects and explicitly leaves actual presence,
+    separation, overlap, revocation, custody, and dual-operator facts unproven.
   - Inventory scope without exposing values.
   - Separate staging/production Resend authority; rotate any shared historical
     full-access credential; prove revocation and delivery.
@@ -328,7 +331,10 @@ legal, entitlement, or service authority.
   - Move sync ZIP/export and later lifecycle/publication work off the web event
     loop while retaining database leases and bounded budgets.
 
-- [ ] **PG-OPS-01 — database budgets**
+- [x] **PG-OPS-01 — database budgets**
+  - Completed at `764dd42` and merged. Statement, lock, idle-transaction,
+    acquisition, API/worker capacity, and redacted saturation budgets now fail
+    closed; true process/pool separation remains WORKERS-01.
   - Add statement/lock/idle-transaction timeouts, consolidate session setup,
     reserve worker connections, and measure before resizing pool 10.
 
@@ -337,6 +343,10 @@ legal, entitlement, or service authority.
     cache/singleflight broad provider checks.
 
 - [ ] **PERF-01 — static delivery and measured CWV**
+  - Static tranche completed at `b6bd28b` and merged: responsive Domains hero
+    transfer drops 68.4–95.0% by viewport and the lossless OG image drops 60.6%,
+    with Legal V2/V3/V4 bytes unchanged. Immutable caching/minification and live
+    post-launch CWV remain.
   - Immutable hashed caching, responsive Domains hero, smaller OG image, broader
     social metadata, JSON-LD, minification, and live CWV measurements.
 
