@@ -285,6 +285,8 @@ function paidCustomBuildQuote() {
       quoteDigest: PAID_QUOTE_DIGEST,
       disclosureDigest: PAID_DISCLOSURE_DIGEST,
       state: "accepted",
+      origin: "assessment_successor",
+      creditSelection: "apply_assessment_credit",
       tier: {
         id: "site",
         label: "Site",
