@@ -6047,6 +6047,9 @@ async function verifyProfessionalServicesReversalState(pool) {
       ss.hosted_runtime_contract_v108() =
         'canonical-ss-v108-professional-services-reversals'
         as exact_runtime_contract,
+      ss.direct_custom_reversal_normalization_contract_v1() =
+        'canonical-direct-custom-reversal-normalization-v1-held'
+        as exact_direct_normalization_contract,
       to_regclass('ss.service_professional_payment_lifecycles') is not null
         and to_regclass('ss.service_professional_reversal_evidence') is not null
         and to_regclass(
@@ -6125,7 +6128,45 @@ async function verifyProfessionalServicesReversalState(pool) {
           and trigger_record.tgname =
             'service_professional_reconciliation_immutable'
           and not trigger_record.tgisinternal
-      ) as exact_guards
+      ) as exact_guards,
+      not has_table_privilege(
+        'service_role',
+        'ss.service_professional_payment_bindings',
+        'SELECT,INSERT,UPDATE,DELETE'
+      ) and not has_table_privilege(
+        'authenticated',
+        'ss.service_professional_payment_bindings',
+        'SELECT'
+      ) and not has_table_privilege(
+        'anon',
+        'ss.service_professional_payment_bindings',
+        'SELECT'
+      ) and has_function_privilege(
+        'service_role',
+        'ss.direct_custom_reversal_normalization_contract_v1()',
+        'EXECUTE'
+      ) and not has_function_privilege(
+        'authenticated',
+        'ss.direct_custom_reversal_normalization_contract_v1()',
+        'EXECUTE'
+      ) as exact_direct_default_deny,
+      lower(pg_get_viewdef(
+        'ss.service_professional_payment_bindings'::regclass,
+        true
+      )) like '%quote.origin = ''direct''%'
+        and lower(pg_get_viewdef(
+          'ss.service_professional_payment_bindings'::regclass,
+          true
+        )) like '%quote.credit_selection = ''no_credit''%'
+        and lower(pg_get_viewdef(
+          'ss.service_professional_payment_bindings'::regclass,
+          true
+        )) like '%invoice.credit_minor = 0%'
+        and lower(pg_get_viewdef(
+          'ss.service_professional_payment_bindings'::regclass,
+          true
+        )) like '%job.start_credit_minor = 0%'
+        as exact_direct_no_credit_binding
   `);
   for (const [name, ready] of Object.entries(proof.rows[0])) {
     assert.equal(
@@ -6227,6 +6268,7 @@ export async function runMigrationVerification({
     writeOutput("accountingPurposeJournalHeldPostgresProof true\n");
     writeOutput("commerceTransitionNotificationPostgresProof true\n");
     writeOutput("alakazamPolicyAuthorityPostgresProof true\n");
+    writeOutput("directCustomReversalNormalizationPostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,

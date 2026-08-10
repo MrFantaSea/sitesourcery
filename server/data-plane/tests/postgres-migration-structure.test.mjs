@@ -3274,9 +3274,9 @@ test("ACCOUNTING-01 reserves migration 115 as a held projection-only journal", a
 
 test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity delivery", async () => {
   const selected = await migrations();
-  assert.equal(selected.length, 69);
+  assert.equal(selected.length, 70);
   assert.deepEqual(
-    selected.slice(-7).map(({ name }) => name),
+    selected.slice(-8).map(({ name }) => name),
     [
       "202608100110_support_privacy_case_lifecycle.sql",
       "202608100111_hosted_identity_delivery_acceptance.sql",
@@ -3284,7 +3284,8 @@ test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity
       "202608100113_custom_direct_opportunity.sql",
       "202608100114_commerce_transition_notifications.sql",
       "202608100115_accounting_purpose_journal.sql",
-      "202608100116_alakazam_policy_authority.sql"
+      "202608100116_alakazam_policy_authority.sql",
+      "202608100117_direct_custom_reversal_normalization.sql"
     ]
   );
   const migration = selected.find(
@@ -3318,6 +3319,76 @@ test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity
   assert.doesNotMatch(
     migration.sql,
     /provider_effects_authorized\s*=\s*true|create table auth\.users|create table ss\.hosted_sessions/iu
+  );
+});
+
+test("DIRECT-REVERSAL-02 additively normalizes only direct no-credit Custom receipts", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name ===
+      "202608100117_direct_custom_reversal_normalization.sql"
+  );
+  assert.ok(migration, "missing DIRECT-REVERSAL-02 migration 117");
+  assert.match(migration.sql, /^-- DIRECT-REVERSAL-02[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  assert.match(
+    migration.sql,
+    /create or replace view ss\.service_professional_payment_bindings/iu
+  );
+  for (const purpose of [
+    "custom_build_initial",
+    "custom_build_change",
+    "custom_build_final"
+  ]) {
+    assert.equal(
+      [...migration.sql.matchAll(new RegExp(`'${purpose}'::text`, "gu"))]
+        .length,
+      2,
+      `${purpose} must retain one credited and add one direct branch`
+    );
+  }
+  assert.equal(
+    [...migration.sql.matchAll(/quote\.origin = 'direct'/gu)].length,
+    3
+  );
+  assert.equal(
+    [...migration.sql.matchAll(/quote\.credit_selection = 'no_credit'/gu)]
+      .length,
+    3
+  );
+  assert.equal([...migration.sql.matchAll(/'none'::text/gu)].length, 3);
+  const legacy = selected.find(
+    ({ name }) => name ===
+      "202608100108_professional_services_reversals.sql"
+  );
+  assert.ok(legacy);
+  const legacyView = legacy.sql.match(
+    /create view ss\.service_professional_payment_bindings as\n([\s\S]*?);\n\nrevoke all/u
+  )?.[1];
+  assert.ok(legacyView, "migration 108 normalized binding view is unavailable");
+  const replacementView = migration.sql.match(
+    /create or replace view ss\.service_professional_payment_bindings as\n([\s\S]*?);\n\nrevoke all/u
+  )?.[1];
+  assert.ok(replacementView, "migration 117 replacement binding view is unavailable");
+  assert.ok(
+    replacementView.startsWith(`${legacyView}\n\nunion all\n\nselect\n`),
+    "all migration 108 assessment-backed binding branches must remain byte-stable"
+  );
+  assert.match(
+    migration.sql,
+    /invoice\.credit_minor = 0[\s\S]*job\.start_credit_minor = 0/iu
+  );
+  assert.match(
+    migration.sql,
+    /revoke all on ss\.service_professional_payment_bindings[\s\S]*from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /canonical-direct-custom-reversal-normalization-v1-held/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /insert into ss\.service_credit_applications|update ss\.service_credit_applications|provider_effects_authorized\s*=\s*true|charges[.]create|payment_intents[.]create/iu
   );
 });
 
