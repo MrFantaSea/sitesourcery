@@ -1,0 +1,261 @@
+name: Exact Legal V4 public-truth deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      control_sha:
+        description: Exact control-only commit on main
+        required: true
+        type: string
+      candidate_sha:
+        description: Exact reviewed two-parent held candidate
+        required: true
+        type: string
+      authority_receipt_sha256:
+        description: SHA-256 of the one-shot owner authority receipt
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    permissions:
+      contents: read
+      pages: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      artifact_id: ${{ steps.pages-artifact.outputs.artifact_id }}
+    steps:
+      - name: Check out exact control commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject control or workflow substitution
+        working-directory: control
+        env:
+          CONTROL_SHA: ${{ inputs.control_sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$CONTROL_SHA"
+          test "$GITHUB_SHA" = "$CONTROL_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$CONTROL_SHA"
+      - name: Enforce public-truth-only control flags
+        working-directory: control
+        run: |
+          node - <<'NODE'
+          const c = require("./data/release-control.json");
+          if (c.state !== "hold" || c.allowsDeployment !== false || c.allowsCommercialDeployment !== false || c.allowsContainmentDeployment !== false) throw new Error("general, commercial, and containment authority must remain held");
+          if (c.allowsPublicTruthReconciliationDeployment !== true || c.publicTruthReconciliation?.state !== "cleared") throw new Error("public-truth-only authority is absent");
+          NODE
+      - name: Verify exact receipt input bytes
+        working-directory: control
+        env:
+          RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: |
+          test "$(sha256sum data/public-truth-authority-v2.json | awk '{print $1}')" = "$RECEIPT_SHA256"
+      - name: Check out exact held candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject candidate substitution
+        working-directory: target
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Use candidate-pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Install candidate-locked dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Install exact reviewed Chromium
+        working-directory: target
+        run: bash scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/reviewed-chromium" "$GITHUB_ENV"
+      - name: Run complete candidate checks
+        working-directory: target
+        run: npm test
+      - name: Rebuild exact sealed Legal V4 Pages artifact
+        working-directory: target
+        run: npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+      - name: Run reviewed route, viewport, and network audit
+        working-directory: target
+        run: node scripts/audit-artifact-from-sitemap.mjs _site
+      - name: Verify exact candidate graph, source ledger, held commerce, and artifact
+        working-directory: target
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+        run: node scripts/verify-public-truth-release-v2.mjs --mode candidate --root "$PWD" --candidate-sha "$CANDIDATE_SHA"
+      - name: Copy exact artifact to control checkout
+        run: |
+          test ! -e control/_site
+          cp -a target/_site control/_site
+      - name: Observe exact currently served Pages predecessor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-v2' \
+            'https://api.github.com/repos/MrFantaSea/sitesourcery/pages/builds/latest' \
+            --output control/pages-latest.json
+      - name: Verify one-shot owner receipt and exact control lineage
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: node scripts/verify-public-truth-release-v2.mjs --mode control --root "$PWD" --candidate-sha "$CANDIDATE_SHA" --control-sha "$CONTROL_SHA" --artifact-root _site
+      - name: Reject post-verification artifact mutation
+        run: diff --no-dereference --recursive target/_site control/_site
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Upload exact validated Pages artifact
+        id: pages-artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: target/_site
+
+  deploy:
+    permissions:
+      contents: read
+      pages: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    needs: validate
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out exact control after environment approval
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out exact candidate after environment approval
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Use candidate-pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+      - name: Rebuild exact candidate immediately before deploy
+        working-directory: target
+        run: npm ci --ignore-scripts && npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+      - name: Copy predeploy artifact and re-observe predecessor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp -a target/_site control/_site
+          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-v2-predeploy' \
+            'https://api.github.com/repos/MrFantaSea/sitesourcery/pages/builds/latest' \
+            --output control/pages-latest.json
+      - name: Revalidate authority immediately before deploy
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: node scripts/verify-public-truth-release-v2.mjs --mode predeploy --root "$PWD" --candidate-sha "$CANDIDATE_SHA" --control-sha "$CONTROL_SHA" --artifact-root _site
+      - name: Deploy exact validated Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  prove:
+    permissions:
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    needs: deploy
+    steps:
+      - name: Check out exact control and candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+      - name: Reconstruct exact candidate artifact
+        working-directory: target
+        run: npm ci --ignore-scripts && npm run build:pages:legal-v4 && cp -a _site ../control/_site
+      - name: Prove exact live bytes and routes twice
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          CONTROL_SHA: ${{ inputs.control_sha }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          GITHUB_REF: ${{ github.ref }}
+          GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_ACTOR_ID: ${{ github.actor_id }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: node scripts/verify-public-truth-release-v2.mjs --mode postdeploy --root "$PWD" --candidate-sha "$CANDIDATE_SHA" --control-sha "$CONTROL_SHA" --artifact-root _site --deployment-page-url "$PAGE_URL" --deployment-status succeed --evidence "$RUNNER_TEMP/public-truth-production-proof-v2.json"
+      - name: Retain bounded production proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-truth-production-proof-v2
+          path: ${{ runner.temp }}/public-truth-production-proof-v2.json
+          retention-days: 90
+          if-no-files-found: error

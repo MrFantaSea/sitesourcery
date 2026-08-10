@@ -84,8 +84,9 @@ const packageLock = JSON.parse(packageLockSource);
 test("browser gate owns the exact customer navigation and route-only current state", () => {
   assert.deepEqual(PRIMARY_NAV_CONTRACT, [
     { label: "Websites", href: "/websites/", className: "" },
-    { label: "Calls & follow-up", href: "/hive/", className: "" },
+    { label: "Domains", href: "/domains/", className: "" },
     { label: "Services", href: "/solutions/", className: "" },
+    { label: "Calls & follow-up", href: "/hive/", className: "" },
     { label: "Examples", href: "/work/", className: "" },
     { label: "About", href: "/about/", className: "" },
     { label: "Get started", href: "/start/", className: "nav-start" },
@@ -716,7 +717,7 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     "/legal/privacy/": 16,
     "/legal/website-terms/": 17,
   });
-  assert.equal(CANONICAL_ROUTES.length, 19);
+  assert.equal(CANONICAL_ROUTES.length, 20);
 
   const validSnapshot = (scenario) => ({
     belowFold: {
@@ -1090,18 +1091,18 @@ test("Abracadabra popup proof fails closed and requires target cleanup", () => {
 test("npm test builds and verifies the exact artifact before the mandatory browser gate", () => {
   assert.equal(
     packageJson.scripts["audit:browser"],
-    "node --experimental-websocket scripts/browser-audit-vnext.mjs",
+    "node --experimental-websocket scripts/browser-audit-current.mjs",
   );
   assert.equal(
-    packageJson.scripts["audit:hosted-domain-browser"],
+    packageJson.scripts["audit:hosted-domain-browser:legacy"],
     "node --experimental-websocket scripts/browser-hosted-domain-journey.mjs",
   );
   const sequence = packageJson.scripts.test.split(" && ");
   assert.deepEqual(sequence.slice(-4), [
     "npm run build:pages",
     "npm run check:artifact",
+    "npm run check:hosted",
     "npm run audit:browser",
-    "npm run audit:hosted-domain-browser",
   ]);
   assert.match(auditSource, /const DEFAULT_ARTIFACT_ROOT = path\.join\(SITE_ROOT, "_site"\)/u);
   assert.match(
@@ -1117,9 +1118,17 @@ test("test commands are executable by the exact pinned Node runtime", () => {
   assert.equal(pinnedNode, "24.18.0");
   assert.equal(packageJson.engines.node, pinnedNode);
   assert.equal(packageLock.packages[""].engines.node, pinnedNode);
-  for (const scriptName of ["test:node", "test:public-truth"]) {
+  for (const scriptName of [
+    "test:node",
+    "test:public-truth:legacy",
+    "test:public-truth:v2",
+  ]) {
     const command = packageJson.scripts[scriptName];
-    assert.match(command, /^node --test /u, `${scriptName} must use the built-in test runner`);
+    assert.match(
+      command,
+      /^node (?:--experimental-websocket )?--test /u,
+      `${scriptName} must use the built-in test runner`,
+    );
     assert.doesNotMatch(
       command,
       /--test-isolation(?:=|\s)/u,

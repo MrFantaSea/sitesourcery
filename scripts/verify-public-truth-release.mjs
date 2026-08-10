@@ -869,9 +869,19 @@ function assertReviewedDomainPreflight(file, source, bytes) {
   }
 }
 
-export async function validateArtifactSafety(artifactRoot, sourceManifest) {
+export async function validateArtifactSafety(
+  artifactRoot,
+  sourceManifest,
+  { expectedEntries } = {},
+) {
   const actual = await artifactManifest(artifactRoot);
-  const expectedEntries = artifactProjectionEntries(sourceManifest);
+  const projection = expectedEntries === undefined
+    ? artifactProjectionEntries(sourceManifest)
+    : validateArtifactManifestShape({
+        count: expectedEntries.length,
+        entries: expectedEntries,
+        sha256: sha256(stableStringify(expectedEntries)),
+      }).entries;
   for (const entry of actual.entries) {
     const segments = entry.path.split("/");
     if (
@@ -912,9 +922,9 @@ export async function validateArtifactSafety(artifactRoot, sourceManifest) {
       }
     }
   }
-  if (stableStringify(actual.entries) !== stableStringify(expectedEntries)) {
+  if (stableStringify(actual.entries) !== stableStringify(projection)) {
     const actualPaths = actual.entries.map((entry) => entry.path);
-    const expectedPaths = expectedEntries.map((entry) => entry.path);
+    const expectedPaths = projection.map((entry) => entry.path);
     const extra = actualPaths.filter((file) => !expectedPaths.includes(file));
     const missing = expectedPaths.filter((file) => !actualPaths.includes(file));
     fail(`artifact is not the exact candidate projection (extra: ${extra.join(", ") || "none"}; missing: ${missing.join(", ") || "none"}; content mutation is also denied)`);

@@ -22,6 +22,11 @@ import {
   HOSTED_PRIVACY_V3_CANDIDATE,
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
+import {
+  assertPagesJointLegalV4Artifact,
+  createPagesJointLegalV4Plan,
+  pagesLegalV4Files,
+} from "./hosted-truth/pages-legal-v4.mjs";
 
 /*
  * This is intentionally an allowlist, not a recursive copy with exceptions.
@@ -266,9 +271,19 @@ function walkArtifact(directory, root = directory) {
 export function buildPagesArtifact({
   root = process.cwd(),
   output,
+  jointLegalV4FinalizationRoot,
 } = {}) {
   assertSortedUniqueAllowlist();
   const { absoluteOutput, absoluteRoot, isExactSiteOutput } = resolveBuildPaths(root, output);
+  const jointLegalV4Plan = jointLegalV4FinalizationRoot
+    ? createPagesJointLegalV4Plan({
+        root: absoluteRoot,
+        finalizationRoot: jointLegalV4FinalizationRoot,
+      })
+    : null;
+  const artifactFiles = jointLegalV4Plan
+    ? pagesLegalV4Files(publicFileAllowlist, jointLegalV4Plan)
+    : publicFileAllowlist;
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
   assertPrivacyV3CandidateSources({ root: absoluteRoot });
 
@@ -289,14 +304,20 @@ export function buildPagesArtifact({
 
   try {
     mkdirSync(absoluteOutput, { recursive: true });
-    for (const file of publicFileAllowlist) {
+    for (const file of artifactFiles) {
       const destination = path.join(absoluteOutput, ...file.split("/"));
       mkdirSync(path.dirname(destination), { recursive: true });
-      const sourceFile = unsealedPublicationSource(file);
-      copyFileSync(path.join(absoluteRoot, ...sourceFile.split("/")), destination);
+      const plannedSource = jointLegalV4Plan?.sourceByFile.get(file);
+      const source = plannedSource
+        ?? path.join(absoluteRoot, ...unsealedPublicationSource(file).split("/"));
+      copyFileSync(source, destination);
     }
     assertImmutableLegalArtifactSources({ root: absoluteOutput });
-    assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+    if (jointLegalV4Plan) {
+      assertPagesJointLegalV4Artifact(absoluteOutput, jointLegalV4Plan);
+    } else {
+      assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+    }
   } catch (error) {
     /*
      * A custom output is guaranteed not to pre-exist, so cleaning it cannot
@@ -312,10 +333,20 @@ export function buildPagesArtifact({
 export function verifyPagesArtifact({
   root = process.cwd(),
   output = path.join(path.resolve(root), "_site"),
+  jointLegalV4FinalizationRoot,
 } = {}) {
   assertSortedUniqueAllowlist();
   const absoluteRoot = path.resolve(root);
   const absoluteOutput = path.resolve(output);
+  const jointLegalV4Plan = jointLegalV4FinalizationRoot
+    ? createPagesJointLegalV4Plan({
+        root: absoluteRoot,
+        finalizationRoot: jointLegalV4FinalizationRoot,
+      })
+    : null;
+  const artifactFiles = jointLegalV4Plan
+    ? pagesLegalV4Files(publicFileAllowlist, jointLegalV4Plan)
+    : publicFileAllowlist;
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
   assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputStat = lstatSync(absoluteOutput);
@@ -323,15 +354,19 @@ export function verifyPagesArtifact({
     throw new Error(`public artifact must be a real directory: ${absoluteOutput}`);
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
-  assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+  if (jointLegalV4Plan) {
+    assertPagesJointLegalV4Artifact(absoluteOutput, jointLegalV4Plan);
+  } else {
+    assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+  }
 
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
   assertHeldAlakazamExecutableBoundary(absoluteRoot);
   const actual = walkArtifact(absoluteOutput).sort(lexical);
-  if (JSON.stringify(actual) !== JSON.stringify(publicFileAllowlist)) {
-    const expectedSet = new Set(publicFileAllowlist);
+  if (JSON.stringify(actual) !== JSON.stringify(artifactFiles)) {
+    const expectedSet = new Set(artifactFiles);
     const actualSet = new Set(actual);
-    const missing = publicFileAllowlist.filter((file) => !actualSet.has(file));
+    const missing = artifactFiles.filter((file) => !actualSet.has(file));
     const unexpected = actual.filter((file) => !expectedSet.has(file));
     throw new Error(
       `public artifact ledger mismatch; missing: ${missing.join(", ") || "none"}; `
@@ -339,15 +374,17 @@ export function verifyPagesArtifact({
     );
   }
 
-  for (const file of publicFileAllowlist) {
-    const sourceFile = unsealedPublicationSource(file);
-    const sourceBytes = readFileSync(path.join(absoluteRoot, ...sourceFile.split("/")));
+  for (const file of artifactFiles) {
+    const plannedSource = jointLegalV4Plan?.sourceByFile.get(file);
+    const sourceBytes = readFileSync(
+      plannedSource ?? path.join(absoluteRoot, ...unsealedPublicationSource(file).split("/")),
+    );
     const artifactBytes = readFileSync(path.join(absoluteOutput, ...file.split("/")));
     if (!sourceBytes.equals(artifactBytes)) {
       throw new Error(`public artifact bytes differ from source: ${file}`);
     }
   }
-  return { files: publicFileAllowlist.length, output: absoluteOutput };
+  return { files: artifactFiles.length, output: absoluteOutput };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -361,8 +398,25 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(
       `Pages artifact verified at ${result.output}: ${result.files} allowlisted files, exact approved publication bytes.`,
     );
+  } else if (
+    process.argv.length === 4
+    && process.argv[2] === "--joint-legal-v4-finalization"
+  ) {
+    const output = buildPagesArtifact({ jointLegalV4FinalizationRoot: process.argv[3] });
+    console.log(
+      `Pages Legal V4 artifact built at ${output} from sealed retained bytes.`,
+    );
+  } else if (
+    process.argv.length === 5
+    && process.argv[2] === "--check"
+    && process.argv[3] === "--joint-legal-v4-finalization"
+  ) {
+    const result = verifyPagesArtifact({ jointLegalV4FinalizationRoot: process.argv[4] });
+    console.log(
+      `Pages Legal V4 artifact verified at ${result.output}: ${result.files} exact files.`,
+    );
   } else {
-    console.error("Usage: node scripts/build-pages.mjs [--check]");
+    console.error("Usage: node scripts/build-pages.mjs [--check] [--joint-legal-v4-finalization DIR]");
     process.exitCode = 2;
   }
 }

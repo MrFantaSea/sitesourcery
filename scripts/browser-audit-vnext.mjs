@@ -170,8 +170,9 @@ export const PROGRESSIVE_DISCLOSURE_COUNTS = Object.freeze({
 });
 export const PRIMARY_NAV_CONTRACT = Object.freeze([
   Object.freeze({ label: "Websites", href: "/websites/", className: "" }),
-  Object.freeze({ label: "Calls & follow-up", href: "/hive/", className: "" }),
+  Object.freeze({ label: "Domains", href: "/domains/", className: "" }),
   Object.freeze({ label: "Services", href: "/solutions/", className: "" }),
+  Object.freeze({ label: "Calls & follow-up", href: "/hive/", className: "" }),
   Object.freeze({ label: "Examples", href: "/work/", className: "" }),
   Object.freeze({ label: "About", href: "/about/", className: "" }),
   Object.freeze({ label: "Get started", href: "/start/", className: "nav-start" }),
@@ -1630,9 +1631,14 @@ const AUDIT_EXPRESSION = `(() => {
     if (!element || element.hidden || element.closest("[hidden]")) return false;
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
+    const visuallyClipped = rect.width <= 1
+      && rect.height <= 1
+      && style.overflow === "hidden"
+      && (style.clip !== "auto" || style.clipPath !== "none");
     return style.display !== "none"
       && style.visibility !== "hidden"
       && Number.parseFloat(style.opacity) > 0
+      && !visuallyClipped
       && rect.width > 0
       && rect.height > 0;
   };
@@ -2187,8 +2193,13 @@ const MENU_EXERCISE_EXPRESSION = `(async () => {
   const visible = (element) => {
     const style = getComputedStyle(element);
     const rect = element.getBoundingClientRect();
+    const visuallyClipped = rect.width <= 1
+      && rect.height <= 1
+      && style.overflow === "hidden"
+      && (style.clip !== "auto" || style.clipPath !== "none");
     return style.display !== "none"
       && style.visibility !== "hidden"
+      && !visuallyClipped
       && rect.width > 0
       && rect.height > 0;
   };
