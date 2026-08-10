@@ -644,7 +644,9 @@ test("API admission preserves worker headroom and fails closed at its deadline",
   const saturated = authority.budgetReadiness();
   assert.equal(saturated.pool.apiConnections, 1);
   assert.equal(saturated.pool.workerReservedConnections, 1);
-  assert.equal(saturated.pool.workerScope, "held-for-workers-01");
+  assert.equal(saturated.pool.workerScope, "external-process");
+  assert.equal(saturated.pool.workload, "api");
+  assert.equal(saturated.pool.processConnectionBudget, 1);
   assert.equal(saturated.telemetry.timedOutAcquisitions, 1);
   assert.equal(saturated.telemetry.saturationEvents, 1);
   assert.equal(saturated.telemetry.queuedApiAcquisitions, 0);
@@ -704,6 +706,48 @@ test("pool acquisition deadline releases a client that arrives late", async () =
     authority.budgetReadiness().telemetry.activeApiTransactions,
     0
   );
+});
+
+test("dedicated worker authority admits only the exact reserved capacity", async () => {
+  const pool = fakePool(readyRow());
+  const releases = [];
+  const authority = createCanonicalPostgresAuthority({
+    pool,
+    workload: "worker",
+    budgetPolicy: {
+      timeouts: {
+        ...DEFAULT_POSTGRES_BUDGET_POLICY.timeouts,
+        acquisitionMs: 100
+      },
+      pool: {
+        totalConnections: 3,
+        apiConnections: 1,
+        workerReservedConnections: 2,
+        connectionIncrease: "none"
+      }
+    }
+  });
+  const first = authority.service({}, () => new Promise((resolve) => {
+    releases.push(resolve);
+  }));
+  const second = authority.service({}, () => new Promise((resolve) => {
+    releases.push(resolve);
+  }));
+  while (authority.budgetReadiness().telemetry.activeTransactions !== 2) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  await assert.rejects(
+    authority.service({}, async () => "must-not-run"),
+    (error) => error?.code === "DATABASE_ACQUISITION_TIMEOUT"
+  );
+  const readiness = authority.budgetReadiness();
+  assert.equal(readiness.pool.workload, "worker");
+  assert.equal(readiness.pool.workerScope, "dedicated-process");
+  assert.equal(readiness.pool.processConnectionBudget, 2);
+  assert.equal(readiness.telemetry.saturationEvents, 1);
+  releases.forEach((release) => release("done"));
+  assert.deepEqual(await Promise.all([first, second]), ["done", "done"]);
+  assert.equal(authority.budgetReadiness().telemetry.activeTransactions, 0);
 });
 
 test("legacy aggregate PostgreSQL entrypoint fails closed", () => {

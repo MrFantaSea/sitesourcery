@@ -174,21 +174,15 @@ test("export worker environment is exact, bounded, and held unless enabled", () 
   );
 });
 
-test("hosted executable composes the held-by-default worker onto its shutdown signal", async () => {
-  const source = await readFile(
-    new URL("../bin/server.mjs", import.meta.url),
-    "utf8"
-  );
-  assert.match(
-    source,
-    /createExportWorker\(\{\s*service,\s*\.\.\.exportWorkerOptionsFromEnvironment\(\)/u
-  );
-  assert.match(
-    source,
-    /exportWorker\.start\(\{\s*signal:\s*shutdownController\.signal\s*\}\)/u
-  );
-  assert.match(
-    source,
-    /shutdownController\.abort\(\);[\s\S]*exportWorker\s*\?\s*exportWorker\.stop\(\)/u
-  );
+test("API starts no export loop and the worker process documents its narrow-port hold", async () => {
+  const [apiSource, runbook] = await Promise.all([
+    readFile(new URL("../bin/server.mjs", import.meta.url), "utf8"),
+    readFile(
+      new URL("../../../ops/SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md", import.meta.url),
+      "utf8"
+    )
+  ]);
+  assert.doesNotMatch(apiSource, /createExportWorker|exportWorker\.start/u);
+  assert.match(runbook, /Export and cancellation processing are\s+methods on `createCanonicalPostgresService`/u);
+  assert.match(runbook, /WORKER_PURPOSE_UNAVAILABLE/u);
 });

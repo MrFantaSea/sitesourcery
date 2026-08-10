@@ -43,28 +43,14 @@ import {
   createAlakazam35Composition
 } from "../alakazam-35-composition.mjs";
 import {
-  createAlakazam35Compiler
-} from "../alakazam-35-compiler.mjs";
-import {
-  createAlakazam35FulfillmentRepository,
-  createAlakazam35TierCompiler
-} from "../alakazam-35-fulfillment.mjs";
-import {
   createPostgresAlakazam35Repository
 } from "../alakazam-35-postgres.mjs";
 import {
   createAlakazam35PublicationPort
 } from "../alakazam-35-publication-port.mjs";
 import {
-  createAlakazam50Compiler
-} from "../alakazam-50-compiler.mjs";
-import {
   createAlakazam50Composition
 } from "../alakazam-50-composition.mjs";
-import {
-  createAlakazam50FulfillmentRepository,
-  createAlakazam50TierCompiler
-} from "../alakazam-50-fulfillment.mjs";
 import {
   createPostgresAlakazam50Repository
 } from "../alakazam-50-postgres.mjs";
@@ -89,13 +75,6 @@ import {
 import {
   createPostgresAlakazamLifecycleRepository
 } from "../alakazam-lifecycle-postgres.mjs";
-import {
-  createAlakazamFulfillmentWorker
-} from "../alakazam-fulfillment-worker.mjs";
-import {
-  cancellationWorkerOptionsFromEnvironment,
-  createCancellationWorker
-} from "../cancellation-worker.mjs";
 import {
   createPostgresCommerceV2Adapter
 } from "../commerce-v2-postgres.mjs";
@@ -174,10 +153,6 @@ import {
   createPostgresDownloadPaymentRepository
 } from "../download-payment-postgres.mjs";
 import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
-import {
-  createExportWorker,
-  exportWorkerOptionsFromEnvironment
-} from "../export-worker.mjs";
 import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
@@ -297,7 +272,7 @@ const postgresBudgetConfiguration =
   postgresBudgetConfigurationFromEnvironment(process.env);
 const pool = createPostgresPool({
   max:
-    postgresBudgetConfiguration.policy.pool.totalConnections,
+    postgresBudgetConfiguration.policy.pool.apiConnections,
   connectionTimeoutMillis:
     postgresBudgetConfiguration.policy.timeouts.acquisitionMs,
   statementTimeoutMillis:
@@ -319,12 +294,7 @@ const authority = createCanonicalPostgresAuthority({
 });
 let apiServer = null;
 let tenantServer = null;
-let cancellationWorker = null;
-let exportWorker = null;
-let alakazamFulfillmentWorker = null;
-let alakazamRetainedPremiumLifecycle = null;
 let shutdownPromise = null;
-const shutdownController = new AbortController();
 
 function closeServer(server) {
   if (!server?.listening) return Promise.resolve();
@@ -338,28 +308,11 @@ function closeServer(server) {
 
 function shutdown() {
   if (!shutdownPromise) {
-    shutdownController.abort();
     shutdownPromise = (async () => {
       await Promise.all([
         closeServer(apiServer),
-        closeServer(tenantServer),
-        cancellationWorker
-          ? cancellationWorker.stop()
-          : Promise.resolve(),
-        exportWorker
-          ? exportWorker.stop()
-          : Promise.resolve(),
-        alakazamFulfillmentWorker
-          ? alakazamFulfillmentWorker.stop()
-          : Promise.resolve(),
-        alakazamRetainedPremiumLifecycle
-          ? alakazamRetainedPremiumLifecycle.stop()
-          : Promise.resolve()
+        closeServer(tenantServer)
       ]);
-      cancellationWorker = null;
-      exportWorker = null;
-      alakazamFulfillmentWorker = null;
-      alakazamRetainedPremiumLifecycle = null;
       await authority.close();
     })();
   }
@@ -436,11 +389,6 @@ async function start() {
     resolveSession: commerceV2.resolveSession,
     clock: commerceV2.clock
   });
-  const alakazamFulfillmentRepository =
-    createAlakazam35FulfillmentRepository({
-      baseRepository: alakazamRepository,
-      tierRepository: alakazam35Repository
-    });
   const alakazam50Repository =
     createPostgresAlakazam50Repository({ authority });
   const alakazam50 = createAlakazam50Composition({
@@ -458,11 +406,6 @@ async function start() {
       resolveSession: commerceV2.resolveSession,
       clock: commerceV2.clock,
       repository: alakazamRetainedPremiumRepository
-    });
-  const alakazam50FulfillmentRepository =
-    createAlakazam50FulfillmentRepository({
-      baseRepository: alakazamFulfillmentRepository,
-      tierRepository: alakazam50Repository
     });
   const alakazamAccountService =
     createAlakazamAccountService({
@@ -599,16 +542,11 @@ async function start() {
   };
   const alakazamLifecyclePolicy =
     createConfiguredAlakazamLifecyclePolicy();
-  alakazamRetainedPremiumLifecycle =
+  const alakazamRetainedPremiumLifecycle =
     createAlakazamRetainedPremiumLifecycle({
       repository: alakazamRetainedPremiumRepository,
       clock: commerceV2.clock,
-      enabled:
-        alakazamComposition.mode === "approved" &&
-        alakazamLifecyclePolicy.mode === "approved",
-      log(entry) {
-        process.stdout.write(`${JSON.stringify(entry)}\n`);
-      }
+      enabled: false
     });
   const alakazamLifecyclePorts = {
     repository:
@@ -719,20 +657,6 @@ async function start() {
       "SITESOURCERY_SPARK_COMPILER_SHA256"
     )
   });
-  const alakazam35Compiler = createAlakazam35Compiler({
-    baseCompiler: compiler
-  });
-  const alakazamTierCompiler = createAlakazam35TierCompiler({
-    baseCompiler: compiler,
-    alakazam35Compiler
-  });
-  const alakazam50Compiler = createAlakazam50Compiler({
-    baseCompiler: alakazamTierCompiler
-  });
-  const alakazam50TierCompiler = createAlakazam50TierCompiler({
-    baseCompiler: alakazamTierCompiler,
-    alakazam50Compiler
-  });
   const exportStore = await createPrivateExportObjectStore({
     root: path.resolve(
       process.env.SITESOURCERY_EXPORT_ROOT ??
@@ -753,20 +677,6 @@ async function start() {
     assetRepository: alakazam35Repository,
     clock: commerceV2.clock
   });
-  alakazamFulfillmentWorker =
-    createAlakazamFulfillmentWorker({
-      repository: alakazam50FulfillmentRepository,
-      compiler: alakazam50TierCompiler,
-      publicationPort,
-      clock: commerceV2.clock,
-      ids: commerceV2.ids,
-      enabled:
-        alakazamComposition.mode === "approved" &&
-        publicationHeld() === false,
-      log(entry) {
-        process.stdout.write(`${JSON.stringify(entry)}\n`);
-      }
-    });
   const recoveryMailPort =
     await createConfiguredRecoveryMailPort();
   const projectLegalAuthorityConfig =
@@ -843,14 +753,6 @@ async function start() {
     readiness.payments,
     stripeComposition
   );
-  exportWorker = createExportWorker({
-    service,
-    ...exportWorkerOptionsFromEnvironment(),
-    log(entry) {
-      process.stdout.write(`${JSON.stringify(entry)}\n`);
-    }
-  });
-
   apiServer = createServer(
     createApiNodeHandler(
       createHostedApi(service, {
@@ -909,29 +811,6 @@ async function start() {
   await listen(apiServer, apiPort);
   await listen(tenantServer, tenantPort);
 
-  exportWorker.start({
-    signal: shutdownController.signal
-  });
-  alakazamFulfillmentWorker.start({
-    signal: shutdownController.signal
-  });
-  alakazamRetainedPremiumLifecycle.start({
-    signal: shutdownController.signal
-  });
-
-  if (stripeComposition.mode === "approved_live") {
-    cancellationWorker = createCancellationWorker({
-      service,
-      ...cancellationWorkerOptionsFromEnvironment(),
-      log(entry) {
-        process.stdout.write(
-          `${JSON.stringify(entry)}\n`
-        );
-      }
-    });
-    cancellationWorker.start();
-  }
-
   process.stdout.write(
     `${JSON.stringify({
       event: "sitesourcery.hosted.started",
@@ -950,18 +829,7 @@ async function start() {
       catalogVersion: readiness.catalog.catalogVersion,
       payments: paymentReadiness,
       alakazamMode: alakazamComposition.mode,
-      cancellationWorker:
-        cancellationWorker?.snapshot().state ??
-        "held_not_started",
-      exportWorker:
-        exportWorker?.snapshot().state ??
-        "held_not_started",
-      alakazamFulfillmentWorker:
-        alakazamFulfillmentWorker?.snapshot().state ??
-        "held_not_started",
-      alakazamRetainedPremiumLifecycle:
-        alakazamRetainedPremiumLifecycle?.snapshot().state ??
-        "held_not_started"
+      backgroundWorkers: "external_process_required"
     })}\n`
   );
 }

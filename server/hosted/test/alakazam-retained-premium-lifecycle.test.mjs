@@ -82,7 +82,9 @@ function fixture({
   grace = null,
   retention = null,
   cancellation = null,
-  enabled = false
+  enabled = false,
+  graceLookupFailures = 0,
+  workerOptions = {}
 } = {}) {
   const calls = {
     graceLookups: [],
@@ -94,6 +96,12 @@ function fixture({
   const repository = {
     async findNextGraceRetainedExit(input) {
       calls.graceLookups.push(structuredClone(input));
+      if (graceLookupFailures > 0) {
+        graceLookupFailures -= 1;
+        const error = new Error("injected lifecycle failure");
+        error.code = "DATABASE_UNAVAILABLE";
+        throw error;
+      }
       return grace === null ? null : structuredClone(grace);
     },
     async findNextRetentionExpiry(input) {
@@ -124,7 +132,8 @@ function fixture({
     repository,
     clock: { now: () => NOW },
     workerId: "retained-lifecycle-test",
-    enabled
+    enabled,
+    ...workerOptions
   });
   return { calls, lifecycle };
 }
@@ -135,10 +144,50 @@ test("the held lifecycle never starts a background mutation loop", () => {
   assert.deepEqual(lifecycle.snapshot(), {
     state: "held",
     enabled: false,
+    intervalMs: 5_000,
+    errorBackoffMs: 5_000,
+    maximumBackoffMs: 60_000,
     cycles: 0,
+    consecutiveErrors: 0,
     lastStatus: null,
     lastErrorCode: null
   });
+});
+
+test("retained lifecycle uses bounded error backoff and resets after success", async () => {
+  const waits = [];
+  const pending = [];
+  const { lifecycle } = fixture({
+    enabled: true,
+    graceLookupFailures: 2,
+    workerOptions: {
+      intervalMs: 150,
+      errorBackoffMs: 100,
+      maximumBackoffMs: 175,
+      wait(milliseconds, signal) {
+        waits.push(milliseconds);
+        return new Promise((resolve) => {
+          pending.push(() => {
+            if (!signal.aborted) resolve();
+            else resolve();
+          });
+        });
+      }
+    }
+  });
+  lifecycle.start();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waits[0], 100);
+  pending.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waits[1], 175);
+  pending.shift()();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(waits[2], 150);
+  assert.equal(lifecycle.snapshot().consecutiveErrors, 0);
+  const stopping = lifecycle.stop();
+  pending.shift()();
+  await stopping;
 });
 
 test("the grace worker applies retained exit only after exact seven-day canonical evidence", async () => {

@@ -241,38 +241,42 @@ test("F03 HTTP rejects query, authentication, CSRF, idempotency, and body drift 
 });
 
 test("production F03 composition remains the base of F04 without changing the commercial enable predicate", async () => {
-  const source = await readFile(
+  const apiSource = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
   );
-  assert.match(source, /createPostgresAlakazam35Repository\(\{ authority \}\)/u);
+  const workerSource = await readFile(
+    new URL("../worker-alakazam-composition.mjs", import.meta.url),
+    "utf8"
+  );
+  assert.match(workerSource, /createPostgresAlakazam35Repository\(\{ authority \}\)/u);
   assert.match(
-    source,
-    /createAlakazam35FulfillmentRepository\(\{\s*baseRepository: alakazamRepository,\s*tierRepository: alakazam35Repository\s*\}\)/u
+    workerSource,
+    /createAlakazam35FulfillmentRepository\(\{\s*baseRepository,\s*tierRepository: tier35Repository\s*\}\)/u
   );
   assert.match(
-    source,
-    /createAlakazam35TierCompiler\(\{\s*baseCompiler: compiler,\s*alakazam35Compiler\s*\}\)/u
+    workerSource,
+    /createAlakazam35TierCompiler\(\{\s*baseCompiler: compiler,\s*alakazam35Compiler: createAlakazam35Compiler\(\{\s*baseCompiler: compiler\s*\}\)\s*\}\)/u
   );
   assert.match(
-    source,
-    /createAlakazam35PublicationPort\(\{\s*runtime: tenantRuntime,\s*assetRepository: alakazam35Repository,\s*clock: commerceV2\.clock\s*\}\)/u
+    workerSource,
+    /createAlakazam35PublicationPort\(\{\s*runtime,\s*assetRepository: tier35Repository,\s*clock: shared\.commerce\.clock\s*\}\)/u
   );
   assert.match(
-    source,
-    /createAlakazam50FulfillmentRepository\(\{\s*baseRepository: alakazamFulfillmentRepository,\s*tierRepository: alakazam50Repository\s*\}\)/u
+    workerSource,
+    /createAlakazam50FulfillmentRepository\(\{\s*baseRepository: createAlakazam35FulfillmentRepository\(\{[\s\S]*?tierRepository: tier35Repository\s*\}\),\s*tierRepository: tier50Repository\s*\}\)/u
   );
   assert.match(
-    source,
-    /createAlakazam50TierCompiler\(\{\s*baseCompiler: alakazamTierCompiler,\s*alakazam50Compiler\s*\}\)/u
+    workerSource,
+    /createAlakazam50TierCompiler\(\{\s*baseCompiler: tier35Compiler,\s*alakazam50Compiler: createAlakazam50Compiler\(\{\s*baseCompiler: tier35Compiler\s*\}\)\s*\}\)/u
   );
   assert.match(
-    source,
-    /createAlakazamFulfillmentWorker\(\{\s*repository: alakazam50FulfillmentRepository,\s*compiler: alakazam50TierCompiler,\s*publicationPort,[\s\S]*?enabled:\s*alakazamComposition\.mode === "approved" &&\s*publicationHeld\(\) === false,/u
+    workerSource,
+    /const enabled =\s*shared\.release\.mode === "approved" &&\s*publicationHeld\(\) === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
   );
-  assert.match(source, /await alakazam35\.readiness\(\)/u);
+  assert.match(workerSource, /tier35Repository\.readiness\(\)/u);
   assert.doesNotMatch(
-    source.match(/createAlakazam35Composition\(\{[\s\S]*?\}\);/u)?.[0] ?? "",
+    apiSource.match(/createAlakazam35Composition\(\{[\s\S]*?\}\);/u)?.[0] ?? "",
     /\b(?:provider|stripe|tenantRuntime)\s*:/u
   );
 });

@@ -284,16 +284,22 @@ credential change.
 
 ## Durable worker inventory
 
-Only a durable job with an implemented lease and exact effect-certainty contract
-may be started automatically.
+Only a durable job with an implemented lease or exact idempotent lifecycle
+fence and effect-certainty contract may be started automatically. The API
+process starts no worker loop. The separately held `bin/worker.mjs` process is
+the sole production background-loop start authority; its exact purpose
+allowlist, currently unavailable narrow ports, and independent PostgreSQL
+reserve are documented in the WORKERS-01 runbook.
 
 | Work | Production behavior | Recovery truth |
 | --- | --- | --- |
-| Subscription cancellation | A bounded, non-overlapping worker calls `processPaymentOutbox()` only in `approved_live` mode. It uses the existing `FOR UPDATE SKIP LOCKED` lease. | Confirmed effects settle once. Known no-effect failures become eligible after the service-owned five-minute delay. Ambiguous effects are held at PostgreSQL `infinity` and require separately reviewed operator reconciliation; the worker cannot retry them. |
-| Project export | A bounded, non-overlapping worker starts only when `SITESOURCERY_EXPORT_WORKER_MODE=enabled`. Every claim carries the v15 attempt number, expiring lease, worker identity, and monotonic fence token. | A worker may reclaim only an expired lease. Immutable object keys include the attempt and fence; stale workers cannot overwrite or finalize a newer claim. Ambiguous object facts become bounded failed/manual-retry evidence rather than an automatic replay. |
-| Publication/release | No background worker is started. | Publication is synchronous through the private in-process port. A local finalization failure is recovered only by replaying the exact idempotent customer command; the audit outbox row is not treated as deployment authority. |
+| Subscription cancellation | The API starts no polling loop. The purpose remains fail-closed in the worker process until its narrow port is extracted after MAIL-COMPOSE-FINAL-03; its existing `FOR UPDATE SKIP LOCKED` lease is unchanged. | Confirmed effects settle once. Known no-effect failures retain the service-owned delay. Ambiguous effects remain held at PostgreSQL `infinity`; no new retry policy exists. |
+| Project export | The API starts no export loop. The purpose remains fail-closed in the worker process until its narrow port is extracted after MAIL-COMPOSE-FINAL-03. Existing attempt, lease, worker identity, and fence-token authority is unchanged. | A worker may reclaim only an expired lease. Immutable object keys and stale-worker fencing remain authoritative. |
+| Alakazam fulfillment/publication | The separate worker process uses the existing leased fulfillment state machine only after exact release, compiler, repository, address, and publication-hold readback. | Publication remains a stage of the fulfillment lease; dark compensation and exact retry evidence are unchanged. There is no generic publication job engine. |
+| Alakazam lifecycle/retention | The separate worker process uses the existing exact seven-day grace and retained-expiry state machine only after release, policy, and repository readback. | Retained exit and purge remain exact-evidence, deterministic-idempotency operations. No earlier purge authority is added. |
 
-Cancellation worker polling is bounded by these optional settings:
+The existing cancellation worker polling options remain bounded for its future
+narrow composition:
 
 - `SITESOURCERY_PAYMENT_WORKER_BATCH_LIMIT` (default `10`, maximum `100`);
 - `SITESOURCERY_PAYMENT_WORKER_INTERVAL_MS` (default `5000`);

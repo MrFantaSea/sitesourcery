@@ -1,0 +1,57 @@
+# WORKERS_HOLD — candidate only. Do not install, enable, or start without the
+# completed owner gate in SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md.
+
+[Unit]
+Description=Site Sourcery bounded hosted workers
+After=local-fs.target network-online.target sitesourcery-hosted.service
+Wants=network-online.target
+ConditionPathExists=/etc/sitesourcery/WORKERS_APPROVED
+ConditionPathExists=!/etc/sitesourcery/WORKERS_HOLD
+ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE
+
+[Service]
+Type=simple
+User=sitesourcery
+Group=sitesourcery
+WorkingDirectory=/opt/sitesourcery/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/workers.env
+ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/assert-runtime.mjs
+ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/bin/worker.mjs
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=30s
+TimeoutStopSec=25s
+KillSignal=SIGTERM
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery
+ReadWritePaths=/var/lib/sitesourcery
+StateDirectory=sitesourcery
+RuntimeDirectory=sitesourcery
+RuntimeDirectoryMode=0750
+LimitNOFILE=4096
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

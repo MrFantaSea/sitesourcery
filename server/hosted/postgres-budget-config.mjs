@@ -196,7 +196,7 @@ export function createPostgresBudgetConfiguration({ configurationJson } = {}) {
       apiConnections: policy.pool.apiConnections,
       workerReservedConnections: policy.pool.workerReservedConnections,
       connectionIncrease: policy.pool.connectionIncrease,
-      workerScope: "held-for-workers-01"
+      workerScope: "external-process"
     }),
     telemetry: Object.freeze({
       schema: "sitesourcery.postgres-pool-telemetry/v1",

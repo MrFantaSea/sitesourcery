@@ -105,6 +105,8 @@ export function createAlakazamFulfillmentWorker({
   leaseMs = DEFAULT_LEASE_MS,
   enabled = false,
   intervalMs = 5_000,
+  errorBackoffMs = 5_000,
+  maximumBackoffMs = 60_000,
   wait = defaultWait,
   log = () => {}
 } = {}) {
@@ -125,6 +127,12 @@ export function createAlakazamFulfillmentWorker({
       Number.isSafeInteger(intervalMs) &&
       intervalMs >= 100 &&
       intervalMs <= 300_000 &&
+      Number.isSafeInteger(errorBackoffMs) &&
+      errorBackoffMs >= 100 &&
+      errorBackoffMs <= 300_000 &&
+      Number.isSafeInteger(maximumBackoffMs) &&
+      maximumBackoffMs >= errorBackoffMs &&
+      maximumBackoffMs <= 900_000 &&
       typeof wait === "function" &&
       typeof log === "function",
     "FULFILLMENT_WORKER_INVALID",
@@ -140,6 +148,7 @@ export function createAlakazamFulfillmentWorker({
   let loopPromise = null;
   let state = enabled ? "stopped" : "held";
   let cycles = 0;
+  let consecutiveErrors = 0;
   let lastStatus = null;
   let lastErrorCode = null;
 
@@ -304,9 +313,11 @@ export function createAlakazamFulfillmentWorker({
     emit({ state });
     try {
       while (!signal.aborted) {
+        let delay = intervalMs;
         try {
           const result = await runOnce();
           cycles += 1;
+          consecutiveErrors = 0;
           lastStatus = result.status;
           lastErrorCode = null;
           emit({
@@ -316,6 +327,14 @@ export function createAlakazamFulfillmentWorker({
           });
         } catch (error) {
           cycles += 1;
+          consecutiveErrors += 1;
+          delay = Math.min(
+            maximumBackoffMs,
+            errorBackoffMs * 2 ** Math.min(
+              consecutiveErrors - 1,
+              20
+            )
+          );
           lastStatus = "error";
           lastErrorCode =
             String(error?.code ?? "FULFILLMENT_WORKER_CYCLE_FAILED")
@@ -327,7 +346,7 @@ export function createAlakazamFulfillmentWorker({
           });
         }
         if (!signal.aborted) {
-          await wait(intervalMs, signal);
+          await wait(delay, signal);
         }
       }
     } finally {
@@ -372,7 +391,11 @@ export function createAlakazamFulfillmentWorker({
       return Object.freeze({
         state,
         enabled,
+        intervalMs,
+        errorBackoffMs,
+        maximumBackoffMs,
         cycles,
+        consecutiveErrors,
         lastStatus,
         lastErrorCode
       });
