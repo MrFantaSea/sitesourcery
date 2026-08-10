@@ -224,6 +224,19 @@
     cancelled: "cancelled",
     ended: "ended"
   };
+  var CUSTOMER_CHECKOUT_CONTEXT_SCHEMA =
+    "sitesourcery.customer-checkout-context/v1";
+  var CUSTOMER_CHECKOUT_CONTEXT_TTL_MS =
+    24 * 60 * 60 * 1000;
+  var CUSTOMER_CHECKOUT_KINDS = Object.freeze([
+    "assessment",
+    "custom_build_change",
+    "custom_build_final",
+    "custom_build_first",
+    "domain",
+    "download",
+    "unknown"
+  ]);
 
   function record(value) {
     return Boolean(value)
@@ -249,6 +262,219 @@
     return typeof value === "string"
       && Number.isFinite(Date.parse(value))
       && new Date(value).toISOString() === value;
+  }
+
+  function checkoutKindLabel(kind) {
+    return {
+      assessment: "Assessment",
+      custom_build_change: "Added-work",
+      custom_build_final: "Final-build",
+      custom_build_first: "Custom-build first-payment",
+      domain: "Domain",
+      download: "Download",
+      unknown: "Secure"
+    }[kind] || "Secure";
+  }
+
+  function customerCheckoutContext(value, observedAt) {
+    var observed = safeIso(observedAt)
+      ? Date.parse(observedAt)
+      : Date.now();
+    if (
+      !exactKeys(
+        value,
+        ["createdAt", "kind", "projectId", "schema"]
+      )
+      || value.schema !== CUSTOMER_CHECKOUT_CONTEXT_SCHEMA
+      || !CUSTOMER_CHECKOUT_KINDS.includes(value.kind)
+      || value.kind === "unknown"
+      || !UUID.test(text(value.projectId))
+      || !safeIso(value.createdAt)
+      || Date.parse(value.createdAt) > observed + 5 * 60 * 1000
+      || observed - Date.parse(value.createdAt) >
+        CUSTOMER_CHECKOUT_CONTEXT_TTL_MS
+    ) return null;
+    return Object.freeze({
+      schema: value.schema,
+      kind: value.kind,
+      projectId: value.projectId,
+      createdAt: value.createdAt
+    });
+  }
+
+  function createCustomerCheckoutContext(
+    kind,
+    projectId,
+    createdAt
+  ) {
+    return customerCheckoutContext({
+      schema: CUSTOMER_CHECKOUT_CONTEXT_SCHEMA,
+      kind: text(kind),
+      projectId: text(projectId),
+      createdAt: safeIso(createdAt)
+        ? createdAt
+        : new Date().toISOString()
+    });
+  }
+
+  function customerCheckoutCancellationFromLocation(
+    locationObject,
+    context,
+    observedAt
+  ) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      return null;
+    }
+    var checkoutValues = parameters.getAll("checkout");
+    var domainValues = parameters.getAll("domainPayment");
+    var checkoutCancelled =
+      checkoutValues.length === 1
+      && checkoutValues[0] === "cancelled";
+    var domainCancelled =
+      domainValues.length === 1
+      && domainValues[0] === "cancelled";
+    if (checkoutCancelled === domainCancelled) return null;
+    var identityFields = [
+      "assessment_invoice",
+      "assessment_project",
+      "custom_build_change_invoice",
+      "custom_build_change_job",
+      "custom_build_change_order",
+      "custom_build_change_project",
+      "custom_build_final_invoice",
+      "custom_build_final_job",
+      "custom_build_final_obligation",
+      "custom_build_final_project",
+      "custom_build_invoice",
+      "custom_build_project",
+      "download_project"
+    ];
+    if (identityFields.some(function (field) {
+      return parameters.has(field);
+    })) return null;
+    var verified = customerCheckoutContext(
+      context,
+      observedAt
+    );
+    return Object.freeze({
+      kind: domainCancelled
+        ? "domain"
+        : verified
+          ? verified.kind
+          : "unknown",
+      projectId: verified ? verified.projectId : "",
+      state: "cancelled"
+    });
+  }
+
+  function customerCheckoutSuccessFromLocation(
+    locationObject
+  ) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      return false;
+    }
+    var checkoutValues = parameters.getAll("checkout");
+    if (
+      checkoutValues.length !== 1
+      || !/^cs_[A-Za-z0-9_]+$/u.test(
+        text(checkoutValues[0])
+      )
+    ) return false;
+    var projectIdentities = [
+      "assessment_project",
+      "custom_build_change_project",
+      "custom_build_final_project",
+      "custom_build_project",
+      "download_project"
+    ].map(function (field) {
+      return parameters.getAll(field);
+    }).filter(function (values) {
+      return values.length > 0;
+    });
+    return projectIdentities.length === 1
+      && projectIdentities[0].length === 1
+      && UUID.test(text(projectIdentities[0][0]));
+  }
+
+  function customerCheckoutExperiencePresentation(
+    state,
+    kind
+  ) {
+    var selectedState = text(state);
+    var selectedKind = CUSTOMER_CHECKOUT_KINDS.includes(kind)
+      ? kind
+      : "unknown";
+    var label = checkoutKindLabel(selectedKind);
+    var presentations = {
+      abandoned: {
+        heading: label + " checkout needs a fresh status check",
+        message:
+          "This browser opened secure checkout earlier but did not return with a verified result. No payment is confirmed by this page. Refresh the project before reopening the retained payment page or trying again.",
+        tone: "attention"
+      },
+      cancelled: {
+        heading: label + " checkout was canceled",
+        message:
+          "This page did not confirm a payment or start fulfillment. Refresh the project before reopening any retained secure payment page. A canceled return never grants access by itself.",
+        tone: "neutral"
+      },
+      declined: {
+        heading: "Added work was declined",
+        message:
+          "The exact added-work decision was confirmed declined. The original approved scope remains in place, no added-work checkout is available, and no added-work charge occurred.",
+        tone: "neutral"
+      },
+      no_charge: {
+        heading: label + " needs no payment",
+        message:
+          "The verified project record shows a zero balance. Checkout stays unavailable; fulfillment proceeds only from the verified zero-balance clearance, never from a browser claim.",
+        tone: "success"
+      }
+    };
+    var selected = presentations[selectedState];
+    return selected
+      ? Object.freeze({
+          state: selectedState,
+          kind: selectedKind,
+          heading: selected.heading,
+          message: selected.message,
+          tone: selected.tone
+        })
+      : null;
+  }
+
+  function locationWithoutCustomerCheckoutState(
+    locationObject
+  ) {
+    var parameters;
+    try {
+      parameters = new URLSearchParams(
+        text(locationObject && locationObject.search)
+      );
+    } catch (_error) {
+      parameters = new URLSearchParams();
+    }
+    ["checkout", "domainPayment"].forEach(
+      function (field) {
+        parameters.delete(field);
+      }
+    );
+    var query = parameters.toString();
+    return (
+      text(locationObject && locationObject.pathname)
+        || "/"
+    ) + (query ? "?" + query : "")
+      + text(locationObject && locationObject.hash);
   }
 
   function nullableIso(value) {
@@ -1530,6 +1756,467 @@
       detail
     );
     list.appendChild(row);
+  }
+
+  function createCustomerAccountRoutesPanel(
+    documentRef,
+    actions
+  ) {
+    actions = actions || {};
+    var current = {};
+    var panel = accountElement(
+      documentRef,
+      "section",
+      "customer-account-routes"
+    );
+    panel.setAttribute(
+      "data-customer-account-routes",
+      ""
+    );
+    panel.setAttribute(
+      "aria-labelledby",
+      "customer-account-routes-title"
+    );
+    var heading = accountElement(
+      documentRef,
+      "h3",
+      "",
+      "Help, project export, and privacy requests"
+    );
+    heading.id = "customer-account-routes-title";
+    var connection = accountElement(
+      documentRef,
+      "p",
+      "customer-account-route-status"
+    );
+    connection.setAttribute("role", "status");
+    connection.setAttribute("aria-live", "polite");
+    connection.setAttribute("tabindex", "-1");
+    var refresh = accountElement(
+      documentRef,
+      "button",
+      "spark-button",
+      "Refresh account from Site Sourcery"
+    );
+    refresh.type = "button";
+    refresh.setAttribute(
+      "data-customer-refresh-account",
+      ""
+    );
+    refresh.addEventListener("click", function () {
+      if (typeof actions.refresh === "function") {
+        Promise.resolve(actions.refresh()).catch(function () {});
+      }
+    });
+    var checkout = accountElement(
+      documentRef,
+      "section",
+      "customer-checkout-state"
+    );
+    checkout.hidden = true;
+    checkout.setAttribute("data-customer-checkout-state", "");
+    checkout.setAttribute("role", "status");
+    var checkoutHeading = accountElement(
+      documentRef,
+      "h4",
+      ""
+    );
+    var checkoutCopy = accountElement(
+      documentRef,
+      "p",
+      ""
+    );
+    checkout.append(checkoutHeading, checkoutCopy);
+
+    var support = accountElement(
+      documentRef,
+      "fieldset",
+      "platform-panel customer-account-route-card"
+    );
+    support.appendChild(accountElement(
+      documentRef,
+      "legend",
+      "",
+      "Project support"
+    ));
+    support.appendChild(accountElement(
+      documentRef,
+      "p",
+      "",
+      "A signed-in customer with a selected project can open a support ticket for that project. Never include passwords, payment-card data, or unnecessary sensitive information."
+    ));
+    var supportSubjectLabel = accountElement(
+      documentRef,
+      "label",
+      "spark-field"
+    );
+    var supportSubject = accountElement(
+      documentRef,
+      "input",
+      ""
+    );
+    supportSubject.name = "customerSupportSubject";
+    supportSubject.type = "text";
+    supportSubject.required = true;
+    supportSubject.minLength = 3;
+    supportSubject.maxLength = 120;
+    supportSubject.autocomplete = "off";
+    supportSubjectLabel.append(
+      accountElement(documentRef, "span", "", "Subject"),
+      supportSubject
+    );
+    var supportMessageLabel = accountElement(
+      documentRef,
+      "label",
+      "spark-field"
+    );
+    var supportMessage = accountElement(
+      documentRef,
+      "textarea",
+      ""
+    );
+    supportMessage.name = "customerSupportMessage";
+    supportMessage.required = true;
+    supportMessage.maxLength = 4000;
+    supportMessage.rows = 4;
+    supportMessageLabel.append(
+      accountElement(
+        documentRef,
+        "span",
+        "",
+        "What do you need help with?"
+      ),
+      supportMessage
+    );
+    var supportButton = accountElement(
+      documentRef,
+      "button",
+      "spark-button spark-button-primary",
+      "Send project support request"
+    );
+    supportButton.type = "button";
+    supportButton.setAttribute(
+      "data-customer-create-support-ticket",
+      ""
+    );
+    supportButton.addEventListener("click", function () {
+      if (
+        supportButton.disabled
+        || !supportSubject.checkValidity()
+        || !supportMessage.checkValidity()
+      ) {
+        supportSubject.reportValidity();
+        supportMessage.reportValidity();
+        return;
+      }
+      if (typeof actions.support !== "function") return;
+      Promise.resolve(actions.support({
+        subject: supportSubject.value,
+        message: supportMessage.value
+      })).then(function (result) {
+        if (!result) return;
+        supportSubject.value = "";
+        supportMessage.value = "";
+      }).catch(function () {});
+    });
+    var supportFallback = accountElement(
+      documentRef,
+      "p",
+      "customer-account-route-manual"
+    );
+    var supportLink = accountElement(
+      documentRef,
+      "a",
+      "",
+      "Use the existing phone or email contact"
+    );
+    supportLink.href = "/contact/#direct-contact";
+    supportFallback.append(
+      "No project selected, or account support unavailable? ",
+      supportLink,
+      "."
+    );
+    support.append(
+      supportSubjectLabel,
+      supportMessageLabel,
+      supportButton,
+      supportFallback
+    );
+
+    var projectExport = accountElement(
+      documentRef,
+      "fieldset",
+      "platform-panel customer-account-route-card"
+    );
+    projectExport.appendChild(accountElement(
+      documentRef,
+      "legend",
+      "",
+      "Project export"
+    ));
+    projectExport.appendChild(accountElement(
+      documentRef,
+      "p",
+      "",
+      "Prepare a bounded project archive from the selected project. Export does not delete the project or change publication, billing, or provider state."
+    ));
+    var exportStatus = accountElement(
+      documentRef,
+      "p",
+      "customer-account-route-status",
+      "Choose a project before preparing an export."
+    );
+    exportStatus.setAttribute("data-customer-export-status", "");
+    exportStatus.setAttribute("role", "status");
+    exportStatus.setAttribute("aria-live", "polite");
+    var exportActions = accountElement(
+      documentRef,
+      "div",
+      "platform-actions"
+    );
+    function routeButton(label, marker, action) {
+      var button = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        label
+      );
+      button.type = "button";
+      button.setAttribute(marker, "");
+      button.addEventListener("click", function () {
+        if (
+          !button.disabled
+          && typeof actions[action] === "function"
+        ) {
+          Promise.resolve(actions[action]()).catch(function () {});
+        }
+      });
+      exportActions.appendChild(button);
+      return button;
+    }
+    var prepareExport = routeButton(
+      "Prepare project export",
+      "data-customer-request-export",
+      "requestExport"
+    );
+    var refreshExport = routeButton(
+      "Refresh export status",
+      "data-customer-refresh-export",
+      "refreshExport"
+    );
+    var downloadExport = routeButton(
+      "Download project export",
+      "data-customer-download-export",
+      "downloadExport"
+    );
+    var retryExport = routeButton(
+      "Prepare a new export",
+      "data-customer-retry-export",
+      "retryExport"
+    );
+    projectExport.append(exportStatus, exportActions);
+
+    var manual = accountElement(
+      documentRef,
+      "section",
+      "platform-panel customer-account-route-card customer-account-manual-routes"
+    );
+    manual.appendChild(accountElement(
+      documentRef,
+      "h4",
+      "",
+      "Account deletion and privacy"
+    ));
+    manual.appendChild(accountElement(
+      documentRef,
+      "p",
+      "",
+      "Account-deletion and privacy requests use the existing reviewed manual contact, where Site Sourcery can verify identity and scope before acting."
+    ));
+    var manualActions = accountElement(
+      documentRef,
+      "div",
+      "platform-actions"
+    );
+    var accountDelete = accountElement(
+      documentRef,
+      "a",
+      "spark-button",
+      "Request account deletion"
+    );
+    accountDelete.href = "/legal/privacy/#contact";
+    accountDelete.setAttribute(
+      "data-customer-account-delete-route",
+      "manual"
+    );
+    var privacyRequest = accountElement(
+      documentRef,
+      "a",
+      "spark-button",
+      "Start a privacy request"
+    );
+    privacyRequest.href = "/legal/privacy/#contact";
+    privacyRequest.setAttribute(
+      "data-customer-privacy-request-route",
+      "manual"
+    );
+    manualActions.append(accountDelete, privacyRequest);
+    manual.appendChild(manualActions);
+
+    panel.append(
+      accountElement(
+        documentRef,
+        "p",
+        "spark-kicker",
+        "Customer routes"
+      ),
+      heading,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-assessment-intro",
+        "Opened this account on another tab or device? Refresh reads current account and project status. It never repeats a charge, publishes a site, or changes a provider."
+      ),
+      connection,
+      refresh,
+      checkout,
+      support,
+      projectExport,
+      manual
+    );
+
+    function operation(name) {
+      return current.operations
+        && current.operations[name]
+        || null;
+    }
+
+    function pending(name) {
+      return operation(name)?.status === "pending";
+    }
+
+    function render(input) {
+      current = input || {};
+      var account = current.account;
+      var project = account && current.project;
+      var online = current.online !== false;
+      var syncing = current.syncing === true
+        || pending("session");
+      if (!online) {
+        connection.textContent =
+          "Offline. Your page remains visible, but account writes, status refresh, support, and export are paused until the connection returns.";
+        connection.setAttribute("data-state", "offline");
+      } else if (current.sessionEnded === true) {
+        connection.textContent =
+          "Your session ended or changed. Sign in again before using project actions. This page did not repeat a charge or submit a write.";
+        connection.setAttribute("data-state", "session-ended");
+      } else if (syncing) {
+        connection.textContent =
+          "Refreshing current account and project authority…";
+        connection.setAttribute("data-state", "syncing");
+      } else if (project) {
+        connection.textContent =
+          "Current project status is loaded. Refresh after reconnecting, reopening, or making a change on another device.";
+        connection.setAttribute("data-state", "ready");
+      } else if (account) {
+        connection.textContent =
+          "Account status is loaded. Choose a project to open support and export.";
+        connection.setAttribute("data-state", "account-ready");
+      } else {
+        connection.textContent =
+          "Sign in to use project support or export. Manual privacy and account-deletion routes remain available below.";
+        connection.setAttribute("data-state", "signed-out");
+      }
+      refresh.disabled = !online || syncing;
+
+      var notice = current.checkoutNotice;
+      checkout.hidden = !notice;
+      if (notice) {
+        checkout.setAttribute("data-customer-checkout-state", notice.state);
+        checkout.setAttribute("data-tone", notice.tone);
+        checkoutHeading.textContent = notice.heading;
+        checkoutCopy.textContent = notice.message;
+      } else {
+        checkout.setAttribute("data-customer-checkout-state", "");
+        checkout.removeAttribute("data-tone");
+        checkoutHeading.textContent = "";
+        checkoutCopy.textContent = "";
+      }
+
+      var supportPending = pending("createSupportTicket");
+      supportSubject.disabled = !project || !online || supportPending;
+      supportMessage.disabled = !project || !online || supportPending;
+      supportButton.disabled = !project || !online || supportPending;
+      supportButton.textContent = supportPending
+        ? "Sending project support request…"
+        : "Send project support request";
+
+      var job = current.exportJob;
+      var exportState = text(job && job.status).toLowerCase();
+      var exportPending = [
+        "requestExport",
+        "getExport",
+        "retryExport",
+        "downloadExport"
+      ].some(pending);
+      var exportEnabled = Boolean(project && online && !exportPending);
+      prepareExport.hidden = Boolean(job);
+      refreshExport.hidden = ![
+        "queued",
+        "working",
+        "ready"
+      ].includes(exportState);
+      downloadExport.hidden = exportState !== "ready";
+      retryExport.hidden = ![
+        "failed",
+        "expired"
+      ].includes(exportState);
+      [
+        prepareExport,
+        refreshExport,
+        downloadExport,
+        retryExport
+      ].forEach(function (button) {
+        button.disabled = !exportEnabled;
+      });
+      if (!project) {
+        exportStatus.textContent =
+          "Choose a project before preparing an export.";
+      } else if (!job) {
+        exportStatus.textContent =
+          "No project export has been prepared in this account view.";
+      } else if (exportState === "queued") {
+        exportStatus.textContent =
+          "Export queued. Refresh to read current worker status.";
+      } else if (exportState === "working") {
+        exportStatus.textContent =
+          "Export is being prepared. Refresh to read current worker status.";
+      } else if (exportState === "ready") {
+        exportStatus.textContent =
+          "Export ready"
+          + (job.filename ? ": " + text(job.filename) : "")
+          + ". The one-time download authorization is bounded by its verified expiry.";
+      } else if (exportState === "failed") {
+        exportStatus.textContent =
+          "Export preparation failed. No project data was deleted. Prepare one safe retry.";
+      } else if (exportState === "expired") {
+        exportStatus.textContent =
+          "The one-time export download expired. Prepare a new export authorization.";
+      } else {
+        exportStatus.textContent =
+          "The export status could not be verified. Refresh before taking another action.";
+      }
+    }
+
+    return Object.freeze({
+      element: panel,
+      focusStatus: function () {
+        if (typeof connection.focus === "function") {
+          connection.focus();
+        }
+      },
+      render: render
+    });
   }
 
   function catalogTierName(account, tierId) {
@@ -13934,6 +14621,16 @@
       "assessment_invoice",
       "assessment_project",
       "checkout",
+      "custom_build_change_invoice",
+      "custom_build_change_job",
+      "custom_build_change_order",
+      "custom_build_change_project",
+      "custom_build_final_invoice",
+      "custom_build_final_job",
+      "custom_build_final_obligation",
+      "custom_build_final_project",
+      "custom_build_invoice",
+      "custom_build_project",
       "download_project"
     ].forEach(function (field) {
       parameters.delete(field);
@@ -14504,6 +15201,8 @@
       "sitesourcery.owner-assessment-evidence-attempt/v1";
     var customBuildAttemptStorageKey =
       "sitesourcery.custom-build-command-attempt/v1";
+    var customerCheckoutContextStorageKey =
+      CUSTOMER_CHECKOUT_CONTEXT_SCHEMA;
 
     function emptyOwnerEvidenceAttempt() {
       return {
@@ -14642,6 +15341,48 @@
 
     var customBuildAttempt = readCustomBuildAttempt();
 
+    function readCustomerCheckoutContext() {
+      try {
+        var stored = windowRef.sessionStorage
+          && windowRef.sessionStorage.getItem(
+            customerCheckoutContextStorageKey
+          );
+        return stored
+          ? customerCheckoutContext(JSON.parse(stored))
+          : null;
+      } catch (_error) {
+        return null;
+      }
+    }
+
+    function storeCustomerCheckoutContext(context) {
+      try {
+        if (!windowRef.sessionStorage) return;
+        if (context) {
+          windowRef.sessionStorage.setItem(
+            customerCheckoutContextStorageKey,
+            JSON.stringify(context)
+          );
+        } else {
+          windowRef.sessionStorage.removeItem(
+            customerCheckoutContextStorageKey
+          );
+        }
+      } catch (_error) {
+        // Server authority remains the source of payment truth.
+      }
+    }
+
+    function rememberCustomerCheckout(kind, projectId) {
+      var context = createCustomerCheckoutContext(
+        kind,
+        projectId,
+        new Date().toISOString()
+      );
+      if (context) storeCustomerCheckoutContext(context);
+      return context;
+    }
+
     function customBuildCommandId(
       accountId,
       operation,
@@ -14724,6 +15465,40 @@
       assessmentCheckoutReturnFromLocation(
         windowRef.location
       );
+    var customerStoredCheckoutContext =
+      readCustomerCheckoutContext();
+    var customerCheckoutCancellation =
+      customerCheckoutCancellationFromLocation(
+        windowRef.location,
+        customerStoredCheckoutContext
+      );
+    var customerCheckoutSuccess =
+      customerCheckoutSuccessFromLocation(
+        windowRef.location
+      );
+    var customerCheckoutNotice =
+      customerCheckoutCancellation
+        ? customerCheckoutExperiencePresentation(
+            "cancelled",
+            customerCheckoutCancellation.kind
+          )
+        : customerStoredCheckoutContext
+          && !customerCheckoutSuccess
+          ? customerCheckoutExperiencePresentation(
+              "abandoned",
+              customerStoredCheckoutContext.kind
+            )
+          : null;
+    var customerCheckoutProjectId = text(
+      customerStoredCheckoutContext
+      && customerStoredCheckoutContext.projectId
+    );
+    var customerOnline = !windowRef.navigator
+      || windowRef.navigator.onLine !== false;
+    var customerSyncing = false;
+    var customerSessionEnded = false;
+    var customerSessionWasReady = false;
+    var customerSessionRefreshScheduled = false;
     var checkoutReturnStarted = false;
     var capabilities = Object.freeze({
       accountRegistration: false,
@@ -14745,6 +15520,22 @@
       recoveryTokenFromLocation(
         windowRef.location
       );
+    if (customerCheckoutCancellation) {
+      storeCustomerCheckoutContext(null);
+      if (
+        windowRef.history
+        && typeof windowRef.history.replaceState ===
+          "function"
+      ) {
+        windowRef.history.replaceState(
+          null,
+          "",
+          locationWithoutCustomerCheckoutState(
+            windowRef.location
+          )
+        );
+      }
+    }
     if (
       (activationToken || recoveryToken)
       && windowRef.history
@@ -15096,6 +15887,54 @@
           }
         }
       );
+    var customerAccountRoutesPanel =
+      createCustomerAccountRoutesPanel(
+        documentRef,
+        {
+          refresh: function () {
+            return refreshCustomerSession("manual");
+          },
+          support: function (input) {
+            return run(
+              null,
+              function () {
+                return control.createSupportTicket(input);
+              },
+              "Project support request sent."
+            );
+          },
+          requestExport: function () {
+            return run(
+              null,
+              function () {
+                return control.requestExport();
+              },
+              "Project export queued."
+            );
+          },
+          refreshExport: function () {
+            return run(
+              null,
+              function () {
+                return control.getExport();
+              },
+              "Project export status refreshed."
+            );
+          },
+          retryExport: function () {
+            return run(
+              null,
+              function () {
+                return control.retryExport();
+              },
+              "A new project export was queued."
+            );
+          },
+          downloadExport: function () {
+            return downloadCustomerProjectExport();
+          }
+        }
+      );
     var alakazamPanel =
       createAlakazamAccountPanel(
         documentRef,
@@ -15206,6 +16045,10 @@
         alakazamAnchor
       );
       alakazamAnchor.parentNode.insertBefore(
+        customerAccountRoutesPanel.element,
+        alakazamAnchor
+      );
+      alakazamAnchor.parentNode.insertBefore(
         alakazamRetainedPremiumHost,
         alakazamAnchor
       );
@@ -15258,6 +16101,9 @@
           customerCustomBuildFinalPanel.element
         );
         controlShell.appendChild(
+          customerAccountRoutesPanel.element
+        );
+        controlShell.appendChild(
           alakazamRetainedPremiumHost
         );
         if (ALAKAZAM_PUBLIC_OFFER_STATE === "released") {
@@ -15287,6 +16133,191 @@
         "is-success",
         kind === "success"
       );
+    }
+
+    function renderCustomerAccountRoutes(state) {
+      var operations = state.operations || {};
+      var authenticationError = Object.keys(operations)
+        .some(function (name) {
+          var error = operations[name]
+            && operations[name].error;
+          return error
+            && [
+              "AUTHENTICATION_REQUIRED",
+              "REAUTHENTICATION_REQUIRED"
+            ].includes(text(error.code));
+        });
+      if (state.account) {
+        customerSessionWasReady = true;
+        customerSessionEnded = false;
+      } else if (
+        authenticationError
+        || (
+          customerSessionWasReady
+          && state.phase === "signed-out"
+        )
+      ) {
+        customerSessionEnded = true;
+      }
+      customerAccountRoutesPanel.render({
+        account: state.account,
+        project: state.project,
+        exportJob: state.exportJob,
+        operations: operations,
+        online: customerOnline,
+        syncing: customerSyncing,
+        sessionEnded: customerSessionEnded,
+        checkoutNotice:
+          customerCheckoutProjectId
+          && state.project
+          && idOf(state.project) !==
+            customerCheckoutProjectId
+            ? null
+            : customerCheckoutNotice
+      });
+    }
+
+    function downloadCustomerProjectExport() {
+      return run(
+        null,
+        function () {
+          return control.downloadExport()
+            .then(function (result) {
+              var URLRef = windowRef.URL;
+              if (
+                !result
+                || !result.blob
+                || !URLRef
+                || typeof URLRef.createObjectURL !== "function"
+                || typeof URLRef.revokeObjectURL !== "function"
+              ) {
+                throw new Error(
+                  "This browser could not open the verified project export."
+                );
+              }
+              var objectUrl = URLRef.createObjectURL(
+                result.blob
+              );
+              var link = documentRef.createElement("a");
+              try {
+                link.href = objectUrl;
+                link.download = text(
+                  result.filename
+                  || "sitesourcery-project-export.zip"
+                );
+                link.hidden = true;
+                documentRef.body.appendChild(link);
+                link.click();
+              } finally {
+                link.remove();
+                windowRef.setTimeout(function () {
+                  URLRef.revokeObjectURL(objectUrl);
+                }, 1000);
+              }
+              return result;
+            });
+        },
+        "Project export download started."
+      );
+    }
+
+    function refreshCustomerSession(reason) {
+      if (customerSyncing) return Promise.resolve(null);
+      if (!customerOnline) {
+        renderCustomerAccountRoutes(control.getState());
+        announce(
+          "You are offline. Account refresh will be available after reconnecting.",
+          "error"
+        );
+        return Promise.resolve(null);
+      }
+      customerSyncing = true;
+      renderCustomerAccountRoutes(control.getState());
+      return control.refreshSession()
+        .then(function (state) {
+          customerSessionEnded = Boolean(
+            customerSessionWasReady
+            && !state.account
+          );
+          if (state.account) {
+            customerSessionWasReady = true;
+            announce(
+              reason === "online"
+                ? "Connection restored. Current account authority is loaded."
+                : "Current account authority is loaded.",
+              "success"
+            );
+          } else if (customerSessionEnded) {
+            revealControlRoom("sign-in");
+            announce(
+              "Your session ended or changed. Sign in again before using project actions.",
+              "error"
+            );
+          }
+          return state;
+        })
+        .catch(function (error) {
+          announce(
+            explain(
+              error,
+              "Current account authority could not be refreshed. No write or payment was repeated."
+            ),
+            "error"
+          );
+          return null;
+        })
+        .finally(function () {
+          customerSyncing = false;
+          renderCustomerAccountRoutes(control.getState());
+          customerAccountRoutesPanel.focusStatus();
+        });
+    }
+
+    function scheduleCustomerSessionRefresh(reason) {
+      if (customerSessionRefreshScheduled) return;
+      customerSessionRefreshScheduled = true;
+      windowRef.setTimeout(function () {
+        customerSessionRefreshScheduled = false;
+        refreshCustomerSession(reason);
+      }, 0);
+    }
+
+    function openCustomerCheckoutProject() {
+      if (!customerCheckoutProjectId) {
+        return Promise.resolve(null);
+      }
+      var state = control.getState();
+      if (
+        !state.account
+        || !state.projects.some(function (project) {
+          return idOf(project) === customerCheckoutProjectId;
+        })
+      ) return Promise.resolve(null);
+      return control.selectProject(
+        customerCheckoutProjectId,
+        function (project) {
+          return maker.loadProject(project);
+        }
+      ).then(function (project) {
+        storeCustomerCheckoutContext(null);
+        if (
+          customerCheckoutSuccess
+          && !downloadCheckoutReturn
+          && !assessmentCheckoutReturn
+          && windowRef.history
+          && typeof windowRef.history.replaceState ===
+            "function"
+        ) {
+          windowRef.history.replaceState(
+            null,
+            "",
+            locationWithoutCheckoutReturn(
+              windowRef.location
+            )
+          );
+        }
+        return project;
+      });
     }
 
     function explain(error, fallback) {
@@ -18113,6 +19144,10 @@
           );
         }
         clearCustomBuildAttempt(commandId);
+        rememberCustomerCheckout(
+          "custom_build_first",
+          projectId
+        );
         windowRef.location.assign(destination);
         return checkout;
       }).catch(function (error) {
@@ -18797,6 +19832,13 @@
           if (!declined || declined.state !== "declined") {
             throw new Error("The exact decline was not confirmed.");
           }
+          customerCheckoutNotice =
+            customerCheckoutExperiencePresentation(
+              "declined",
+              "custom_build_change"
+            );
+          customerCheckoutProjectId = projectId;
+          storeCustomerCheckoutContext(null);
         }
         clearCustomBuildAttempt(commandId);
         customBuildChangeCompletionRead = {
@@ -18809,6 +19851,7 @@
           error: ""
         };
         renderCustomerCustomBuildChangeCompletionPanel();
+        renderCustomerAccountRoutes(control.getState());
         customerCustomBuildChangeCompletionPanel.focusStatus();
         return requestCustomerCustomBuildChangeInvoice(
           sequence,
@@ -18950,6 +19993,10 @@
           );
         }
         clearCustomBuildAttempt(commandId);
+        rememberCustomerCheckout(
+          "custom_build_change",
+          projectId
+        );
         windowRef.location.assign(destination);
         return checkout;
       }).catch(function (error) {
@@ -19196,6 +20243,17 @@
             "The delivery and handoff response could not be verified."
           );
         }
+        if (
+          snapshot.obligation.amount.amountMinor === 0
+        ) {
+          customerCheckoutNotice =
+            customerCheckoutExperiencePresentation(
+              "no_charge",
+              "custom_build_final"
+            );
+          customerCheckoutProjectId = selectedProjectId;
+          storeCustomerCheckoutContext(null);
+        }
         customBuildFinalRead = {
           accountId: selectedAccountId,
           projectId: selectedProjectId,
@@ -19209,6 +20267,7 @@
           error: ""
         };
         renderCustomerCustomBuildFinalPanel();
+        renderCustomerAccountRoutes(control.getState());
         if (
           snapshot.state === "handed_off"
           && !verifiedCustomerCustomBuildHandoffDocument(
@@ -19333,6 +20392,10 @@
           );
         }
         clearCustomBuildAttempt(commandId);
+        rememberCustomerCheckout(
+          "custom_build_final",
+          projectId
+        );
         windowRef.location.assign(destination);
         return checkout;
       }).catch(function (error) {
@@ -19701,6 +20764,10 @@
             "The secure assessment payment destination could not be verified."
           );
         }
+        rememberCustomerCheckout(
+          "assessment",
+          projectId
+        );
         windowRef.location.assign(destination);
         return checkout;
       }).catch(function (error) {
@@ -21248,6 +22315,7 @@
     }
 
     function clearCheckoutReturnLocation() {
+      storeCustomerCheckoutContext(null);
       if (
         !windowRef.history
         || typeof windowRef.history.replaceState !==
@@ -22118,6 +23186,7 @@
     function render(state) {
       lastState = state;
       var account = state.account;
+      renderCustomerAccountRoutes(state);
       var sessionBar = one("[data-session-bar]");
       sessionBar.hidden = !account;
       if (account) {
@@ -22374,6 +23443,11 @@
           function () {
             pendingGuestCandidate = null;
             projectLegalStaleNotice = false;
+            customerSessionWasReady = false;
+            customerSessionEnded = false;
+            customerCheckoutNotice = null;
+            customerCheckoutProjectId = "";
+            storeCustomerCheckoutContext(null);
             clearProjectLegalAcceptance();
             return control
               .signOut()
@@ -22529,6 +23603,10 @@
               var destination =
                 safeCheckoutDestination(result);
               if (destination) {
+                rememberCustomerCheckout(
+                  "download",
+                  idOf(lastState.project)
+                );
                 windowRef.location.assign(
                   destination
                 );
@@ -22687,6 +23765,39 @@
 
     installProjectLegalControls();
     control.subscribe(render);
+    var customerHiddenAt = 0;
+    windowRef.addEventListener("offline", function () {
+      customerOnline = false;
+      renderCustomerAccountRoutes(control.getState());
+    });
+    windowRef.addEventListener("online", function () {
+      customerOnline = true;
+      renderCustomerAccountRoutes(control.getState());
+      scheduleCustomerSessionRefresh("online");
+    });
+    windowRef.addEventListener("pageshow", function (event) {
+      if (event && event.persisted) {
+        scheduleCustomerSessionRefresh("reopen");
+      }
+    });
+    if (
+      typeof documentRef.addEventListener === "function"
+    ) {
+      documentRef.addEventListener(
+        "visibilitychange",
+        function () {
+          if (documentRef.visibilityState === "hidden") {
+            customerHiddenAt = Date.now();
+          } else if (
+            customerHiddenAt
+            && Date.now() - customerHiddenAt >= 1000
+          ) {
+            customerHiddenAt = 0;
+            scheduleCustomerSessionRefresh("reopen");
+          }
+        }
+      );
+    }
     controlRoom.setAttribute(
       "data-control-ready",
       "hosted"
@@ -22746,6 +23857,9 @@
       control.boot()
     ])
       .then(function () {
+        return openCustomerCheckoutProject();
+      })
+      .then(function () {
         if (control.getState().account) {
           announce("Account ready.", "success");
         } else if (
@@ -22790,6 +23904,10 @@
       alakazamAccountPresentation,
     bindAcceptedVersion: bindAcceptedVersion,
     boot: boot,
+    createCustomerAccountRoutesPanel:
+      createCustomerAccountRoutesPanel,
+    createCustomerCheckoutContext:
+      createCustomerCheckoutContext,
     createAlakazamPublicationPanel:
       createAlakazamPublicationPanel,
     customBuildPublicEstimate:
@@ -22802,10 +23920,20 @@
       downloadCheckoutReturnFromLocation,
     downloadEntitlement:
       downloadEntitlement,
+    customerCheckoutCancellationFromLocation:
+      customerCheckoutCancellationFromLocation,
+    customerCheckoutContext:
+      customerCheckoutContext,
+    customerCheckoutExperiencePresentation:
+      customerCheckoutExperiencePresentation,
+    customerCheckoutSuccessFromLocation:
+      customerCheckoutSuccessFromLocation,
     locationWithoutDownloadCheckoutReturn:
       locationWithoutDownloadCheckoutReturn,
     locationWithoutCheckoutReturn:
       locationWithoutCheckoutReturn,
+    locationWithoutCustomerCheckoutState:
+      locationWithoutCustomerCheckoutState,
     projectLegalEvidencePresentation:
       projectLegalEvidencePresentation,
     ownerReviewTargets:
