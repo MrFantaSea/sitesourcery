@@ -23,11 +23,11 @@ authority.
 - The previously pasted Stripe Standard live key is treated as compromised
   until an authenticated Dashboard roll proves the old key expired. It is not
   used by this integration line.
-- The current integrated union applies 66 migrations cleanly on fresh
+- The current integrated union applies 67 migrations cleanly on fresh
   PostgreSQL 16 after separating Engagement's `v106` marker from Mail's `v54`
-  marker. The proof includes the durable operator work queue, held transition
-  notification outbox, and accounting purpose journal; the generated proof
-  database was removed and absence-proven.
+  marker. The proof includes direct Custom, the durable operator work queue,
+  held transition notification outbox, and accounting purpose journal; the
+  generated proof database was removed and absence-proven.
 
 ## Target shape
 
@@ -177,7 +177,11 @@ legal, entitlement, or service authority.
   - Preserve exact organization/project/legal authority and audit evidence.
   - Dependencies: none; blocks assessment/Custom customer completeness.
 
-- [ ] **CUSTOM-DIRECT-01 — direct Custom opportunity**
+- [x] **CUSTOM-DIRECT-01 — direct Custom opportunity**
+  - Completed at `6391192`, verified against the integrated UX/accounting line
+    at `3eb2b41`, and merged at `416a2b1` as migration 113. Both direct
+    no-credit and assessment-successor flows retain exact money/credit/project
+    authority and pass fresh PostgreSQL 16 replay.
   - Allow a direct Custom quote without a mandatory assessment report/credit.
   - Keep assessment credit optional, exact, one-use, and project-bound.
   - Prove both direct and assessment-successor arithmetic and lifecycle.
@@ -403,9 +407,9 @@ legal, entitlement, or service authority.
 1. Parallel foundation: IA-01, ENGAGEMENT-01, TAX-PURPOSE-01,
    SHAPE-EPOCH-01, INGRESS-01, MAIL-01.
 2. Integrate foundation and run exact final-union migration/full browser/ops
-   proof. The current 66-migration checkpoint through operator queue 112,
-   Commerce Notifications 114, and Accounting 115 is green; Mail 111 and
-   Custom Direct 113 require the final successor proof.
+   proof. The current 67-migration checkpoint through Custom Direct 113,
+   Commerce Notifications 114, and Accounting 115 is green; Mail 111 requires
+   the final successor proof.
 3. Complete Legal publication, origin seal, current restore, monitoring, and
    Cloudflare cutover.
 4. Launch Download alone after exact Stripe test/live readiness proof.
