@@ -1,19 +1,21 @@
-# ACTIVATION_HOLD — template only. Do not copy, enable, or start.
+# ACTIVATION_HOLD — independent observer candidate only. Do not copy, enable, or start.
 
 [Unit]
-Description=Check approved Site Sourcery operations and recovery signals
-After=sitesourcery-hosted.service
-ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+Description=Observe Site Sourcery public edge without origin or backup dependencies
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/sitesourcery-independent-monitor/MONITOR_APPROVED
+ConditionPathExists=/etc/sitesourcery-independent-monitor/monitor-approved.json
 
 [Service]
 Type=oneshot
 User=sitesourcery-monitor
 Group=sitesourcery-monitor
-WorkingDirectory=/opt/sitesourcery/current
-EnvironmentFile=/etc/sitesourcery/monitor.env
-ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/ops/monitor-held.mjs
+WorkingDirectory=/opt/sitesourcery-monitor/current
+EnvironmentFile=/etc/sitesourcery-independent-monitor/monitor.env
+ExecStart=/opt/sitesourcery-monitor/node-24.18.0/bin/node /opt/sitesourcery-monitor/current/ops/independent-monitor.mjs
 UMask=0077
-TimeoutStartSec=30s
+TimeoutStartSec=45s
 
 NoNewPrivileges=true
 PrivateTmp=true
@@ -35,4 +37,5 @@ RestrictSUIDSGID=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 
-ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery /mnt/sitesourcery-backups /var/lib/caddy
+ReadOnlyPaths=/opt/sitesourcery-monitor/current /etc/sitesourcery-independent-monitor
+ReadWritePaths=/var/lib/sitesourcery-independent-monitor

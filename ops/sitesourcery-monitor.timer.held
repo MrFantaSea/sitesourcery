@@ -1,8 +1,8 @@
-# ACTIVATION_HOLD — template only. Do not copy, enable, or start.
+# ACTIVATION_HOLD — independent observer candidate only. Do not copy, enable, or start.
 
 [Unit]
-Description=Offer the Site Sourcery operations monitor every minute
-ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+Description=Offer the independent Site Sourcery edge monitor every minute
+ConditionPathExists=/etc/sitesourcery-independent-monitor/MONITOR_APPROVED
 
 [Timer]
 OnBootSec=2m

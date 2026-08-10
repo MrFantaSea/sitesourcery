@@ -1,0 +1,16 @@
+# ACTIVATION_HOLD — second-observer candidate only. Do not copy, enable, or start.
+
+[Unit]
+Description=Offer the independent Site Sourcery dead-man every two minutes
+ConditionPathExists=/etc/sitesourcery-dead-man/DEAD_MAN_APPROVED
+
+[Timer]
+OnBootSec=3m
+OnUnitActiveSec=2m
+AccuracySec=5s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=sitesourcery-monitor-dead-man.service
+
+[Install]
+WantedBy=timers.target
