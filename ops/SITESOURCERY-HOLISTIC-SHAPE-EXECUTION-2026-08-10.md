@@ -23,10 +23,11 @@ authority.
 - The previously pasted Stripe Standard live key is treated as compromised
   until an authenticated Dashboard roll proves the old key expired. It is not
   used by this integration line.
-- The current integrated union applies 64 migrations cleanly on fresh
+- The current integrated union applies 65 migrations cleanly on fresh
   PostgreSQL 16 after separating Engagement's `v106` marker from Mail's `v54`
-  marker. The proof includes the durable operator work queue, and the generated
-  proof database was removed and absence-proven.
+  marker. The proof includes the durable operator work queue and held accounting
+  purpose journal, and the generated proof database was removed and
+  absence-proven.
 
 ## Target shape
 
@@ -277,7 +278,10 @@ legal, entitlement, or service authority.
     events.
   - Dependencies: MAIL-01.
 
-- [ ] **ACCOUNTING-01 — cross-product purpose journal**
+- [x] **ACCOUNTING-01 — cross-product purpose journal**
+  - Completed at `5c69005` and merged at `3a7b6bb` as migration 115. The seven
+    source relations replay idempotently on fresh PostgreSQL 16; absent fee,
+    payout-aging, and Domain tax evidence remains explicitly absent.
   - Append-only projection over product-specific receipts, fees, payouts, aging,
     tax export, and evidence bundles.
   - Do not replace purpose-specific payment/service state machines.
@@ -398,9 +402,9 @@ legal, entitlement, or service authority.
 1. Parallel foundation: IA-01, ENGAGEMENT-01, TAX-PURPOSE-01,
    SHAPE-EPOCH-01, INGRESS-01, MAIL-01.
 2. Integrate foundation and run exact final-union migration/full browser/ops
-   proof. The current 64-migration checkpoint through operator queue migration
-   112 is green; Custom Direct 113 and later packets require the final successor
-   proof.
+   proof. The current 65-migration checkpoint through operator queue migration
+   112 and accounting migration 115 is green; Mail 111, Custom Direct 113, and
+   Commerce Notifications 114 require the final successor proof.
 3. Complete Legal publication, origin seal, current restore, monitoring, and
    Cloudflare cutover.
 4. Launch Download alone after exact Stripe test/live readiness proof.
