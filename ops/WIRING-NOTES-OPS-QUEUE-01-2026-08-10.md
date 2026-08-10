@@ -1,8 +1,10 @@
 # OPS-QUEUE-01 held wiring notes
 
 Status: held. This packet adds a source-authoritative operator queue and exact
-contracts, but does not compose them into the hosted HTTP root, customer DOM,
-Stripe router, alert transport, provider adapters, or any production worker.
+contracts. PRO-LIFECYCLE-COMPOSE-02 now constructs the queue inside the held
+hosted professional-lifecycle aggregate with only the existing professional
+reversal reconciliation port. It remains absent from the hosted HTTP root,
+customer DOM, Stripe router, alert transport, provider adapters, and workers.
 
 ## Authority and source rules
 
@@ -42,30 +44,29 @@ The refresh projects only bounded facts from:
 revision and digest. The bounded domain provider-operation failure/manual-
 review source is used instead; do not manufacture identity for the older row.
 
-## Later composition, in order
+## Remaining composition, in order
 
-1. Construct `createPostgresOperatorWorkQueueRepository` with the canonical
-   PostgreSQL authority.
-2. Construct `createOperatorWorkQueue` with that repository, the existing
-   professional-services reversal service, and the canonical server clock.
-3. Wire the three held manifest routes only after the owner surface has exact
+1. Preserve the current repository and service construction with the canonical
+   PostgreSQL authority, professional-services reversal service, and server
+   clock.
+2. Wire the three held manifest routes only after the owner surface has exact
    authentication, CSRF, and idempotency gates. Do not add a generic repair
    endpoint.
-4. In the already signature-verifying shared Stripe router, route only
+3. In the already signature-verifying shared Stripe router, route only
    `invoice.finalization_failed` into
    `recordInvoiceFinalizationFailure`. Supply HMAC/SHA-256 digests of provider
    event ID and invoice ID, payload digest, signature-verification digest, one
    bounded reason code, and provider event time. Never pass or log raw payload,
    invoice contents, customer fields, provider error messages, or secrets.
-5. Refresh after committed source transitions or on a bounded operator poll.
+4. Refresh after committed source transitions or on a bounded operator poll.
    Refresh performs no provider or alert effect.
 
 ## Holds
 
-- No production HTTP/composition file is edited by this packet.
+- Production composition constructs the held queue, but no HTTP/provider/alert
+  call site is registered.
 - No outbound alert is sent; invoice-finalization rows only establish durable
   owner-alert evidence for later reviewed alert composition.
 - Publication, domain, Care, and all commercial/provider switches remain held.
-- Migration union order is `202608100106`, `202608100107`, `202608100108`,
-  `202608100109`, `202608100110`, `202608100112`, expected total 64. If the
-  MAIL wiring packet adds `202608100111`, insert it before 112 and expect 65.
+- The current integration successor includes the additive union through
+  migration 117 and totals 70 migrations. PRO-LIFECYCLE-COMPOSE-02 adds none.

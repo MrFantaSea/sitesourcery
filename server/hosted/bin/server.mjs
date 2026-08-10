@@ -161,6 +161,9 @@ import {
   createProductionEngagementBootstrap
 } from "../engagement-production-composition.mjs";
 import {
+  createProfessionalLifecycleProductionComposition
+} from "../professional-lifecycle-production-composition.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -739,6 +742,16 @@ async function start() {
     legalAuthority: projectLegalAuthorityConfig.authority,
     engagementBootstrap
   });
+  const professionalLifecycle =
+    createProfessionalLifecycleProductionComposition({
+      authority,
+      engagementBootstrap,
+      mailLifecycle,
+      clock: commerceV2.clock,
+      ids: commerceV2.ids
+    });
+  const professionalLifecycleReadiness =
+    await professionalLifecycle.readiness();
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -770,25 +783,29 @@ async function start() {
   assertApprovedCustomServicesAssessmentPaymentReady(
     customServicesAssessmentPaymentComposition,
     readiness.payments,
-    await customServicesAssessmentSettlement.readiness()
+    await customServicesAssessmentSettlement.readiness(),
+    professionalLifecycleReadiness
   );
   assertApprovedCustomBuildPaymentReady(
     customBuildPaymentComposition,
     readiness.payments,
     await customServicesCustomBuild.readiness(),
-    await customBuildPayment.readiness()
+    await customBuildPayment.readiness(),
+    professionalLifecycleReadiness
   );
   assertApprovedCustomBuildChangePaymentReady(
     customBuildChangePaymentComposition,
     readiness.payments,
     await customServicesCustomBuild.readiness(),
-    await customBuildChangePayment.readiness()
+    await customBuildChangePayment.readiness(),
+    professionalLifecycleReadiness
   );
   assertApprovedCustomBuildFinalPaymentReady(
     customBuildFinalPaymentComposition,
     readiness.payments,
     await customServicesCustomBuild.readiness(),
-    await customBuildFinalPayment.readiness()
+    await customBuildFinalPayment.readiness(),
+    professionalLifecycleReadiness
   );
   await customServicesCustomBuildWork.readiness();
   await customServicesCustomBuildProgress.readiness();

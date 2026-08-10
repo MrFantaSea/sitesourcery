@@ -1,3 +1,7 @@
+import {
+  isExactProfessionalLifecycleReadiness
+} from "./professional-lifecycle-production-composition.mjs";
+
 const MODES = new Set(["held", "approved"]);
 const RELEASE_KEYS = Object.freeze([
   "approved",
@@ -79,7 +83,8 @@ export function assertApprovedCustomBuildFinalPaymentReady(
   composition,
   stripeReadiness,
   customBuildReadiness,
-  finalPaymentReadiness
+  finalPaymentReadiness,
+  professionalLifecycleReadiness = null
 ) {
   if (
     composition?.mode === "approved" &&
@@ -114,12 +119,15 @@ export function assertApprovedCustomBuildFinalPaymentReady(
       finalPaymentReadiness?.ownerReconciliation === true &&
       finalPaymentReadiness?.holdScope === HOLD_SCOPE &&
       finalPaymentReadiness?.providerEffectProcessing ===
-        PROVIDER_EFFECT_PROCESSING
+        PROVIDER_EFFECT_PROCESSING &&
+      isExactProfessionalLifecycleReadiness(
+        professionalLifecycleReadiness
+      )
     )
   ) {
     throw configurationError(
       "CUSTOM_BUILD_FINAL_PAYMENT_NOT_READY",
-      "Approved Custom-build final payment requires a completion-bound second installment, cross-purpose provider fencing, exact Stripe readback settlement, zero-balance clearance, and reconciliation that remains active while new Checkout creation is held."
+      "Approved Custom-build final payment requires a completion-bound second installment, cross-purpose provider fencing, exact Stripe readback settlement, zero-balance clearance, held professional lifecycle contracts, and reconciliation that remains active while new Checkout creation is held."
     );
   }
   return stripeReadiness;

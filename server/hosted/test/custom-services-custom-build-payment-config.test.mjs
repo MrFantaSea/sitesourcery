@@ -5,6 +5,9 @@ import {
   assertApprovedCustomBuildPaymentReady,
   createConfiguredCustomBuildPaymentRelease
 } from "../custom-services-custom-build-payment-config.mjs";
+import {
+  PROFESSIONAL_LIFECYCLE_READY
+} from "./professional-lifecycle-readiness-fixture.mjs";
 
 const STRIPE_READY = Object.freeze({
   ready: true,
@@ -62,7 +65,8 @@ test("approved Custom-build payment requires every exact readiness", () => {
       approved,
       STRIPE_READY,
       CUSTOM_BUILD_READY,
-      PAYMENT_READY
+      PAYMENT_READY,
+      PROFESSIONAL_LIFECYCLE_READY
     ),
     STRIPE_READY
   );
@@ -85,11 +89,25 @@ test("approved Custom-build payment requires every exact readiness", () => {
           approved,
           readiness[0],
           readiness[1],
-          readiness[2]
+          readiness[2],
+          readiness[3] ?? PROFESSIONAL_LIFECYCLE_READY
         ),
       (error) => error.code === "CUSTOM_BUILD_PAYMENT_NOT_READY"
     );
   }
+  assert.throws(
+    () => assertApprovedCustomBuildPaymentReady(
+      approved,
+      STRIPE_READY,
+      CUSTOM_BUILD_READY,
+      PAYMENT_READY,
+      {
+        ...PROFESSIONAL_LIFECYCLE_READY,
+        accounting: "authoritative"
+      }
+    ),
+    (error) => error.code === "CUSTOM_BUILD_PAYMENT_NOT_READY"
+  );
 
   assert.doesNotThrow(() =>
     assertApprovedCustomBuildPaymentReady(

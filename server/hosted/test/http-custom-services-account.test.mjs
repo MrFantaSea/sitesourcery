@@ -1371,7 +1371,7 @@ test("production composes custom-services account from canonical project and Pos
   );
   assert.match(
     source,
-    /assertApprovedCustomServicesAssessmentPaymentReady\([\s\S]*customServicesAssessmentPaymentComposition,[\s\S]*readiness\.payments,[\s\S]*customServicesAssessmentSettlement\.readiness\(\)[\s\S]*\)/u
+    /assertApprovedCustomServicesAssessmentPaymentReady\([\s\S]*customServicesAssessmentPaymentComposition,[\s\S]*readiness\.payments,[\s\S]*customServicesAssessmentSettlement\.readiness\(\),[\s\S]*professionalLifecycleReadiness[\s\S]*\)/u
   );
   assert.match(
     source,
@@ -1399,7 +1399,7 @@ test("production composes custom-services account from canonical project and Pos
   );
   assert.match(
     source,
-    /assertApprovedCustomBuildPaymentReady\([\s\S]*customBuildPaymentComposition,[\s\S]*readiness\.payments,[\s\S]*customServicesCustomBuild\.readiness\(\),[\s\S]*customBuildPayment\.readiness\(\)[\s\S]*\)/u
+    /assertApprovedCustomBuildPaymentReady\([\s\S]*customBuildPaymentComposition,[\s\S]*readiness\.payments,[\s\S]*customServicesCustomBuild\.readiness\(\),[\s\S]*customBuildPayment\.readiness\(\),[\s\S]*professionalLifecycleReadiness[\s\S]*\)/u
   );
   assert.match(
     source,

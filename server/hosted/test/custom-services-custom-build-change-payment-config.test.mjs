@@ -6,6 +6,9 @@ import {
   createConfiguredCustomBuildChangePaymentRelease,
   validateCustomBuildChangePaymentRelease
 } from "../custom-services-custom-build-change-payment-config.mjs";
+import {
+  PROFESSIONAL_LIFECYCLE_READY
+} from "./professional-lifecycle-readiness-fixture.mjs";
 
 const STRIPE_READY = Object.freeze({
   ready: true,
@@ -135,7 +138,8 @@ test("approved Custom-build change payment preserves the exact purpose contract"
       approved,
       STRIPE_READY,
       CUSTOM_BUILD_READY,
-      CHANGE_PAYMENT_READY
+      CHANGE_PAYMENT_READY,
+      PROFESSIONAL_LIFECYCLE_READY
     ),
     STRIPE_READY
   );
@@ -179,12 +183,28 @@ test("approved Custom-build change payment rejects every readiness mismatch", ()
           approved,
           stripe,
           customBuild,
-          changePayment
+          changePayment,
+          PROFESSIONAL_LIFECYCLE_READY
         ),
       (error) =>
         error.code === "CUSTOM_BUILD_CHANGE_PAYMENT_NOT_READY"
     );
   }
+
+  assert.throws(
+    () => assertApprovedCustomBuildChangePaymentReady(
+      approved,
+      STRIPE_READY,
+      CUSTOM_BUILD_READY,
+      CHANGE_PAYMENT_READY,
+      {
+        ...PROFESSIONAL_LIFECYCLE_READY,
+        automaticRestoration: true
+      }
+    ),
+    (error) =>
+      error.code === "CUSTOM_BUILD_CHANGE_PAYMENT_NOT_READY"
+  );
 
   assert.doesNotThrow(() =>
     assertApprovedCustomBuildChangePaymentReady(

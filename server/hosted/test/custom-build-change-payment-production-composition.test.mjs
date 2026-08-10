@@ -26,7 +26,7 @@ test("production composes Purpose-1 PostgreSQL payment separately alongside the 
   );
   assert.match(
     source,
-    /assertApprovedCustomBuildChangePaymentReady\(\s*customBuildChangePaymentComposition,\s*readiness\.payments,\s*await customServicesCustomBuild\.readiness\(\),\s*await customBuildChangePayment\.readiness\(\)\s*\)/u
+    /assertApprovedCustomBuildChangePaymentReady\(\s*customBuildChangePaymentComposition,\s*readiness\.payments,\s*await customServicesCustomBuild\.readiness\(\),\s*await customBuildChangePayment\.readiness\(\),\s*professionalLifecycleReadiness\s*\)/u
   );
   assert.match(
     source,

@@ -248,6 +248,86 @@ export function createPostgresProfessionalServicesReversalRepository({
 } = {}) {
   const database = validateAuthority(authority);
 
+  async function readiness() {
+    try {
+      const result = await database.service(
+        { actorKind: "system", readOnly: true },
+        (client) => client.query(`
+          select
+            to_regprocedure(
+              'ss.hosted_runtime_contract_v108()'
+            ) is not null
+              and ss.hosted_runtime_contract_v108() =
+                'canonical-ss-v108-professional-services-reversals'
+              as contract_ready,
+            to_regprocedure(
+              'ss.direct_custom_reversal_normalization_contract_v1()'
+            ) is not null
+              and ss.direct_custom_reversal_normalization_contract_v1() =
+                'canonical-direct-custom-reversal-normalization-v1-held'
+              as direct_normalization_ready,
+            count(*) = 3 as tables_ready,
+            bool_and(c.relrowsecurity and c.relforcerowsecurity)
+              as rls_ready,
+            bool_and(
+              has_table_privilege(
+                'service_role', c.oid, 'SELECT'
+              )
+              and not has_table_privilege(
+                'service_role', c.oid, 'INSERT,UPDATE,DELETE'
+              )
+              and not has_table_privilege(
+                'authenticated', c.oid,
+                'SELECT,INSERT,UPDATE,DELETE'
+              )
+              and not has_table_privilege(
+                'anon', c.oid, 'SELECT,INSERT,UPDATE,DELETE'
+              )
+            ) as grants_ready
+          from pg_class c
+          join pg_namespace n on n.oid = c.relnamespace
+          where n.nspname = 'ss'
+            and c.relname = any($1::text[])
+        `, [[
+          "service_professional_payment_lifecycles",
+          "service_professional_reversal_evidence",
+          "service_professional_reversal_reconciliations"
+        ]])
+      );
+      const row = result.rows[0] ?? {};
+      const ready = row.contract_ready === true &&
+        row.direct_normalization_ready === true &&
+        row.tables_ready === true && row.rls_ready === true &&
+        row.grants_ready === true;
+      return Object.freeze({
+        ready,
+        verified: ready,
+        kind: "professional-services-reversal-postgres",
+        code: ready ? null : "PROFESSIONAL_REVERSAL_NOT_MIGRATED",
+        sourceAuthoritative: true,
+        monotonic: true,
+        directNormalization:
+          row.direct_normalization_ready === true
+            ? "held"
+            : "not_ready",
+        providerEffects: false,
+        automaticRestoration: false
+      });
+    } catch {
+      return Object.freeze({
+        ready: false,
+        verified: false,
+        kind: "professional-services-reversal-postgres",
+        code: "PROFESSIONAL_REVERSAL_DATABASE_UNAVAILABLE",
+        sourceAuthoritative: true,
+        monotonic: true,
+        directNormalization: "not_ready",
+        providerEffects: false,
+        automaticRestoration: false
+      });
+    }
+  }
+
   async function findPaymentByIntent({ organizationId, paymentIntentId }) {
     invariant(UUID.test(String(organizationId ?? "")), "invalid_input", "organizationId is invalid", { status: 400 });
     invariant(PAYMENT_INTENT_ID.test(String(paymentIntentId ?? "")), "invalid_input", "paymentIntentId is invalid", { status: 400 });
@@ -338,6 +418,7 @@ export function createPostgresProfessionalServicesReversalRepository({
   }
 
   return Object.freeze({
+    readiness,
     findPaymentByIntent,
     recordEvidence,
     reconcileEvidence

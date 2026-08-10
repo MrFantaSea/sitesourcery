@@ -274,6 +274,12 @@ accepts only `held` or `approved`. `approved` refuses startup unless the shared
 Stripe adapter is ready with the exact `serviceAssessment` purpose decision and
 the assessment-specific webhook, readback, and atomic-settlement boundary
 reports its exact readiness schema.
+Approval also requires the held professional-lifecycle readiness contract:
+Engagement, v108 plus held v117 direct-reversal normalization, source-bound
+notification reservation, MAIL reservation, the bounded operator queue, and
+projection-only accounting must all read back exactly. This readiness sends no
+mail and grants no provider, automatic-restoration, generic-repair, or
+authoritative-accounting effect.
 The invoice projection and payment command consume the same immutable release
 object, so a held runtime exposes no pay button and performs no provider payment
 effect.
@@ -286,6 +292,8 @@ payment boundary that verifies Stripe readback, atomically settles the reserved
 `$200` assessment credit, and opens one build job. The customer submits only the
 retained invoice digest; subtotal, credit, deadline, tax policy, and final
 handoff amount remain server-owned.
+The same held professional-lifecycle readiness is mandatory for the Custom
+initial, accepted-change, and final approval assertions.
 Neither switch authorizes a deployment, public release, DNS change, or production
 credential change.
 
