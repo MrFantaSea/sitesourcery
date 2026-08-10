@@ -16,6 +16,7 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608100108_professional_services_reversals.sql",
   "202608100109_stripe_tax_purpose_authority.sql",
   "202608100110_support_privacy_case_lifecycle.sql",
+  "202608100111_hosted_identity_delivery_acceptance.sql",
   "202608100112_operator_work_queue.sql",
   "202608100113_custom_direct_opportunity.sql",
   "202608100114_commerce_transition_notifications.sql",

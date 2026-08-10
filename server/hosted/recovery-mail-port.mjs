@@ -126,6 +126,7 @@ function heldError() {
 }
 
 function publicReceipt({
+  state,
   mode,
   provider,
   providerMessageId,
@@ -146,7 +147,7 @@ function publicReceipt({
   };
   return Object.freeze({
     ...facts,
-    state: "delivered",
+    state,
     receiptId: digest(facts)
   });
 }
@@ -204,6 +205,7 @@ export function createDevelopmentRecoveryMailSink({
       }
       const acceptedAt = currentTime(clock);
       const receipt = publicReceipt({
+        state: "delivered",
         mode: "dev-sink",
         provider: "development-sink",
         providerMessageId: `dev_${digest(request.idempotencyKey).slice(0, 24)}`,
@@ -287,6 +289,7 @@ export function createProductionRecoveryMailPort({
   return Object.freeze({
     kind: "recovery-mail",
     mode: "production",
+    providerEffects: true,
     readiness: transportReadiness,
     async deliver(input) {
       const status = await transportReadiness();
@@ -327,6 +330,7 @@ export function createProductionRecoveryMailPort({
         { status: 502 }
       );
       const receipt = publicReceipt({
+        state: "provider_accepted",
         mode: "production",
         provider: status.provider,
         providerMessageId,

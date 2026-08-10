@@ -163,6 +163,14 @@ import {
   identityPepperConfigurationFromEnvironment
 } from "../identity-pepper-config.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
+import {
+  createDurableRecoveryMailPort,
+  createDurableRegistrationMailPort
+} from "../mail-delivery-bridge.mjs";
+import { createMailLifecycle } from "../mail-lifecycle.mjs";
+import {
+  createPostgresMailLifecycleRepository
+} from "../mail-lifecycle-postgres.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
 import {
   postgresBudgetConfigurationFromEnvironment
@@ -628,8 +636,24 @@ async function start() {
     identityPepperConfigurationFromEnvironment(
       process.env
     );
-  const registrationMailPort =
+  const mailLifecycle = createMailLifecycle({
+    repository: createPostgresMailLifecycleRepository({
+      authority
+    }),
+    clock: commerceV2.clock
+  });
+  const configuredRegistrationMailPort =
     await createConfiguredRegistrationMailPort();
+  const registrationMailPort =
+    configuredRegistrationMailPort.mode === "production"
+      ? createDurableRegistrationMailPort({
+          lifecycle: mailLifecycle,
+          providerPort: configuredRegistrationMailPort,
+          registrationBaseUrl:
+            process.env.SITESOURCERY_REGISTRATION_BASE_URL,
+          clock: commerceV2.clock
+        })
+      : configuredRegistrationMailPort;
   const identity = identityPepperConfiguration.compose(
     createPostgresIdentityBridge,
     {
@@ -677,8 +701,18 @@ async function start() {
     assetRepository: alakazam35Repository,
     clock: commerceV2.clock
   });
-  const recoveryMailPort =
+  const configuredRecoveryMailPort =
     await createConfiguredRecoveryMailPort();
+  const recoveryMailPort =
+    configuredRecoveryMailPort.mode === "production"
+      ? createDurableRecoveryMailPort({
+          lifecycle: mailLifecycle,
+          providerPort: configuredRecoveryMailPort,
+          recoveryBaseUrl:
+            process.env.SITESOURCERY_RECOVERY_BASE_URL,
+          clock: commerceV2.clock
+        })
+      : configuredRecoveryMailPort;
   const projectLegalAuthorityConfig =
     createProjectLegalAuthorityFromEnvironment();
   const service = createCanonicalPostgresService({

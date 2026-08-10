@@ -374,7 +374,8 @@ test("CSRF bootstrap is same-origin, stable across tabs, and required before wri
   );
   assert.equal(valid.status, 202);
   assert.equal(valid.headers.get("set-cookie"), null);
-  assert.deepEqual(await valid.json(), {
+  const validPayload = await valid.json();
+  assert.deepEqual(validPayload, {
     accepted: true,
     verificationRequired: true,
     delivery: "email",
@@ -382,6 +383,10 @@ test("CSRF bootstrap is same-origin, stable across tabs, and required before wri
     expiresAt: "2026-07-30T14:00:00.000Z",
     replayed: false
   });
+  assert.doesNotMatch(
+    JSON.stringify(validPayload),
+    /provider_accepted/iu
+  );
   assert.equal(context.calls.register.length, 1);
   assert.equal(
     context.calls.register[0].commandId,
@@ -680,6 +685,10 @@ test("recovery response states manual delivery without exposing a token", async 
     emailSent: false
   });
   assert.doesNotMatch(JSON.stringify(payload), /token|owner@/iu);
+  assert.doesNotMatch(
+    JSON.stringify(payload),
+    /provider_accepted|delivered|messageId|receipt/iu
+  );
   assert.deepEqual(context.calls.recovery, [
     {
       email: "owner@example.test",

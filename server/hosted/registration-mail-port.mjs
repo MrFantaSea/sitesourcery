@@ -140,6 +140,7 @@ function heldError() {
 }
 
 function publicReceipt({
+  state,
   mode,
   provider,
   providerMessageId,
@@ -161,7 +162,7 @@ function publicReceipt({
   };
   return Object.freeze({
     ...facts,
-    state: "delivered",
+    state,
     receiptId: digest(facts)
   });
 }
@@ -227,6 +228,7 @@ export function createDevelopmentRegistrationMailSink({
       }
       const acceptedAt = currentTime(clock);
       const receipt = publicReceipt({
+        state: "delivered",
         mode: "dev-sink",
         provider: "development-sink",
         providerMessageId:
@@ -312,6 +314,7 @@ export function createProductionRegistrationMailPort({
   return Object.freeze({
     kind: "registration-mail",
     mode: "production",
+    providerEffects: true,
     readiness: transportReadiness,
     async deliver(input) {
       const status = await transportReadiness();
@@ -358,6 +361,7 @@ export function createProductionRegistrationMailPort({
         { status: 502 }
       );
       const receipt = publicReceipt({
+        state: "provider_accepted",
         mode: "production",
         provider: status.provider,
         providerMessageId,

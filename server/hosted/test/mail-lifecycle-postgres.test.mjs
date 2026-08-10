@@ -17,10 +17,15 @@ test("repository readiness proves the v54 marker, all tables, forced RLS, and no
         return work({
           async query(sql, values) {
             assert.match(sql, /hosted_runtime_contract_v54/u);
+            assert.match(
+              sql,
+              /hosted_identity_delivery_acceptance_contract_v1/u
+            );
             assert.equal(values[0].length, 5);
             return {
               rows: [{
                 contract_ready: true,
+                identity_delivery_ready: true,
                 tables_ready: true,
                 rls_ready: true
               }]

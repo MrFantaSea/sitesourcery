@@ -121,7 +121,7 @@ test("verified production transport must return one exact bound receipt", async 
   const replay = await port.deliver(REQUEST);
   assert.deepEqual(replay, first);
   assert.equal(sends.length, 1);
-  assert.equal(first.state, "delivered");
+  assert.equal(first.state, "provider_accepted");
   assert.equal(first.provider, "test-transactional-mail");
   assert.match(first.receiptId, /^[a-f0-9]{64}$/u);
   assert.doesNotMatch(JSON.stringify(first), /owner@example|recovery-token/iu);

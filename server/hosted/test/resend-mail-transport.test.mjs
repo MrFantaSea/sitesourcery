@@ -537,7 +537,7 @@ test("Resend composes with both narrow production mail ports", async () => {
     expiresAt: "2026-08-02T18:29:00.000Z"
   });
   assert.equal(registrationReceipt.provider, "resend");
-  assert.equal(registrationReceipt.state, "delivered");
+  assert.equal(registrationReceipt.state, "provider_accepted");
 
   assert.equal((await recovery.readiness()).provider, "resend");
   const recoveryReceipt = await recovery.deliver({
@@ -549,7 +549,7 @@ test("Resend composes with both narrow production mail ports", async () => {
     expiresAt: "2026-08-01T20:29:00.000Z"
   });
   assert.equal(recoveryReceipt.provider, "resend");
-  assert.equal(recoveryReceipt.state, "delivered");
+  assert.equal(recoveryReceipt.state, "provider_accepted");
   assert.equal(
     calls.filter((call) => call.url.endsWith("/emails"))
       .length,

@@ -161,6 +161,7 @@ function createIdentityAuthorityModel() {
             Date.parse(values[1]) &&
           [
             "pending_delivery",
+            "provider_accepted",
             "delivered",
             "delivery_unknown"
           ].includes(registration.state)
@@ -181,6 +182,7 @@ function createIdentityAuthorityModel() {
           registration.email === values[0] &&
           [
             "pending_delivery",
+            "provider_accepted",
             "delivered",
             "delivery_unknown"
           ].includes(registration.state);
@@ -218,7 +220,12 @@ function createIdentityAuthorityModel() {
           activated_at: null,
           activated_user_id: null,
           activated_organization_id: null,
-          activation_command_id: null
+          activation_command_id: null,
+          mail_delivery_id: null,
+          provider_accepted_at: null,
+          delivery_lineage_version: null,
+          possession_evidence_digest: null,
+          possession_proven_at: null
         };
         return { rowCount: 1, rows: [] };
       }
@@ -245,7 +252,7 @@ function createIdentityAuthorityModel() {
       }
       if (
         sql.startsWith(
-          "update ss.hosted_registration_requests set state = 'delivered'"
+          "update ss.hosted_registration_requests set state = $2"
         )
       ) {
         if (
@@ -255,13 +262,16 @@ function createIdentityAuthorityModel() {
         ) {
           return { rowCount: 0, rows: [] };
         }
-        registration.state = "delivered";
-        registration.delivery_provider = values[1];
+        registration.state = values[1];
+        registration.delivery_provider = values[2];
         registration.delivery_receipt =
-          JSON.parse(values[2]);
+          JSON.parse(values[3]);
         registration.delivery_receipt_digest =
-          values[3];
-        registration.delivered_at = values[4];
+          values[4];
+        registration.mail_delivery_id = values[5];
+        registration.provider_accepted_at = values[6];
+        registration.delivery_lineage_version = values[7];
+        registration.delivered_at = values[8];
         return { rowCount: 1, rows: [] };
       }
       if (
@@ -288,7 +298,7 @@ function createIdentityAuthorityModel() {
         const eligible =
           registration &&
           registration.token_digest === values[0] &&
-          ["delivered", "activated"].includes(
+          ["provider_accepted", "delivered", "activated"].includes(
             registration.state
           ) &&
           Date.parse(registration.expires_at) >
@@ -412,11 +422,17 @@ function createIdentityAuthorityModel() {
       ) {
         if (
           registration?.id !== values[0] ||
-          registration.state !== "delivered"
+          !["provider_accepted", "delivered"].includes(
+            registration.state
+          )
         ) {
           return { rowCount: 0, rows: [] };
         }
         registration.state = "activated";
+        registration.delivered_at = values[1];
+        registration.possession_evidence_digest =
+          values[5];
+        registration.possession_proven_at = values[1];
         registration.activated_at = values[1];
         registration.activated_user_id =
           values[2];

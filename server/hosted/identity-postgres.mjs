@@ -23,6 +23,8 @@ const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 const RECOVERY_MS = 30 * 60 * 1000;
 const REGISTRATION_MS = 2 * 60 * 60 * 1000;
 const DEFAULT_RATE_LIMIT = DEFAULT_INGRESS_POLICY.identity.subject;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 function iso(value) {
   const selected = value instanceof Date ? value : new Date(value);
@@ -548,7 +550,7 @@ export function createPostgresIdentityBridge({
           { status: 409 }
         );
         invariant(
-          ["delivered", "activated"].includes(
+          ["provider_accepted", "delivered", "activated"].includes(
             prior.rows[0].state
           ),
           "REGISTRATION_DELIVERY_RECONCILIATION_REQUIRED",
@@ -559,11 +561,11 @@ export function createPostgresIdentityBridge({
           accepted: true,
           verificationRequired: true,
           delivery:
-            prior.rows[0].state === "delivered"
+            prior.rows[0].state !== "activated"
               ? "email"
               : "already_verified",
           emailSent:
-            prior.rows[0].state === "delivered",
+            prior.rows[0].state !== "activated",
           expiresAt: iso(prior.rows[0].expires_at),
           replayed: true
         };
@@ -655,6 +657,7 @@ export function createPostgresIdentityBridge({
               where lower(email) = $1
                 and state in (
                   'pending_delivery',
+                  'provider_accepted',
                   'delivered',
                   'delivery_unknown'
                 )
@@ -667,6 +670,7 @@ export function createPostgresIdentityBridge({
               where lower(email) = $1
                 and state in (
                   'pending_delivery',
+                  'provider_accepted',
                   'delivered',
                   'delivery_unknown'
                 )
@@ -720,7 +724,7 @@ export function createPostgresIdentityBridge({
         });
         if (staged.replayed) {
           invariant(
-            ["delivered", "activated"].includes(
+            ["provider_accepted", "delivered", "activated"].includes(
               staged.state
             ),
             "REGISTRATION_DELIVERY_RECONCILIATION_REQUIRED",
@@ -731,10 +735,10 @@ export function createPostgresIdentityBridge({
             accepted: true,
             verificationRequired: true,
             delivery:
-              staged.state === "delivered"
+              staged.state !== "activated"
                 ? "email"
                 : "already_verified",
-            emailSent: staged.state === "delivered",
+            emailSent: staged.state !== "activated",
             expiresAt: staged.expiresAt,
             replayed: true
           };
@@ -758,8 +762,17 @@ export function createPostgresIdentityBridge({
           );
           throw error;
         }
-        invariant(
+        const productionAcceptance =
+          receipt?.state === "provider_accepted" &&
+          receipt.mode === "production" &&
+          receipt.providerEffects === true &&
+          UUID.test(String(receipt.messageId ?? ""));
+        const developmentDelivery =
           receipt?.state === "delivered" &&
+          receipt.mode === "dev-sink" &&
+          receipt.provider === "development-sink";
+        invariant(
+          (productionAcceptance || developmentDelivery) &&
             receipt.idempotencyKey ===
               deliveryIdempotencyKey &&
             receipt.expiresAt === expiresAt &&
@@ -775,6 +788,8 @@ export function createPostgresIdentityBridge({
           receiptId: receipt.receiptId,
           mode: receipt.mode,
           provider: receipt.provider,
+          state: receipt.state,
+          messageId: receipt.messageId ?? null,
           providerMessageId: receipt.providerMessageId,
           idempotencyKey: receipt.idempotencyKey,
           payloadDigest: receipt.payloadDigest,
@@ -808,19 +823,28 @@ export function createPostgresIdentityBridge({
           );
           const finalized = await client.query(
             `update ss.hosted_registration_requests
-                set state = 'delivered',
-                    delivery_provider = $2,
-                    delivery_receipt = $3::jsonb,
-                    delivery_receipt_digest = $4,
-                    delivered_at = $5
+                set state = $2,
+                    delivery_provider = $3,
+                    delivery_receipt = $4::jsonb,
+                    delivery_receipt_digest = $5,
+                    mail_delivery_id = $6,
+                    provider_accepted_at = $7,
+                    delivery_lineage_version = $8,
+                    delivered_at = $9
               where id = $1
                 and state = 'pending_delivery'`,
             [
               registrationId,
+              receipt.state,
               receipt.provider,
               JSON.stringify(receiptFacts),
               receiptDigest,
-              receipt.acceptedAt
+              productionAcceptance ? receipt.messageId : null,
+              productionAcceptance ? receipt.acceptedAt : null,
+              productionAcceptance
+                ? "provider_accepted_v1"
+                : "development_sink_v1",
+              developmentDelivery ? receipt.acceptedAt : null
             ]
           );
           invariant(
@@ -880,7 +904,9 @@ export function createPostgresIdentityBridge({
           `select *
              from ss.hosted_registration_requests
             where token_digest = $1
-              and state in ('delivered', 'activated')
+              and state in (
+                'provider_accepted', 'delivered', 'activated'
+              )
               and expires_at > $2
             for update`,
           [tokenDigest, activatedAt]
@@ -985,6 +1011,18 @@ export function createPostgresIdentityBridge({
             replayed: true
           };
         }
+        const possessionEvidenceDigest = sha256(
+          JSON.stringify({
+            schema:
+              "sitesourcery.registration-token-possession/v1",
+            registrationId: registration.id,
+            tokenDigest,
+            activationCommandId: selectedCommandId,
+            mailDeliveryId:
+              registration.mail_delivery_id ?? null,
+            provenAt: activatedAt
+          })
+        );
         const userId = randomUUID();
         const organizationId = randomUUID();
         const created = await client.query(
@@ -1057,18 +1095,22 @@ export function createPostgresIdentityBridge({
         const consumed = await client.query(
           `update ss.hosted_registration_requests
               set state = 'activated',
+                  delivered_at = $2,
+                  possession_evidence_digest = $6,
+                  possession_proven_at = $2,
                   activated_at = $2,
                   activated_user_id = $3,
                   activated_organization_id = $4,
                   activation_command_id = $5
             where id = $1
-              and state = 'delivered'`,
+              and state in ('provider_accepted', 'delivered')`,
           [
             registration.id,
             activatedAt,
             userId,
             organizationId,
-            selectedCommandId
+            selectedCommandId,
+            possessionEvidenceDigest
           ]
         );
         invariant(
@@ -1287,6 +1329,7 @@ export function createPostgresIdentityBridge({
       const replay = await query(
         `select
            token.id,
+           token.user_id,
            token.created_at,
            token.expires_at,
            users.email
@@ -1302,6 +1345,7 @@ export function createPostgresIdentityBridge({
           recipient: email,
           delivery: {
             tokenId: replay.rows[0].id,
+            userId: replay.rows[0].user_id,
             email: replay.rows[0].email,
             token: rawToken,
             createdAt: iso(replay.rows[0].created_at),
@@ -1363,6 +1407,7 @@ export function createPostgresIdentityBridge({
           ).rows[0];
         return {
           tokenId: token.id,
+          userId: result.rows[0].id,
           email: result.rows[0].email,
           token: rawToken,
           createdAt: iso(token.created_at),
@@ -1387,12 +1432,20 @@ export function createPostgresIdentityBridge({
       const now = iso(clock());
       return transact(async (client) => {
         const token = await client.query(
-          `select user_id
-             from ss.hosted_recovery_tokens
-            where token_digest = $1
-              and used_at is null
-              and expires_at > $2
-            for update`,
+          `select
+             token.id,
+             token.user_id,
+             delivery.id as delivery_request_id,
+             delivery.mail_delivery_id,
+             delivery.state as delivery_state
+           from ss.hosted_recovery_tokens token
+           join ss.hosted_recovery_delivery_requests delivery
+             on delivery.recovery_token_id = token.id
+          where token.token_digest = $1
+            and token.used_at is null
+            and token.expires_at > $2
+            and delivery.state in ('provider_accepted', 'delivered')
+          for update of token, delivery`,
           [tokenDigest, now]
         );
         invariant(
@@ -1402,6 +1455,19 @@ export function createPostgresIdentityBridge({
           { status: 409 }
         );
         const userId = token.rows[0].user_id;
+        const possessionEvidenceDigest = sha256(
+          JSON.stringify({
+            schema:
+              "sitesourcery.recovery-token-possession/v1",
+            recoveryTokenId: token.rows[0].id,
+            recoveryDeliveryRequestId:
+              token.rows[0].delivery_request_id,
+            tokenDigest,
+            mailDeliveryId:
+              token.rows[0].mail_delivery_id ?? null,
+            provenAt: now
+          })
+        );
         await client.query(
           `update ss.hosted_password_credentials
               set password_phc = $2,
@@ -1416,6 +1482,30 @@ export function createPostgresIdentityBridge({
               set used_at = $2
             where token_digest = $1`,
           [tokenDigest, now]
+        );
+        const completedDelivery = await client.query(
+          `update ss.hosted_recovery_delivery_requests
+              set state = 'delivered',
+                  delivered_at = $2,
+                  possession_evidence_digest = $3,
+                  possession_proven_at = $2,
+                  updated_at = $2
+            where id = $1
+              and recovery_token_id = $4
+              and state in ('provider_accepted', 'delivered')
+              and possession_proven_at is null`,
+          [
+            token.rows[0].delivery_request_id,
+            now,
+            possessionEvidenceDigest,
+            token.rows[0].id
+          ]
+        );
+        invariant(
+          completedDelivery.rowCount === 1,
+          "RECOVERY_TOKEN_INVALID",
+          "That recovery link is invalid or expired.",
+          { status: 409 }
         );
         await client.query(
           `update ss.hosted_sessions

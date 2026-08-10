@@ -32,6 +32,18 @@ test("hosted startup creates each configured mail port exactly once", async () =
     )?.length,
     1
   );
+  assert.match(
+    source,
+    /createMailLifecycle\([\s\S]*createPostgresMailLifecycleRepository/u
+  );
+  assert.match(
+    source,
+    /configuredRegistrationMailPort\.mode === "production"[\s\S]*createDurableRegistrationMailPort/u
+  );
+  assert.match(
+    source,
+    /configuredRecoveryMailPort\.mode === "production"[\s\S]*createDurableRecoveryMailPort/u
+  );
 });
 
 test("registration configuration defaults to fail-closed production", async () => {

@@ -121,7 +121,13 @@ function priorRecoveryDelivery(row, requestDigest) {
     { status: 409 }
   );
   invariant(
-    row.state === "delivered",
+    [
+      "provider_accepted",
+      "delivered",
+      "recipient_unresolved"
+    ].includes(
+      row.state
+    ),
     "RECOVERY_DELIVERY_RECONCILIATION_REQUIRED",
     "That recovery email may not have completed. Contact Site Sourcery before trying again.",
     { status: 409 }
@@ -5882,12 +5888,12 @@ export function createCanonicalPostgresService({
              id, command_id, request_digest,
              delivery_idempotency_key, delivery_mode,
              delivery_provider, state, requested_at,
-             expires_at
+             expires_at, recovery_token_id
            ) values (
              $1, $2, $3,
              $4, $5,
-             $6, 'pending_delivery', $7,
-             $8
+             $6, $7, $8,
+             $9, $10
            )`,
           [
             id,
@@ -5896,8 +5902,12 @@ export function createCanonicalPostgresService({
             deliveryIdempotencyKey,
             recoveryReadiness.mode,
             recoveryReadiness.provider,
+            issued.delivery
+              ? "pending_delivery"
+              : "recipient_unresolved",
             requestedAt,
-            expiresAt
+            expiresAt,
+            issued.delivery?.tokenId ?? null
           ]
         );
         invariant(
@@ -5912,6 +5922,11 @@ export function createCanonicalPostgresService({
         return priorRecoveryDelivery(
           reservation.row,
           requestDigest
+        );
+      }
+      if (!issued.delivery) {
+        return recoveryDeliveryResponse(
+          recoveryReadiness.mode
         );
       }
 
@@ -5940,11 +5955,23 @@ export function createCanonicalPostgresService({
           idempotencyKey: deliveryIdempotencyKey,
           recipient,
           token: recoveryToken,
+          customerUserId: issued.delivery.userId,
           requestedAt,
           expiresAt
         });
-        invariant(
+        const productionAcceptance =
+          receipt?.state === "provider_accepted" &&
+          receipt.mode === "production" &&
+          receipt.providerEffects === true &&
+          /^[0-9a-f-]{36}$/u.test(
+            String(receipt.messageId ?? "")
+          );
+        const developmentDelivery =
           receipt?.state === "delivered" &&
+          receipt.mode === "dev-sink" &&
+          receipt.provider === "development-sink";
+        invariant(
+          (productionAcceptance || developmentDelivery) &&
             receipt.mode === recoveryReadiness.mode &&
             receipt.provider ===
               recoveryReadiness.provider &&
@@ -5963,6 +5990,8 @@ export function createCanonicalPostgresService({
           receiptId: receipt.receiptId,
           mode: receipt.mode,
           provider: receipt.provider,
+          state: receipt.state,
+          messageId: receipt.messageId ?? null,
           providerMessageId: receipt.providerMessageId,
           idempotencyKey: receipt.idempotencyKey,
           payloadDigest: receipt.payloadDigest,
@@ -6041,16 +6070,25 @@ export function createCanonicalPostgresService({
           );
           const finalized = await client.query(
             `update ss.hosted_recovery_delivery_requests
-                set state = 'delivered',
-                    provider_receipt_id = $2,
-                    delivered_at = $3,
+                set state = $2,
+                    provider_receipt_id = $3,
+                    mail_delivery_id = $4,
+                    provider_accepted_at = $5,
+                    delivery_lineage_version = $6,
+                    delivered_at = $7,
                     updated_at = clock_timestamp()
               where id = $1
                 and state = 'pending_delivery'`,
             [
               reservation.id,
+              receipt.state,
               recorded.rows[0].id,
-              receipt.acceptedAt
+              productionAcceptance ? receipt.messageId : null,
+              productionAcceptance ? receipt.acceptedAt : null,
+              productionAcceptance
+                ? "provider_accepted_v1"
+                : "development_sink_v1",
+              developmentDelivery ? receipt.acceptedAt : null
             ]
           );
           invariant(
