@@ -1255,10 +1255,13 @@ function fakeStripe({
       }
     },
     coupons: {
-      async retrieve(id) {
-        calls.coupons.push(id);
+      async retrieve(id, options) {
+        calls.coupons.push({
+          id,
+          options: structuredClone(options)
+        });
         if (couponError) throw couponError;
-        return structuredClone(
+        const coupon = structuredClone(
           couponResponse ?? {
             id,
             valid: true,
@@ -1275,6 +1278,10 @@ function fakeStripe({
             }
           }
         );
+        if (!options?.expand?.includes("applies_to")) {
+          coupon.applies_to = null;
+        }
+        return coupon;
       }
     },
     customers: {
@@ -2572,7 +2579,10 @@ test("Alakazam readiness proves all three Product-bound Prices, the exact $5 Cou
     alakazam: true
   });
   assert.deepEqual(fake.calls.coupons, [
-    ALAKAZAM_COUPON_ID
+    {
+      id: ALAKAZAM_COUPON_ID,
+      options: { expand: ["applies_to"] }
+    }
   ]);
   assert.deepEqual(fake.calls.products, [
     ALAKAZAM_PRODUCT_ID
@@ -2611,6 +2621,24 @@ test("Alakazam readiness fails closed when its Product, Coupon, or Portal drifts
         percent_off: null,
         applies_to: {
           products: [ALAKAZAM_PRODUCT_ID]
+        }
+      }
+    }),
+    fakeStripe({
+      config,
+      couponResponse: {
+        id: ALAKAZAM_COUPON_ID,
+        valid: true,
+        livemode: false,
+        amount_off: 500,
+        currency: "usd",
+        duration: "once",
+        duration_in_months: null,
+        max_redemptions: null,
+        percent_off: null,
+        redeem_by: null,
+        applies_to: {
+          products: ["prod_unapproved"]
         }
       }
     }),

@@ -5847,7 +5847,8 @@ export function createStripeProviderAdapter(options = {}) {
     let coupon;
     try {
       coupon = await client.coupons.retrieve(
-        config.alakazam.downloadCreditCouponId
+        config.alakazam.downloadCreditCouponId,
+        { expand: ["applies_to"] }
       );
     } catch {
       throw noEffect(
