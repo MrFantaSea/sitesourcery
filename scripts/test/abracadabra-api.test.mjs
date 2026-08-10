@@ -1081,13 +1081,16 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
   const calls = [];
   const commandIds = {
     issue: "10000000-0000-4000-8000-000000000001",
-    void: "10000000-0000-4000-8000-000000000002",
-    accept: "10000000-0000-4000-8000-000000000003"
+    direct: "10000000-0000-4000-8000-000000000002",
+    void: "10000000-0000-4000-8000-000000000003",
+    accept: "10000000-0000-4000-8000-000000000004"
   };
   const organizationId =
     "20000000-0000-4000-8000-000000000001";
   const jobId =
     "80000000-0000-4000-8000-000000000001";
+  const projectId =
+    "30000000-0000-4000-8000-000000000001";
   const quoteId =
     "50000000-0000-4000-8000-000000000001";
   const client = createClient({
@@ -1106,6 +1109,7 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
   await client.listOwnerCustomBuildOpportunities();
   await client.issueOwnerCustomBuildQuote(jobId, {
     commandId: commandIds.issue,
+    creditSelection: "apply_assessment_credit",
     organizationId,
     tierId: "scale",
     craftedPages: 16,
@@ -1115,6 +1119,21 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
     suppliedMedia: 64,
     scopeStatement:
       "Build the exact approved pages and sections in this bounded scope.",
+    targetCompletionDate: "2026-09-15",
+    expiresAt: "2026-08-19T16:00:00.000Z"
+  });
+  await client.issueOwnerDirectCustomBuildQuote(projectId, {
+    commandId: commandIds.direct,
+    creditSelection: "no_credit",
+    organizationId,
+    tierId: "card",
+    craftedPages: 1,
+    sections: 5,
+    uniqueLayouts: 1,
+    contentWords: 500,
+    suppliedMedia: 2,
+    scopeStatement:
+      "Build the direct customer Card scope without an assessment prerequisite.",
     targetCompletionDate: "2026-09-15",
     expiresAt: "2026-08-19T16:00:00.000Z"
   });
@@ -1154,6 +1173,10 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
       ],
       [
         "POST",
+        `/api/v1/operator/custom-services/custom-build-opportunities/${projectId}/quote`
+      ],
+      [
+        "POST",
         `/api/v1/operator/custom-services/custom-build-quotes/${quoteId}/void`
       ],
       [
@@ -1168,6 +1191,7 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
   );
   assert.deepEqual(JSON.parse(serviceCalls[1].options.body), {
     commandId: commandIds.issue,
+    creditSelection: "apply_assessment_credit",
     organizationId,
     tierId: "scale",
     craftedPages: 16,
@@ -1181,11 +1205,26 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
     expiresAt: "2026-08-19T16:00:00.000Z"
   });
   assert.deepEqual(JSON.parse(serviceCalls[2].options.body), {
+    commandId: commandIds.direct,
+    creditSelection: "no_credit",
+    organizationId,
+    tierId: "card",
+    craftedPages: 1,
+    sections: 5,
+    uniqueLayouts: 1,
+    contentWords: 500,
+    suppliedMedia: 2,
+    scopeStatement:
+      "Build the direct customer Card scope without an assessment prerequisite.",
+    targetCompletionDate: "2026-09-15",
+    expiresAt: "2026-08-19T16:00:00.000Z"
+  });
+  assert.deepEqual(JSON.parse(serviceCalls[3].options.body), {
     commandId: commandIds.void,
     organizationId,
     reason: "The customer requested a corrected replacement scope."
   });
-  assert.deepEqual(JSON.parse(serviceCalls[4].options.body), {
+  assert.deepEqual(JSON.parse(serviceCalls[5].options.body), {
     acceptanceStatement: "accepted_exact_custom_build_quote",
     acceptedDisclosureDigest: "b".repeat(64),
     acceptedQuoteDigest: "a".repeat(64),
@@ -1195,8 +1234,9 @@ test("assessment-backed Custom build commands use exact routes, bodies, and comm
   });
   for (const [index, commandId] of [
     [1, commandIds.issue],
-    [2, commandIds.void],
-    [4, commandIds.accept]
+    [2, commandIds.direct],
+    [3, commandIds.void],
+    [5, commandIds.accept]
   ]) {
     assert.equal(
       serviceCalls[index].options.headers["X-CSRF-Token"],
@@ -1223,6 +1263,7 @@ test("Custom build API rejects unsupported authority and out-of-band footprint c
   });
   const base = {
     commandId: "10000000-0000-4000-8000-000000000001",
+    creditSelection: "apply_assessment_credit",
     organizationId: "20000000-0000-4000-8000-000000000001",
     tierId: "card",
     craftedPages: 1,

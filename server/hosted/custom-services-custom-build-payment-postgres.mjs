@@ -135,7 +135,7 @@ function paidJobProjection(row) {
       row.job_scope_statement.length <= 2000 &&
       ["not_required", "unpaid"].includes(row.final_payment_state) &&
       row.job_currency === "USD" &&
-      Number(row.job_start_credit_minor) === 20_000 &&
+      [0, 20_000].includes(Number(row.job_start_credit_minor)) &&
       Number(row.job_start_paid_subtotal_minor) ===
         Number(row.job_start_gross_minor) -
           Number(row.job_start_credit_minor) &&
@@ -192,7 +192,8 @@ function paidJobProjection(row) {
       ),
       creditMinor: integer(
         row.job_start_credit_minor,
-        "Job assessment credit"
+        "Job assessment credit",
+        { zero: true }
       ),
       paidSubtotalMinor: integer(
         row.job_start_paid_subtotal_minor,
@@ -382,7 +383,8 @@ function purposeFromRow(row, taxMode = row?.tax_mode) {
       UUID.test(String(row.quote_id ?? "")) &&
       UUID.test(String(row.quote_revision_id ?? "")) &&
       UUID.test(String(row.quote_acceptance_id ?? "")) &&
-      UUID.test(String(row.credit_application_id ?? "")) &&
+      (row.credit_application_id === null ||
+        UUID.test(String(row.credit_application_id))) &&
       UUID.test(String(row.invoice_id ?? row.id ?? "")) &&
       INVOICE_NUMBER.test(String(row.invoice_number ?? "")) &&
       SHA256.test(String(row.accepted_quote_digest ?? "")) &&
@@ -426,7 +428,7 @@ function expectedMetadata(purpose, purposeDigest) {
     quote_id: purpose.quoteId,
     quote_revision_id: purpose.quoteRevisionId,
     quote_acceptance_id: purpose.quoteAcceptanceId,
-    credit_application_id: purpose.creditApplicationId,
+    credit_application_id: purpose.creditApplicationId ?? "none",
     invoice_id: purpose.invoiceId,
     invoice_number: purpose.invoiceNumber,
     accepted_quote_digest: purpose.acceptedQuoteDigest,
@@ -558,7 +560,7 @@ function invoiceProjection(row, release) {
       SHA256.test(String(row.invoice_digest ?? "")) &&
       SHA256.test(String(row.accepted_quote_digest ?? "")) &&
       SHA256.test(String(row.accepted_disclosure_digest ?? "")) &&
-      lines.length === 2 &&
+      lines.length === (Number(row.credit_minor) === 0 ? 1 : 2) &&
       lines.reduce((sum, line) => sum + Number(line.amountMinor), 0) ===
         Number(row.subtotal_minor),
     "CUSTOM_BUILD_PAYMENT_CONFLICT",
@@ -592,8 +594,12 @@ function invoiceProjection(row, release) {
       tax: { amountMinor: null, state: "calculated_at_checkout" },
       total: { amountMinor: null, currency: "USD", state: "shown_at_checkout" },
       credit: {
-        amountMinor: integer(row.credit_minor, "Invoice credit"),
-        state: row.credit_state
+        amountMinor: integer(row.credit_minor, "Invoice credit", {
+          zero: true
+        }),
+        state: row.credit_application_id === null
+          ? "not_applied"
+          : row.credit_state
       },
       finalHandoff: {
         amountMinor: integer(row.final_due_minor, "Final amount", { zero: true }),
@@ -656,7 +662,8 @@ const INVOICE_SELECT = `
       and receipt.customer_user_id = invoice.customer_user_id
       and receipt.invoice_id = invoice.id
       and receipt.checkout_attempt_id = attempt.id
-      and receipt.credit_application_id = invoice.credit_application_id
+      and receipt.credit_application_id is not distinct from
+        invoice.credit_application_id
       and receipt.provider = 'stripe'
       and receipt.checkout_session_id = attempt.checkout_session_id
       and receipt.payment_status = 'paid'
@@ -732,7 +739,7 @@ const INVOICE_SELECT = `
    and revision.quote_id = invoice.quote_id
    and revision.quote_revision = invoice.quote_revision
    and revision.id = invoice.quote_revision_id
-  join ss.service_credit_applications application
+  left join ss.service_credit_applications application
     on application.organization_id = invoice.organization_id
    and application.id = invoice.credit_application_id
   left join lateral (
@@ -908,13 +915,30 @@ export function createPostgresCustomServicesCustomBuildPayment({
           { status: 500 }
         );
 
+        const locked = await client.query(
+          `select ss.lock_service_custom_build_checkout_invoice(
+             $1, $2, $3, $4
+           ) as locked`,
+          [
+            input.organizationId,
+            input.projectId,
+            input.customerId,
+            input.invoiceId
+          ]
+        );
+        invariant(
+          locked.rowCount === 1 && locked.rows[0].locked === true,
+          "CUSTOM_BUILD_INVOICE_UNAVAILABLE",
+          "The Custom build invoice is unavailable.",
+          { status: 404 }
+        );
         const invoiceResult = await client.query(
           `select invoice.*,
                   application.state as credit_state,
                   customer.stripe_customer_id,
                   receipt.id as receipt_id
            from ss.service_custom_build_invoices invoice
-           join ss.service_credit_applications application
+           left join ss.service_credit_applications application
              on application.organization_id = invoice.organization_id
             and application.id = invoice.credit_application_id
            join ss.service_custom_build_quotes quote
@@ -929,8 +953,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
              and invoice.project_id = $2
              and invoice.customer_user_id = $3
              and invoice.id = $4
-             and quote.state = 'accepted'
-           for update of application`,
+             and quote.state = 'accepted'`,
           [
             input.organizationId,
             input.projectId,
@@ -947,7 +970,10 @@ export function createPostgresCustomServicesCustomBuildPayment({
         const invoice = invoiceResult.rows[0];
         invariant(
           invoice.invoice_digest === input.invoiceDigest &&
-            invoice.credit_state === "reserved" &&
+            (Number(invoice.credit_minor) === 0
+              ? invoice.credit_application_id === null &&
+                invoice.credit_state === null
+              : invoice.credit_state === "reserved") &&
             invoice.receipt_id === null &&
             Date.parse(iso(invoice.payment_deadline, "Payment deadline")) >
               Date.parse(iso(paymentClock.now(), "Payment clock")),
@@ -955,6 +981,21 @@ export function createPostgresCustomServicesCustomBuildPayment({
           "The Custom build invoice is no longer payable.",
           { status: 409 }
         );
+        if (invoice.credit_application_id !== null) {
+          const lockedCredit = await client.query(
+            `select state from ss.service_credit_applications
+              where organization_id = $1 and id = $2
+              for update`,
+            [input.organizationId, invoice.credit_application_id]
+          );
+          invariant(
+            lockedCredit.rowCount === 1 &&
+              lockedCredit.rows[0].state === "reserved",
+            "CUSTOM_BUILD_INVOICE_CHANGED",
+            "The Custom build assessment credit is no longer payable.",
+            { status: 409 }
+          );
+        }
 
         const active = await client.query(
           `select attempt.*, invoice.invoice_number
@@ -1578,7 +1619,8 @@ export function createPostgresCustomServicesCustomBuildPayment({
           [resolution.organizationId, resolution.creditApplicationId]
         );
         invariant(
-          creditUpdate.rowCount === 1,
+          creditUpdate.rowCount ===
+            (resolution.creditApplicationId === null ? 0 : 1),
           "CUSTOM_BUILD_PAYMENT_CONFLICT",
           "The uncertain Custom build credit could not be fenced.",
           { status: 500 }
@@ -1612,7 +1654,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
            join ss.service_custom_build_invoices invoice
              on invoice.organization_id = attempt.organization_id
             and invoice.id = attempt.invoice_id
-           join ss.service_credit_applications application
+           left join ss.service_credit_applications application
              on application.organization_id = invoice.organization_id
             and application.id = invoice.credit_application_id
            join ss.service_custom_build_quote_revisions revision
@@ -1624,7 +1666,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
              on event.organization_id = attempt.organization_id
             and event.id = $3
            where attempt.organization_id = $1 and attempt.id = $2
-           for update of attempt, application, event`,
+           for update of attempt, event`,
           [resolution.organizationId, resolution.attemptId, event.eventId]
         );
         invariant(
@@ -1634,6 +1676,21 @@ export function createPostgresCustomServicesCustomBuildPayment({
           { status: 409 }
         );
         const row = selected.rows[0];
+        if (row.credit_application_id !== null) {
+          const lockedCredit = await client.query(
+            `select state from ss.service_credit_applications
+              where organization_id = $1 and id = $2
+              for update`,
+            [resolution.organizationId, row.credit_application_id]
+          );
+          invariant(
+            lockedCredit.rowCount === 1 &&
+              lockedCredit.rows[0].state === row.credit_state,
+            "CUSTOM_BUILD_PAYMENT_CONFLICT",
+            "The Custom build assessment credit changed before settlement.",
+            { status: 409 }
+          );
+        }
         invariant(
           ["ready", "paid"].includes(row.attempt_state) &&
             row.checkout_session_id === resolution.checkoutSessionId &&
@@ -1663,7 +1720,9 @@ export function createPostgresCustomServicesCustomBuildPayment({
           const receipt = existing.rows[0];
           invariant(
             row.attempt_state === "paid" &&
-              row.credit_state === "settled" &&
+              (row.credit_application_id === null
+                ? row.credit_state === null
+                : row.credit_state === "settled") &&
               receipt.checkout_session_id === payment.checkoutSessionId &&
               receipt.payment_intent_id === payment.paymentIntentId &&
               receipt.stripe_customer_id === payment.customerId &&
@@ -1689,7 +1748,10 @@ export function createPostgresCustomServicesCustomBuildPayment({
           invariant(
             existing.rowCount === 0 &&
               row.attempt_state === "ready" &&
-              row.credit_state === "reserved",
+              (row.credit_application_id === null
+                ? row.credit_state === null && Number(row.credit_minor) === 0
+                : row.credit_state === "reserved" &&
+                  Number(row.credit_minor) === 20_000),
             "CUSTOM_BUILD_PAYMENT_CONFLICT",
             "The Custom build settlement state is inconsistent.",
             { status: 409 }
@@ -1841,7 +1903,8 @@ export function createPostgresCustomServicesCustomBuildPayment({
             [resolution.organizationId, resolution.creditApplicationId, settledAt]
           );
           invariant(
-            creditSettled.rowCount === 1,
+            creditSettled.rowCount ===
+              (resolution.creditApplicationId === null ? 0 : 1),
             "CUSTOM_BUILD_PAYMENT_CONFLICT",
             "The assessment build credit could not be settled with payment.",
             { status: 500 }

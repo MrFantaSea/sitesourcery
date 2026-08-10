@@ -139,6 +139,41 @@ test("paid invoice projection requires exact receipt, job, quote, and money link
   ]) assert.ok(context.queries[0].text.includes(evidence), evidence);
 });
 
+test("direct Custom payment projection retains one full-price line without synthetic credit", async () => {
+  const context = boundary(paidInvoiceRow({
+    credit_application_id: null,
+    credit_minor: "0",
+    credit_state: null,
+    gross_start_minor: "90000",
+    subtotal_minor: "90000",
+    job_start_credit_minor: "0",
+    job_start_paid_subtotal_minor: "90000",
+    lines: [
+      {
+        lineNumber: 1,
+        componentKey: "custom_build_start",
+        displayName: "Site Plus first installment",
+        amountMinor: 90000
+      }
+    ]
+  }));
+
+  const projection = await context.payment.readCurrentInvoice(scope());
+
+  assert.equal(projection.state, "paid");
+  assert.deepEqual(projection.invoice.credit, {
+    amountMinor: 0,
+    state: "not_applied"
+  });
+  assert.equal(projection.invoice.lines.length, 1);
+  assert.equal(projection.job.firstPayment.creditMinor, 0);
+  assert.equal(projection.job.firstPayment.paidSubtotalMinor, 90000);
+  assert.match(
+    context.queries[0].text,
+    /left join ss\.service_credit_applications/iu
+  );
+});
+
 test("paid invoice projection fails closed on mismatched linkage, money, or date", async (t) => {
   for (const [name, override] of [
     ["receipt linkage", { receipt_linkage_valid: false }],

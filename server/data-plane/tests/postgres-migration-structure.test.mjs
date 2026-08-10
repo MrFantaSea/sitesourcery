@@ -86,6 +86,48 @@ test("TAX-PURPOSE-01 is additive at migration 109 and fails closed for disabled 
   );
 });
 
+test("CUSTOM-DIRECT-01 is additive at migration 113 and preserves exact optional-credit authority", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608100113_custom_direct_opportunity.sql"
+  );
+  assert.ok(migration, "missing CUSTOM-DIRECT-01 migration 113");
+  assert.match(migration.sql, /^-- CUSTOM-DIRECT-01[\s\S]*\bbegin;/iu);
+  assert.match(migration.sql, /commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /create table ss\.service_custom_build_direct_opportunities/iu
+  );
+  assert.match(
+    migration.sql,
+    /provenance = 'direct_custom_inquiry'/iu
+  );
+  assert.match(
+    migration.sql,
+    /credit_selection in \('no_credit', 'apply_assessment_credit'\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /credit_amount_minor in \(0, 20000\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /invoice\.credit_minor = 0 and application\.id is null/iu
+  );
+  assert.match(
+    migration.sql,
+    /create function ss\.lock_service_custom_build_checkout_invoice\([\s\S]*?security definer[\s\S]*?for update of quote/iu
+  );
+  assert.match(
+    migration.sql,
+    /revoke all on function ss\.lock_service_custom_build_checkout_invoice\([\s\S]*?from public, anon, authenticated, service_role;[\s\S]*?grant execute on function ss\.lock_service_custom_build_checkout_invoice\([\s\S]*?to service_role;/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /automatic_tax|provider_effects_authorized|commercial_cutover/iu
+  );
+});
+
 test("Alakazam 35 migration is additive, held, append-only, and exact-authority bound", async () => {
   const migration = (await migrations()).find(
     ({ name }) => name ===

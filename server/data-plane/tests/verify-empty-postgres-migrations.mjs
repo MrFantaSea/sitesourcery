@@ -32,6 +32,8 @@ import { createPostgresCommerceTransitionNotificationRepository } from
   "../../hosted/commerce-transition-notifications-postgres.mjs";
 import { resolveMigrationVerificationInventory } from
   "./migration-verification-inventory.mjs";
+import { createPostgresCustomServicesCustomBuild } from
+  "../../hosted/custom-services-custom-build-postgres.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -1569,9 +1571,9 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
     `insert into ss.operator_permissions (
        operator_user_id, capability, state,
        granted_by_user_id, granted_at
-     ) values (
-       $1, 'service_case_manage', 'held', $2, $3
-     )`,
+     ) values
+       ($1, 'service_case_manage', 'held', $2, $3),
+       ($1, 'service_quote_author', 'held', $2, $3)`,
     [operatorUserId, authorizerUserId, "2026-08-10T00:00:00.000Z"]
   );
   await pool.query(
@@ -1579,10 +1581,11 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
        operator_user_id, capability, event_sequence,
        event_kind, predecessor_event_id, recorded_by_kind,
        effective_at, expires_at, created_at
-     ) values (
-       $1, 'service_case_manage', 99, 'grant', null,
-       'deployment_control', $2, $3, $2
-     )`,
+     ) values
+       ($1, 'service_case_manage', 99, 'grant', null,
+        'deployment_control', $2, $3, $2),
+       ($1, 'service_quote_author', 99, 'grant', null,
+        'deployment_control', $2, $3, $2)`,
     [
       operatorUserId,
       "2026-08-10T00:00:00.000Z",
@@ -1695,6 +1698,90 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
   assert.equal(claim.project.id, invitation.project.id);
   assert.equal(claim.organization.id, invitation.organization.id);
   assert.equal(claim.provenance, "direct_custom_inquiry");
+
+  const customBuild = createPostgresCustomServicesCustomBuild({
+    authority: database
+  });
+  const directOpportunities = await customBuild.listOpportunities({
+    userId: operatorUserId
+  });
+  const directOpportunity = directOpportunities.opportunities.find(
+    (entry) =>
+      entry.origin === "direct" &&
+      entry.engagementId === claim.engagementId
+  );
+  assert.ok(directOpportunity);
+  assert.equal(directOpportunity.projectId, claim.project.id);
+  assert.equal(directOpportunity.assessment, null);
+  assert.equal(directOpportunity.credit, null);
+
+  const directQuote = await customBuild.issueDirectQuote(
+    { userId: operatorUserId },
+    claim.project.id,
+    {
+      commandId: "pg-direct-custom-quote-001",
+      contentWords: 1600,
+      craftedPages: 4,
+      creditSelection: "no_credit",
+      expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+      organizationId: claim.organization.id,
+      scopeStatement:
+        "Build the four-page direct Custom website described in this Engagement.",
+      sections: 14,
+      suppliedMedia: 10,
+      targetCompletionDate: new Date(Date.now() + 45 * 86400000)
+        .toISOString().slice(0, 10),
+      tierId: "site",
+      uniqueLayouts: 4
+    }
+  );
+  assert.equal(directQuote.origin, "direct");
+  assert.equal(directQuote.reportId, null);
+  assert.equal(directQuote.credit, null);
+  assert.equal(directQuote.quote.origin, "direct");
+  assert.equal(directQuote.quote.creditSelection, "no_credit");
+  assert.equal(directQuote.quote.pricing.serviceAmountMinor, 120000);
+  assert.equal(directQuote.quote.pricing.creditAmountMinor, 0);
+  assert.equal(directQuote.quote.pricing.startDueMinor, 60000);
+
+  const directScope = {
+    actorId: claim.user.id,
+    customerId: claim.user.id,
+    organizationId: claim.organization.id,
+    projectId: claim.project.id
+  };
+  const directAccepted = await customBuild.acceptCurrentQuote({
+    ...directScope,
+    acceptanceStatement: "accepted_exact_custom_build_quote",
+    acceptedDisclosureDigest: directQuote.quote.disclosureDigest,
+    acceptedQuoteDigest: directQuote.quote.quoteDigest,
+    commandId: "pg-direct-custom-accept-001",
+    quoteId: directQuote.quote.quoteId,
+    quoteRevision: directQuote.quote.quoteRevision
+  });
+  assert.equal(directAccepted.state, "accepted");
+  assert.equal(directAccepted.credit, null);
+  const directFinancialEvidence = await pool.query(
+    `select
+       invoice.credit_application_id is null as no_credit_application,
+       invoice.credit_minor = 0 as zero_credit,
+       invoice.subtotal_minor = invoice.gross_start_minor as full_start_due,
+       invoice.tax_state = 'calculation_required' as purpose_tax_boundary,
+       count(line.id)::integer as line_count
+     from ss.service_custom_build_invoices invoice
+     join ss.service_custom_build_invoice_lines line
+       on line.invoice_id = invoice.id
+    where invoice.quote_id = $1
+    group by invoice.id`,
+    [directQuote.quote.quoteId]
+  );
+  assert.deepEqual(directFinancialEvidence.rows, [{
+    no_credit_application: true,
+    zero_credit: true,
+    full_start_due: true,
+    purpose_tax_boundary: true,
+    line_count: 1
+  }]);
 
   currentTime = new Date(
     invitationStart + 2 * 60 * 60 * 1000
@@ -3847,7 +3934,7 @@ async function verifyPlatformSchema(pool) {
         as independently_derived_scale_authority,
       (
         select count(*) = 2
-          and bool_and(column_record.is_nullable = 'NO')
+          and bool_and(column_record.is_nullable = 'YES')
           from information_schema.columns column_record
          where column_record.table_schema = 'ss'
            and column_record.table_name = 'service_custom_build_quotes'
@@ -3866,18 +3953,43 @@ async function verifyPlatformSchema(pool) {
              and pg_get_constraintdef(constraint_record.oid) like
                '%organization_id, source_job_id, source_report_id%'
         )
+        and exists (
+          select 1
+            from pg_constraint constraint_record
+           where constraint_record.conrelid =
+             'ss.service_custom_build_quotes'::regclass
+             and constraint_record.confrelid =
+               'ss.service_custom_build_direct_opportunities'::regclass
+             and constraint_record.contype = 'f'
+             and pg_get_constraintdef(constraint_record.oid) like
+               '%organization_id, direct_opportunity_id%'
+        )
+        and exists (
+          select 1
+            from pg_constraint constraint_record
+           where constraint_record.conrelid =
+             'ss.service_custom_build_quotes'::regclass
+             and constraint_record.conname =
+               'service_custom_build_quotes_source_authority_check'
+             and pg_get_constraintdef(constraint_record.oid) like
+               '%assessment_successor%'
+             and pg_get_constraintdef(constraint_record.oid) like
+               '%direct%'
+        )
         and (
           select procedure_record.prosecdef
             and lower(pg_get_functiondef(procedure_record.oid)) like
               '%from ss.service_assessment_reports report%'
             and lower(pg_get_functiondef(procedure_record.oid)) like
+              '%from ss.service_custom_build_direct_opportunities opportunity%'
+            and lower(pg_get_functiondef(procedure_record.oid)) like
               '%service_quote_author%'
             and lower(pg_get_functiondef(procedure_record.oid)) like
-              '%eligible delivered assessment%'
+              '%one exact custom opportunity%'
             from pg_proc procedure_record
            where procedure_record.oid =
              'ss.prepare_service_custom_build_quote()'::regprocedure
-        ) as assessment_backed_quote_only,
+        ) as purpose_bound_quote_sources,
       (
         select count(*) = 2
           and bool_and(column_record.is_generated = 'ALWAYS')
@@ -3909,9 +4021,9 @@ async function verifyPlatformSchema(pool) {
             'service_role', acceptance_materializer.oid, 'EXECUTE'
           )
           and lower(pg_get_functiondef(acceptance_preparer.oid)) like
-            '%claimed_quote_digest is distinct from revision_record.quote_digest%'
+            '%new.accepted_quote_digest is distinct from revision_record.quote_digest%'
           and lower(pg_get_functiondef(acceptance_preparer.oid)) like
-            '%claimed_disclosure_digest is distinct from revision_record.disclosure_digest%'
+            '%new.accepted_disclosure_digest is distinct from revision_record.disclosure_digest%'
           and lower(pg_get_functiondef(acceptance_preparer.oid)) like
             '%credit.organization_id = revision_record.organization_id%'
           and lower(pg_get_functiondef(acceptance_preparer.oid)) like
@@ -3922,8 +4034,12 @@ async function verifyPlatformSchema(pool) {
             '%credit.acceptance_cutoff = revision_record.credit_acceptance_cutoff%'
           and lower(pg_get_functiondef(acceptance_preparer.oid)) like
             '%for update of credit%'
+          and lower(pg_get_functiondef(acceptance_preparer.oid)) like
+            '%revision_record.credit_amount_minor = 0%'
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
             '%insert into ss.service_credit_applications%'
+          and lower(pg_get_functiondef(acceptance_materializer.oid)) like
+            '%if revision_record.credit_amount_minor = 20000%'
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
             '%''reserved''%'
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
@@ -3934,7 +4050,7 @@ async function verifyPlatformSchema(pool) {
            'ss.prepare_service_custom_build_quote_acceptance()'::regprocedure
            and acceptance_materializer.oid =
              'ss.materialize_service_custom_build_acceptance()'::regprocedure
-      ) as exact_atomic_customer_reservation,
+      ) as exact_optional_atomic_customer_reservation,
       exists (
         select 1
           from pg_index index_record

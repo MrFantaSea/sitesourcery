@@ -3217,7 +3217,11 @@
     );
   }
 
-  function customBuildPublicEstimate(tierId, footprint) {
+  function customBuildPublicEstimate(
+    tierId,
+    footprint,
+    creditSelection
+  ) {
     var tier = customBuildTier(tierId);
     if (
       !tier
@@ -3264,26 +3268,34 @@
     var startValueMinor = paymentSchedule === "full_before_work"
       ? serviceAmountMinor
       : Math.floor(serviceAmountMinor / 2);
+    var creditAmountMinor = creditSelection === "no_credit"
+      ? 0
+      : creditSelection === "apply_assessment_credit"
+        ? 20000
+        : null;
+    if (creditAmountMinor === null) return null;
     return Object.freeze({
       serviceAmountMinor: serviceAmountMinor,
-      creditAmountMinor: 20000,
-      customerAmountMinor: serviceAmountMinor - 20000,
+      creditAmountMinor: creditAmountMinor,
+      customerAmountMinor: serviceAmountMinor - creditAmountMinor,
       paymentSchedule: paymentSchedule,
       scaleUnits: scaleUnits,
       startValueMinor: startValueMinor,
-      startCreditMinor: 20000,
-      startDueMinor: startValueMinor - 20000,
+      startCreditMinor: creditAmountMinor,
+      startDueMinor: startValueMinor - creditAmountMinor,
       finalDueMinor: serviceAmountMinor - startValueMinor
     });
   }
 
-  function customBuildTermsRules(paymentSchedule) {
+  function customBuildTermsRules(paymentSchedule, creditSelection) {
     var paymentRule = paymentSchedule === "full_before_work"
       ? "The remaining balance is due before build work begins."
       : "The remaining first installment is due before build work begins; the final installment is due before final launch or handoff.";
     return [
       "This quote covers only the scope and footprint shown here. Added or changed work requires a separate written change order.",
-      "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
+      creditSelection === "no_credit"
+        ? "No assessment credit is applied to this quote."
+        : "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
       paymentRule,
       "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
       "Build work does not begin until the required first payment is verified.",
@@ -3359,7 +3371,11 @@
       });
   }
 
-  function safeCustomBuildTerms(value, paymentSchedule) {
+  function safeCustomBuildTerms(
+    value,
+    paymentSchedule,
+    creditSelection
+  ) {
     return exactKeys(
       value,
       [
@@ -3378,7 +3394,7 @@
       && value.legalDocumentId === CUSTOM_BUILD_LEGAL_DOCUMENT_ID
       && sameAssessmentList(
         value.rules,
-        customBuildTermsRules(paymentSchedule)
+        customBuildTermsRules(paymentSchedule, creditSelection)
       );
   }
 
@@ -3413,10 +3429,12 @@
         value,
         [
           "acceptance",
+          "creditSelection",
           "creditAcceptanceCutoff",
           "disclosureDigest",
           "expiresAt",
           "issuedAt",
+          "origin",
           "pricing",
           "quoteDigest",
           "quoteId",
@@ -3435,15 +3453,23 @@
       || !SHA256.test(text(value.quoteDigest))
       || !SHA256.test(text(value.disclosureDigest))
       || !["issued", "accepted", "voided"].includes(value.state)
+      || !["direct", "assessment_successor"].includes(value.origin)
+      || !["no_credit", "apply_assessment_credit"]
+        .includes(value.creditSelection)
+      || (value.origin === "direct"
+        && value.creditSelection !== "no_credit")
       || !assessmentText(value.scopeStatement, 20, 2000)
       || value.workmanshipCorrectionDays !== 30
       || !assessmentDate(value.targetCompletionDate)
       || !safeIso(value.issuedAt)
       || !safeIso(value.expiresAt)
-      || !safeIso(value.creditAcceptanceCutoff)
+      || (value.creditSelection === "apply_assessment_credit"
+        ? !safeIso(value.creditAcceptanceCutoff)
+        : value.creditAcceptanceCutoff !== null)
       || Date.parse(value.expiresAt) <= Date.parse(value.issuedAt)
-      || Date.parse(value.expiresAt) >
-        Date.parse(value.creditAcceptanceCutoff)
+      || (value.creditSelection === "apply_assessment_credit"
+        && Date.parse(value.expiresAt) >
+          Date.parse(value.creditAcceptanceCutoff))
       || Date.parse(value.expiresAt) >
         Date.parse(value.issuedAt) + 30 * 24 * 60 * 60 * 1000
       || Date.parse(value.targetCompletionDate + "T00:00:00.000Z") <=
@@ -3469,7 +3495,8 @@
     var tier = customBuildTier(value.tier.id);
     var estimate = customBuildPublicEstimate(
       value.tier.id,
-      value.tier.footprint
+      value.tier.footprint,
+      value.creditSelection
     );
     if (
       !tier
@@ -3516,7 +3543,8 @@
       )
       || !safeCustomBuildTerms(
         value.terms,
-        value.pricing.paymentSchedule
+        value.pricing.paymentSchedule,
+        value.creditSelection
       )
     ) return false;
     if (value.state === "issued" && value.acceptance !== null) {
@@ -3570,18 +3598,22 @@
     if (
       !safeCustomBuildQuote(value.quote)
       || value.quote.state !== value.state
-      || !safeCustomBuildCredit(value.credit)
-      || value.quote.creditAcceptanceCutoff !==
-        value.credit.acceptanceCutoff
-      || value.quote.pricing.creditAmountMinor !==
-        value.credit.amountMinor
+      || (value.quote.creditSelection === "apply_assessment_credit"
+        ? !safeCustomBuildCredit(value.credit)
+          || value.quote.creditAcceptanceCutoff !==
+            value.credit.acceptanceCutoff
+          || value.quote.pricing.creditAmountMinor !==
+            value.credit.amountMinor
+        : value.quote.pricing.creditAmountMinor !== 0)
     ) return null;
     if (
-      value.state === "issued"
+      value.quote.creditSelection === "apply_assessment_credit"
+      && value.state === "issued"
       && !["available", "expired"].includes(value.credit.state)
     ) return null;
     if (
-      value.state === "accepted"
+      value.quote.creditSelection === "apply_assessment_credit"
+      && value.state === "accepted"
       && ![
         "reserved",
         "reconciliation_required",
@@ -3589,7 +3621,8 @@
       ].includes(value.credit.state)
     ) return null;
     if (
-      value.state === "voided"
+      value.quote.creditSelection === "apply_assessment_credit"
+      && value.state === "voided"
       && !["available", "released", "expired"]
         .includes(value.credit.state)
     ) return null;
@@ -3637,7 +3670,7 @@
     )
       && SHA256.test(text(value.acceptedDisclosureDigest))
       && SHA256.test(text(value.acceptedQuoteDigest))
-      && value.creditMinor === 20000
+      && [0, 20000].includes(value.creditMinor)
       && safeMinor(value.finalHandoffMinor)
       && safeMinor(value.grossStartMinor)
       && value.grossStartMinor > value.creditMinor
@@ -3698,7 +3731,10 @@
     ) return false;
     var estimate = customBuildPublicEstimate(
       value.tierId,
-      value.footprint
+      value.footprint,
+      value.firstPayment.creditMinor === 0
+        ? "no_credit"
+        : "apply_assessment_credit"
     );
     return Boolean(estimate)
       && value.firstPayment.grossMinor === estimate.startValueMinor
@@ -3926,7 +3962,7 @@
       || !Array.isArray(value.opportunities)
       || value.opportunities.length > 100
     ) return null;
-    var jobIds = new Set();
+    var opportunityIds = new Set();
     var valid = value.opportunities.every(function (entry) {
       if (
         !exactKeys(
@@ -3937,6 +3973,8 @@
             "credit",
             "currentQuote",
             "customer",
+            "engagementId",
+            "origin",
             "organizationId",
             "organizationName",
             "projectId",
@@ -3948,14 +3986,7 @@
         || !UUID.test(text(entry.projectId))
         || !assessmentText(entry.projectName, 1, 200)
         || !UUID.test(text(entry.caseId))
-        || !exactKeys(
-          entry.assessment,
-          ["deliveredAt", "jobId", "reportId"]
-        )
-        || !UUID.test(text(entry.assessment.jobId))
-        || jobIds.has(entry.assessment.jobId)
-        || !UUID.test(text(entry.assessment.reportId))
-        || !safeIso(entry.assessment.deliveredAt)
+        || !["direct", "assessment_successor"].includes(entry.origin)
         || !exactKeys(
           entry.customer,
           ["customerId", "email", "name"]
@@ -3963,24 +3994,50 @@
         || !UUID.test(text(entry.customer.customerId))
         || !assessmentText(entry.customer.name, 1, 200)
         || !assessmentText(entry.customer.email, 3, 320)
-        || !safeCustomBuildCredit(entry.credit)
+        || (entry.origin === "direct"
+          ? !UUID.test(text(entry.engagementId))
+            || entry.assessment !== null
+            || entry.credit !== null
+          : entry.engagementId !== null
+            || !exactKeys(
+              entry.assessment,
+              ["deliveredAt", "jobId", "reportId"]
+            )
+            || !UUID.test(text(entry.assessment.jobId))
+            || !UUID.test(text(entry.assessment.reportId))
+            || !safeIso(entry.assessment.deliveredAt)
+            || !safeCustomBuildCredit(entry.credit))
         || (entry.currentQuote !== null
           && !safeCustomBuildQuote(entry.currentQuote))
         || (entry.currentQuote
+          && entry.currentQuote.origin !== entry.origin)
+        || (entry.currentQuote
+          && entry.currentQuote.creditSelection ===
+            "apply_assessment_credit"
           && entry.currentQuote.creditAcceptanceCutoff !==
             entry.credit.acceptanceCutoff)
         || (entry.currentQuote
+          && entry.currentQuote.creditSelection ===
+            "apply_assessment_credit"
           && entry.currentQuote.state === "accepted"
           && entry.credit.state !== "reserved")
         || (entry.currentQuote
+          && entry.currentQuote.creditSelection ===
+            "apply_assessment_credit"
           && entry.currentQuote.state === "issued"
           && !["available", "expired"].includes(entry.credit.state))
         || (entry.currentQuote
+          && entry.currentQuote.creditSelection ===
+            "apply_assessment_credit"
           && entry.currentQuote.state === "voided"
           && !["available", "released", "expired"]
             .includes(entry.credit.state))
       ) return false;
-      jobIds.add(entry.assessment.jobId);
+      var opportunityId = entry.origin === "direct"
+        ? "direct:" + entry.engagementId
+        : "assessment:" + entry.assessment.jobId;
+      if (opportunityIds.has(opportunityId)) return false;
+      opportunityIds.add(opportunityId);
       return true;
     });
     return valid ? value : null;
@@ -5812,7 +5869,9 @@
           "credit",
           "caseId",
           "customerId",
+          "directOpportunityId",
           "jobId",
+          "origin",
           "organizationId",
           "projectId",
           "quote",
@@ -5828,16 +5887,31 @@
       || !UUID.test(text(value.projectId))
       || !UUID.test(text(value.caseId))
       || !UUID.test(text(value.customerId))
-      || !UUID.test(text(value.jobId))
-      || !UUID.test(text(value.reportId))
-      || !safeCustomBuildCredit(value.credit)
+      || !["direct", "assessment_successor"].includes(value.origin)
+      || (value.origin === "direct"
+        ? !UUID.test(text(value.directOpportunityId))
+          || value.jobId !== null
+          || value.reportId !== null
+          || value.credit !== null
+        : value.directOpportunityId !== null
+          || !UUID.test(text(value.jobId))
+          || !UUID.test(text(value.reportId))
+          || (value.quote
+            && value.quote.creditSelection ===
+              "apply_assessment_credit"
+            ? !safeCustomBuildCredit(value.credit)
+            : value.credit !== null))
       || !safeCustomBuildQuote(value.quote)
-      || value.quote.creditAcceptanceCutoff !==
-        value.credit.acceptanceCutoff
+      || value.quote.origin !== value.origin
+      || (value.quote.creditSelection === "apply_assessment_credit"
+        && value.quote.creditAcceptanceCutoff !==
+          value.credit.acceptanceCutoff)
       || value.quote.state !== value.state
-      || (value.state === "issued"
+      || (value.quote.creditSelection === "apply_assessment_credit"
+        && value.state === "issued"
         && !["available", "expired"].includes(value.credit.state))
-      || (value.state === "voided"
+      || (value.quote.creditSelection === "apply_assessment_credit"
+        && value.state === "voided"
         && !["available", "released", "expired"]
           .includes(value.credit.state))
     ) return null;
@@ -9100,7 +9174,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "After an assessment report is delivered, bind one exact Custom base-build scope to its same-project $200 credit. The browser shows a public estimate; the server remains the only monetary authority."
+        "Issue one exact Custom base-build scope from either a direct customer Engagement or a delivered assessment. Assessment credit is an explicit same-project choice; the server remains the only monetary authority."
       ),
       status,
       refresh,
@@ -9154,7 +9228,9 @@
             documentRef,
             "p",
             "customer-assessment-note",
-            "Safe void is confirmed. An unconsumed released credit may be used on one corrected replacement quote before its deadline."
+            quote.creditSelection === "apply_assessment_credit"
+              ? "Safe void is confirmed. An unconsumed released credit may be used on one corrected replacement quote before its deadline."
+              : "Safe void is confirmed. No assessment credit was reserved or released."
           )
         );
         return section;
@@ -9182,7 +9258,9 @@
         documentRef,
         "p",
         "customer-assessment-note",
-        "Safe void asks the server to release only an unconsumed assessment credit. The server must refuse if payment is settled or uncertain."
+        quote.creditSelection === "apply_assessment_credit"
+          ? "Safe void asks the server to release only an unconsumed assessment credit. The server must refuse if payment is settled or uncertain."
+          : "Safe void changes only this quote authority. No assessment credit is attached."
       );
       var button = accountElement(
         documentRef,
@@ -9248,7 +9326,9 @@
     }
 
     function renderIssueForm(entry, busy) {
-      var draftKey = entry.assessment.jobId;
+      var draftKey = entry.origin === "direct"
+        ? "direct:" + entry.engagementId
+        : "assessment:" + entry.assessment.jobId;
       var savedDraft = issueDrafts.get(draftKey) || null;
       var startingTier = customBuildTier(
         savedDraft && savedDraft.tierId
@@ -9260,8 +9340,28 @@
       );
       form.setAttribute(
         "data-owner-custom-build-form",
-        entry.assessment.jobId
+        draftKey
       );
+      var creditChoices = entry.origin === "direct"
+        || !["available", "released"].includes(entry.credit.state)
+        ? [["no_credit", "No assessment credit"]]
+        : [
+            ["apply_assessment_credit", "Apply the $200 assessment credit"],
+            ["no_credit", "Do not apply the assessment credit"]
+          ];
+      var startingCreditSelection = creditChoices.some(function (choice) {
+        return choice[0] === (savedDraft && savedDraft.creditSelection);
+      })
+        ? savedDraft.creditSelection
+        : creditChoices[0][0];
+      var creditField = assessmentSelect(
+        documentRef,
+        "creditSelection",
+        "Assessment credit",
+        startingCreditSelection,
+        creditChoices
+      );
+      var creditSelect = creditField.querySelector("select");
       var tierField = assessmentSelect(
         documentRef,
         "tierId",
@@ -9333,10 +9433,14 @@
       var targetInput = target.querySelector("input");
       targetInput.min = customBuildFutureDate(1);
       targetInput.max = customBuildFutureDate(730);
-      var cutoff = Date.parse(entry.credit.acceptanceCutoff);
+      var cutoff = entry.credit
+        ? Date.parse(entry.credit.acceptanceCutoff)
+        : Number.POSITIVE_INFINITY;
       var maximumExpiry = Math.min(
         Date.now() + 30 * 24 * 60 * 60 * 1000,
-        cutoff
+        creditSelect.value === "apply_assessment_credit"
+          ? cutoff
+          : Number.POSITIVE_INFINITY
       );
       var defaultExpiry = Math.min(
         Date.now() + 14 * 24 * 60 * 60 * 1000,
@@ -9380,6 +9484,7 @@
       issue.type = "submit";
       issue.disabled = busy;
       form.append(
+        creditField,
         tierField,
         pages,
         sections,
@@ -9420,6 +9525,7 @@
 
       function storeDraft() {
         issueDrafts.set(draftKey, {
+          creditSelection: creditSelect.value,
           tierId: selectedTier.value,
           craftedPages: Number(footprintInputs.craftedPages.value),
           sections: Number(footprintInputs.sections.value),
@@ -9437,7 +9543,8 @@
       function updateEstimate() {
         var publicEstimate = customBuildPublicEstimate(
           selectedTier.value,
-          currentFootprint()
+          currentFootprint(),
+          creditSelect.value
         );
         if (!publicEstimate) {
           estimate.textContent = selectedTier.value === "scale"
@@ -9451,9 +9558,12 @@
           : " ($4,000.00 + $270.00 × "
             + publicEstimate.scaleUnits + " capacity unit"
             + (publicEstimate.scaleUnits === 1 ? "" : "s") + ")";
+        var creditCopy = publicEstimate.creditAmountMinor === 0
+          ? "no assessment credit; "
+          : "−$200.00 assessment credit; ";
         estimate.textContent = "Calculated public estimate: "
           + customBuildMoney(publicEstimate.serviceAmountMinor)
-          + scaleCopy + " gross; −$200.00 assessment credit; "
+          + scaleCopy + " gross; " + creditCopy
           + customBuildMoney(publicEstimate.customerAmountMinor)
           + " remaining before tax. The issued server quote is authoritative.";
         issue.disabled = busy;
@@ -9471,6 +9581,20 @@
       }
 
       selectedTier.addEventListener("change", applyTierDefaults);
+      creditSelect.addEventListener("change", function () {
+        var selectedMaximum = Math.min(
+          Date.now() + 30 * 24 * 60 * 60 * 1000,
+          creditSelect.value === "apply_assessment_credit"
+            ? cutoff
+            : Number.POSITIVE_INFINITY
+        );
+        expiryInput.max = customBuildLocalDateTime(selectedMaximum);
+        if (Date.parse(expiryInput.value) > selectedMaximum) {
+          expiryInput.value = customBuildLocalDateTime(selectedMaximum);
+        }
+        storeDraft();
+        updateEstimate();
+      });
       Object.keys(footprintInputs).forEach(function (name) {
         footprintInputs[name].addEventListener("input", function () {
           storeDraft();
@@ -9500,6 +9624,7 @@
         if (typeof actions.issue !== "function") return;
         actions.issue(entry, {
           organizationId: entry.organizationId,
+          creditSelection: creditSelect.value,
           tierId: selectedTier.value,
           craftedPages: currentFootprint().craftedPages,
           sections: currentFootprint().sections,
@@ -9523,8 +9648,12 @@
         "customer-owner-quote-card customer-owner-custom-build-card"
       );
       card.setAttribute(
-        "data-custom-build-job",
-        entry.assessment.jobId
+        entry.origin === "direct"
+          ? "data-custom-build-engagement"
+          : "data-custom-build-job",
+        entry.origin === "direct"
+          ? entry.engagementId
+          : entry.assessment.jobId
       );
       card.append(
         accountElement(
@@ -9541,36 +9670,49 @@
         )
       );
       var sourceFacts = accountElement(documentRef, "dl", "");
-      appendAccountFact(
-        documentRef,
-        sourceFacts,
-        "Assessment report",
-        entry.assessment.reportId + " · delivered "
-          + accountDate(entry.assessment.deliveredAt)
-      );
-      appendAccountFact(
-        documentRef,
-        sourceFacts,
-        "Assessment job",
-        entry.assessment.jobId
-      );
-      appendAccountFact(
-        documentRef,
-        sourceFacts,
-        "Build credit",
-        customBuildMoney(entry.credit.amountMinor) + " · "
-          + accountWords(entry.credit.state)
-      );
-      appendAccountFact(
-        documentRef,
-        sourceFacts,
-        "Credit deadline",
-        accountDate(entry.credit.acceptanceCutoff)
-      );
+      if (entry.origin === "direct") {
+        appendAccountFact(
+          documentRef,
+          sourceFacts,
+          "Opportunity source",
+          "Direct customer Engagement · no assessment required"
+        );
+      } else {
+        appendAccountFact(
+          documentRef,
+          sourceFacts,
+          "Assessment report",
+          entry.assessment.reportId + " · delivered "
+            + accountDate(entry.assessment.deliveredAt)
+        );
+        appendAccountFact(
+          documentRef,
+          sourceFacts,
+          "Assessment job",
+          entry.assessment.jobId
+        );
+        appendAccountFact(
+          documentRef,
+          sourceFacts,
+          "Build credit",
+          customBuildMoney(entry.credit.amountMinor) + " · "
+            + accountWords(entry.credit.state)
+        );
+        appendAccountFact(
+          documentRef,
+          sourceFacts,
+          "Credit deadline",
+          accountDate(entry.credit.acceptanceCutoff)
+        );
+      }
       card.appendChild(sourceFacts);
       if (entry.currentQuote) {
         if (entry.currentQuote.state !== "voided") {
-          issueDrafts.delete(entry.assessment.jobId);
+          issueDrafts.delete(
+            entry.origin === "direct"
+              ? "direct:" + entry.engagementId
+              : "assessment:" + entry.assessment.jobId
+          );
         } else {
           voidDrafts.delete(entry.currentQuote.quoteId);
         }
@@ -9579,19 +9721,8 @@
       if (
         (!entry.currentQuote
           || entry.currentQuote.state === "voided")
-        && ["available", "released"].includes(entry.credit.state)
       ) {
         card.appendChild(renderIssueForm(entry, busy));
-      } else if (!entry.currentQuote) {
-        card.appendChild(
-          accountElement(
-            documentRef,
-            "p",
-            "customer-assessment-note",
-            "A new quote cannot be issued while this credit is "
-              + accountWords(entry.credit.state) + "."
-          )
-        );
       }
       return card;
     }
@@ -9626,8 +9757,8 @@
       status.textContent = read.busyKey
         ? "Saving one exact Custom build command…"
         : queue.opportunities.length === 0
-          ? "No delivered assessment is waiting for a Custom build quote."
-          : queue.opportunities.length + " delivered assessment "
+          ? "No direct Engagement or delivered assessment is waiting for a Custom build quote."
+          : queue.opportunities.length + " Custom build "
             + (queue.opportunities.length === 1
               ? "opportunity"
               : "opportunities") + " ready.";
@@ -16862,9 +16993,13 @@
       );
       if (!queue || !entry) return null;
       return queue.opportunities.find(function (candidate) {
-        return candidate.assessment.jobId === entry.assessment.jobId
+        return candidate.origin === entry.origin
           && candidate.projectId === entry.projectId
-          && candidate.assessment.reportId === entry.assessment.reportId
+          && (candidate.origin === "direct"
+            ? candidate.engagementId === entry.engagementId
+            : candidate.assessment.jobId === entry.assessment.jobId
+              && candidate.assessment.reportId ===
+                entry.assessment.reportId)
           && candidate.organizationId === entry.organizationId;
       }) || null;
     }
@@ -16876,16 +17011,25 @@
         !current
         || (current.currentQuote !== null
           && current.currentQuote.state !== "voided")
-        || !["available", "released"].includes(current.credit.state)
+        || (input.creditSelection === "apply_assessment_credit"
+          && (!current.credit
+            || !["available", "released"].includes(
+              current.credit.state
+            )))
         || ownerCustomBuildRead.busyKey
-        || typeof client.issueOwnerCustomBuildQuote !== "function"
+        || (current.origin === "direct"
+          ? typeof client.issueOwnerDirectCustomBuildQuote !== "function"
+          : typeof client.issueOwnerCustomBuildQuote !== "function")
       ) return Promise.resolve(null);
+      var opportunityId = current.origin === "direct"
+        ? current.projectId
+        : current.assessment.jobId;
       var commandId;
       try {
         commandId = customBuildCommandId(
           accountId,
           "issue",
-          current.assessment.jobId,
+          opportunityId,
           input
         );
       } catch (error) {
@@ -16900,15 +17044,25 @@
       }
       var sequence = ownerCustomBuildReadSequence;
       ownerCustomBuildRead = Object.assign({}, ownerCustomBuildRead, {
-        busyKey: "issue:" + current.assessment.jobId,
+        busyKey: "issue:" + opportunityId,
         error: ""
       });
       renderOwnerCustomBuildPanel();
       return Promise.resolve().then(function () {
-        return client.issueOwnerCustomBuildQuote(
-          current.assessment.jobId,
-          Object.assign({}, input, { commandId: commandId })
+        var exactInput = Object.assign(
+          {},
+          input,
+          { commandId: commandId }
         );
+        return current.origin === "direct"
+          ? client.issueOwnerDirectCustomBuildQuote(
+              current.projectId,
+              exactInput
+            )
+          : client.issueOwnerCustomBuildQuote(
+              current.assessment.jobId,
+              exactInput
+            );
       }).then(function (result) {
         if (!ownerCustomBuildReadIsCurrent(sequence, accountId)) {
           return null;
@@ -16921,8 +17075,13 @@
           || receipt.projectId !== current.projectId
           || receipt.customerId !== current.customer.customerId
           || receipt.caseId !== current.caseId
-          || receipt.jobId !== current.assessment.jobId
-          || receipt.reportId !== current.assessment.reportId
+          || receipt.origin !== current.origin
+          || (current.origin === "direct"
+            ? receipt.directOpportunityId !== current.engagementId
+              || receipt.jobId !== null
+              || receipt.reportId !== null
+            : receipt.jobId !== current.assessment.jobId
+              || receipt.reportId !== current.assessment.reportId)
           || receipt.quote.tier.id !== input.tierId
         ) {
           throw new Error(

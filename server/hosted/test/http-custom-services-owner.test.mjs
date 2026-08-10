@@ -12,6 +12,8 @@ const OPERATOR_ID =
   "10000000-0000-4000-8000-000000000001";
 const ORGANIZATION_ID =
   "20000000-0000-4000-8000-000000000001";
+const PROJECT_ID =
+  "21000000-0000-4000-8000-000000000001";
 const CASE_ID =
   "30000000-0000-4000-8000-000000000001";
 const JOB_ID =
@@ -383,6 +385,10 @@ test("owner Custom build routes bind exact opportunities, job quotes, and quote 
         calls.push({ action: "issue", actor, jobId, input });
         return issuedReceipt;
       },
+      async issueDirectQuote(actor, projectId, input) {
+        calls.push({ action: "issue-direct", actor, projectId, input });
+        return issuedReceipt;
+      },
       async voidQuote(actor, quoteId, input) {
         calls.push({ action: "void", actor, quoteId, input });
         return voidedReceipt;
@@ -409,6 +415,7 @@ test("owner Custom build routes bind exact opportunities, job quotes, and quote 
 
   const issueBody = {
     organizationId: ORGANIZATION_ID,
+    creditSelection: "apply_assessment_credit",
     tierId: "site-plus",
     craftedPages: 7,
     sections: 28,
@@ -466,6 +473,29 @@ test("owner Custom build routes bind exact opportunities, job quotes, and quote 
     }
   ]);
 
+  const directBody = {
+    ...issueBody,
+    creditSelection: "no_credit"
+  };
+  const direct = await api.fetch(request({
+    body: directBody,
+    method: "POST",
+    path:
+      "/api/v1/operator/custom-services/custom-build-opportunities/" +
+      `${PROJECT_ID}/quote`
+  }));
+  assert.equal(direct.status, 201);
+  assert.deepEqual(await direct.json(), issuedReceipt);
+  assert.deepEqual(calls.at(-1), {
+    action: "issue-direct",
+    actor: { userId: OPERATOR_ID },
+    projectId: PROJECT_ID,
+    input: {
+      ...directBody,
+      commandId: "owner-quote-command-1"
+    }
+  });
+
   const monetary = await api.fetch(request({
     body: { ...issueBody, amountMinor: 1 },
     method: "POST",
@@ -478,14 +508,14 @@ test("owner Custom build routes bind exact opportunities, job quotes, and quote 
     (await monetary.json()).error.code,
     "INVALID_CUSTOM_BUILD_QUOTE"
   );
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
 
   const signedOut = await api.fetch(request({
     path: listPath,
     signedIn: false
   }));
   assert.equal(signedOut.status, 401);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
 });
 
 test("owner paid Custom build jobs are private, authenticated, and read-only", async () => {

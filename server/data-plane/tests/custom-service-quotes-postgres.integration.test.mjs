@@ -2873,7 +2873,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.deepEqual(await customBuild.readiness(), {
       schema: "sitesourcery.custom-services-custom-build-readiness/v1",
       ready: true,
-      runtimeContract: "canonical-ss-v41-custom-build-quote-credit"
+      runtimeContract: "canonical-ss-v41-custom-build-quote-credit",
+      directContract:
+        "canonical-custom-direct-v1-engagement-optional-credit"
     });
 
     const opportunities = await customBuild.listOpportunities(operatorActor);
@@ -2891,6 +2893,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
 
     const customBuildIssue = {
       commandId: `custom-build-issue-${randomUUID()}`,
+      creditSelection: "apply_assessment_credit",
       organizationId: customer.organizationId,
       tierId: "site",
       craftedPages: 4,
@@ -3241,6 +3244,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
 
     const raceBuildIssue = {
       commandId: `v47-race-custom-build-issue-${randomUUID()}`,
+      creditSelection: "apply_assessment_credit",
       organizationId: other.organizationId,
       tierId: "site",
       craftedPages: 4,
@@ -4899,6 +4903,44 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     });
     assert.equal(replayAfterVoid.state, "voided");
     assert.equal(replayAfterVoid.credit.state, "released");
+    assert.equal(
+      (await assessmentWork.readCustomerReport(
+        customerAssessmentScope
+      )).credit.state,
+      "available"
+    );
+
+    const declinedCreditBuild = await customBuild.issueQuote(
+      operatorActor,
+      paidJob.jobId,
+      {
+        ...customBuildIssue,
+        commandId: `custom-build-issue-${randomUUID()}`,
+        creditSelection: "no_credit",
+        scopeStatement:
+          "Build the same approved Site scope while explicitly preserving the optional assessment credit."
+      }
+    );
+    assert.equal(declinedCreditBuild.credit, null);
+    assert.equal(declinedCreditBuild.quote.creditSelection, "no_credit");
+    assert.equal(declinedCreditBuild.quote.pricing.creditAmountMinor, 0);
+    assert.equal(declinedCreditBuild.quote.pricing.startDueMinor, 60000);
+    assert.equal(
+      (await customBuild.readCurrentQuote(customerAssessmentScope)).credit,
+      null
+    );
+    const declinedCreditVoided = await customBuild.voidQuote(
+      operatorActor,
+      declinedCreditBuild.quote.quoteId,
+      {
+        commandId: `custom-build-void-${randomUUID()}`,
+        organizationId: customer.organizationId,
+        reason:
+          "Exercise the explicit no-credit option before issuing the corrected credited quote."
+      }
+    );
+    assert.equal(declinedCreditVoided.credit, null);
+    assert.equal(declinedCreditVoided.state, "voided");
     assert.equal(
       (await assessmentWork.readCustomerReport(
         customerAssessmentScope
@@ -7242,7 +7284,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       [paidJob.jobId]
     );
     assert.deepEqual(customBuildCounts.rows[0], {
-      quotes: 2,
+      quotes: 3,
       released_credits: 1,
       active_credits: 1,
       build_jobs: 1
