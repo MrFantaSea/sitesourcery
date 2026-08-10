@@ -790,7 +790,8 @@ async function start() {
   }
   assertApprovedAlakazamReady(
     alakazamComposition,
-    readiness.payments
+    readiness.payments,
+    alakazamPolicyReadiness
   );
   if (!readiness.ready) {
     throw new Error(

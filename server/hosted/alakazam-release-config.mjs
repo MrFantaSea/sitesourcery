@@ -61,7 +61,8 @@ export function createConfiguredAlakazamRelease({
 
 export function assertApprovedAlakazamReady(
   composition,
-  readiness
+  readiness,
+  policyReadiness
 ) {
   if (
     composition?.mode === "approved" &&
@@ -71,12 +72,22 @@ export function assertApprovedAlakazamReady(
       readiness.alakazam === true &&
       readiness.taxModes?.alakazam ===
         composition.release.taxMode &&
-      typeof readiness.livemode === "boolean"
+      typeof readiness.livemode === "boolean" &&
+      policyReadiness?.schema ===
+        "sitesourcery.alakazam-policy-readiness/v1" &&
+      policyReadiness.ready === true &&
+      policyReadiness.verified === true &&
+      policyReadiness.state === "released" &&
+      policyReadiness.commercialEffects === true &&
+      policyReadiness.providerEffects === true &&
+      policyReadiness.publicationEffects === true &&
+      policyReadiness.automaticRecoveryFromReversalEvidence ===
+        false
     )
   ) {
     throw configurationError(
       "ALAKAZAM_NOT_READY",
-      "Approved Alakazam is not ready; inspect the private Stripe Product, Price, Coupon, Portal, tax, and release configuration."
+      "Approved Alakazam is not ready; inspect the canonical released policy plus the private Stripe Product, Price, Coupon, Portal, tax, and release configuration."
     );
   }
   return readiness;

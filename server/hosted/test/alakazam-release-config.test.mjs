@@ -55,7 +55,7 @@ test("approved Alakazam requires one exact tax ruling", () => {
   );
 });
 
-test("approved Alakazam refuses startup until matching Stripe readiness", () => {
+test("approved Alakazam requires matching Stripe and released policy readiness", () => {
   const approved = createConfiguredAlakazamRelease({
     environment: {
       SITESOURCERY_ALAKAZAM_MODE: "approved",
@@ -71,7 +71,7 @@ test("approved Alakazam refuses startup until matching Stripe readiness", () => 
         alakazam: true,
         taxModes: { alakazam: "automatic" },
         livemode: false
-      }),
+      }, {}),
     (error) => error.code === "ALAKAZAM_NOT_READY"
   );
   const ready = {
@@ -81,8 +81,37 @@ test("approved Alakazam refuses startup until matching Stripe readiness", () => 
     taxModes: { alakazam: "disabled_by_owner" },
     livemode: false
   };
+  const heldPolicy = {
+    schema: "sitesourcery.alakazam-policy-readiness/v1",
+    ready: true,
+    verified: true,
+    state: "held",
+    commercialEffects: false,
+    providerEffects: false,
+    publicationEffects: false,
+    automaticRecoveryFromReversalEvidence: false
+  };
+  assert.throws(
+    () => assertApprovedAlakazamReady(
+      approved,
+      ready,
+      heldPolicy
+    ),
+    (error) => error.code === "ALAKAZAM_NOT_READY"
+  );
+  const releasedPolicy = {
+    ...heldPolicy,
+    state: "released",
+    commercialEffects: true,
+    providerEffects: true,
+    publicationEffects: true
+  };
   assert.deepEqual(
-    assertApprovedAlakazamReady(approved, ready),
+    assertApprovedAlakazamReady(
+      approved,
+      ready,
+      releasedPolicy
+    ),
     ready
   );
   assert.doesNotThrow(() =>
