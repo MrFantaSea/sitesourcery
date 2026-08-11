@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sitesourcery.com/schemas/final-release-epoch-v2.json",
+  "title": "Site Sourcery final held release epoch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "epochId",
+    "state",
+    "bindingSha256",
+    "evidence",
+    "identity",
+    "legalV4Pages",
+    "privacyArtifact",
+    "rollback",
+    "authority",
+    "digest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sitesourcery.final-release-epoch/v2"
+    },
+    "epochId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "state": {
+      "const": "verified_held"
+    },
+    "bindingSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "originReleaseInputDigest",
+        "originSuccessorBindingSha256",
+        "ciFinalReceiptDigest",
+        "originSealSha256",
+        "originInstalledReadbackDigest",
+        "originInstalledReadbackReceiptSha256"
+      ],
+      "properties": {
+        "originReleaseInputDigest": { "$ref": "#/$defs/sha256" },
+        "originSuccessorBindingSha256": { "$ref": "#/$defs/sha256" },
+        "ciFinalReceiptDigest": { "$ref": "#/$defs/sha256" },
+        "originSealSha256": { "$ref": "#/$defs/sha256" },
+        "originInstalledReadbackDigest": { "$ref": "#/$defs/sha256" },
+        "originInstalledReadbackReceiptSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceCommitSha",
+        "sourceTreeSha",
+        "artifactManifestSha256",
+        "unitManifestSha256",
+        "environmentSchemaManifestSha256",
+        "environmentClassificationSha256",
+        "workerManifestSha256",
+        "workerContractSha256",
+        "migrationCount",
+        "latestMigration",
+        "migrationManifestSha256",
+        "legalAuthorityDigest",
+        "legalManifestSha256",
+        "ingressManifestSha256"
+      ],
+      "properties": {
+        "sourceCommitSha": { "$ref": "#/$defs/commitSha" },
+        "sourceTreeSha": { "$ref": "#/$defs/commitSha" },
+        "artifactManifestSha256": { "$ref": "#/$defs/sha256" },
+        "unitManifestSha256": { "$ref": "#/$defs/sha256" },
+        "environmentSchemaManifestSha256": { "$ref": "#/$defs/sha256" },
+        "environmentClassificationSha256": { "$ref": "#/$defs/sha256" },
+        "workerManifestSha256": { "$ref": "#/$defs/sha256" },
+        "workerContractSha256": { "$ref": "#/$defs/sha256" },
+        "migrationCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latestMigration": {
+          "type": "string",
+          "pattern": "^[0-9]{12}_[a-z0-9_]+\\.sql$"
+        },
+        "migrationManifestSha256": { "$ref": "#/$defs/sha256" },
+        "legalAuthorityDigest": { "$ref": "#/$defs/sha256" },
+        "legalManifestSha256": { "$ref": "#/$defs/sha256" },
+        "ingressManifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "legalV4Pages": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fileCount", "manifestSha256"],
+      "properties": {
+        "fileCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "manifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "privacyArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "sha256", "byteCount"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^[A-Z0-9][A-Z0-9-]{2,127}$"
+        },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byteCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predecessorCommitSha",
+        "predecessorTreeSha",
+        "predecessorArtifactManifestSha256"
+      ],
+      "properties": {
+        "predecessorCommitSha": { "$ref": "#/$defs/commitSha" },
+        "predecessorTreeSha": { "$ref": "#/$defs/commitSha" },
+        "predecessorArtifactManifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "authority": {
+      "const": {
+        "state": "held",
+        "allowsCapabilities": false,
+        "allowsCustomerEffects": false,
+        "allowsProviderEffects": false,
+        "allowsDnsMutation": false,
+        "allowsDeployment": false,
+        "enabledCapabilities": []
+      }
+    },
+    "digest": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    }
+  }
+}

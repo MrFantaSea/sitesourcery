@@ -2,6 +2,11 @@ import {
   canonicalJson,
   sha256Bytes
 } from "./immutable-evidence.mjs";
+import {
+  FINAL_RELEASE_EPOCH_V2_SCHEMA,
+  releaseIdentityFromFinalEpochV2,
+  validateFinalReleaseEpochV2
+} from "./final-release-epoch-v2.mjs";
 import { validateReleaseEpoch } from "./release-epoch.mjs";
 
 export const INDEPENDENT_RELEASE_IDENTITY_SCHEMA =
@@ -88,13 +93,42 @@ function freeze(value) {
 }
 
 export function releaseIdentityFromEpoch(value) {
+  return releaseEvidenceFromEpoch(value).releaseIdentity;
+}
+
+export function releaseEvidenceFromEpoch(value) {
+  if (value?.schema === FINAL_RELEASE_EPOCH_V2_SCHEMA) {
+    const epoch = validateFinalReleaseEpochV2(value);
+    const current = releaseIdentityFromFinalEpochV2(epoch);
+    return freeze({
+      releaseIdentity: {
+        schema: INDEPENDENT_RELEASE_IDENTITY_SCHEMA,
+        epochId: current.epochId,
+        bindingSha256: current.bindingSha256,
+        publicArtifactCommitSha:
+          current.candidateCommitSha
+      },
+      privacyArtifact: {
+        version: epoch.privacyArtifact.version,
+        sha256: epoch.privacyArtifact.sha256,
+        byteCount: epoch.privacyArtifact.byteCount
+      }
+    });
+  }
   const epoch = validateReleaseEpoch(value);
   return freeze({
-    schema: INDEPENDENT_RELEASE_IDENTITY_SCHEMA,
-    epochId: epoch.epochId,
-    bindingSha256: epoch.binding.sha256,
-    publicArtifactCommitSha:
-      epoch.binding.artifact.publicArtifactCommitSha
+    releaseIdentity: {
+      schema: INDEPENDENT_RELEASE_IDENTITY_SCHEMA,
+      epochId: epoch.epochId,
+      bindingSha256: epoch.binding.sha256,
+      publicArtifactCommitSha:
+        epoch.binding.artifact.publicArtifactCommitSha
+    },
+    privacyArtifact: {
+      version: epoch.binding.legal.privacyVersion,
+      sha256: epoch.binding.artifact.privacySha256,
+      byteCount: epoch.binding.artifact.privacyByteCount
+    }
   });
 }
 

@@ -12,11 +12,14 @@ const ACTOR = Object.freeze({
 });
 const UNBOUND_RELEASE = Object.freeze({
   schema:
-    "sitesourcery.hosted-release-identity/v1",
+    "sitesourcery.hosted-release-identity/v2",
   state: "unbound",
   epochId: null,
   bindingSha256: null,
-  publicArtifactCommitSha: null
+  candidateCommitSha: null,
+  candidateTreeSha: null,
+  migrationCount: null,
+  latestMigration: null
 });
 const READINESS_LATENCY_BUCKETS = new Set([
   "under_25_ms",
@@ -561,27 +564,40 @@ test("health and readiness probes are sessionless, bounded, and nonsecret", asyn
   assert.deepEqual(held.calls.authenticate, []);
 });
 
-test("liveness reports an injected validated release identity without checking dependencies", async () => {
+test("liveness and readiness share one validated held release identity without coupling checks", async () => {
   const releaseIdentity = {
     schema:
-      "sitesourcery.hosted-release-identity/v1",
-    state: "bound",
+      "sitesourcery.hosted-release-identity/v2",
+    state: "verified_held",
     epochId: "fixture-release-epoch",
     bindingSha256: "a".repeat(64),
-    publicArtifactCommitSha: "b".repeat(40)
+    candidateCommitSha: "b".repeat(40),
+    candidateTreeSha: "c".repeat(40),
+    migrationCount: 7,
+    latestMigration:
+      "202608100007_fixture_release.sql"
   };
   const context = createContext({ releaseIdentity });
-  const response = await context.api.fetch(
+  const live = await context.api.fetch(
     new Request(`${ORIGIN}/api/v1/live`)
   );
-  assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), {
+  assert.equal(live.status, 200);
+  assert.deepEqual(await live.json(), {
     schema: "sitesourcery.hosted-liveness/v1",
     live: true,
     service: "sitesourcery-hosted-runtime",
     release: releaseIdentity
   });
   assert.equal(context.calls.readiness.length, 0);
+  const ready = await context.api.fetch(
+    new Request(`${ORIGIN}/api/v1/ready`)
+  );
+  assert.equal(ready.status, 200);
+  assert.deepEqual(
+    (await ready.json()).release,
+    releaseIdentity
+  );
+  assert.equal(context.calls.readiness.length, 1);
   assert.deepEqual(context.calls.authenticate, []);
 });
 

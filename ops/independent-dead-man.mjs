@@ -3,10 +3,14 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { canonicalJson } from "./immutable-evidence.mjs";
 import {
-  canonicalJson,
-  readJsonObject
-} from "./immutable-evidence.mjs";
+  FINAL_RELEASE_EPOCH_V2_INSTALLED_PATH,
+  FINAL_RELEASE_EPOCH_V2_SCHEMA,
+  RELEASE_EVIDENCE_PARENT_PATH,
+  readAnchoredJsonFile,
+  readInstalledFinalReleaseEpochV2
+} from "./final-release-epoch-v2.mjs";
 import {
   evaluateIndependentDeadMan,
   releaseIdentityFromEpoch
@@ -42,10 +46,46 @@ function maximumAge(environment) {
   return Number(raw);
 }
 
+async function readAnchoredReleaseEpoch(environment, epochPath) {
+  const expectedEpochFileSha256 = required(
+    environment,
+    "SITESOURCERY_RELEASE_EPOCH_SHA256"
+  );
+  const unprojected = await readAnchoredJsonFile(epochPath, {
+    expectedSha256: expectedEpochFileSha256,
+    expectedPath: FINAL_RELEASE_EPOCH_V2_INSTALLED_PATH,
+    expectedParentPath: RELEASE_EVIDENCE_PARENT_PATH,
+    expectedOwnerUid: 0
+  });
+  if (unprojected.schema !== FINAL_RELEASE_EPOCH_V2_SCHEMA) {
+    return unprojected;
+  }
+  return readInstalledFinalReleaseEpochV2({
+    epochPath,
+    expectedEpochFileSha256,
+    originSealPath: absolute(
+      environment,
+      "SITESOURCERY_ORIGIN_SEAL_FILE"
+    ),
+    expectedOriginSealFileSha256: required(
+      environment,
+      "SITESOURCERY_ORIGIN_SEAL_FILE_SHA256"
+    ),
+    installedReadbackPath: absolute(
+      environment,
+      "SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE"
+    ),
+    expectedInstalledReadbackFileSha256: required(
+      environment,
+      "SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE_SHA256"
+    )
+  });
+}
+
 export async function deadManFromEnvironment(
   environment = process.env,
   {
-    readEpoch = readJsonObject,
+    readEpoch = null,
     readHeartbeat = readIndependentMonitorHeartbeat,
     now = () => new Date()
   } = {}
@@ -60,10 +100,13 @@ export async function deadManFromEnvironment(
   ) {
     throw new Error("Independent dead-man remains held.");
   }
-  const epoch = await readEpoch(
-    absolute(environment, "SITESOURCERY_RELEASE_EPOCH_FILE"),
-    "Release epoch"
+  const epochPath = absolute(
+    environment,
+    "SITESOURCERY_RELEASE_EPOCH_FILE"
   );
+  const epoch = readEpoch
+    ? await readEpoch(epochPath, "Release epoch")
+    : await readAnchoredReleaseEpoch(environment, epochPath);
   let heartbeat = null;
   try {
     heartbeat = await readHeartbeat(

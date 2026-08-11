@@ -88,7 +88,7 @@ const HOSTED_LIVENESS_SCHEMA =
 const HOSTED_READINESS_SCHEMA =
   "sitesourcery.hosted-readiness/v1";
 const HOSTED_RELEASE_IDENTITY_SCHEMA =
-  "sitesourcery.hosted-release-identity/v1";
+  "sitesourcery.hosted-release-identity/v2";
 const SESSIONLESS_IDENTITY_WRITES = new Set([
   "/api/v1/auth/register",
   "/api/v1/auth/register/complete",
@@ -128,7 +128,10 @@ function runtimeReleaseIdentity(input) {
       state: "unbound",
       epochId: null,
       bindingSha256: null,
-      publicArtifactCommitSha: null
+      candidateCommitSha: null,
+      candidateTreeSha: null,
+      migrationCount: null,
+      latestMigration: null
     });
   }
   invariant(
@@ -138,14 +141,17 @@ function runtimeReleaseIdentity(input) {
         Object.keys(input).sort()
       ) === JSON.stringify([
         "bindingSha256",
+        "candidateCommitSha",
+        "candidateTreeSha",
         "epochId",
-        "publicArtifactCommitSha",
+        "latestMigration",
+        "migrationCount",
         "schema",
         "state"
       ]) &&
       input.schema ===
         HOSTED_RELEASE_IDENTITY_SCHEMA &&
-      input.state === "bound" &&
+      input.state === "verified_held" &&
       /^[A-Za-z0-9._:-]{1,128}$/u.test(
         input.epochId
       ) &&
@@ -153,7 +159,16 @@ function runtimeReleaseIdentity(input) {
         input.bindingSha256
       ) &&
       /^[a-f0-9]{40}$/u.test(
-        input.publicArtifactCommitSha
+        input.candidateCommitSha
+      ) &&
+      /^[a-f0-9]{40}$/u.test(
+        input.candidateTreeSha
+      ) &&
+      Number.isSafeInteger(input.migrationCount) &&
+      input.migrationCount > 0 &&
+      typeof input.latestMigration === "string" &&
+      /^[0-9]{12}_[a-z0-9_]+\.sql$/u.test(
+        input.latestMigration
       ),
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted release identity is invalid.",
@@ -161,11 +176,13 @@ function runtimeReleaseIdentity(input) {
   );
   return Object.freeze({
     schema: HOSTED_RELEASE_IDENTITY_SCHEMA,
-    state: "bound",
+    state: "verified_held",
     epochId: input.epochId,
     bindingSha256: input.bindingSha256,
-    publicArtifactCommitSha:
-      input.publicArtifactCommitSha
+    candidateCommitSha: input.candidateCommitSha,
+    candidateTreeSha: input.candidateTreeSha,
+    migrationCount: input.migrationCount,
+    latestMigration: input.latestMigration
   });
 }
 

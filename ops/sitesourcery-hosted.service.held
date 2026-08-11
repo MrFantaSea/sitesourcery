@@ -15,6 +15,7 @@ WorkingDirectory=/opt/sitesourcery/current
 Environment=NODE_ENV=production
 EnvironmentFile=/etc/sitesourcery/hosted.env
 ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/assert-runtime.mjs
+ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/ops/verify-final-release-epoch-v2.mjs --epoch ${SITESOURCERY_RELEASE_EPOCH_FILE} --epoch-sha256 ${SITESOURCERY_RELEASE_EPOCH_SHA256} --origin-seal ${SITESOURCERY_ORIGIN_SEAL_FILE} --origin-seal-sha256 ${SITESOURCERY_ORIGIN_SEAL_FILE_SHA256} --installed-readback ${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE} --installed-readback-sha256 ${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE_SHA256}
 ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/bin/server.mjs
 Restart=on-failure
 RestartSec=5s

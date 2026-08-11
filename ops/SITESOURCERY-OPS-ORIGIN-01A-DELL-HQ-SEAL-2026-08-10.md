@@ -243,6 +243,30 @@ Exit zero and state `verified` require all fields to match. State `mismatch` or
 any validation failure is a deployment blocker and does not authorize a fix,
 service change, migration, or capability lift.
 
+### Successor V2 bootstrap boundary
+
+The installed readback is install-state evidence, not proof that the successor
+process is live. In the only non-circular V2 sequence, collect the exact file,
+unit, environment-schema, migration, legal, worker, authority, and actual
+loopback observations while the reviewed predecessor still owns those held
+loopback endpoints. Never manufacture a listener observation from the expected
+tuple. That readback proves the installed successor bytes and the bounded host
+topology at the observation time; it does not identify the predecessor-owned
+listener as the successor and does not prove successor liveness or readiness.
+
+After the CI successor input/final receipt, origin seal, and that installed
+readback agree, construct the held V2 receipt. Install the V2 receipt, origin
+seal, and installed readback as root-owned, non-group/world-writable regular
+files; put each exact raw-file SHA-256 in the root-owned environment; then let
+the unit precheck validate the same paths and digests consumed by the server.
+Only after that precheck may an owner-authorized cutover stop the predecessor
+and start the successor. A successful successor `/api/v1/live` identity,
+`/api/v1/ready` identity and dependency result, plus a fresh independent
+listener observation, are separate required post-start proofs. Failure of any
+post-start proof requires the already-sealed rollback path. The installed
+readback alone must never be reported as candidate listener, liveness, or
+readiness proof.
+
 ## Exact held rollback planning
 
 Print the rollback plan from the same seal:

@@ -249,7 +249,7 @@ test("liveness readiness and customer capability remain separate contracts", () 
   );
 });
 
-test("schema and repository verifier bind the current held epoch", async () => {
+test("schema retains v1 while repository verifier rejects it on the successor tree", async () => {
   const schema = JSON.parse(
     await readFile(
       new URL("../release-epoch.schema.json", import.meta.url),
@@ -280,19 +280,11 @@ test("schema and repository verifier bind the current held epoch", async () => {
     schema.$defs.dependencyReadiness.oneOf.length,
     2
   );
-  const result = await verifyReleaseEpochRepository();
-  assert.deepEqual(result, {
-    valid: true,
-    epochId: "shape-epoch-20260810",
-    bindingSha256: BINDING_SHA256,
-    migrationCount: 58,
-    providerPurposeCount: 19,
-    installedIdentity: "not_proven",
-    liveness: "not_observed",
-    dependencyReadiness: "blocked",
-    dependencyBlockerCount: 4,
-    customerCapability: "held",
-    publicMode: "held",
-    providerEffectsAllowed: false
-  });
+  await assert.rejects(
+    verifyReleaseEpochRepository(),
+    (error) =>
+      error?.name === "ReleaseEpochVerificationFailure" &&
+      error?.code === "RELEASE_EPOCH_REPOSITORY_MISMATCH" &&
+      /PostgreSQL migration count/u.test(error.message)
+  );
 });

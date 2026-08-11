@@ -7,6 +7,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  readInstalledFinalReleaseEpochV2,
+  releaseIdentityFromFinalEpochV2
+} from "../../../ops/final-release-epoch-v2.mjs";
+import {
   createNodeHandler as createTenantNodeHandler,
   DEFAULT_PLATFORM_BASE_DOMAIN,
   SelfHostRuntime
@@ -354,6 +358,29 @@ function listen(server, port) {
 }
 
 async function start() {
+  const releaseIdentity =
+    releaseIdentityFromFinalEpochV2(
+      await readInstalledFinalReleaseEpochV2({
+        epochPath: requiredEnvironment(
+          "SITESOURCERY_RELEASE_EPOCH_FILE"
+        ),
+        expectedEpochFileSha256: requiredEnvironment(
+          "SITESOURCERY_RELEASE_EPOCH_SHA256"
+        ),
+        originSealPath: requiredEnvironment(
+          "SITESOURCERY_ORIGIN_SEAL_FILE"
+        ),
+        expectedOriginSealFileSha256: requiredEnvironment(
+          "SITESOURCERY_ORIGIN_SEAL_FILE_SHA256"
+        ),
+        installedReadbackPath: requiredEnvironment(
+          "SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE"
+        ),
+        expectedInstalledReadbackFileSha256: requiredEnvironment(
+          "SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE_SHA256"
+        )
+      })
+    );
   await authority.assertReady();
   const commerceV2 =
     createPostgresCommerceV2Adapter({
@@ -878,6 +905,7 @@ async function start() {
           customBuildFinalCommerce:
             customBuildFinalPayment
         }),
+        releaseIdentity,
         ingressPolicy
       }),
       ingressPolicy

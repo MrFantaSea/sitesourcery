@@ -37,5 +37,5 @@ RestrictSUIDSGID=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 
-ReadOnlyPaths=/opt/sitesourcery-monitor/current /etc/sitesourcery-independent-monitor
+ReadOnlyPaths=/opt/sitesourcery-monitor/current /etc/sitesourcery-independent-monitor /etc/sitesourcery
 ReadWritePaths=/var/lib/sitesourcery-independent-monitor

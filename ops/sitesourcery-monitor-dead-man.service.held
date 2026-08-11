@@ -34,4 +34,4 @@ RestrictSUIDSGID=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 
-ReadOnlyPaths=/opt/sitesourcery-dead-man/current /etc/sitesourcery-dead-man /var/lib/sitesourcery-independent-monitor
+ReadOnlyPaths=/opt/sitesourcery-dead-man/current /etc/sitesourcery-dead-man /etc/sitesourcery /var/lib/sitesourcery-independent-monitor
