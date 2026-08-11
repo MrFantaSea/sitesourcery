@@ -4,7 +4,14 @@ Status: repository implementation reconciled; external release gates held
 
 Prepared: 2026-08-10
 
-Ledger reconciliation baseline: `3c94ffea1ac597556178291fc0b62ff87cc0edc2`
+Historical proof baseline: `3c94ffea1ac597556178291fc0b62ff87cc0edc2`
+
+Current pre-ledger integration checkpoint:
+`edf88da05ac59434754621fb580090950db2df2b` (**not frozen; exact post-ledger
+integration reproof is still required**)
+
+Superseded candidate: `7d6bfa9a116fa96d1adc75216d2597435ba18036`
+(historical input only; later integrations changed its tree)
 
 Legal V4 release ancestor: `69ad11c682dda9d6f792492d322b662dcbc98b4b`
 
@@ -36,13 +43,13 @@ remain held at this snapshot.
   inventory is in
   `server/data-plane/tests/migration-verification-inventory.mjs`; this is not a
   successor release epoch or installed-database claim.
-- The pre-ledger integrated proof at baseline `3c94ffe` is full pinned Node
+- The historical integrated proof at baseline `3c94ffe` is full pinned Node
   **819/819**, public-truth v2 **30/30**, self-host **19/19**, hosted **657 pass
   / 9 intentional database-gated skips / 0 fail**, and ops **146/146**. The
-  canonical run also rebuilt and verified the exact 90-file Pages artifact and
-  hosted artifact, then passed all **15 hosted routes x 3 viewports** at
-  320x720, 390x844, and 1440x1000. The final clean ledger commit must be
-  re-proved before it is frozen.
+  historical run also rebuilt and verified the exact 90-file Pages artifact
+  and hosted artifact, then passed all **15 hosted routes x 3 viewports** at
+  320x720, 390x844, and 1440x1000. Those counts describe `3c94ffe`; they are not
+  proof of the current checkpoint.
 - The separate sealed Legal V4 proof at the same baseline is **87/87**, rebuilds
   and verifies **94 exact files**, and passes **15 routes x 6 viewports** (90
   route-width combinations) with the reviewed Chrome 149.0.7827.55 identity.
@@ -63,10 +70,15 @@ remain held at this snapshot.
 - The Alakazam policy authority and the fail-closed gate requiring a genuinely
   released policy are merged. That gate does not make the current held policy
   released and does not enable Alakazam effects.
-- The current reviewed Legal V4 Pages projection contains 94 files. CI now
-  requires each explicit successor to supply its own positive `fileCount` and
-  exact `manifestSha256`; 94 is evidence for this projection, not a global
-  runtime or workflow constant.
+- The retained packet proofs for the current Legal V4 projections contain
+  **94 Pages files** and **104 complete hosted files**. CI requires each exact
+  successor to derive and supply the applicable positive `fileCount` and
+  `manifestSha256`; 94 and 104 are evidence for these reviewed projections,
+  not global runtime, workflow, or release constants.
+- Checkpoint `edf88da` integrates the six-width CI browser contract, complete
+  hosted Legal V4 projection, and candidate-generic public-truth successor
+  control. It remains a held integration checkpoint, not a frozen candidate;
+  the exact post-ledger integrated commit must be re-proved before freezing.
 - Inquiry-only static publication remains a candidate boundary, not a proven
   deployed publication. Hosted accounts/API and every payment purpose remain
   held pending the applicable lists below.
@@ -127,6 +139,7 @@ Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 | SHAPE-EPOCH-01 | `2161422`; `ops/release-epoch.mjs` | Fail-closed non-secret epoch contract and liveness/readiness/capability vocabulary. Retained epoch remains stale. |
 | FINAL-EPOCH-V2-03 | packet `888861c`, integrated `38fb3db`; `ops/final-release-epoch-v2.mjs` | Generic successor receipt/projector cross-binds protected CI, origin seal, and installed readback through exact root-owned path/digest anchors; retained v1 bytes remain immutable. Candidate-specific evidence is intentionally not embedded. |
 | LEGAL-PUBLISH-01 | `71d4aac`; `server/hosted/legal-publication-control.mjs` | Approved/effective basis is separate from real publication time; owner facts cannot be invented. |
+| PUBLIC-TRUTH-SUCCESSOR-16 | packet `9015e989`, integrated `edf88da`; `.github/workflows/public-truth-reconciliation-v3.yml`, `scripts/verify-public-truth-release-v3.mjs` | Candidate-generic C'→K'→P' authority binds exact commit/tree, source, successor input, Pages manifest, reviewed Chrome/six-width proof, owner receipt, predecessor, expiry, and one-shot use. The candidate contains no receipt or candidate-specific successor input; Pages publication and every broader effect remain held. |
 | INGRESS-01 | `d0aaf42`; `server/hosted/ingress-policy.mjs`, `ops/Caddyfile.candidate.held` | Pre-buffer limits, deadlines, concurrency/rate/write/compile budgets, and ownership-before-expensive-work. |
 | OPS-MON-01 | `4d48937`; `ops/independent-monitor.mjs`, `ops/independent-dead-man.mjs` | Independent held probes, telemetry contracts, and dead-man candidates. |
 | MONITOR-IDENTITY-05 | packet `00960dc`, integrated `3c94ffe`; monitor/dead-man ports and entrypoints | Production monitoring requires anchored v2 and exact-matches `/api/v1/live`; a predecessor, generic-health response, or retained v1 cannot yield a successor-green heartbeat. |
@@ -134,6 +147,8 @@ Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 | OPS-SECRETS-01 | `5d86201`; `ops/credential-topology.mjs` | Secret-blind topology and rotation contract; no real secret presence or revocation claim. |
 | OPS-ORIGIN-01 / WORKER-02 | `ffbc13e`, `83e7d6c`; `ops/origin-seal-runtime.mjs` | Held origin seal now binds API plus worker unit/env identity, pool allocation, zero-loop API proof, install/stop/rollback order. |
 | CI-01 / CI-LEGAL-MANIFEST-02 | `31baa44`, `511f7f9`; `ops/ci-release-proof-runtime.mjs` | Manual/protected held proof uses explicit successor migration and Legal manifest inputs; exact rebuilt count and digest must match. |
+| CI-BROWSER-CONTRACT-12 | packet `cdb8fd52`, integrated `83e708f`; held CI workflow, browser runtime, receipts, and runbook | Canonical release proof uses reviewed Chrome 149.0.7827.55 at exact widths 320, 360, 390, 720, 768, and 1440 across 15 routes (90 route-width observations), and rejects width, count, or browser drift without granting publication authority. |
+| HOSTED-LEGAL-V4-13 | packet `33584f9f`, integrated `990205d`; `scripts/build-hosted.mjs`, Legal V4 hosted verifier, held CI wiring | The explicit complete hosted Legal V4 projection preserves ordinary V2 plus sealed V3/V4 legal bytes and produced 104 files in retained packet proof. Count and manifest are projection evidence derived from the exact candidate, never source constants; default ordinary hosted V2 remains unchanged. |
 | DNS-PREFLIGHT-02 | packet `089c807`, integrated `b2ee901`, receipt `6ea556a`; `ops/dns-cutover-preflight.mjs` | The post-cutoff read-only 44-query preflight passed with `mutationAuthorized:false`; delegation remains Spaceship and no DNS mutation occurred. |
 | IA-01 | `1c02bc8`; public HTML/catalog proof | Three plain starting paths and honest held/current product language. |
 | ENGAGEMENT-01 | `1842899`, production composition `74fa475`; `server/hosted/engagement-production-composition.mjs` | Canonical invitation/claim/project bootstrap is composed with a separately configured secret name and held effects. |
@@ -165,28 +180,39 @@ Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 
 ## Active packets — pending commit or integration
 
-None. All repository packets listed above are merged and held. This does not
-close any external owner, provider, deployment, DNS, publication, or
-commercial gate.
+None. `CI-BROWSER-CONTRACT-12`, `HOSTED-LEGAL-V4-13`, and
+`PUBLIC-TRUTH-SUCCESSOR-16` are now in the merged register. All repository
+packets listed above are merged and held. This does not close any external
+owner, provider, deployment, DNS, publication, or commercial gate.
 
 ## REQUIRED-PRE-STATIC
 
 The smallest inquiry/contact/legal Pages launch requires all of these and does
 not require hosted or commerce release:
 
-- Create the exact successor input for the chosen candidate: candidate SHA,
-  rebuilt artifact/tree identities, sealed Legal tuple, exact 70-or-later
-  ordered migration inventory, and the current rebuilt Legal manifest's exact
-  positive file count and digest.
-- Run the protected/manual held CI proof on that exact successor. For the
-  reviewed projection the explicit evidence is 94 files; a later projection
-  must use its own derived count.
-- **LEGAL-PUBLISH-FINAL:** obtain and verify the one-shot owner Legal
-  publication receipt with real owner authorization, exact sealed
-  `effectiveAt`, and actual `publishedAt`.
-- Publish/read back the exact static artifact and prove public legal aliases,
-  contact path, redirects/404, TLS, and rollback bytes. This does not release
-  accounts, API, payment, mail, tunnel, or provider effects.
+- Integrate this ledger-only close, re-prove that exact clean commit, and only
+  then freeze it as candidate C'. Checkpoint `edf88da` is an ancestor/checkpoint,
+  not the frozen candidate.
+- Create K' as the exact one-parent successor-control commit whose only change
+  is `ops/releases/ci-successor-inputs/<C'>.json`. Bind C' SHA/tree, sealed
+  Legal tuple, exact 70-or-later ordered migration inventory, and the rebuilt
+  projection manifests and positive counts. The retained 94 Pages and 104
+  hosted file counts are evidence, not reusable expectations.
+- Run the protected/manual held CI proof against C' using K's exact input and
+  digest. Preserve the required order: full Node, ops, Legal V4 Pages
+  build/check, complete hosted Legal V4 build/check, exact six-width browser
+  proof, fresh PostgreSQL proof/cleanup, then final held origin/CI verification.
+- **LEGAL-PUBLISH-FINAL:** obtain the real owner/legal authorization and create
+  P' as the exact one-parent publication-control commit whose only changes are
+  the short-lived one-shot V3 authority receipt and release control. The
+  receipt must not invent P' or `publishedAt`; successful postdeploy live-byte
+  proof records the actual `publishedAt`.
+- Under separate push/dispatch and protected `github-pages` environment
+  authority, run the V3 workflow with the exact C'/K'/P', successor-input
+  digest, and receipt digest. It must revalidate first use, predecessor,
+  artifact, reviewed browser, and expiry immediately before Pages-only deploy,
+  then prove the exact live bytes. This does not release accounts, API,
+  payment, mail, tunnel, DNS, or provider effects.
 - **OPS-DNS-01:** if the apex requires Cloudflare delegation, retain and verify
   the passed post-cutoff preflight receipt, then complete only the separately
   authorized convergence sequence below; otherwise retain the explicit Pages
@@ -196,8 +222,8 @@ not require hosted or commerce release:
 
 Hosted accounts/API require every applicable static gate plus:
 
-- Re-prove the exact integrated repository after this ledger is committed,
-  then freeze that commit once without amendment.
+- Reuse only the exact re-proved and frozen C' plus its held successor proof;
+  neither `edf88da` nor the retained packet counts are a hosted release epoch.
 - **SHAPE-EPOCH-SUCCESSOR:** mint a new successor release epoch from the final
   candidate. The retained
   `ops/releases/shape-epoch-2026-08-10/release-epoch.json` still binds 58
@@ -263,7 +289,7 @@ exact proof:
 
 | Fact | Current evidence | Required close |
 | --- | --- | --- |
-| Legal owner receipt / publication | V4 basis and bytes are sealed; owner facts are absent. | Owner supplies real authorization, exact basis effective instant, and actual `publishedAt`; verify one-shot receipt and public bytes. |
+| Legal owner receipt / publication | V4 basis and bytes are sealed; owner facts are absent, no V3 authority receipt exists, and no real `publishedAt` has been observed. | Owner supplies real authorization and exact basis effective instant; create and verify the short-lived one-shot receipt without inventing P' or `publishedAt`, then record actual `publishedAt` only after exact public-byte proof. |
 | Successor epoch | Retained epoch is a 58-migration historical checkpoint. | Seal final source/artifact/legal/70-or-later migration/API-worker/public-mode/provider/backup/monitor/rollback identities. |
 | Dell/HQ install and rollback | Held origin/API/worker tooling exists. | Authorized exact install, installed-vs-expected readback, loopback/tunnel proof, and predecessor rollback rehearsal. |
 | Backup | Held contract exists. | Current non-empty final-union restore, off-host ciphertext, retention/RPO/RTO owner facts, and absence/readback evidence. |
@@ -335,14 +361,19 @@ packet does not close its external proof gate.
 
 ## Shortest dependency-safe execution order
 
-1. Commit and review this reconciled ledger, then re-prove the exact integrated
-   repository.
-2. Freeze the final candidate and generate the explicit successor epoch,
-   migration inventory, and Legal manifest evidence.
-3. Run protected CI plus local fresh-PG/browser/ops union proof on that exact
-   candidate; fix defects, never evidence expectations.
-4. Obtain the owner Legal publication receipt and launch/read back static Pages
-   only. Keep hosted and commerce held.
+1. Commit, integrate, and review this reconciled ledger, then re-prove that
+   exact clean integrated commit. Do not freeze checkpoint `edf88da` or reuse
+   retained projection counts as expectations.
+2. Freeze the re-proved commit once as C'; generate its explicit successor
+   epoch, migration and projection evidence; then create the single-input held
+   K' control commit.
+3. Run protected CI plus local fresh-PG/browser/ops union proof on C' with K's
+   exact input. Fix defects and regenerate evidence from the resulting new
+   candidate; never edit evidence expectations.
+4. Obtain the real owner/legal authorization, create exact short-lived P', and
+   under separate push/dispatch/environment approval run the one-shot V3
+   Pages workflow. Record `publishedAt` only after exact live-byte proof. Keep
+   hosted, commerce, provider, DNS, and customer effects held.
 5. Perform the authorized origin/API/worker install, current backup/restore,
    independent monitor/dead-man, rollback, and post-cutoff DNS/tunnel/TLS proof.
 6. Prove hosted accounts, mail, recovery, worker, readiness, and conservative
