@@ -2884,7 +2884,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       "sitesourcery.custom-services-owner-custom-build-opportunities/v1"
     );
     const opportunity = opportunities.opportunities.find(
-      (entry) => entry.assessment.jobId === paidJob.jobId
+      (entry) => entry.assessment?.jobId === paidJob.jobId
     );
     assert.ok(opportunity);
     assert.equal(opportunity.credit.amountMinor, 20000);

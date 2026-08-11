@@ -1,10 +1,10 @@
 # Site Sourcery holistic shape execution ledger
 
-Status: active, deduplicated coordination ledger
+Status: repository implementation reconciled; external release gates held
 
 Prepared: 2026-08-10
 
-Ledger snapshot: `fbd99f231850dc5f31f818d34b744279ebe37bf0`
+Ledger reconciliation baseline: `3c94ffea1ac597556178291fc0b62ff87cc0edc2`
 
 Legal V4 release ancestor: `69ad11c682dda9d6f792492d322b662dcbc98b4b`
 
@@ -36,6 +36,21 @@ remain held at this snapshot.
   inventory is in
   `server/data-plane/tests/migration-verification-inventory.mjs`; this is not a
   successor release epoch or installed-database claim.
+- The pre-ledger integrated proof at baseline `3c94ffe` is full pinned Node
+  **819/819**, public-truth v2 **30/30**, self-host **19/19**, hosted **657 pass
+  / 9 intentional database-gated skips / 0 fail**, and ops **146/146**. The
+  canonical run also rebuilt and verified the exact 90-file Pages artifact and
+  hosted artifact, then passed all **15 hosted routes x 3 viewports** at
+  320x720, 390x844, and 1440x1000. The final clean ledger commit must be
+  re-proved before it is frozen.
+- The separate sealed Legal V4 proof at the same baseline is **87/87**, rebuilds
+  and verifies **94 exact files**, and passes **15 routes x 6 viewports** (90
+  route-width combinations) with the reviewed Chrome 149.0.7827.55 identity.
+- The fresh PostgreSQL 16 pre-freeze proof applies all **70 migrations** through
+  migration 117, passes every embedded held journey plus the six-file
+  Custom/Alakazam/professional matrix **24/24**, then proves the exact generated
+  database absent, the admin database still `postgres`, and
+  `sitesourcery_current` still present.
 - API startup is designed to start zero durable worker loops. Supervised worker
   entrypoints and narrow worker ports are merged, but their real unit/env
   installation remains held.
@@ -110,45 +125,49 @@ Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 | Packet | Repository evidence | Current result |
 | --- | --- | --- |
 | SHAPE-EPOCH-01 | `2161422`; `ops/release-epoch.mjs` | Fail-closed non-secret epoch contract and liveness/readiness/capability vocabulary. Retained epoch remains stale. |
+| FINAL-EPOCH-V2-03 | packet `888861c`, integrated `38fb3db`; `ops/final-release-epoch-v2.mjs` | Generic successor receipt/projector cross-binds protected CI, origin seal, and installed readback through exact root-owned path/digest anchors; retained v1 bytes remain immutable. Candidate-specific evidence is intentionally not embedded. |
 | LEGAL-PUBLISH-01 | `71d4aac`; `server/hosted/legal-publication-control.mjs` | Approved/effective basis is separate from real publication time; owner facts cannot be invented. |
 | INGRESS-01 | `d0aaf42`; `server/hosted/ingress-policy.mjs`, `ops/Caddyfile.candidate.held` | Pre-buffer limits, deadlines, concurrency/rate/write/compile budgets, and ownership-before-expensive-work. |
 | OPS-MON-01 | `4d48937`; `ops/independent-monitor.mjs`, `ops/independent-dead-man.mjs` | Independent held probes, telemetry contracts, and dead-man candidates. |
+| MONITOR-IDENTITY-05 | packet `00960dc`, integrated `3c94ffe`; monitor/dead-man ports and entrypoints | Production monitoring requires anchored v2 and exact-matches `/api/v1/live`; a predecessor, generic-health response, or retained v1 cannot yield a successor-green heartbeat. |
 | OPS-BACKUP-01 | `f29e760`; `ops/backup-restore-contract.mjs` | Held backup/restore contract and clean-room verifier; no real final-union restore yet. |
 | OPS-SECRETS-01 | `5d86201`; `ops/credential-topology.mjs` | Secret-blind topology and rotation contract; no real secret presence or revocation claim. |
 | OPS-ORIGIN-01 / WORKER-02 | `ffbc13e`, `83e7d6c`; `ops/origin-seal-runtime.mjs` | Held origin seal now binds API plus worker unit/env identity, pool allocation, zero-loop API proof, install/stop/rollback order. |
 | CI-01 / CI-LEGAL-MANIFEST-02 | `31baa44`, `511f7f9`; `ops/ci-release-proof-runtime.mjs` | Manual/protected held proof uses explicit successor migration and Legal manifest inputs; exact rebuilt count and digest must match. |
+| DNS-PREFLIGHT-02 | packet `089c807`, integrated `b2ee901`, receipt `6ea556a`; `ops/dns-cutover-preflight.mjs` | The post-cutoff read-only 44-query preflight passed with `mutationAuthorized:false`; delegation remains Spaceship and no DNS mutation occurred. |
 | IA-01 | `1c02bc8`; public HTML/catalog proof | Three plain starting paths and honest held/current product language. |
 | ENGAGEMENT-01 | `1842899`, production composition `74fa475`; `server/hosted/engagement-production-composition.mjs` | Canonical invitation/claim/project bootstrap is composed with a separately configured secret name and held effects. |
 | CUSTOM-DIRECT-01 | verified union `3eb2b41`, merged at `416a2b1`; migration 113 | Direct and assessment-successor Custom opportunities preserve exact credit, project, and money authority. |
 | CUSTOMER-UX-01 A/B | `a7d79a3`, `42a2d46` | Keyboard, bounded request, reconnect/session, checkout-state, support/export, and honest manual rights routing. |
 | SUPPORT-CASE-01 | `fb39d31`; migration 110 | Forced-RLS support/privacy lifecycle with digest-only evidence and held mail reservation linkage. |
 | TAX-PURPOSE-01 | `a812f0c`; migration 109 | Eight-purpose tax authority; current collection policy remains purpose-bound and held. |
+| TAX-READBACK-AUTHORITY-02 | packet `204345e`, integrated `7a80932`; Stripe adapter and production config | Any future automatic purpose requires a fresh exact provider-readback attestation; current `disabled_by_owner` purposes carry no latent attestation and remain zero-tax. |
 | STRIPE-SLICES-01 | `b5ff3d2` | Download readiness no longer depends on subscription/Portal/Alakazam capabilities. |
 | PRO-REVERSALS-01 | `bd89bd8`; migration 108 | Evidence-first assessment/Custom cancellation, termination, refund, dispute, and reconciliation semantics. |
 | DIRECT-REVERSAL-01 | `5d69ded`; migration 117 | Direct Custom reversal bindings normalized without weakening assessment-backed authority. |
+| PRO-LIFECYCLE-COMPOSE-02 | `aede848`; `server/hosted/professional-lifecycle-production-composition.mjs` | Held aggregate binds Engagement, professional reversals, MAIL reservations, bounded operator queue, and projection-only accounting into all assessment/Custom approval gates. |
+| PRO-REVERSAL-WEBHOOK-03 | packets `4a30031`, `dab5b90`; integrated `1494184`, `07d767d` | Exact provider readback routes assessment and direct/credited Custom refund/dispute evidence into v108/v117 before canonical fallback; sequential or concurrent duplicate events replay through exact durable binding and never auto-restore. |
+| PRO-CLASSIFICATION-04 | packet `5cd83cb`, integrated `8c83497`; local PaymentIntent resolver and provider corroboration | Exact indexed local receipts determine professional ownership before provider readback; mutable Stripe metadata cannot redirect tenant, purpose, or receipt identity. |
 | MAIL-01 / MAIL-WIRING-02 / MAIL-COMPOSE-03 → MAIL-COMPOSE-FINAL-03 | `43a121a`, `d8a93cd`, `c459982`; migrations 107 and 111 | Reserve-before-effect composition; provider accepted is never persisted as delivered; token possession proves delivery/activation or consumption. |
 | OPS-QUEUE-01 | `5270762`; migration 112 | One source-authoritative operator read model; no generic mark-paid repair. |
 | COMMERCE-NOTIFY-01 | `d59bda2`; migration 114 | Held outbox originates from committed transitions, not raw provider events. |
 | ACCOUNTING-01 | `5c69005`; migration 115 | Append-only purpose journal projects only existing source evidence; it does not replace product state machines. |
 | ALAKAZAM-POLICY-01 | `c337273`; migration 116 | One canonical held lifecycle/purge/export authority. |
 | ALAKAZAM released-policy gate | `746245a`; `server/hosted/alakazam-release-config.mjs` | Approved construction fails unless exact policy readiness is verified and released with required effects. Current effects remain held. |
+| ALAKAZAM-WORKER-POLICY-03 | packet `5096bf3`, integrated `ccd165f`; shared released-policy predicate and external worker composition | API and both Alakazam workers require the same canonical released-policy tuple; missing, held, stale, mismatched, or failed reads remain held. |
 | WORKERS-01 / WORKERS-02 | `02836fa`, `7b06fc4`; `server/hosted/bin/worker.mjs`, `server/hosted/worker-core-composition.mjs` | API starts no duplicate loops; supervised, purpose-allowlisted worker process uses independent bounded PG capacity. |
 | PG-OPS-01 | `764dd42`; `server/hosted/postgres-budget-config.mjs` | Fail-closed statement/lock/idle/acquisition and API/worker pool budgets with PII-free saturation evidence. |
 | READINESS-01 | `511397a`; `server/hosted/readiness-snapshot.mjs` | Cheap liveness is separated from cached/singleflight dependency readiness and customer capability. |
+| CAPABILITIES-SNAPSHOT-05 | packet `1ce1a93`, integrated `f1973c1`; `server/hosted/capabilities-snapshot.mjs` | Public capability projection has its own bounded TTL/singleflight over the full readiness fanout; failures and timeouts are fixed, PII-free, and do not amplify dependencies. |
+| CORE-RELEASE-AUTHORITY-05 | packet `a60cec8`, integrated `c4d2ebc`; `scripts/core-release.mjs` | Core release derives exact ordered migration names, per-file bytes/digests, count, latest, and canonical manifest; the live stale constant 54 is removed. |
 | IDENTITY-ROTATION-01 | `88df3f6` | One current writer pepper plus bounded explicitly configured prior verifier versions; no real secret was rotated. |
 | PERF-01 / PERF-01A | `b6bd28b`; `PERF-01A-EVIDENCE.md` | Responsive Domain imagery, smaller OG asset, and source-truthful metadata/JSON-LD with sealed Legal bytes preserved; live CWV remains unproven. |
 
 ## Active packets — pending commit or integration
 
-These are not complete in ledger snapshot `fbd99f2`:
-
-- **PRO-LIFECYCLE-COMPOSE-02 — ACTIVE, PENDING INTEGRATION.** Candidate
-  `aede848` exists outside this snapshot. It still requires review and merge
-  proof before the production professional lifecycle can be called complete.
-- **TAX-READBACK-AUTHORITY — ACTIVE, PENDING COMMIT.** Its isolated worktree is
-  not represented by an independent packet commit in this snapshot. Do not
-  infer provider/tax readiness from migration 109, the scheduled registration,
-  or an in-progress adapter diff.
+None. All repository packets listed above are merged and held. This does not
+close any external owner, provider, deployment, DNS, publication, or
+commercial gate.
 
 ## REQUIRED-PRE-STATIC
 
@@ -168,17 +187,17 @@ not require hosted or commerce release:
 - Publish/read back the exact static artifact and prove public legal aliases,
   contact path, redirects/404, TLS, and rollback bytes. This does not release
   accounts, API, payment, mail, tunnel, or provider effects.
-- **OPS-DNS-01:** if the apex requires Cloudflare delegation, complete the
-  post-cutoff DNS preflight and convergence sequence below; otherwise retain
-  the explicit Pages fallback without claiming apex convergence.
+- **OPS-DNS-01:** if the apex requires Cloudflare delegation, retain and verify
+  the passed post-cutoff preflight receipt, then complete only the separately
+  authorized convergence sequence below; otherwise retain the explicit Pages
+  fallback without claiming apex convergence.
 
 ## REQUIRED-PRE-HOSTED
 
 Hosted accounts/API require every applicable static gate plus:
 
-- Review and integrate the active professional-lifecycle packet if its routes
-  are in the hosted candidate. Review the active Tax readback packet separately;
-  neither may be called complete from this ledger.
+- Re-prove the exact integrated repository after this ledger is committed,
+  then freeze that commit once without amendment.
 - **SHAPE-EPOCH-SUCCESSOR:** mint a new successor release epoch from the final
   candidate. The retained
   `ops/releases/shape-epoch-2026-08-10/release-epoch.json` still binds 58
@@ -226,8 +245,8 @@ exact proof:
   the scheduled New Jersey registration effective
   `2026-10-21T04:00:00Z`; that date alone neither enables collection nor
   releases a purpose.
-- Finish and merge exact Tax provider readback authority; reconcile its facts
-  with migration 109 and each purpose's approved pre-/post-effective policy.
+- Reconcile the merged exact Tax provider-readback authority with migration 109
+  and each purpose's approved pre-/post-effective owner policy.
 - Read back the exact live mode, endpoint/events, Checkout purpose, Product,
   Price, Coupon, Portal or subscription capability only where that purpose
   requires it. Prove idempotency, return/reconciliation, refund/dispute/dunning,
@@ -251,7 +270,7 @@ exact proof:
 | Monitor/on-call | Held independent probes/dead-man exist. | External activation, alert receipt, dead-man expiry/recovery, secondary contact, and launch-day ownership. |
 | Stripe Standard key | Previously exposed live-shaped Standard key is treated as compromised and unused here. | Authenticated roll, old-key revocation proof, restricted replacements, redacted runtime readiness. |
 | Stripe Tax | One New Jersey registration is documented as scheduled for `2026-10-21T04:00:00Z`. | Same-mode complete Settings/registration readback and sealed owner attestation; later collection must obey exact effective authority. |
-| DNS/Cloudflare | Held tunnel/origin candidates exist; convergence is not proved. | Wait through the retained cutoff, recheck old DS/fallback fail-closed, delegate, prove Active/SSL/tunnel/origin/mail records, then add only the reviewed Cloudflare DS after convergence. |
+| DNS/Cloudflare | Post-cutoff read-only receipt `dns-cutover-preflight-2026-08-10T234906Z.json` passed all 44 checks with `mutationAuthorized:false`; delegation remains the exact Spaceship pair. | Under separate owner authority, delegate only the reviewed nameserver pair, prove Active/SSL/tunnel/origin/mail convergence, then add only the reviewed Cloudflare DS after convergence. |
 | Resend/mail | Durable local lifecycle and production composition are held. | Restricted production credential, exact sender/domain/provider readback, accepted/bounce/complaint/suppression and customer recovery proof. |
 
 ## POST-LAUNCH / FEATURE
@@ -289,23 +308,23 @@ packet does not close its external proof gate.
 | PH-04 | INGRESS-01 |
 | PH-05..06 | OPS-BACKUP-01 plus real current restore |
 | PH-07..08 | MAIL-01/WIRING-02/FINAL-03 plus provider delivery/recovery proof |
-| PH-09 | OPS-MON-01 plus external activation/dead-man receipt |
+| PH-09 | OPS-MON-01, MONITOR-IDENTITY-05, plus external activation/dead-man receipt |
 | PH-10 | SUPPORT-CASE-01, OPS-BACKUP-01, owner escalation |
 | PH-11..12 | CUSTOMER-UX-01, SUPPORT-CASE-01 |
 | PC-01..02 | TAX-PURPOSE-01, STRIPE-SLICES-01, exact live purpose proof |
 | PC-03 | ENGAGEMENT-01, CUSTOM-DIRECT-01 |
-| PC-04..05 | CUSTOMER-UX-01, PRO-REVERSALS-01, DIRECT-REVERSAL-01, pending professional composition |
+| PC-04..05 | CUSTOMER-UX-01, PRO-REVERSALS-01, DIRECT-REVERSAL-01, PRO-LIFECYCLE-COMPOSE-02, PRO-REVERSAL-WEBHOOK-03, PRO-CLASSIFICATION-04 |
 | PC-06 | OPS-QUEUE-01 |
-| PC-07 | TAX-PURPOSE-01, pending Tax readback, final provider attestation |
+| PC-07 | TAX-PURPOSE-01, TAX-READBACK-AUTHORITY-02, final provider attestation |
 | PL-01..02 | PG-OPS-01, WORKERS-01/02, bounded load proof |
 | PL-03 | PERF-01A/01B |
 | PL-04 | WORKERS-01/02 |
 | PL-05 | OPS-BACKUP-01, continuity/on-call close |
-| PL-06 | READINESS-01 |
+| PL-06 | READINESS-01, CAPABILITIES-SNAPSHOT-05 |
 | PL-07 | CUSTOMER-UX-01 |
 | PL-08 | CI-01/CI-LEGAL-MANIFEST-02 |
 | PL-09 | TRUTH-CLEANUP-01, MODULARIZE-01 |
-| PL-10 | load/SLO proof across INGRESS-01, PG-OPS-01, WORKERS-01/02, READINESS-01 |
+| PL-10 | load/SLO proof across INGRESS-01, PG-OPS-01, WORKERS-01/02, READINESS-01, CAPABILITIES-SNAPSHOT-05 |
 | PL-11 | IDENTITY-ROTATION-01 plus real secret rotation/retirement proof |
 | PL-12..14 | continuity/on-call close, MAIL-01, OPS-MON-01 |
 | PL-15 | PERF-01A/01B |
@@ -316,8 +335,8 @@ packet does not close its external proof gate.
 
 ## Shortest dependency-safe execution order
 
-1. Finish and review the two active packets; merge only their exact bounded
-   commits after focused and union proof.
+1. Commit and review this reconciled ledger, then re-prove the exact integrated
+   repository.
 2. Freeze the final candidate and generate the explicit successor epoch,
    migration inventory, and Legal manifest evidence.
 3. Run protected CI plus local fresh-PG/browser/ops union proof on that exact
