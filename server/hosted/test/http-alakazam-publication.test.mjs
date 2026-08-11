@@ -357,6 +357,7 @@ test("publication HTTP rejects malformed, stale, and rogue authority before reco
 });
 
 test("publication capability reports authorization without provider effects", async () => {
+  let at = 1_000;
   const boundary = {
     async readiness() {
       return {
@@ -374,7 +375,12 @@ test("publication capability reports authorization without provider effects", as
     }
   };
   const api = createHostedApi(service(), {
-    alakazamPublication: boundary
+    alakazamPublication: boundary,
+    capabilitiesPolicy: {
+      ttlMs: 1,
+      timeoutMs: 10,
+      now: () => at
+    }
   });
   const response = await api.fetch(
     new Request(`${ORIGIN}/api/v1/capabilities`)
@@ -388,6 +394,7 @@ test("publication capability reports authorization without provider effects", as
     authorization: true,
     providerEffects: true
   });
+  at += 2;
   const providerEnabled = await api.fetch(
     new Request(`${ORIGIN}/api/v1/capabilities`)
   );

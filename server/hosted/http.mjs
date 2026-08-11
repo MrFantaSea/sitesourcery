@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 
 import { WRITE_METHODS } from "./constants.mjs";
+import {
+  createCapabilitiesSnapshot
+} from "./capabilities-snapshot.mjs";
 import { HostedError, invariant, publicError } from "./errors.mjs";
 import {
   DEFAULT_INGRESS_POLICY,
@@ -569,6 +572,7 @@ export function createHostedApi(
     customServicesOwner = null,
     engagementBootstrap = null,
     stripeWebhook = null,
+    capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
     releaseIdentity = null,
     ingressPolicy = DEFAULT_INGRESS_POLICY
@@ -911,6 +915,79 @@ export function createHostedApi(
     (() => `req_${randomToken(12)}`);
   const nextCsrfToken =
     typeof csrfTokens === "function" ? csrfTokens : () => randomToken(32);
+  const capabilitiesBoundary =
+    createCapabilitiesSnapshot({
+      async load() {
+        invariant(
+          typeof service.readiness === "function",
+          "RUNTIME_CONFIGURATION_ERROR",
+          "Hosted capabilities are unavailable.",
+          { status: 500 }
+        );
+        const [
+          readiness,
+          download,
+          alakazam,
+          alakazam35Readiness,
+          alakazam50Readiness,
+          alakazamRetainedPremiumReadiness,
+          alakazamPublicationReadiness
+        ] = await Promise.all([
+          service.readiness(),
+          typeof downloadBoundary.readiness === "function"
+            ? downloadBoundary.readiness()
+            : {
+                quote: false,
+                payment: false
+              },
+          alakazamBillingBoundary.readiness(),
+          alakazam35Boundary.readiness(),
+          alakazam50Boundary.readiness(),
+          alakazamRetainedPremiumBoundary.readiness(),
+          alakazamPublicationBoundary.readiness()
+        ]);
+        const registration =
+          readiness?.registration ?? {};
+        const recovery =
+          readiness?.recovery ?? {};
+        const domains =
+          readiness?.providers?.domains ?? {};
+        return Object.freeze({
+          accountRegistration:
+            registration.ready === true &&
+            registration.verified === true,
+          accountRecoveryEmail:
+            recovery.ready === true &&
+            recovery.verified === true,
+          downloadQuote: download.quote === true,
+          downloadPayment: download.payment === true,
+          alakazamQuote: alakazam.quote === true,
+          alakazamCheckout: alakazam.checkout === true,
+          alakazamDowngrade: alakazam.downgrade === true,
+          alakazam35:
+            alakazam35Readiness.authorization === true &&
+            alakazam35Readiness.providerEffects === false,
+          alakazam50:
+            alakazam50Readiness.authorization === true &&
+            alakazam50Readiness.providerEffects === false,
+          alakazamRetainedPremium:
+            alakazamRetainedPremiumReadiness.ready === true &&
+            alakazamRetainedPremiumReadiness.authorization === true &&
+            alakazamRetainedPremiumReadiness.providerEffects === false &&
+            alakazamRetainedPremiumReadiness.state === "held",
+          alakazamPublication:
+            alakazamPublicationReadiness.authorization === true &&
+            alakazamPublicationReadiness.providerEffects === false,
+          domainPurchase:
+            domains.ready === true &&
+            domains.registrar === "ready",
+          publishing:
+            readiness?.publication?.ready === true &&
+            readiness?.publication?.held === false
+        });
+      },
+      ...(capabilitiesPolicy ?? {})
+    });
 
   return Object.freeze({
     async fetch(request, requestContext = {}) {
@@ -1014,83 +1091,16 @@ export function createHostedApi(
           method === "GET" &&
           pathname === "/api/v1/capabilities"
         ) {
+          const capabilities =
+            await capabilitiesBoundary.read();
           invariant(
-            typeof service.readiness === "function",
-            "RUNTIME_CONFIGURATION_ERROR",
+            capabilities.ok === true,
+            "CAPABILITIES_UNAVAILABLE",
             "Hosted capabilities are unavailable.",
-            { status: 500 }
+            { status: 503 }
           );
-          const readiness =
-            await service.readiness();
-          const download =
-            typeof downloadBoundary.readiness ===
-              "function"
-              ? await downloadBoundary.readiness()
-              : {
-                  quote: false,
-                  payment: false
-                };
-          const alakazam =
-            await alakazamBillingBoundary.readiness();
-          const alakazam35Readiness =
-            await alakazam35Boundary.readiness();
-          const alakazam50Readiness =
-            await alakazam50Boundary.readiness();
-          const alakazamRetainedPremiumReadiness =
-            await alakazamRetainedPremiumBoundary.readiness();
-          const alakazamPublicationReadiness =
-            await alakazamPublicationBoundary.readiness();
-          const registration =
-            readiness?.registration ?? {};
-          const recovery =
-            readiness?.recovery ?? {};
-          const domains =
-            readiness?.providers?.domains ?? {};
           return json(
-            {
-              accountRegistration:
-                registration.ready === true &&
-                registration.verified === true,
-              accountRecoveryEmail:
-                recovery.ready === true &&
-                recovery.verified === true,
-              downloadQuote:
-                download.quote === true,
-              downloadPayment:
-                download.payment === true,
-              alakazamQuote:
-                alakazam.quote === true,
-              alakazamCheckout:
-                alakazam.checkout === true,
-              alakazamDowngrade:
-                alakazam.downgrade === true,
-              alakazam35:
-                alakazam35Readiness.authorization === true &&
-                alakazam35Readiness.providerEffects === false,
-              alakazam50:
-                alakazam50Readiness.authorization === true &&
-                alakazam50Readiness.providerEffects === false,
-              alakazamRetainedPremium:
-                alakazamRetainedPremiumReadiness.ready === true &&
-                alakazamRetainedPremiumReadiness.authorization ===
-                  true &&
-                alakazamRetainedPremiumReadiness.providerEffects ===
-                  false &&
-                alakazamRetainedPremiumReadiness.state === "held",
-              alakazamPublication:
-                alakazamPublicationReadiness.authorization ===
-                  true &&
-                alakazamPublicationReadiness.providerEffects ===
-                  false,
-              domainPurchase:
-                domains.ready === true &&
-                domains.registrar === "ready",
-              publishing:
-                readiness?.publication?.ready ===
-                  true &&
-                readiness?.publication?.held ===
-                  false
-            },
+            capabilities.value,
             200,
             { "X-Request-Id": requestId }
           );
