@@ -530,9 +530,17 @@ test("workflow is manual protected held and has no effect-bearing action", async
     "npm run check:ops",
     "build:pages:legal-v4",
     "Run and record six-width browser proof",
+    "build:hosted:legal-v4",
+    "check:hosted:legal-v4",
     "ss_ci_release_[1-9][0-9]*_[1-9][0-9]*",
     "ci-release-proof.mjs absence"
   ]) assert.ok(source.includes(required), required);
+  assert.ok(
+    source.indexOf("npm test") < source.indexOf("build:hosted:legal-v4") &&
+      source.indexOf("build:hosted:legal-v4") <
+        source.indexOf("ci-release-proof.mjs final"),
+    "complete hosted V4 projection must replace the ordinary build before origin verification",
+  );
   assert.doesNotMatch(source, /\b(?:upload|deploy)-(?:pages-)?artifact@/u);
   assert.doesNotMatch(source, /\b(?:deploy-pages|configure-pages)@/u);
   assert.doesNotMatch(source, /\b(?:stripe|cloudflare|resend)\b/iu);

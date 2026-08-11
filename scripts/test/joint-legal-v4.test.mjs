@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { buildHostedArtifact } from "../build-hosted.mjs";
+import {
+  buildHostedArtifact,
+  hostedFileAllowlist,
+  hostedFilesForJointLegalV4,
+  verifyHostedArtifact,
+} from "../build-hosted.mjs";
+import { artifactManifest } from "../verify-public-truth-release.mjs";
+import { JOINT_LEGAL_V3_RELEASE } from
+  "../hosted-truth/joint-legal-v3-artifacts.mjs";
 import {
   JOINT_LEGAL_V4_CONTENT,
   JOINT_LEGAL_V4_DOCUMENT_IDS,
@@ -16,6 +24,10 @@ import {
   createPrivacyV4RenderPlan,
   createWebsiteTermsV4RenderPlan,
 } from "../hosted-truth/joint-legal-v4-render.mjs";
+import {
+  HOSTED_PRIVACY_V2_ARTIFACT,
+  HOSTED_WEBSITE_TERMS_V2_ARTIFACT,
+} from "../hosted-truth/legal-artifacts.mjs";
 
 const ROOT = path.resolve(new URL("../..", import.meta.url).pathname);
 const RELEASE_ROOT = path.join(
@@ -44,6 +56,18 @@ const V3_ARTIFACTS = Object.freeze([
 
 function digest(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+async function walk(root, current = root) {
+  const files = [];
+  for (const entry of await readdir(current, { withFileTypes: true })) {
+    const absolute = path.join(current, entry.name);
+    if (entry.isDirectory()) files.push(...await walk(root, absolute));
+    else if (entry.isFile()) {
+      files.push(path.relative(root, absolute).split(path.sep).join("/"));
+    }
+  }
+  return files.sort();
 }
 
 test("joint Legal V4 owns the exact owner-approved production tuple", () => {
@@ -154,23 +178,75 @@ test("hosted builder consumes only the retained exact V4 finalization", async ()
   const temporary = await mkdtemp(path.join(tmpdir(), "sitesourcery-joint-legal-v4-release-"));
   try {
     const output = path.join(temporary, "hosted");
+    const secondOutput = path.join(temporary, "hosted-repeat");
+    const exactFiles = await hostedFilesForJointLegalV4({
+      root: ROOT,
+      finalizationRoot: RELEASE_ROOT,
+    });
     await buildHostedArtifact({
       root: ROOT,
       output,
       jointLegalV4FinalizationRoot: RELEASE_ROOT,
     });
+    await verifyHostedArtifact({
+      root: ROOT,
+      output,
+      jointLegalV4FinalizationRoot: RELEASE_ROOT,
+    });
+    assert.deepEqual(await walk(output), exactFiles);
+    assert.ok(hostedFileAllowlist.every((file) => exactFiles.includes(file)));
+    const manifest = await artifactManifest(output);
+    assert.equal(manifest.count, exactFiles.length);
+
+    await buildHostedArtifact({
+      root: ROOT,
+      output: secondOutput,
+      jointLegalV4FinalizationRoot: RELEASE_ROOT,
+    });
+    const repeatedManifest = await artifactManifest(secondOutput);
+    assert.equal(repeatedManifest.count, manifest.count);
+    assert.equal(repeatedManifest.sha256, manifest.sha256);
+
     for (const [relative, sha256, byteCount] of [
-      ["legal/privacy/index.html", JOINT_LEGAL_V4_RELEASE.privacySha256, 31_451],
+      [
+        HOSTED_PRIVACY_V2_ARTIFACT.file,
+        HOSTED_PRIVACY_V2_ARTIFACT.sha256,
+        HOSTED_PRIVACY_V2_ARTIFACT.byteCount,
+      ],
+      [
+        HOSTED_WEBSITE_TERMS_V2_ARTIFACT.file,
+        HOSTED_WEBSITE_TERMS_V2_ARTIFACT.sha256,
+        HOSTED_WEBSITE_TERMS_V2_ARTIFACT.byteCount,
+      ],
+      [
+        `legal/privacy/versions/${JOINT_LEGAL_V3_RELEASE.privacyVersion}/index.html`,
+        JOINT_LEGAL_V3_RELEASE.privacySha256,
+        JOINT_LEGAL_V3_RELEASE.privacyByteCount,
+      ],
+      [
+        `legal/website-terms/versions/${JOINT_LEGAL_V3_RELEASE.websiteTermsVersion}/index.html`,
+        JOINT_LEGAL_V3_RELEASE.websiteTermsSha256,
+        JOINT_LEGAL_V3_RELEASE.websiteTermsByteCount,
+      ],
+      [
+        "legal/privacy/index.html",
+        JOINT_LEGAL_V4_RELEASE.privacySha256,
+        JOINT_LEGAL_V4_RELEASE.privacyByteCount,
+      ],
       [
         `legal/privacy/versions/${JOINT_LEGAL_V4_RELEASE.privacyVersion}/index.html`,
         JOINT_LEGAL_V4_RELEASE.privacySha256,
-        31_451,
+        JOINT_LEGAL_V4_RELEASE.privacyByteCount,
       ],
-      ["legal/website-terms/index.html", JOINT_LEGAL_V4_RELEASE.websiteTermsSha256, 26_215],
+      [
+        "legal/website-terms/index.html",
+        JOINT_LEGAL_V4_RELEASE.websiteTermsSha256,
+        JOINT_LEGAL_V4_RELEASE.websiteTermsByteCount,
+      ],
       [
         `legal/website-terms/versions/${JOINT_LEGAL_V4_RELEASE.websiteTermsVersion}/index.html`,
         JOINT_LEGAL_V4_RELEASE.websiteTermsSha256,
-        26_215,
+        JOINT_LEGAL_V4_RELEASE.websiteTermsByteCount,
       ],
     ]) {
       const bytes = await readFile(path.join(output, relative));

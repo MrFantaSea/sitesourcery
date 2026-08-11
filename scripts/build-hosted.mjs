@@ -46,6 +46,9 @@ import {
   createPrivacyV3RenderPlan,
   renderPrivacyV3CandidatePage,
 } from "./hosted-truth/privacy-v3-render.mjs";
+import {
+  PAGES_JOINT_LEGAL_V3_ROOT,
+} from "./hosted-truth/pages-legal-v4.mjs";
 
 const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
@@ -279,7 +282,7 @@ async function createJointLegalV3FinalizationPlan(input) {
   return Object.freeze({ root, receipt, artifacts: Object.freeze(artifacts) });
 }
 
-async function createJointLegalV4FinalizationPlan(input) {
+async function createJointLegalV4FinalizationPlan(input, sourceRoot) {
   if (input === undefined || input === null) return null;
   if (typeof input !== "string" || input.trim() === "") {
     throw new Error("joint legal V4 finalized input must be one explicit directory");
@@ -351,7 +354,27 @@ async function createJointLegalV4FinalizationPlan(input) {
       || artifacts[currentIndex].byteCount !== artifacts[versionedIndex].byteCount
     ) throw new Error("joint legal V4 current and versioned receipt identities differ");
   }
-  return Object.freeze({ root, receipt, artifacts: Object.freeze(artifacts) });
+  const retainedV3 = await createJointLegalV3FinalizationPlan(
+    path.join(sourceRoot, ...PAGES_JOINT_LEGAL_V3_ROOT.split("/")),
+  );
+  const retainedV3Versions = [
+    retainedV3.artifacts[1],
+    retainedV3.artifacts[3],
+  ].map((artifact) => Object.freeze({
+    ...artifact,
+    sourceRoot: retainedV3.root,
+  }));
+  return Object.freeze({
+    root,
+    receipt,
+    artifacts: Object.freeze([
+      ...artifacts.map((artifact) => Object.freeze({
+        ...artifact,
+        sourceRoot: root,
+      })),
+      ...retainedV3Versions,
+    ]),
+  });
 }
 
 function hostedFilesForPlans(privacyV3Plan, jointLegalV3Plan, jointLegalV4Plan) {
@@ -366,6 +389,21 @@ function hostedFilesForPlans(privacyV3Plan, jointLegalV3Plan, jointLegalV4Plan) 
       ...legalPlans[0].artifacts.map(({ file }) => file),
     ]),
   ].sort(lexical));
+}
+
+export async function hostedFilesForJointLegalV4({
+  root = process.cwd(),
+  finalizationRoot,
+} = {}) {
+  const absoluteRoot = path.resolve(root);
+  const plan = await createJointLegalV4FinalizationPlan(
+    finalizationRoot,
+    absoluteRoot,
+  );
+  if (!plan) {
+    throw new Error("hosted joint Legal V4 file plan requires finalization");
+  }
+  return hostedFilesForPlans(null, null, plan);
 }
 
 export function hostedFilesForPrivacyV3Render(options) {
@@ -924,7 +962,10 @@ async function writeHostedArtifact({
     );
     if (finalizedLegalArtifact) {
       await copyFile(
-        path.join(jointLegalPlan.root, finalizedLegalArtifact.sourceFile),
+        path.join(
+          finalizedLegalArtifact.sourceRoot ?? jointLegalPlan.root,
+          finalizedLegalArtifact.sourceFile,
+        ),
         destination,
       );
       continue;
@@ -1044,14 +1085,14 @@ function assertJointLegalV4Truth(sources) {
   ], "unreleased joint legal V4");
 }
 
-async function assertJointLegalV3Artifact(output, plan) {
+async function assertJointLegalArtifact(output, plan) {
   for (const artifact of plan.artifacts) {
     const bytes = await readFile(path.join(output, ...artifact.file.split("/")));
     if (
       sha256(bytes) !== artifact.sha256
       || bytes.byteLength !== artifact.byteCount
     ) {
-      throw new Error(`hosted joint legal V3 artifact mismatch: ${artifact.role}`);
+      throw new Error(`hosted joint legal artifact mismatch: ${artifact.role}`);
     }
   }
   for (const [currentIndex, versionedIndex] of [[0, 1], [2, 3]]) {
@@ -1062,7 +1103,7 @@ async function assertJointLegalV3Artifact(output, plan) {
       path.join(output, ...plan.artifacts[versionedIndex].file.split("/")),
     );
     if (!current.equals(versioned)) {
-      throw new Error("hosted joint legal V3 current and versioned bytes differ");
+      throw new Error("hosted joint legal current and versioned bytes differ");
     }
   }
 }
@@ -1084,6 +1125,7 @@ export async function verifyHostedArtifact({
   );
   const jointLegalV4Plan = await createJointLegalV4FinalizationPlan(
     jointLegalV4FinalizationRoot,
+    absoluteRoot,
   );
   const artifactFiles = hostedFilesForPlans(
     privacyV3Plan,
@@ -1098,7 +1140,7 @@ export async function verifyHostedArtifact({
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
   if (jointLegalV3Plan || jointLegalV4Plan) {
-    await assertJointLegalV3Artifact(
+    await assertJointLegalArtifact(
       absoluteOutput,
       jointLegalV4Plan ?? jointLegalV3Plan,
     );
@@ -1318,9 +1360,10 @@ export async function buildHostedArtifact({
   );
   const jointLegalV4Plan = await createJointLegalV4FinalizationPlan(
     jointLegalV4FinalizationRoot,
+    absoluteRoot,
   );
   if (
-    (privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan)
+    (privacyV3Plan || jointLegalV3Plan)
     && absoluteOutput === path.join(absoluteRoot, "_hosted")
   ) {
     throw new Error("legal review/finalization output must remain outside the repository");
@@ -1381,9 +1424,13 @@ export async function buildHostedArtifact({
 
 function parseCli(argv) {
   const options = {};
+  let check = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
-    if (argument === "--output") {
+    if (argument === "--check") {
+      if (check) throw new Error("--check may be supplied only once");
+      check = true;
+    } else if (argument === "--output") {
       const value = argv[index + 1];
       if (!value) throw new Error("--output requires a path");
       options.output = value;
@@ -1411,16 +1458,22 @@ function parseCli(argv) {
       throw new Error(`unknown build:hosted argument: ${argument}`);
     }
   }
-  return options;
+  return { check, options };
 }
 
 if (
   process.argv[1]
   && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 ) {
-  buildHostedArtifact(parseCli(process.argv.slice(2)))
+  const { check, options } = parseCli(process.argv.slice(2));
+  const operation = check ? verifyHostedArtifact : buildHostedArtifact;
+  operation(options)
     .then((output) => {
-      console.log(`Hosted artifact built and verified at ${output}`);
+      console.log(
+        check
+          ? `Hosted artifact verified at ${path.resolve(options.output ?? "_hosted")}`
+          : `Hosted artifact built and verified at ${output}`,
+      );
     })
     .catch((error) => {
       console.error(error.stack || error.message);

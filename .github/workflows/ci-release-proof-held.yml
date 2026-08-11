@@ -122,6 +122,10 @@ jobs:
         working-directory: target
         run: npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
 
+      - name: Build and verify complete held Legal V4 hosted projection
+        working-directory: target
+        run: npm run build:hosted:legal-v4 && npm run check:hosted:legal-v4
+
       - name: Record successor-bound Legal V4 manifest proof
         run: node target/ops/ci-release-proof.mjs legal-v4 --root target --artifact-root target/_site
 
