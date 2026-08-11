@@ -1,0 +1,335 @@
+name: Exact successor Legal V4 public-truth deployment
+run-name: public-truth-v3-${{ inputs.authority_receipt_sha256 }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_sha:
+        description: Exact clean held candidate C' commit SHA
+        required: true
+        type: string
+      successor_control_sha:
+        description: Exact held successor-input control K' commit SHA
+        required: true
+        type: string
+      publication_control_sha:
+        description: Exact one-shot publication control P' commit SHA on main
+        required: true
+        type: string
+      successor_input_sha256:
+        description: SHA-256 of K's exact candidate-named CI successor input
+        required: true
+        type: string
+      authority_receipt_sha256:
+        description: SHA-256 of P's one-shot owner authority receipt
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: public-truth-v3-${{ inputs.authority_receipt_sha256 }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    permissions:
+      actions: read
+      contents: read
+      pages: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    outputs:
+      artifact_id: ${{ steps.pages-artifact.outputs.artifact_id }}
+    steps:
+      - name: Check out exact publication control P'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.publication_control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reject publication workflow or ref substitution
+        env:
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_SHA" = "$PUBLICATION_CONTROL_SHA"
+          test "$GITHUB_WORKFLOW_SHA" = "$PUBLICATION_CONTROL_SHA"
+          test "$(git -C control rev-parse HEAD)" = "$PUBLICATION_CONTROL_SHA"
+      - name: Pin control Node before reading workflow history
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: control/.nvmrc
+      - name: Prove this is the unique first workflow use of P'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: |
+          set -euo pipefail
+          node control/scripts/verify-public-truth-release-v3.mjs \
+            --mode runs \
+            --evidence "$RUNNER_TEMP/public-truth-v3-runs.json"
+          node --input-type=module - "$RUNNER_TEMP/public-truth-v3-runs.json" <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import { validateFirstUseWorkflowRuns } from "./control/scripts/verify-public-truth-release-v3.mjs";
+          const payload = JSON.parse(await readFile(process.argv[2], "utf8"));
+          validateFirstUseWorkflowRuns(payload, {
+            publicationControlSha: process.env.PUBLICATION_CONTROL_SHA,
+            runId: process.env.GITHUB_RUN_ID,
+            authorityReceiptSha256: process.env.AUTHORITY_RECEIPT_SHA256,
+          });
+          NODE
+          printf 'PUBLIC_TRUTH_V3_FIRST_USE=verified\n' >> "$GITHUB_ENV"
+      - name: Check out exact held candidate C'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin candidate Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+      - name: Install candidate locked dependencies
+        working-directory: target
+        run: npm ci --ignore-scripts
+      - name: Install exact reviewed browser
+        working-directory: target
+        run: bash scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/reviewed-chromium" "$GITHUB_ENV"
+      - name: Run full held candidate proof
+        working-directory: target
+        run: npm test
+      - name: Build and verify successor-bound Legal V4 Pages artifact
+        working-directory: target
+        run: npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+      - name: Audit and bind all routes at the exact six primary widths
+        working-directory: target
+        run: |
+          set -euo pipefail
+          node scripts/verify-public-truth-release-v3.mjs \
+            --mode browser \
+            --artifact-root "$PWD/_site" \
+            --evidence "$RUNNER_TEMP/public-truth-browser-proof-v3.json"
+          proof_sha256="$(sha256sum "$RUNNER_TEMP/public-truth-browser-proof-v3.json" | awk '{print $1}')"
+          [[ "$proof_sha256" =~ ^[a-f0-9]{64}$ ]]
+          printf 'PUBLIC_TRUTH_BROWSER_PROOF_SHA256=%s\n' "$proof_sha256" >> "$GITHUB_ENV"
+      - name: Copy artifact and observe exact current Pages predecessor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test ! -e control/_site
+          cp -a target/_site control/_site
+          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-v3' \
+            'https://api.github.com/repos/MrFantaSea/sitesourcery/pages/builds/latest' \
+            --output control/pages-latest.json
+      - name: Verify C' to K' to P' and one-shot held authority
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SUCCESSOR_CONTROL_SHA: ${{ inputs.successor_control_sha }}
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+          SUCCESSOR_INPUT_SHA256: ${{ inputs.successor_input_sha256 }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: >-
+          node scripts/verify-public-truth-release-v3.mjs
+          --mode control
+          --root "$PWD"
+          --candidate-root ../target
+          --artifact-root ../target/_site
+          --candidate-sha "$CANDIDATE_SHA"
+          --successor-control-sha "$SUCCESSOR_CONTROL_SHA"
+          --publication-control-sha "$PUBLICATION_CONTROL_SHA"
+          --successor-input-sha256 "$SUCCESSOR_INPUT_SHA256"
+          --authority-receipt-sha256 "$AUTHORITY_RECEIPT_SHA256"
+          --browser-proof "$RUNNER_TEMP/public-truth-browser-proof-v3.json"
+          --browser-proof-sha256 "$PUBLIC_TRUTH_BROWSER_PROOF_SHA256"
+      - name: Reject copied-artifact mutation
+        run: diff --no-dereference --recursive target/_site control/_site
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - name: Upload exact validated Pages artifact
+        id: pages-artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: target/_site
+
+  deploy:
+    permissions:
+      actions: read
+      contents: read
+      pages: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: validate
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out exact P' and C' after environment approval
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.publication_control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+      - name: Rebuild exact candidate immediately before deploy
+        working-directory: target
+        run: npm ci --ignore-scripts && npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+      - name: Reconfirm unique first use and predecessor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: |
+          set -euo pipefail
+          cp -a target/_site control/_site
+          node control/scripts/verify-public-truth-release-v3.mjs \
+            --mode runs \
+            --evidence "$RUNNER_TEMP/public-truth-v3-runs.json"
+          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            --header 'User-Agent: sitesourcery-public-truth-v3-predeploy' \
+            'https://api.github.com/repos/MrFantaSea/sitesourcery/pages/builds/latest' \
+            --output control/pages-latest.json
+          node --input-type=module - "$RUNNER_TEMP/public-truth-v3-runs.json" <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import { validateFirstUseWorkflowRuns } from "./control/scripts/verify-public-truth-release-v3.mjs";
+          const payload = JSON.parse(await readFile(process.argv[2], "utf8"));
+          validateFirstUseWorkflowRuns(payload, {
+            publicationControlSha: process.env.PUBLICATION_CONTROL_SHA,
+            runId: process.env.GITHUB_RUN_ID,
+            authorityReceiptSha256: process.env.AUTHORITY_RECEIPT_SHA256,
+          });
+          NODE
+          printf 'PUBLIC_TRUTH_V3_FIRST_USE=verified\n' >> "$GITHUB_ENV"
+      - name: Revalidate exact authority immediately before deploy
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SUCCESSOR_CONTROL_SHA: ${{ inputs.successor_control_sha }}
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+          SUCCESSOR_INPUT_SHA256: ${{ inputs.successor_input_sha256 }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: >-
+          node scripts/verify-public-truth-release-v3.mjs
+          --mode predeploy
+          --root "$PWD"
+          --candidate-root ../target
+          --artifact-root ../target/_site
+          --candidate-sha "$CANDIDATE_SHA"
+          --successor-control-sha "$SUCCESSOR_CONTROL_SHA"
+          --publication-control-sha "$PUBLICATION_CONTROL_SHA"
+          --successor-input-sha256 "$SUCCESSOR_INPUT_SHA256"
+          --authority-receipt-sha256 "$AUTHORITY_RECEIPT_SHA256"
+      - name: Deploy exact validated Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+
+  prove:
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: deploy
+    steps:
+      - name: Check out exact P' and C'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.publication_control_sha }}
+          path: control
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.candidate_sha }}
+          path: target
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: target/.nvmrc
+      - name: Reconstruct exact candidate artifact
+        working-directory: target
+        run: npm ci --ignore-scripts && npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+      - name: Reconfirm unique first use
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+        run: |
+          set -euo pipefail
+          cp -a target/_site control/_site
+          node control/scripts/verify-public-truth-release-v3.mjs \
+            --mode runs \
+            --evidence "$RUNNER_TEMP/public-truth-v3-runs.json"
+          node --input-type=module - "$RUNNER_TEMP/public-truth-v3-runs.json" <<'NODE'
+          import { readFile } from "node:fs/promises";
+          import { validateFirstUseWorkflowRuns } from "./control/scripts/verify-public-truth-release-v3.mjs";
+          const payload = JSON.parse(await readFile(process.argv[2], "utf8"));
+          validateFirstUseWorkflowRuns(payload, {
+            publicationControlSha: process.env.PUBLICATION_CONTROL_SHA,
+            runId: process.env.GITHUB_RUN_ID,
+            authorityReceiptSha256: process.env.AUTHORITY_RECEIPT_SHA256,
+          });
+          NODE
+          printf 'PUBLIC_TRUTH_V3_FIRST_USE=verified\n' >> "$GITHUB_ENV"
+      - name: Prove exact live bytes and record actual publishedAt
+        working-directory: control
+        env:
+          CANDIDATE_SHA: ${{ inputs.candidate_sha }}
+          SUCCESSOR_CONTROL_SHA: ${{ inputs.successor_control_sha }}
+          PUBLICATION_CONTROL_SHA: ${{ inputs.publication_control_sha }}
+          SUCCESSOR_INPUT_SHA256: ${{ inputs.successor_input_sha256 }}
+          AUTHORITY_RECEIPT_SHA256: ${{ inputs.authority_receipt_sha256 }}
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: >-
+          node scripts/verify-public-truth-release-v3.mjs
+          --mode postdeploy
+          --root "$PWD"
+          --candidate-root ../target
+          --artifact-root ../target/_site
+          --candidate-sha "$CANDIDATE_SHA"
+          --successor-control-sha "$SUCCESSOR_CONTROL_SHA"
+          --publication-control-sha "$PUBLICATION_CONTROL_SHA"
+          --successor-input-sha256 "$SUCCESSOR_INPUT_SHA256"
+          --authority-receipt-sha256 "$AUTHORITY_RECEIPT_SHA256"
+          --deployment-page-url "$PAGE_URL"
+          --deployment-status succeed
+          --evidence "$RUNNER_TEMP/public-truth-production-proof-v3.json"
+      - name: Retain bounded production proof
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: public-truth-production-proof-v3
+          path: ${{ runner.temp }}/public-truth-production-proof-v3.json
+          retention-days: 90
+          if-no-files-found: error

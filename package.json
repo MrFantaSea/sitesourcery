@@ -52,11 +52,12 @@
     "ops:alert-delivery-proof": "node ops/prove-alert-delivery.mjs",
     "test:public-truth:legacy": "node --test scripts/test/public-truth-release.test.mjs",
     "test:public-truth:v2": "node --test scripts/test/browser-release-gate.test.mjs scripts/test/pages-legal-v4.test.mjs scripts/test/public-truth-release-v2.test.mjs",
+    "test:public-truth:v3": "node --test scripts/test/public-truth-release-v3.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "build:pages:legal-v4": "node scripts/build-pages.mjs --joint-legal-v4-finalization ops/releases/joint-legal-v4-2026-08-09T214211Z",
     "check:artifact": "node scripts/build-pages.mjs --check",
     "check:artifact:legal-v4": "node scripts/build-pages.mjs --check --joint-legal-v4-finalization ops/releases/joint-legal-v4-2026-08-09T214211Z",
-    "test": "npm run runtime:check && npm run check && npm run test:node && npm run test:public-truth:v2 && npm run check:selfhost && npm run check:hosted-service && npm run check:ops && npm run build:pages && npm run check:artifact && npm run check:hosted && npm run audit:browser"
+    "test": "npm run runtime:check && npm run check && npm run test:node && npm run test:public-truth:v2 && npm run test:public-truth:v3 && npm run check:selfhost && npm run check:hosted-service && npm run check:ops && npm run build:pages && npm run check:artifact && npm run check:hosted && npm run audit:browser"
   },
   "devDependencies": {
     "html-validate": "10.17.0"
