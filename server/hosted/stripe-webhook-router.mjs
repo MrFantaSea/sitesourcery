@@ -17,6 +17,9 @@ import {
   isAlakazamPaymentRecoveryEvent
 } from "../commerce-v2/alakazam-lifecycle-state.mjs";
 import {
+  isPotentialProfessionalServicesReversalEvent
+} from "../commerce-v2/professional-services-reversal.mjs";
+import {
   isPotentialCustomServicesAssessmentStripeEvent
 } from "./custom-services-assessment-settlement-postgres.mjs";
 import {
@@ -47,6 +50,7 @@ export function createStripeWebhookRouter({
   customBuildCommerce,
   customBuildChangeCommerce,
   customBuildFinalCommerce,
+  professionalReversal,
   alakazamCommerce,
   alakazamLifecycle
 } = {}) {
@@ -71,6 +75,8 @@ export function createStripeWebhookRouter({
       customBuildFinalCommerce &&
       typeof customBuildFinalCommerce.ingestStripeEvent ===
         "function" &&
+      professionalReversal &&
+      typeof professionalReversal.ingestStripeEvent === "function" &&
       alakazamCommerce &&
       typeof alakazamCommerce.ingestStripeEvent ===
         "function" &&
@@ -224,6 +230,13 @@ export function createStripeWebhookRouter({
             .ingestStripeEvent(event);
         if (result?.status !==
           "not_alakazam_cancellation") {
+          return result;
+        }
+      }
+      if (isPotentialProfessionalServicesReversalEvent(event)) {
+        const result =
+          await professionalReversal.ingestStripeEvent(event);
+        if (result?.status !== "not_professional_reversal") {
           return result;
         }
       }

@@ -1,6 +1,7 @@
 import {
   clone,
   deepFreeze,
+  digest,
   invariant,
   requiredDigest,
   requiredIso,
@@ -13,6 +14,8 @@ export const PROFESSIONAL_REVERSAL_EVIDENCE_SCHEMA =
   "sitesourcery.professional-services-reversal-evidence/v1";
 export const PROFESSIONAL_REVERSAL_RECONCILIATION_SCHEMA =
   "sitesourcery.professional-services-reversal-reconciliation/v1";
+export const PROFESSIONAL_STRIPE_REVERSAL_FACTS_SCHEMA =
+  "sitesourcery.stripe-professional-services-reversal/v1";
 
 export const PROFESSIONAL_PAYMENT_PURPOSES = Object.freeze([
   "assessment",
@@ -43,6 +46,7 @@ const UUID =
 const PAYMENT_INTENT_ID = /^pi_[A-Za-z0-9_]+$/u;
 const PROVIDER_EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
 const PROVIDER_OBJECT_ID = /^(?:ch|re|dp)_[A-Za-z0-9_]+$/u;
+const CHARGE_ID = /^ch_[A-Za-z0-9_]+$/u;
 const CONTROL = /[\u0000-\u001f\u007f]/u;
 const PURPOSES = new Set(PROFESSIONAL_PAYMENT_PURPOSES);
 const LIFECYCLE_STATES = Object.freeze({ active: 0, held: 1, terminated: 2 });
@@ -55,6 +59,56 @@ const CREDIT_STATES = new Set([
 ]);
 const QUOTE_STATES = new Set(["none", "issued", "accepted", "voided"]);
 const EVIDENCE_CERTAINTIES = new Set(["verified", "ambiguous"]);
+const PROFESSIONAL_REVERSAL_EVENT_TYPES = new Set([
+  "charge.refunded",
+  "refund.created",
+  "refund.updated",
+  "refund.failed",
+  "charge.dispute.created",
+  "charge.dispute.updated",
+  "charge.dispute.closed",
+  "charge.dispute.funds_withdrawn",
+  "charge.dispute.funds_reinstated"
+]);
+
+function firstMatching(candidates, pattern) {
+  return candidates.find(
+    (candidate) => typeof candidate === "string" && pattern.test(candidate)
+  ) ?? null;
+}
+
+function reversalEventIdentity(value) {
+  const object = value?.data?.object;
+  if (!object || typeof object !== "object" || Array.isArray(object)) {
+    return null;
+  }
+  const stripeChargeId = firstMatching(
+    [object.charge, object.charge?.id, object.id],
+    CHARGE_ID
+  );
+  const stripePaymentIntentId = firstMatching(
+    [
+      object.payment_intent,
+      object.payment_intent?.id,
+      object.charge?.payment_intent
+    ],
+    PAYMENT_INTENT_ID
+  );
+  const expectedObject = value.type === "charge.refunded"
+    ? CHARGE_ID
+    : value.type?.startsWith("refund.")
+      ? /^re_[A-Za-z0-9_]+$/u
+      : /^dp_[A-Za-z0-9_]+$/u;
+  const stripeEventObjectId = firstMatching([object.id], expectedObject);
+  return stripeChargeId && stripePaymentIntentId && stripeEventObjectId
+    ? { stripeChargeId, stripePaymentIntentId, stripeEventObjectId }
+    : null;
+}
+
+export function isPotentialProfessionalServicesReversalEvent(value) {
+  return PROFESSIONAL_REVERSAL_EVENT_TYPES.has(value?.type) &&
+    reversalEventIdentity(value) !== null;
+}
 
 function exactKeys(value, expected, field, { status = 400 } = {}) {
   invariant(
@@ -427,7 +481,136 @@ function exactReconciliationInput(value) {
   });
 }
 
-function exactPorts({ repository, clock, ids } = {}) {
+function exactVerifiedReversalEvent(value) {
+  const identity = reversalEventIdentity(value);
+  invariant(
+    identity &&
+      PROVIDER_EVENT_ID.test(String(value?.id ?? "")) &&
+      PROFESSIONAL_REVERSAL_EVENT_TYPES.has(value.type) &&
+      typeof value.livemode === "boolean" &&
+      typeof value.api_version === "string" &&
+      value.api_version.length >= 3 && value.api_version.length <= 100 &&
+      Number.isSafeInteger(value.created) && value.created > 0,
+    "stripe_event_invalid",
+    "The verified professional reversal event is invalid",
+    { status: 400 }
+  );
+  return Object.freeze({
+    providerEventId: value.id,
+    providerEventType: value.type,
+    livemode: value.livemode,
+    ...identity
+  });
+}
+
+function exactProfessionalProviderReadback(value, event) {
+  if (value?.status === "not_professional_services") {
+    exactKeys(
+      value,
+      ["status"],
+      "professionalReversalReadback",
+      { status: 502 }
+    );
+    return Object.freeze({ status: "not_professional_services" });
+  }
+  exactKeys(
+    value,
+    [
+      "amountChargedMinor",
+      "amountReversedMinor",
+      "automaticRestorationAuthorized",
+      "currency",
+      "evidenceCertainty",
+      "livemode",
+      "metadataDigest",
+      "organizationId",
+      "outcome",
+      "paymentPurpose",
+      "provider",
+      "providerEffectAuthorized",
+      "providerFactsDigest",
+      "providerObjectId",
+      "providerObservedAt",
+      "reversalKind",
+      "schema",
+      "stripeChargeId",
+      "stripeDisputeId",
+      "stripePaymentIntentId",
+      "stripeRefundId"
+    ],
+    "professionalReversalReadback",
+    { status: 502 }
+  );
+  const facts = { ...value };
+  delete facts.providerFactsDigest;
+  invariant(
+    value.schema === PROFESSIONAL_STRIPE_REVERSAL_FACTS_SCHEMA &&
+      value.provider === "stripe" &&
+      PURPOSES.has(value.paymentPurpose) &&
+      UUID.test(value.organizationId) &&
+      value.livemode === event.livemode &&
+      value.stripeChargeId === event.stripeChargeId &&
+      value.stripePaymentIntentId === event.stripePaymentIntentId &&
+      PROVIDER_OBJECT_ID.test(value.providerObjectId) &&
+      value.evidenceCertainty === "verified" &&
+      PROFESSIONAL_REVERSAL_OUTCOMES[value.outcome] &&
+      Number.isSafeInteger(value.amountChargedMinor) &&
+      value.amountChargedMinor > 0 &&
+      Number.isSafeInteger(value.amountReversedMinor) &&
+      value.amountReversedMinor >= 0 &&
+      value.amountReversedMinor <= value.amountChargedMinor &&
+      value.currency === "USD" &&
+      requiredDigest(value.metadataDigest, "metadataDigest") &&
+      requiredIso(value.providerObservedAt, "providerObservedAt") &&
+      value.providerEffectAuthorized === false &&
+      value.automaticRestorationAuthorized === false &&
+      requiredDigest(value.providerFactsDigest, "providerFactsDigest") &&
+      digest(facts) === value.providerFactsDigest,
+    "professional_reversal_readback_invalid",
+    "Stripe professional reversal readback is inconsistent",
+    { status: 502 }
+  );
+  const refund = value.reversalKind === "refund";
+  const refundEvent = event.providerEventType === "charge.refunded" ||
+    event.providerEventType.startsWith("refund.");
+  invariant(
+    refund === refundEvent &&
+      (refund
+      ? value.providerObjectId ===
+          (event.providerEventType === "charge.refunded"
+            ? value.stripeChargeId
+            : value.stripeRefundId) &&
+        /^re_[A-Za-z0-9_]+$/u.test(value.stripeRefundId) &&
+        value.stripeDisputeId === null
+      : value.reversalKind === "dispute" &&
+        value.stripeDisputeId === value.providerObjectId &&
+        /^dp_[A-Za-z0-9_]+$/u.test(value.stripeDisputeId) &&
+        value.stripeRefundId === null),
+    "professional_reversal_readback_invalid",
+    "Stripe professional reversal object identity is inconsistent",
+    { status: 502 }
+  );
+  invariant(
+    (value.outcome === "refund_full"
+      ? value.amountReversedMinor === value.amountChargedMinor
+      : value.outcome === "refund_partial"
+        ? value.amountReversedMinor > 0 &&
+          value.amountReversedMinor < value.amountChargedMinor
+        : [
+            "refund_failed",
+            "dispute_won",
+            "dispute_funds_reinstated"
+          ].includes(value.outcome)
+          ? value.amountReversedMinor === 0
+          : true),
+    "professional_reversal_readback_invalid",
+    "Stripe professional reversal amount and outcome are inconsistent",
+    { status: 502 }
+  );
+  return deepFreeze({ ...value, providerFacts: facts });
+}
+
+function exactPorts({ repository, provider, clock, ids } = {}) {
   invariant(
     repository &&
       typeof repository.findPaymentByIntent === "function" &&
@@ -449,51 +632,126 @@ function exactPorts({ repository, clock, ids } = {}) {
     "professional reversal IDs are required",
     { status: 500 }
   );
-  return { repository, clock, ids };
+  return { repository, provider, clock, ids };
 }
 
 export function createProfessionalServicesReversalService(options = {}) {
   const ports = exactPorts(options);
-  return Object.freeze({
-    async recordEvidence(value) {
-      const input = exactRecordInput(value);
-      const payment = await ports.repository.findPaymentByIntent({
-        organizationId: input.organizationId,
-        paymentIntentId: input.paymentIntentId
-      });
-      if (payment === null) {
-        return deepFreeze({ status: "not_professional_services" });
-      }
-      const selectedPayment = exactProfessionalPayment(payment);
+  async function recordEvidence(value, { requiredPurpose = null } = {}) {
+    const input = exactRecordInput(value);
+    const payment = await ports.repository.findPaymentByIntent({
+      organizationId: input.organizationId,
+      paymentIntentId: input.paymentIntentId
+    });
+    if (payment === null) {
       invariant(
-        selectedPayment.totalMinor === input.amountChargedMinor &&
-          selectedPayment.currency === input.currency,
-        "reversal_binding_invalid",
-        "provider reversal evidence does not match the paid receipt",
+        requiredPurpose === null,
+        "professional_reversal_binding_unavailable",
+        "Verified Stripe professional reversal evidence has no durable payment binding",
         { status: 409 }
       );
-      const decision = input.evidenceCertainty === "verified"
-        ? decideProfessionalReversalConsequence({
-            outcome: input.outcome,
-            payment: selectedPayment
-          })
-        : null;
-      return deepFreeze(clone(await ports.repository.recordEvidence({
-        ...input,
-        evidenceId: exactUuid(
-          ports.ids.next("professional_reversal_evidence"),
-          "evidenceId",
-          { status: 500 }
-        ),
-        lifecycleId: exactUuid(
-          ports.ids.next("professional_payment_lifecycle"),
-          "lifecycleId",
-          { status: 500 }
-        ),
-        payment: selectedPayment,
-        decision,
-        recordedAt: requiredIso(ports.clock.now(), "clock.now")
-      })));
+      return deepFreeze({ status: "not_professional_services" });
+    }
+    const selectedPayment = exactProfessionalPayment(payment);
+    invariant(
+      (requiredPurpose === null ||
+        selectedPayment.paymentPurpose === requiredPurpose) &&
+        selectedPayment.totalMinor === input.amountChargedMinor &&
+        selectedPayment.currency === input.currency,
+      "reversal_binding_invalid",
+      "provider reversal evidence does not match the paid receipt",
+      { status: 409 }
+    );
+    const decision = input.evidenceCertainty === "verified"
+      ? decideProfessionalReversalConsequence({
+          outcome: input.outcome,
+          payment: selectedPayment
+        })
+      : null;
+    return deepFreeze(clone(await ports.repository.recordEvidence({
+      ...input,
+      evidenceId: exactUuid(
+        ports.ids.next("professional_reversal_evidence"),
+        "evidenceId",
+        { status: 500 }
+      ),
+      lifecycleId: exactUuid(
+        ports.ids.next("professional_payment_lifecycle"),
+        "lifecycleId",
+        { status: 500 }
+      ),
+      payment: selectedPayment,
+      decision,
+      recordedAt: requiredIso(ports.clock.now(), "clock.now")
+    })));
+  }
+
+  return Object.freeze({
+    recordEvidence,
+
+    async ingestStripeEvent(value) {
+      if (!isPotentialProfessionalServicesReversalEvent(value)) {
+        return deepFreeze({ status: "not_professional_reversal" });
+      }
+      const event = exactVerifiedReversalEvent(value);
+      invariant(
+        ports.provider &&
+          typeof ports.provider.retrieveProfessionalReversal === "function" &&
+          typeof ports.provider.issueRefund !== "function" &&
+          typeof ports.provider.createRefund !== "function",
+        "invalid_configuration",
+        "read-only professional reversal provider is required",
+        { status: 500 }
+      );
+      let selected;
+      try {
+        selected = await ports.provider.retrieveProfessionalReversal({
+          eventType: event.providerEventType,
+          stripeChargeId: event.stripeChargeId,
+          stripePaymentIntentId: event.stripePaymentIntentId,
+          stripeEventObjectId: event.stripeEventObjectId
+        });
+      } catch (error) {
+        invariant(
+          false,
+          "professional_reversal_reconciliation_unavailable",
+          "Professional reversal readback is temporarily unavailable",
+          { status: error?.status === 502 ? 502 : 503 }
+        );
+      }
+      const readback = exactProfessionalProviderReadback(selected, event);
+      if (readback.status === "not_professional_services") {
+        return deepFreeze({ status: "not_professional_reversal" });
+      }
+      invariant(
+        typeof ports.repository.findEvidenceByEvent === "function",
+        "invalid_configuration",
+        "professional reversal replay lookup is required",
+        { status: 500 }
+      );
+      const retained = await ports.repository.findEvidenceByEvent({
+        organizationId: readback.organizationId,
+        providerEventId: event.providerEventId,
+        providerEventType: event.providerEventType,
+        paymentIntentId: readback.stripePaymentIntentId,
+        providerObjectId: readback.providerObjectId
+      });
+      if (retained !== null) return deepFreeze(clone(retained));
+      return recordEvidence({
+        organizationId: readback.organizationId,
+        providerEventId: event.providerEventId,
+        providerEventType: event.providerEventType,
+        paymentIntentId: readback.stripePaymentIntentId,
+        providerObjectId: readback.providerObjectId,
+        evidenceCertainty: readback.evidenceCertainty,
+        outcome: readback.outcome,
+        amountChargedMinor: readback.amountChargedMinor,
+        amountReversedMinor: readback.amountReversedMinor,
+        currency: readback.currency,
+        providerFacts: readback.providerFacts,
+        providerFactsDigest: readback.providerFactsDigest,
+        providerObservedAt: readback.providerObservedAt
+      }, { requiredPurpose: readback.paymentPurpose });
     },
 
     async reconcileEvidence(actor, value) {

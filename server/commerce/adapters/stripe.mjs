@@ -35,6 +35,9 @@ import {
 import {
   ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA
 } from "../../commerce-v2/alakazam-lifecycle-state.mjs";
+import {
+  PROFESSIONAL_STRIPE_REVERSAL_FACTS_SCHEMA
+} from "../../commerce-v2/professional-services-reversal.mjs";
 import { createHeldStripeAdapter } from "./held.mjs";
 
 export const STRIPE_API_VERSION = "2026-06-24.dahlia";
@@ -218,6 +221,98 @@ const STRIPE_ALAKAZAM_DISPUTE_EVENTS = new Set([
   "charge.dispute.funds_withdrawn",
   "charge.dispute.updated"
 ]);
+const PROFESSIONAL_REVERSAL_METADATA = new Map([
+  [STRIPE_SERVICE_ASSESSMENT_METADATA_SCHEMA, {
+    paymentPurpose: "assessment",
+    fields: [
+      "accepted_disclosure_digest", "customer_id", "invoice_digest",
+      "invoice_id", "invoice_number", "project_id", "purpose_digest",
+      "quote_id", "schema", "tenant_id"
+    ],
+    invoice: /^SSA-[0-9A-F]{32}$/u
+  }],
+  [STRIPE_CUSTOM_BUILD_START_METADATA_SCHEMA, {
+    paymentPurpose: "custom_build_initial",
+    fields: [
+      "accepted_disclosure_digest", "accepted_quote_digest",
+      "credit_application_id", "customer_id", "invoice_digest",
+      "invoice_id", "invoice_number", "project_id", "purpose_digest",
+      "quote_acceptance_id", "quote_id", "quote_revision_id", "schema",
+      "tenant_id"
+    ],
+    invoice: /^SSCB-[0-9A-F]{32}$/u
+  }],
+  [STRIPE_CUSTOM_BUILD_CHANGE_METADATA_SCHEMA, {
+    paymentPurpose: "custom_build_change",
+    fields: [
+      "accepted_disclosure_digest", "accepted_quote_digest",
+      "change_acceptance_id", "change_number", "change_order_id",
+      "customer_id", "invoice_digest", "invoice_id", "invoice_number",
+      "job_id", "prior_effective_scope_digest", "project_id",
+      "purpose_digest", "schema", "scope_boundary_digest",
+      "target_completion_date", "tenant_id"
+    ],
+    invoice: /^SSCB-CHG-[0-9A-F]{32}$/u
+  }],
+  [STRIPE_CUSTOM_BUILD_FINAL_METADATA_SCHEMA, {
+    paymentPurpose: "custom_build_final",
+    fields: [
+      "accepted_disclosure_digest", "accepted_quote_digest",
+      "base_scope_digest", "commercial_contract_digest",
+      "completion_package_digest", "completion_package_id", "customer_id",
+      "effective_change_order_digests_digest", "effective_scope_digest",
+      "final_obligation_digest", "final_obligation_id", "installment_number",
+      "invoice_digest", "invoice_id", "invoice_number", "job_id",
+      "project_id", "purpose_digest", "quote_acceptance_id", "quote_id",
+      "quote_revision_id", "schema", "tenant_id",
+      "workmanship_correction_days"
+    ],
+    invoice: /^SSCB-FINAL-[0-9A-F]{32}$/u
+  }]
+]);
+
+function professionalReversalMetadata(value) {
+  const selected = PROFESSIONAL_REVERSAL_METADATA.get(value?.schema);
+  if (!selected) return null;
+  const fields = selected.fields;
+  invariant(
+    exactObjectKeys(value, fields) &&
+      fields.every((field) =>
+        typeof value[field] === "string" &&
+        value[field].length > 0 && value[field].length <= 500 &&
+        SAFE_METADATA_VALUE.test(value[field])
+      ) &&
+      UUID.test(value.tenant_id) &&
+      UUID.test(value.customer_id) &&
+      UUID.test(value.project_id) &&
+      fields.filter((field) => field.endsWith("_digest"))
+        .every((field) => SHA256.test(value[field])) &&
+      fields.filter((field) =>
+        field.endsWith("_id") &&
+        !["credit_application_id"].includes(field)
+      ).every((field) => UUID.test(value[field])) &&
+      (!fields.includes("credit_application_id") ||
+        value.credit_application_id === "none" ||
+        UUID.test(value.credit_application_id)) &&
+      selected.invoice.test(value.invoice_number) &&
+      (!fields.includes("change_number") ||
+        /^[1-9][0-9]*$/u.test(value.change_number)) &&
+      (!fields.includes("target_completion_date") ||
+        /^\d{4}-\d{2}-\d{2}$/u.test(value.target_completion_date)) &&
+      (!fields.includes("installment_number") ||
+        value.installment_number === "2") &&
+      (!fields.includes("workmanship_correction_days") ||
+        value.workmanship_correction_days === "30"),
+    "stripe_professional_reversal_mismatch",
+    "Stripe professional reversal metadata changed",
+    { status: 502 }
+  );
+  return Object.freeze({
+    paymentPurpose: selected.paymentPurpose,
+    organizationId: value.tenant_id,
+    metadataDigest: digest(value)
+  });
+}
 
 export function createOfficialStripeClient({
   secretKey,
@@ -2690,7 +2785,6 @@ function validateCustomBuildStartPurpose(
     "quoteId",
     "quoteRevisionId",
     "quoteAcceptanceId",
-    "creditApplicationId",
     "invoiceId",
     "invoiceNumber"
   ]) {
@@ -2699,6 +2793,13 @@ function validateCustomBuildStartPurpose(
       `purpose.${field}`
     );
   }
+  identity.creditApplicationId =
+    purpose.creditApplicationId === null
+      ? "none"
+      : safeMetadataValue(
+          purpose.creditApplicationId,
+          "purpose.creditApplicationId"
+        );
   invariant(
     purpose.schema ===
       STRIPE_CUSTOM_BUILD_START_PURPOSE_SCHEMA &&
@@ -2706,9 +2807,10 @@ function validateCustomBuildStartPurpose(
         identity.quoteId,
         identity.quoteRevisionId,
         identity.quoteAcceptanceId,
-        identity.creditApplicationId,
         identity.invoiceId
       ].every((value) => UUID.test(value)) &&
+      (identity.creditApplicationId === "none" ||
+        UUID.test(identity.creditApplicationId)) &&
       /^SSCB-[0-9A-F]{32}$/u.test(
         identity.invoiceNumber
       ) &&
@@ -6012,6 +6114,7 @@ export function createStripeProviderAdapter(options = {}) {
       retrieveAlakazamIncidentInvoice: reject,
       retrieveAlakazamCancellation: reject,
       retrieveAlakazamReversal: reject,
+      retrieveProfessionalReversal: reject,
       retrieveAlakazamSubscription: reject,
       retrieveAlakazamSchedule: reject,
       applyAlakazamUpgrade: reject,
@@ -6629,10 +6732,12 @@ export function createStripeProviderAdapter(options = {}) {
     });
   }
 
-  async function retrieveAlakazamReversalInternal({
+  async function retrieveStripeReversalInternal({
     eventType,
     stripeChargeId,
-    stripePaymentIntentId
+    stripePaymentIntentId,
+    stripeEventObjectId = null,
+    professional = false
   }) {
     requireCapability("charges:read");
     const refundEvent =
@@ -6686,6 +6791,12 @@ export function createStripeProviderAdapter(options = {}) {
       "Stripe Alakazam Charge identity or amount changed",
       { status: 502 }
     );
+    const professionalMetadata = professional
+      ? professionalReversalMetadata(charge.metadata)
+      : null;
+    if (professional && professionalMetadata === null) {
+      return Object.freeze({ status: "not_professional_services" });
+    }
     let reversalKind;
     let outcome;
     let amountReversedMinor;
@@ -6741,6 +6852,15 @@ export function createStripeProviderAdapter(options = {}) {
         "Stripe Alakazam Refund identity, amount, or status changed",
         { status: 502 }
       );
+      if (professional) {
+        invariant(
+          stripeEventObjectId ===
+            (eventType === "charge.refunded" ? chargeId : stripeRefundId),
+          "stripe_professional_reversal_mismatch",
+          "Stripe professional Refund wake object changed",
+          { status: 502 }
+        );
+      }
       reversalKind = "refund";
       amountReversedMinor =
         refund.status === "succeeded" ? refund.amount : 0;
@@ -6818,6 +6938,14 @@ export function createStripeProviderAdapter(options = {}) {
         "Stripe Alakazam Dispute identity, amount, or balance evidence changed",
         { status: 502 }
       );
+      if (professional) {
+        invariant(
+          stripeEventObjectId === stripeDisputeId,
+          "stripe_professional_reversal_mismatch",
+          "Stripe professional Dispute wake object changed",
+          { status: 502 }
+        );
+      }
       const withdrawn = transactions.some(
         ({ amount }) => amount < 0
       );
@@ -6880,8 +7008,23 @@ export function createStripeProviderAdapter(options = {}) {
       }
     }
     const facts = {
-      schema: ALAKAZAM_REVERSAL_FACTS_SCHEMA,
+      schema: professional
+        ? PROFESSIONAL_STRIPE_REVERSAL_FACTS_SCHEMA
+        : ALAKAZAM_REVERSAL_FACTS_SCHEMA,
       provider: "stripe",
+      ...(professional ? {
+        paymentPurpose: professionalMetadata.paymentPurpose,
+        organizationId: professionalMetadata.organizationId,
+        livemode: config.livemode,
+        metadataDigest: professionalMetadata.metadataDigest,
+        providerObjectId:
+          eventType === "charge.refunded"
+            ? chargeId
+            : stripeRefundId ?? stripeDisputeId,
+        evidenceCertainty: "verified",
+        providerEffectAuthorized: false,
+        automaticRestorationAuthorized: false
+      } : {}),
       reversalKind,
       outcome,
       stripeChargeId: chargeId,
@@ -7516,7 +7659,25 @@ export function createStripeProviderAdapter(options = {}) {
         "Alakazam reversal readback requires exact event, Charge, and PaymentIntent identity",
         { status: 500 }
       );
-      return retrieveAlakazamReversalInternal(request);
+      return retrieveStripeReversalInternal(request);
+    },
+
+    async retrieveProfessionalReversal(request = {}) {
+      invariant(
+        exactObjectKeys(request, [
+          "eventType",
+          "stripeChargeId",
+          "stripeEventObjectId",
+          "stripePaymentIntentId"
+        ]),
+        "stripe_professional_reversal_read_invalid",
+        "Professional reversal readback requires exact event, Charge, PaymentIntent, and wake-object identity",
+        { status: 500 }
+      );
+      return retrieveStripeReversalInternal({
+        ...request,
+        professional: true
+      });
     },
 
     async retrieveAlakazamSubscription(request = {}) {

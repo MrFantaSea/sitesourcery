@@ -38,7 +38,7 @@ test("production composes Purpose-1 PostgreSQL payment separately alongside the 
   );
   assert.match(
     source,
-    /customBuildCommerce:\s*customBuildPayment,\s*alakazamCommerce,\s*alakazamLifecycle,\s*customBuildChangeCommerce:\s*customBuildChangePayment/u
+    /customBuildCommerce:\s*customBuildPayment,\s*professionalReversal:\s*professionalLifecycle[.]professionalReversal,\s*alakazamCommerce,\s*alakazamLifecycle,\s*customBuildChangeCommerce:\s*customBuildChangePayment/u
   );
   assert.doesNotMatch(
     source,

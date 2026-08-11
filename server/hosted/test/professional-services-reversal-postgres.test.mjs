@@ -187,6 +187,54 @@ test("payment lookup is organization-bound and rejects multiple matches", async 
   );
 });
 
+test("durable event replay lookup is organization-bound and exact-identity fenced", async () => {
+  const replayRow = {
+    ...resultRow({ result_status: "replay" }),
+    provider_event_type: "charge.refunded",
+    payment_intent_id: "pi_professional_reversal_1",
+    provider_object_id: "ch_professional_reversal_1"
+  };
+  const { repository, calls } = harness(() => ({
+    rows: [replayRow],
+    rowCount: 1
+  }));
+  const replay = await repository.findEvidenceByEvent({
+    organizationId: ORGANIZATION_ID,
+    providerEventId: "evt_professional_reversal_1",
+    providerEventType: "charge.refunded",
+    paymentIntentId: "pi_professional_reversal_1",
+    providerObjectId: "ch_professional_reversal_1"
+  });
+  assert.equal(replay.status, "replay");
+  assert.deepEqual(calls[0].context, {
+    actorKind: "system",
+    organizationId: ORGANIZATION_ID,
+    readOnly: true
+  });
+  assert.match(calls[1].text,
+    /service_professional_reversal_evidence[\s\S]*provider_event_id/u);
+  assert.deepEqual(calls[1].values, [
+    ORGANIZATION_ID,
+    "evt_professional_reversal_1"
+  ]);
+
+  const drifted = harness(() => ({
+    rows: [replayRow],
+    rowCount: 1
+  })).repository;
+  await assert.rejects(
+    drifted.findEvidenceByEvent({
+      organizationId: ORGANIZATION_ID,
+      providerEventId: "evt_professional_reversal_1",
+      providerEventType: "refund.updated",
+      paymentIntentId: "pi_professional_reversal_1",
+      providerObjectId: "re_professional_reversal_1"
+    }),
+    (error) =>
+      error.code === "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT"
+  );
+});
+
 test("recording calls only the evidence-first database function", async () => {
   const { repository, calls } = harness((text) => {
     assert.match(text, /record_service_professional_reversal/u);

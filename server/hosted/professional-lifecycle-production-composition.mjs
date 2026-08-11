@@ -165,6 +165,7 @@ function fixedReadiness({
 
 export function createProfessionalLifecycleProductionComposition({
   authority,
+  provider,
   engagementBootstrap,
   mailLifecycle,
   clock,
@@ -172,6 +173,8 @@ export function createProfessionalLifecycleProductionComposition({
 } = {}) {
   invariant(
     authority && typeof authority.service === "function" &&
+      provider &&
+      typeof provider.retrieveProfessionalReversal === "function" &&
       engagementBootstrap &&
       typeof engagementBootstrap.readiness === "function" &&
       mailLifecycle && typeof mailLifecycle.readiness === "function" &&
@@ -186,6 +189,7 @@ export function createProfessionalLifecycleProductionComposition({
   const professionalReversal =
     createProfessionalServicesReversalService({
       repository: reversalRepository,
+      provider,
       clock,
       ids
     });

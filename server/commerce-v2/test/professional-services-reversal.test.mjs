@@ -70,6 +70,50 @@ function evidence(overrides = {}) {
   };
 }
 
+function reversalEvent(overrides = {}) {
+  return {
+    id: "evt_professional_reversal_1",
+    type: "charge.refunded",
+    livemode: false,
+    api_version: "2026-06-24.dahlia",
+    created: 1786377600,
+    data: {
+      object: {
+        id: "ch_professional_reversal_1",
+        payment_intent: "pi_professional_reversal_1"
+      }
+    },
+    ...overrides
+  };
+}
+
+function professionalReadback(overrides = {}) {
+  const facts = {
+    schema: "sitesourcery.stripe-professional-services-reversal/v1",
+    provider: "stripe",
+    paymentPurpose: "assessment",
+    organizationId: ORGANIZATION_ID,
+    livemode: false,
+    metadataDigest: "9".repeat(64),
+    providerObjectId: "ch_professional_reversal_1",
+    evidenceCertainty: "verified",
+    providerEffectAuthorized: false,
+    automaticRestorationAuthorized: false,
+    reversalKind: "refund",
+    outcome: "refund_full",
+    stripeChargeId: "ch_professional_reversal_1",
+    stripePaymentIntentId: "pi_professional_reversal_1",
+    stripeRefundId: "re_professional_reversal_1",
+    stripeDisputeId: null,
+    amountChargedMinor: 21400,
+    amountReversedMinor: 21400,
+    currency: "USD",
+    providerObservedAt: NOW,
+    ...overrides
+  };
+  return { ...facts, providerFactsDigest: digest(facts) };
+}
+
 test("all professional payment purposes share the bounded reversal contract", () => {
   assert.deepEqual(PROFESSIONAL_PAYMENT_PURPOSES, [
     "assessment",
@@ -236,6 +280,121 @@ test("unknown payment intents are ignored and mismatched amounts fail closed", a
     (error) =>
       error.code === "repository_conflict" && error.status === 500
   );
+});
+
+test("verified professional webhook readback records one purpose-bound Charge wake without raw money authority", async () => {
+  const calls = { provider: [], replay: [], record: [] };
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal(input) {
+        calls.provider.push(input);
+        return professionalReadback();
+      }
+    },
+    repository: {
+      async findEvidenceByEvent(input) {
+        calls.replay.push(input);
+        return null;
+      },
+      async findPaymentByIntent() { return payment(); },
+      async recordEvidence(input) {
+        calls.record.push(input);
+        return { status: "recorded", lifecycleState: "terminated" };
+      },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => NOW },
+    ids: {
+      next(label) {
+        return label === "professional_reversal_evidence"
+          ? EVIDENCE_ID
+          : LIFECYCLE_ID;
+      }
+    }
+  });
+  assert.deepEqual(await service.ingestStripeEvent(reversalEvent()), {
+    status: "recorded",
+    lifecycleState: "terminated"
+  });
+  assert.deepEqual(calls.provider, [{
+    eventType: "charge.refunded",
+    stripeChargeId: "ch_professional_reversal_1",
+    stripePaymentIntentId: "pi_professional_reversal_1",
+    stripeEventObjectId: "ch_professional_reversal_1"
+  }]);
+  assert.equal(calls.record[0].providerObjectId,
+    "ch_professional_reversal_1");
+  assert.equal(calls.record[0].providerFacts.stripeRefundId,
+    "re_professional_reversal_1");
+  assert.equal(calls.record[0].decision.toState, "terminated");
+});
+
+test("duplicate verified event returns durable replay despite a later readback timestamp", async () => {
+  let observedAt = NOW;
+  let retained = null;
+  let records = 0;
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal() {
+        return professionalReadback({ providerObservedAt: observedAt });
+      }
+    },
+    repository: {
+      async findEvidenceByEvent() { return retained; },
+      async findPaymentByIntent() { return payment(); },
+      async recordEvidence() {
+        records += 1;
+        retained = {
+          status: "replay",
+          evidenceId: EVIDENCE_ID,
+          lifecycleState: "terminated"
+        };
+        return { status: "recorded", lifecycleState: "terminated" };
+      },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => "2026-08-10T16:05:00.000Z" },
+    ids: {
+      next(label) {
+        return label === "professional_reversal_evidence"
+          ? EVIDENCE_ID
+          : LIFECYCLE_ID;
+      }
+    }
+  });
+  assert.equal((await service.ingestStripeEvent(reversalEvent())).status,
+    "recorded");
+  observedAt = "2026-08-10T17:00:00.000Z";
+  assert.deepEqual(await service.ingestStripeEvent(reversalEvent()), retained);
+  assert.equal(records, 1);
+});
+
+test("professional webhook readback ambiguity fails closed before durable evidence", async () => {
+  let writes = 0;
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal() {
+        const error = new Error("multiple refunds");
+        error.status = 502;
+        throw error;
+      }
+    },
+    repository: {
+      async findEvidenceByEvent() { return null; },
+      async findPaymentByIntent() { return payment(); },
+      async recordEvidence() { writes += 1; },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => NOW },
+    ids: { next: () => EVIDENCE_ID }
+  });
+  await assert.rejects(
+    service.ingestStripeEvent(reversalEvent()),
+    (error) =>
+      error.code === "professional_reversal_reconciliation_unavailable" &&
+      error.status === 502
+  );
+  assert.equal(writes, 0);
 });
 
 test("ambiguous evidence has no guessed outcome and requires reconciliation", async () => {

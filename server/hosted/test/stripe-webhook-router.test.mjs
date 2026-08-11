@@ -40,6 +40,10 @@ function fixture(
     customBuildFinalResult = {
       status: "custom_build_final"
     },
+    professionalResult = {
+      status: "not_professional_reversal"
+    },
+    professionalError = null,
     alakazamResult = { status: "alakazam" },
     renewalResult = {
       status: "not_alakazam_renewal"
@@ -59,6 +63,7 @@ function fixture(
   } = {}
 ) {
   const calls = {
+    sequence: [],
     verify: [],
     canonical: [],
     download: [],
@@ -66,6 +71,7 @@ function fixture(
     customBuild: [],
     customBuildChange: [],
     customBuildFinal: [],
+    professional: [],
     alakazam: [],
     renewal: [],
     incident: [],
@@ -82,12 +88,14 @@ function fixture(
     },
     canonicalService: {
       async ingestVerifiedStripeEvent(input) {
+        calls.sequence.push("canonical");
         calls.canonical.push(structuredClone(input));
         return { status: "canonical" };
       }
     },
     downloadCommerce: {
       async ingestStripeEvent(input) {
+        calls.sequence.push("download");
         calls.download.push(structuredClone(input));
         return structuredClone(downloadResult);
       }
@@ -118,6 +126,14 @@ function fixture(
           structuredClone(input)
         );
         return structuredClone(customBuildFinalResult);
+      }
+    },
+    professionalReversal: {
+      async ingestStripeEvent(input) {
+        calls.sequence.push("professional");
+        calls.professional.push(structuredClone(input));
+        if (professionalError) throw professionalError;
+        return structuredClone(professionalResult);
       }
     },
     alakazamCommerce: {
@@ -155,6 +171,7 @@ function fixture(
       },
       reversal: {
         async ingestStripeEvent(input) {
+          calls.sequence.push("alakazam_reversal");
           calls.reversal.push(structuredClone(input));
           return structuredClone(reversalResult);
         }
@@ -415,7 +432,60 @@ test("non-Download reversal continues to canonical commerce", async () => {
   assert.equal(context.calls.assessment.length, 0);
   assert.equal(context.calls.customBuildChange.length, 0);
   assert.equal(context.calls.alakazam.length, 0);
+  assert.equal(context.calls.professional.length, 1);
   assert.equal(context.calls.canonical.length, 1);
+  assert.deepEqual(context.calls.sequence, [
+    "download",
+    "alakazam_reversal",
+    "professional",
+    "canonical"
+  ]);
+});
+
+test("professional reversal claims after Alakazam fallthrough and errors never reach canonical", async () => {
+  const selected = {
+    ...event(),
+    type: "charge.refunded",
+    data: {
+      object: {
+        id: "ch_router_professional_1",
+        payment_intent: "pi_router_professional_1"
+      }
+    }
+  };
+  const claimed = fixture(selected, {
+    downloadResult: { status: "not_download" },
+    professionalResult: { status: "recorded" }
+  });
+  assert.deepEqual(
+    await claimed.router.ingestStripeWebhook({
+      rawBody: Buffer.from("professional-refund"),
+      signature: "stripe-signature"
+    }),
+    { status: "recorded" }
+  );
+  assert.deepEqual(claimed.calls.sequence, [
+    "download",
+    "alakazam_reversal",
+    "professional"
+  ]);
+  assert.equal(claimed.calls.canonical.length, 0);
+
+  const failure = new Error("readback unavailable");
+  failure.code = "professional_reversal_reconciliation_unavailable";
+  const failed = fixture(selected, {
+    downloadResult: { status: "not_download" },
+    professionalError: failure
+  });
+  await assert.rejects(
+    failed.router.ingestStripeWebhook({
+      rawBody: Buffer.from("professional-refund-error"),
+      signature: "stripe-signature"
+    }),
+    (error) => error === failure
+  );
+  assert.equal(failed.calls.professional.length, 1);
+  assert.equal(failed.calls.canonical.length, 0);
 });
 
 test("shared webhook router preserves canonical Stripe events without double verification", async () => {
@@ -543,6 +613,7 @@ test("shared webhook router composes held Alakazam lifecycle events after existi
   );
   assert.equal(reversal.calls.download.length, 1);
   assert.equal(reversal.calls.reversal.length, 1);
+  assert.equal(reversal.calls.professional.length, 0);
   assert.equal(reversal.calls.canonical.length, 0);
 });
 

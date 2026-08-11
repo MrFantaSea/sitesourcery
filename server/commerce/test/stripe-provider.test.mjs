@@ -586,7 +586,7 @@ function customBuildStartMetadata(
     quote_id: purpose.quoteId,
     quote_revision_id: purpose.quoteRevisionId,
     quote_acceptance_id: purpose.quoteAcceptanceId,
-    credit_application_id: purpose.creditApplicationId,
+    credit_application_id: purpose.creditApplicationId ?? "none",
     invoice_id: purpose.invoiceId,
     invoice_number: purpose.invoiceNumber,
     accepted_quote_digest:
@@ -1930,6 +1930,70 @@ function fakeAlakazamCharge(overrides = {}) {
   };
 }
 
+function professionalReversalMetadata(schema) {
+  const common = {
+    schema,
+    tenant_id: "10000000-0000-4000-8000-000000000001",
+    customer_id: "20000000-0000-4000-8000-000000000001",
+    project_id: "30000000-0000-4000-8000-000000000001",
+    invoice_id: "40000000-0000-4000-8000-000000000001",
+    accepted_disclosure_digest: "a".repeat(64),
+    invoice_digest: "b".repeat(64),
+    purpose_digest: "c".repeat(64)
+  };
+  if (schema === "sitesourcery_service_assessment_checkout_v1") {
+    return {
+      ...common,
+      invoice_number: `SSA-${"A".repeat(32)}`,
+      quote_id: "50000000-0000-4000-8000-000000000001"
+    };
+  }
+  if (schema === "sitesourcery_custom_build_start_checkout_v1") {
+    return {
+      ...common,
+      invoice_number: `SSCB-${"A".repeat(32)}`,
+      quote_id: "50000000-0000-4000-8000-000000000001",
+      quote_revision_id: "60000000-0000-4000-8000-000000000001",
+      quote_acceptance_id: "70000000-0000-4000-8000-000000000001",
+      credit_application_id: "none",
+      accepted_quote_digest: "d".repeat(64)
+    };
+  }
+  if (schema === "sitesourcery_custom_build_change_checkout_v1") {
+    return {
+      ...common,
+      invoice_number: `SSCB-CHG-${"A".repeat(32)}`,
+      job_id: "50000000-0000-4000-8000-000000000001",
+      change_order_id: "60000000-0000-4000-8000-000000000001",
+      change_acceptance_id: "70000000-0000-4000-8000-000000000001",
+      change_number: "1",
+      accepted_quote_digest: "d".repeat(64),
+      scope_boundary_digest: "e".repeat(64),
+      prior_effective_scope_digest: "f".repeat(64),
+      target_completion_date: "2026-09-01"
+    };
+  }
+  return {
+    ...common,
+    invoice_number: `SSCB-FINAL-${"A".repeat(32)}`,
+    job_id: "50000000-0000-4000-8000-000000000001",
+    quote_id: "60000000-0000-4000-8000-000000000001",
+    quote_revision_id: "70000000-0000-4000-8000-000000000001",
+    quote_acceptance_id: "80000000-0000-4000-8000-000000000001",
+    completion_package_id: "90000000-0000-4000-8000-000000000001",
+    final_obligation_id: "a0000000-0000-4000-8000-000000000001",
+    installment_number: "2",
+    workmanship_correction_days: "30",
+    accepted_quote_digest: "d".repeat(64),
+    commercial_contract_digest: "e".repeat(64),
+    base_scope_digest: "f".repeat(64),
+    effective_change_order_digests_digest: "1".repeat(64),
+    effective_scope_digest: "2".repeat(64),
+    completion_package_digest: "3".repeat(64),
+    final_obligation_digest: "4".repeat(64)
+  };
+}
+
 function fakeAlakazamSchedule(
   request,
   {
@@ -2409,6 +2473,7 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     "retrieveAlakazamIncidentInvoice",
     "retrieveAlakazamCancellation",
     "retrieveAlakazamReversal",
+    "retrieveProfessionalReversal",
     "retrieveAlakazamSubscription",
     "retrieveAlakazamSchedule",
     "applyAlakazamUpgrade",
@@ -3609,6 +3674,157 @@ test("Alakazam reversal readback binds one exact Refund or Dispute to its succes
   }]);
 });
 
+test("professional reversal readback classifies all four exact payment metadata contracts including direct v117", async () => {
+  const config = alakazamConfiguration();
+  for (const [schema, paymentPurpose] of [
+    ["sitesourcery_service_assessment_checkout_v1", "assessment"],
+    ["sitesourcery_custom_build_start_checkout_v1", "custom_build_initial"],
+    ["sitesourcery_custom_build_change_checkout_v1", "custom_build_change"],
+    ["sitesourcery_custom_build_final_checkout_v1", "custom_build_final"]
+  ]) {
+    const fake = fakeStripe({
+      config,
+      chargeRetrieveResponse: fakeAlakazamCharge({
+        metadata: professionalReversalMetadata(schema)
+      }),
+      refundListResponse: {
+        has_more: false,
+        data: [{
+          id: "re_professional_1",
+          charge: "ch_alakazam_lifecycle_1",
+          payment_intent: "pi_alakazam_lifecycle_1",
+          livemode: false,
+          currency: "usd",
+          amount: 2500,
+          status: "succeeded"
+        }]
+      }
+    });
+    const facts = await adapterFixture({ config, fake })
+      .adapter.retrieveProfessionalReversal({
+        eventType: "charge.refunded",
+        stripeChargeId: "ch_alakazam_lifecycle_1",
+        stripePaymentIntentId: "pi_alakazam_lifecycle_1",
+        stripeEventObjectId: "ch_alakazam_lifecycle_1"
+      });
+    assert.equal(facts.paymentPurpose, paymentPurpose);
+    assert.equal(facts.organizationId,
+      "10000000-0000-4000-8000-000000000001");
+    assert.equal(facts.providerObjectId, "ch_alakazam_lifecycle_1");
+    assert.equal(facts.stripeRefundId, "re_professional_1");
+    assert.equal(facts.providerEffectAuthorized, false);
+    assert.equal(facts.automaticRestorationAuthorized, false);
+    assert.match(facts.providerFactsDigest, /^[a-f0-9]{64}$/u);
+    if (paymentPurpose === "custom_build_initial") {
+      assert.equal(
+        fake.calls.chargeReads.length,
+        1,
+        "direct credit_application_id=none is accepted from Charge readback"
+      );
+    }
+  }
+});
+
+test("professional dispute readback is exact and non-professional Charge metadata falls through", async () => {
+  const config = alakazamConfiguration();
+  const disputeFake = fakeStripe({
+    config,
+    chargeRetrieveResponse: fakeAlakazamCharge({
+      amount_refunded: 0,
+      refunded: false,
+      metadata: professionalReversalMetadata(
+        "sitesourcery_custom_build_final_checkout_v1"
+      )
+    }),
+    disputeListResponse: {
+      has_more: false,
+      data: [{
+        id: "dp_professional_1",
+        charge: "ch_alakazam_lifecycle_1",
+        payment_intent: "pi_alakazam_lifecycle_1",
+        livemode: false,
+        currency: "usd",
+        amount: 2500,
+        status: "under_review",
+        balance_transactions: [{ amount: -2500 }]
+      }]
+    }
+  });
+  const dispute = await adapterFixture({ config, fake: disputeFake })
+    .adapter.retrieveProfessionalReversal({
+      eventType: "charge.dispute.updated",
+      stripeChargeId: "ch_alakazam_lifecycle_1",
+      stripePaymentIntentId: "pi_alakazam_lifecycle_1",
+      stripeEventObjectId: "dp_professional_1"
+    });
+  assert.equal(dispute.paymentPurpose, "custom_build_final");
+  assert.equal(dispute.providerObjectId, "dp_professional_1");
+  assert.equal(dispute.outcome, "dispute_open");
+
+  const unrelated = fakeStripe({
+    config,
+    chargeRetrieveResponse: fakeAlakazamCharge({ metadata: {} })
+  });
+  assert.deepEqual(
+    await adapterFixture({ config, fake: unrelated })
+      .adapter.retrieveProfessionalReversal({
+        eventType: "charge.refunded",
+        stripeChargeId: "ch_alakazam_lifecycle_1",
+        stripePaymentIntentId: "pi_alakazam_lifecycle_1",
+        stripeEventObjectId: "ch_alakazam_lifecycle_1"
+      }),
+    { status: "not_professional_services" }
+  );
+  assert.equal(unrelated.calls.refundLists.length, 0);
+});
+
+test("professional reversal readback fails closed on ambiguous multiple refunds", async () => {
+  const config = alakazamConfiguration();
+  const fake = fakeStripe({
+    config,
+    chargeRetrieveResponse: fakeAlakazamCharge({
+      amount_refunded: 2000,
+      refunded: false,
+      metadata: professionalReversalMetadata(
+        "sitesourcery_custom_build_start_checkout_v1"
+      )
+    }),
+    refundListResponse: {
+      has_more: false,
+      data: [
+        {
+          id: "re_professional_1",
+          charge: "ch_alakazam_lifecycle_1",
+          payment_intent: "pi_alakazam_lifecycle_1",
+          livemode: false,
+          currency: "usd",
+          amount: 1000,
+          status: "succeeded"
+        },
+        {
+          id: "re_professional_2",
+          charge: "ch_alakazam_lifecycle_1",
+          payment_intent: "pi_alakazam_lifecycle_1",
+          livemode: false,
+          currency: "usd",
+          amount: 1000,
+          status: "succeeded"
+        }
+      ]
+    }
+  });
+  await assert.rejects(
+    adapterFixture({ config, fake }).adapter
+      .retrieveProfessionalReversal({
+        eventType: "charge.refunded",
+        stripeChargeId: "ch_alakazam_lifecycle_1",
+        stripePaymentIntentId: "pi_alakazam_lifecycle_1",
+        stripeEventObjectId: "ch_alakazam_lifecycle_1"
+      }),
+    (error) => error.status === 502
+  );
+});
+
 test("Alakazam upgrade swaps the existing item with no proration and proves the unchanged billing boundary", async () => {
   const config = alakazamConfiguration();
   const request = alakazamRequest({
@@ -4708,6 +4924,26 @@ test("Custom-build first installment creates one exact variable automatic-tax Ch
     requestOptions.idempotencyKey,
     /^ss:custom_build_start_checkout:[a-f0-9]{64}$/u
   );
+});
+
+test("direct Custom first installment canonically maps null credit authority to metadata none", async () => {
+  const config = configuration({ taxMode: "automatic" });
+  const { adapter, calls } = adapterFixture({ config });
+  const request = customBuildStartRequest({
+    purpose: { creditApplicationId: null }
+  });
+  await adapter.createCustomBuildStartCheckout(request);
+  assert.equal(request.purpose.creditApplicationId, null);
+  assert.equal(
+    calls.checkouts[0].params.metadata.credit_application_id,
+    "none"
+  );
+  assert.equal(
+    calls.checkouts[0].params.payment_intent_data.metadata
+      .credit_application_id,
+    "none"
+  );
+  assert.equal(request.purposeDigest, digest(request.purpose));
 });
 
 test("Custom-build Checkout rejects purpose tampering before Stripe and response tampering as ambiguous", async () => {

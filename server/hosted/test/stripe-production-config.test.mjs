@@ -258,9 +258,12 @@ test("production Stripe composition defaults to held and supplies no latent conf
     "siteService"
   ]);
   assert.deepEqual(HOSTED_CAPABILITIES, [
+    "charges:read",
     "checkout:create",
     "checkout:read",
+    "disputes:read",
     "prices:read",
+    "refunds:read",
     "webhook_endpoints:read",
     "webhooks:verify"
   ]);
@@ -1174,7 +1177,7 @@ test("the hosted server injects one configured adapter for Checkout and every ve
   );
   assert.match(
     source,
-    /downloadCommerce,\s*assessmentCommerce:\s*customServicesAssessmentSettlement,\s*customBuildCommerce:\s*customBuildPayment,\s*alakazamCommerce/u
+    /downloadCommerce,\s*assessmentCommerce:\s*customServicesAssessmentSettlement,\s*customBuildCommerce:\s*customBuildPayment,\s*professionalReversal:\s*professionalLifecycle[.]professionalReversal,\s*alakazamCommerce/u
   );
   assert.match(
     source,

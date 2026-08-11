@@ -745,6 +745,7 @@ async function start() {
   const professionalLifecycle =
     createProfessionalLifecycleProductionComposition({
       authority,
+      provider: stripeComposition.adapter,
       engagementBootstrap,
       mailLifecycle,
       clock: commerceV2.clock,
@@ -868,6 +869,8 @@ async function start() {
           assessmentCommerce:
             customServicesAssessmentSettlement,
           customBuildCommerce: customBuildPayment,
+          professionalReversal:
+            professionalLifecycle.professionalReversal,
           alakazamCommerce,
           alakazamLifecycle,
           customBuildChangeCommerce:

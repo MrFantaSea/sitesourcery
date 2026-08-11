@@ -1468,6 +1468,11 @@ test(
           return { status: "not_custom_build_final" };
         }
       },
+      professionalReversal: {
+        async ingestStripeEvent() {
+          return { status: "not_professional_reversal" };
+        }
+      },
       alakazamCommerce: {
         async ingestStripeEvent() {
           return { status: "not_alakazam" };

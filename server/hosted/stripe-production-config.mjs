@@ -28,9 +28,12 @@ const APPROVAL_FIELDS = Object.freeze([
   "provider"
 ]);
 const HOSTED_CAPABILITIES = Object.freeze([
+  "charges:read",
   "checkout:create",
   "checkout:read",
+  "disputes:read",
   "prices:read",
+  "refunds:read",
   "webhook_endpoints:read",
   "webhooks:verify"
 ]);

@@ -193,6 +193,34 @@ function resultFromRow(row) {
   });
 }
 
+function replayFromRow(row, expected) {
+  exactKeys(
+    row,
+    [
+      "access_consequence", "credit_consequence", "customer_user_id",
+      "evidence_id", "lifecycle_id", "lifecycle_revision",
+      "lifecycle_state", "organization_id", "payment_intent_id",
+      "payment_purpose", "project_id", "provider_event_type",
+      "provider_object_id", "quote_consequence", "receipt_id",
+      "reconciliation_required", "result_status", "severity"
+    ],
+    "professionalReversalReplayRow"
+  );
+  invariant(
+    row.provider_event_type === expected.providerEventType &&
+      row.payment_intent_id === expected.paymentIntentId &&
+      row.provider_object_id === expected.providerObjectId,
+    "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT",
+    "Retained professional reversal event identity changed.",
+    { status: 500 }
+  );
+  const projected = { ...row };
+  delete projected.provider_event_type;
+  delete projected.payment_intent_id;
+  delete projected.provider_object_id;
+  return resultFromRow(projected);
+}
+
 function validateAuthority(value) {
   invariant(
     value && typeof value.service === "function",
@@ -348,6 +376,56 @@ export function createPostgresProfessionalServicesReversalRepository({
     ));
   }
 
+  async function findEvidenceByEvent({
+    organizationId,
+    providerEventId,
+    providerEventType,
+    paymentIntentId,
+    providerObjectId
+  }) {
+    invariant(UUID.test(String(organizationId ?? "")), "invalid_input", "organizationId is invalid", { status: 400 });
+    invariant(/^evt_[A-Za-z0-9_]+$/u.test(String(providerEventId ?? "")), "invalid_input", "providerEventId is invalid", { status: 400 });
+    return translated(() => database.service(
+      { actorKind: "system", organizationId, readOnly: true },
+      async (client) => {
+        const selected = one(await client.query(`
+          select
+            'replay'::text as result_status,
+            evidence.id as evidence_id,
+            lifecycle.id as lifecycle_id,
+            lifecycle.organization_id,
+            lifecycle.project_id,
+            lifecycle.customer_user_id,
+            lifecycle.payment_purpose,
+            lifecycle.payment_receipt_id as receipt_id,
+            lifecycle.state as lifecycle_state,
+            lifecycle.severity,
+            lifecycle.revision as lifecycle_revision,
+            lifecycle.access_consequence,
+            lifecycle.credit_consequence,
+            lifecycle.quote_consequence,
+            lifecycle.reconciliation_required,
+            evidence.provider_event_type,
+            evidence.payment_intent_id,
+            evidence.provider_object_id
+          from ss.service_professional_reversal_evidence evidence
+          join ss.service_professional_payment_lifecycles lifecycle
+            on lifecycle.id = evidence.lifecycle_id
+           and lifecycle.organization_id = evidence.organization_id
+          where evidence.organization_id = $1
+            and evidence.provider_event_id = $2
+        `, [organizationId, providerEventId]), "professionalReversalReplay", {
+          optional: true
+        });
+        return selected === null ? null : replayFromRow(selected, {
+          providerEventType,
+          paymentIntentId,
+          providerObjectId
+        });
+      }
+    ));
+  }
+
   async function recordEvidence(input) {
     const payment = exactProfessionalPayment(input.payment);
     return translated(() => database.service(
@@ -419,6 +497,7 @@ export function createPostgresProfessionalServicesReversalRepository({
 
   return Object.freeze({
     readiness,
+    findEvidenceByEvent,
     findPaymentByIntent,
     recordEvidence,
     reconcileEvidence

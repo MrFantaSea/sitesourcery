@@ -63,6 +63,11 @@ function compose(options = {}) {
   const composition =
     createProfessionalLifecycleProductionComposition({
       authority: database.port,
+      provider: {
+        async retrieveProfessionalReversal() {
+          throw new Error("not reached");
+        }
+      },
       engagementBootstrap: {
         async readiness() {
           return { state: "ready", providerEffects: false };
@@ -116,6 +121,10 @@ test("production composition binds all six held lifecycle boundaries", async () 
   );
   assert.equal(
     typeof composition.professionalReversal.recordEvidence,
+    "function"
+  );
+  assert.equal(
+    typeof composition.professionalReversal.ingestStripeEvent,
     "function"
   );
   assert.equal(
@@ -209,6 +218,14 @@ test("production root gates every professional payment and adds no delivery or p
     )
   ]);
   assert.match(root, /createProfessionalLifecycleProductionComposition/u);
+  assert.match(
+    root,
+    /createProfessionalLifecycleProductionComposition\(\{[\s\S]*?provider:\s*stripeComposition[.]adapter/u
+  );
+  assert.match(
+    root,
+    /professionalReversal:\s*professionalLifecycle[.]professionalReversal/u
+  );
   for (const assertion of [
     "assertApprovedCustomServicesAssessmentPaymentReady",
     "assertApprovedCustomBuildPaymentReady",
