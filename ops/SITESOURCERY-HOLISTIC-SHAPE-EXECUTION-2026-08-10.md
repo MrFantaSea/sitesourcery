@@ -7,11 +7,15 @@ Prepared: 2026-08-10
 Historical proof baseline: `3c94ffea1ac597556178291fc0b62ff87cc0edc2`
 
 Current pre-ledger integration checkpoint:
-`edf88da05ac59434754621fb580090950db2df2b` (**not frozen; exact post-ledger
+`dd288e2e088699986b7795abc7b34a5eb482f46d` (**not frozen; exact post-ledger
 integration reproof is still required**)
 
 Superseded candidate: `7d6bfa9a116fa96d1adc75216d2597435ba18036`
 (historical input only; later integrations changed its tree)
+
+Pre-hardening proof candidate:
+`d0722c77529fad0a5e1352eafee9edac72d92ba2` (retained proof evidence only;
+the authority-hardening successor changed its tree and must be re-proved)
 
 Legal V4 release ancestor: `69ad11c682dda9d6f792492d322b662dcbc98b4b`
 
@@ -75,10 +79,15 @@ remain held at this snapshot.
   successor to derive and supply the applicable positive `fileCount` and
   `manifestSha256`; 94 and 104 are evidence for these reviewed projections,
   not global runtime, workflow, or release constants.
-- Checkpoint `edf88da` integrates the six-width CI browser contract, complete
-  hosted Legal V4 projection, and candidate-generic public-truth successor
-  control. It remains a held integration checkpoint, not a frozen candidate;
-  the exact post-ledger integrated commit must be re-proved before freezing.
+- Checkpoint `dd288e2` integrates the six-width CI browser contract, complete
+  hosted Legal V4 projection, candidate-generic public-truth successor control,
+  and protected proof/expiry hardening. It remains a held integration
+  checkpoint, not a frozen candidate; the exact post-ledger integrated commit
+  must be re-proved before freezing.
+- Any retained full Node, Legal/browser, PostgreSQL, or artifact proof from
+  `d0722c7` predates the proof-path and expiry hardening. It is useful
+  historical evidence, but is not final proof of `dd288e2` or of the later
+  ledger-integrated candidate.
 - Inquiry-only static publication remains a candidate boundary, not a proven
   deployed publication. Hosted accounts/API and every payment purpose remain
   held pending the applicable lists below.
@@ -140,6 +149,7 @@ Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 | FINAL-EPOCH-V2-03 | packet `888861c`, integrated `38fb3db`; `ops/final-release-epoch-v2.mjs` | Generic successor receipt/projector cross-binds protected CI, origin seal, and installed readback through exact root-owned path/digest anchors; retained v1 bytes remain immutable. Candidate-specific evidence is intentionally not embedded. |
 | LEGAL-PUBLISH-01 | `71d4aac`; `server/hosted/legal-publication-control.mjs` | Approved/effective basis is separate from real publication time; owner facts cannot be invented. |
 | PUBLIC-TRUTH-SUCCESSOR-16 | packet `9015e989`, integrated `edf88da`; `.github/workflows/public-truth-reconciliation-v3.yml`, `scripts/verify-public-truth-release-v3.mjs` | Candidate-generic C'→K'→P' authority binds exact commit/tree, source, successor input, Pages manifest, reviewed Chrome/six-width proof, owner receipt, predecessor, expiry, and one-shot use. The candidate contains no receipt or candidate-specific successor input; Pages publication and every broader effect remain held. |
+| RELEASE-AUTHORITY-HARDEN-22 | packet `3217012`, integrated `dd288e2`; `.github/workflows/ci-release-proof-held.yml`, `CI_RELEASE_PROTECTED_IMPLEMENTATION_PATHS`, and public-truth V3 verifier | The protected workflow's ordered control/candidate `cmp` list must equal the exact nine exported proof paths, including artifact/browser/route authority and the reviewed Chromium installer. Public-truth predeploy requires an exact 45-minute remaining authority budget: 20 minutes deploy + 20 minutes live proof + 5 minutes safety; it grants no additional effect. |
 | INGRESS-01 | `d0aaf42`; `server/hosted/ingress-policy.mjs`, `ops/Caddyfile.candidate.held` | Pre-buffer limits, deadlines, concurrency/rate/write/compile budgets, and ownership-before-expensive-work. |
 | OPS-MON-01 | `4d48937`; `ops/independent-monitor.mjs`, `ops/independent-dead-man.mjs` | Independent held probes, telemetry contracts, and dead-man candidates. |
 | MONITOR-IDENTITY-05 | packet `00960dc`, integrated `3c94ffe`; monitor/dead-man ports and entrypoints | Production monitoring requires anchored v2 and exact-matches `/api/v1/live`; a predecessor, generic-health response, or retained v1 cannot yield a successor-green heartbeat. |
@@ -180,10 +190,11 @@ Every row is **MERGED / HELD**. Residual real-world proof is listed later.
 
 ## Active packets — pending commit or integration
 
-None. `CI-BROWSER-CONTRACT-12`, `HOSTED-LEGAL-V4-13`, and
-`PUBLIC-TRUTH-SUCCESSOR-16` are now in the merged register. All repository
-packets listed above are merged and held. This does not close any external
-owner, provider, deployment, DNS, publication, or commercial gate.
+None. `CI-BROWSER-CONTRACT-12`, `HOSTED-LEGAL-V4-13`,
+`PUBLIC-TRUTH-SUCCESSOR-16`, and `RELEASE-AUTHORITY-HARDEN-22` are now in the
+merged register. All repository packets listed above are merged and held. This
+does not close any external owner, provider, deployment, DNS, publication, or
+commercial gate.
 
 ## REQUIRED-PRE-STATIC
 
@@ -191,7 +202,7 @@ The smallest inquiry/contact/legal Pages launch requires all of these and does
 not require hosted or commerce release:
 
 - Integrate this ledger-only close, re-prove that exact clean commit, and only
-  then freeze it as candidate C'. Checkpoint `edf88da` is an ancestor/checkpoint,
+  then freeze it as candidate C'. Checkpoint `dd288e2` is an ancestor/checkpoint,
   not the frozen candidate.
 - Create K' as the exact one-parent successor-control commit whose only change
   is `ops/releases/ci-successor-inputs/<C'>.json`. Bind C' SHA/tree, sealed
@@ -202,11 +213,16 @@ not require hosted or commerce release:
   digest. Preserve the required order: full Node, ops, Legal V4 Pages
   build/check, complete hosted Legal V4 build/check, exact six-width browser
   proof, fresh PostgreSQL proof/cleanup, then final held origin/CI verification.
+  The protected control and candidate must byte-match all nine declared proof
+  implementation paths, including the artifact audit, browser runtime, route
+  authority, and reviewed Chromium installer.
 - **LEGAL-PUBLISH-FINAL:** obtain the real owner/legal authorization and create
   P' as the exact one-parent publication-control commit whose only changes are
   the short-lived one-shot V3 authority receipt and release control. The
   receipt must not invent P' or `publishedAt`; successful postdeploy live-byte
-  proof records the actual `publishedAt`.
+  proof records the actual `publishedAt`. Immediately before deploy, at least
+  45 minutes of receipt authority must remain: 20 minutes for deploy, 20 for
+  live proof, and 5 for safety.
 - Under separate push/dispatch and protected `github-pages` environment
   authority, run the V3 workflow with the exact C'/K'/P', successor-input
   digest, and receipt digest. It must revalidate first use, predecessor,
@@ -223,7 +239,7 @@ not require hosted or commerce release:
 Hosted accounts/API require every applicable static gate plus:
 
 - Reuse only the exact re-proved and frozen C' plus its held successor proof;
-  neither `edf88da` nor the retained packet counts are a hosted release epoch.
+  neither `dd288e2` nor the retained packet counts are a hosted release epoch.
 - **SHAPE-EPOCH-SUCCESSOR:** mint a new successor release epoch from the final
   candidate. The retained
   `ops/releases/shape-epoch-2026-08-10/release-epoch.json` still binds 58
@@ -362,7 +378,7 @@ packet does not close its external proof gate.
 ## Shortest dependency-safe execution order
 
 1. Commit, integrate, and review this reconciled ledger, then re-prove that
-   exact clean integrated commit. Do not freeze checkpoint `edf88da` or reuse
+   exact clean integrated commit. Do not freeze checkpoint `dd288e2` or reuse
    retained projection counts as expectations.
 2. Freeze the re-proved commit once as C'; generate its explicit successor
    epoch, migration and projection evidence; then create the single-input held
