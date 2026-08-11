@@ -23,6 +23,7 @@ import {
 import {
   CI_RELEASE_BROWSER_VERSION,
   CI_RELEASE_BROWSER_WIDTHS,
+  CI_RELEASE_PROTECTED_IMPLEMENTATION_PATHS,
   ciReleaseDatabaseName,
   ciReleaseDatabaseNameSha256,
   createCiReleaseFinalReceipt,
@@ -44,6 +45,23 @@ const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../.."
 );
+
+function protectedImplementationPaths(workflow) {
+  const selected = workflow.match(
+    /for file in \\\n(?<paths>[\s\S]*?)\n\s+do\n/u
+  );
+  assert.ok(selected?.groups?.paths, "protected implementation loop is missing");
+  return selected.groups.paths.trim().split("\n").map((line) => (
+    line.trim().replace(/ \\$/u, "")
+  ));
+}
+
+function assertProtectedImplementationPaths(workflow) {
+  assert.deepEqual(
+    protectedImplementationPaths(workflow),
+    CI_RELEASE_PROTECTED_IMPLEMENTATION_PATHS
+  );
+}
 const layout = Object.freeze({
   artifactRoot:
     "ops/releases/joint-legal-v4-2026-08-09T214211Z/hosted",
@@ -535,6 +553,22 @@ test("workflow is manual protected held and has no effect-bearing action", async
     "ss_ci_release_[1-9][0-9]*_[1-9][0-9]*",
     "ci-release-proof.mjs absence"
   ]) assert.ok(source.includes(required), required);
+  assertProtectedImplementationPaths(source);
+  assert.throws(
+    () => assertProtectedImplementationPaths(
+      source.replace("            scripts/browser-audit-vnext.mjs \\\n", "")
+    ),
+    /Expected values to be strictly deep-equal/u
+  );
+  assert.throws(
+    () => assertProtectedImplementationPaths(
+      source.replace(
+        "scripts/install-reviewed-chromium.sh",
+        "scripts/install-unreviewed-browser.sh"
+      )
+    ),
+    /Expected values to be strictly deep-equal/u
+  );
   assert.ok(
     source.indexOf("npm test") < source.indexOf("build:hosted:legal-v4") &&
       source.indexOf("build:hosted:legal-v4") <

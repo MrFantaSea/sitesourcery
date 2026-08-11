@@ -79,6 +79,10 @@ jobs:
             ops/ci-release-proof-runtime.mjs \
             ops/ci-release-proof-repository.mjs \
             ops/ci-release-proof.mjs \
+            scripts/audit-artifact-from-sitemap.mjs \
+            scripts/browser-audit-vnext.mjs \
+            scripts/check-routes.mjs \
+            scripts/install-reviewed-chromium.sh \
             server/data-plane/tests/migration-verification-inventory.mjs \
             server/data-plane/tests/verify-empty-postgres-migrations.mjs
           do

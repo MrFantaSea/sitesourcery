@@ -21,6 +21,17 @@ export const CI_RELEASE_FINAL_RECEIPT_SCHEMA =
 export const CI_RELEASE_PROTECTED_ENVIRONMENT =
   "ci-release-proof-held";
 export const CI_RELEASE_PINNED_NODE = "24.18.0";
+export const CI_RELEASE_PROTECTED_IMPLEMENTATION_PATHS = Object.freeze([
+  "ops/ci-release-proof-runtime.mjs",
+  "ops/ci-release-proof-repository.mjs",
+  "ops/ci-release-proof.mjs",
+  "scripts/audit-artifact-from-sitemap.mjs",
+  "scripts/browser-audit-vnext.mjs",
+  "scripts/check-routes.mjs",
+  "scripts/install-reviewed-chromium.sh",
+  "server/data-plane/tests/migration-verification-inventory.mjs",
+  "server/data-plane/tests/verify-empty-postgres-migrations.mjs"
+]);
 export const CI_RELEASE_BROWSER_WIDTHS = Object.freeze(
   PRIMARY_BROWSER_AUDIT_VIEWPORTS.map((viewport) => viewport.width)
 );

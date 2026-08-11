@@ -41,7 +41,14 @@ export const REPOSITORY_ID_V3 = "1296712694";
 export const OWNER_LOGIN_V3 = "MrFantaSea";
 export const OWNER_GITHUB_USER_ID_V3 = "293072489";
 export const MAX_AUTHORITY_LIFETIME_MS_V3 = 60 * 60 * 1000;
-export const MIN_PREDEPLOY_REMAINING_MS_V3 = 5 * 60 * 1000;
+export const PUBLIC_TRUTH_V3_DEPLOY_JOB_TIMEOUT_MINUTES = 20;
+export const PUBLIC_TRUTH_V3_PROVE_JOB_TIMEOUT_MINUTES = 20;
+export const PUBLIC_TRUTH_V3_AUTHORITY_SAFETY_MINUTES = 5;
+export const MIN_PREDEPLOY_REMAINING_MS_V3 = (
+  PUBLIC_TRUTH_V3_DEPLOY_JOB_TIMEOUT_MINUTES
+  + PUBLIC_TRUTH_V3_PROVE_JOB_TIMEOUT_MINUTES
+  + PUBLIC_TRUTH_V3_AUTHORITY_SAFETY_MINUTES
+) * 60 * 1000;
 export const MAX_CLOCK_SKEW_MS_V3 = 5 * 60 * 1000;
 export const REVIEWED_BROWSER_V3 = Object.freeze({
   version: REVIEWED_CHROMIUM.version,
@@ -1082,11 +1089,12 @@ async function verifyAuthorizedState({
       receipt,
     );
   }
-  if (
-    requireRemaining &&
-    Date.parse(receipt.authority.expiresAt) - now <
-      MIN_PREDEPLOY_REMAINING_MS_V3
-  ) fail("predeploy authority has less than five minutes remaining.");
+  if (requireRemaining) {
+    requirePredeployAuthorityBudgetV3({
+      expiresAt: receipt.authority.expiresAt,
+      now,
+    });
+  }
   return {
     candidateTreeSha,
     ciInput,
@@ -1211,6 +1219,21 @@ export function postdeployPublishedAtV3({ startedAt, completedAt, expiresAt }) {
     completedAt >= expiry
   ) fail("successful live proof completed outside the owner authority window.");
   return new Date(completedAt).toISOString();
+}
+
+export function requirePredeployAuthorityBudgetV3({ expiresAt, now }) {
+  const expiry = Date.parse(exactInstant(expiresAt, "authority expiry"));
+  if (
+    !Number.isFinite(now)
+    || expiry - now < MIN_PREDEPLOY_REMAINING_MS_V3
+  ) {
+    fail(
+      "predeploy authority has less than the required "
+      + `${MIN_PREDEPLOY_REMAINING_MS_V3 / (60 * 1000)}-minute `
+      + "deploy, live-proof, and safety budget.",
+    );
+  }
+  return expiry - now;
 }
 
 export function parseCliV3(argv) {

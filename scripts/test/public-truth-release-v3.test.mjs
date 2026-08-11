@@ -21,6 +21,11 @@ import { artifactManifest } from "../verify-public-truth-release.mjs";
 import {
   AUTHORITY_STATEMENT_V3,
   IMMUTABLE_V2_BLOBS,
+  MAX_AUTHORITY_LIFETIME_MS_V3,
+  MIN_PREDEPLOY_REMAINING_MS_V3,
+  PUBLIC_TRUTH_V3_AUTHORITY_SAFETY_MINUTES,
+  PUBLIC_TRUTH_V3_DEPLOY_JOB_TIMEOUT_MINUTES,
+  PUBLIC_TRUTH_V3_PROVE_JOB_TIMEOUT_MINUTES,
   RECEIPT_PATH_V3,
   REVIEWED_BROWSER_V3,
   V3_PROOF_IDENTITY_PATHS,
@@ -33,6 +38,7 @@ import {
   createAuthorityReceiptV3,
   parseCliV3,
   postdeployPublishedAtV3,
+  requirePredeployAuthorityBudgetV3,
   validateAuthorityReceiptV3,
   validateBrowserProofV3,
   validateFirstUseWorkflowRuns,
@@ -52,6 +58,17 @@ const SOURCE = "7".repeat(64);
 const PAGES = "8".repeat(64);
 const PREDECESSOR = "9".repeat(40);
 const NOW = Date.parse("2026-08-11T11:00:00.000Z");
+
+function workflowJobTimeout(workflow, job, nextJob) {
+  const start = workflow.indexOf(`  ${job}:`);
+  const end = nextJob ? workflow.indexOf(`\n  ${nextJob}:`, start) : workflow.length;
+  assert.ok(start >= 0 && end > start, `${job} job is missing`);
+  const matches = [...workflow.slice(start, end).matchAll(
+    /^    timeout-minutes: ([1-9][0-9]*)$/gmu
+  )];
+  assert.equal(matches.length, 1, `${job} must have one exact timeout`);
+  return Number(matches[0][1]);
+}
 
 function receipt() {
   return createAuthorityReceiptV3({
@@ -288,11 +305,58 @@ test("publishedAt is post-verification completion and must precede authority exp
     completedAt: NOW + 30_000,
     expiresAt: "2026-08-11T11:55:00.000Z",
   }), "2026-08-11T11:00:30.000Z");
+  assert.equal(postdeployPublishedAtV3({
+    startedAt: NOW,
+    completedAt: Date.parse("2026-08-11T11:54:59.999Z"),
+    expiresAt: "2026-08-11T11:55:00.000Z",
+  }), "2026-08-11T11:54:59.999Z");
   assert.throws(() => postdeployPublishedAtV3({
     startedAt: NOW,
     completedAt: Date.parse("2026-08-11T11:55:00.000Z"),
     expiresAt: "2026-08-11T11:55:00.000Z",
   }), /outside/iu);
+});
+
+test("predeploy authority covers deploy and live-proof job maxima plus safety", async () => {
+  assert.equal(PUBLIC_TRUTH_V3_DEPLOY_JOB_TIMEOUT_MINUTES, 20);
+  assert.equal(PUBLIC_TRUTH_V3_PROVE_JOB_TIMEOUT_MINUTES, 20);
+  assert.equal(PUBLIC_TRUTH_V3_AUTHORITY_SAFETY_MINUTES, 5);
+  assert.equal(
+    MIN_PREDEPLOY_REMAINING_MS_V3,
+    (
+      PUBLIC_TRUTH_V3_DEPLOY_JOB_TIMEOUT_MINUTES
+      + PUBLIC_TRUTH_V3_PROVE_JOB_TIMEOUT_MINUTES
+      + PUBLIC_TRUTH_V3_AUTHORITY_SAFETY_MINUTES
+    ) * 60 * 1000,
+  );
+  assert.ok(MIN_PREDEPLOY_REMAINING_MS_V3 < MAX_AUTHORITY_LIFETIME_MS_V3);
+
+  const workflow = await readFile(
+    path.join(ROOT, ".github/workflows/public-truth-reconciliation-v3.yml"),
+    "utf8",
+  );
+  assert.equal(
+    workflowJobTimeout(workflow, "deploy", "prove"),
+    PUBLIC_TRUTH_V3_DEPLOY_JOB_TIMEOUT_MINUTES,
+  );
+  assert.equal(
+    workflowJobTimeout(workflow, "prove"),
+    PUBLIC_TRUTH_V3_PROVE_JOB_TIMEOUT_MINUTES,
+  );
+
+  const expiresAt = "2026-08-11T12:00:00.000Z";
+  const exactMinimum = Date.parse(expiresAt) - MIN_PREDEPLOY_REMAINING_MS_V3;
+  assert.equal(
+    requirePredeployAuthorityBudgetV3({ expiresAt, now: exactMinimum }),
+    MIN_PREDEPLOY_REMAINING_MS_V3,
+  );
+  assert.throws(
+    () => requirePredeployAuthorityBudgetV3({
+      expiresAt,
+      now: exactMinimum + 1,
+    }),
+    /required 45-minute/u,
+  );
 });
 
 test("CLI separates machine browser proof from future P' control verification", () => {
