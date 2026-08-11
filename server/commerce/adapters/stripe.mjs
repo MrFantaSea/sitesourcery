@@ -310,7 +310,67 @@ function professionalReversalMetadata(value) {
   return Object.freeze({
     paymentPurpose: selected.paymentPurpose,
     organizationId: value.tenant_id,
+    projectId: value.project_id,
+    customerId: value.customer_id,
     metadataDigest: digest(value)
+  });
+}
+
+function exactProfessionalPaymentBinding(value) {
+  invariant(
+    exactObjectKeys(value, [
+      "currency",
+      "customerId",
+      "organizationId",
+      "paymentIntentId",
+      "paymentPurpose",
+      "projectId",
+      "receiptId",
+      "totalMinor"
+    ]) &&
+      [
+        "assessment",
+        "custom_build_initial",
+        "custom_build_change",
+        "custom_build_final"
+      ].includes(value.paymentPurpose) &&
+      UUID.test(value.receiptId) &&
+      UUID.test(value.organizationId) &&
+      UUID.test(value.projectId) &&
+      UUID.test(value.customerId) &&
+      /^pi_[A-Za-z0-9_]+$/u.test(value.paymentIntentId) &&
+      Number.isSafeInteger(value.totalMinor) &&
+      value.totalMinor > 0 &&
+      value.currency === "USD",
+    "stripe_professional_reversal_read_invalid",
+    "Professional reversal requires one exact durable payment binding",
+    { status: 500 }
+  );
+  return value;
+}
+
+function professionalReversalMetadataEvidence(value, payment) {
+  const retained = value !== null &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.getPrototypeOf(value) === Object.prototype
+    ? value
+    : {};
+  let selected = null;
+  try {
+    selected = professionalReversalMetadata(retained);
+  } catch {
+    // Stripe metadata is mutable context only. Durable receipt identity below
+    // remains the sole classifier and authority for this reversal.
+  }
+  return Object.freeze({
+    metadataDigest: digest(retained),
+    metadataCorroborated:
+      selected !== null &&
+      selected.paymentPurpose === payment.paymentPurpose &&
+      selected.organizationId === payment.organizationId &&
+      selected.projectId === payment.projectId &&
+      selected.customerId === payment.customerId
   });
 }
 
@@ -6737,7 +6797,8 @@ export function createStripeProviderAdapter(options = {}) {
     stripeChargeId,
     stripePaymentIntentId,
     stripeEventObjectId = null,
-    professional = false
+    professional = false,
+    professionalPayment = null
   }) {
     requireCapability("charges:read");
     const refundEvent =
@@ -6759,6 +6820,15 @@ export function createStripeProviderAdapter(options = {}) {
       stripePaymentIntentId,
       "pi",
       "stripePaymentIntentId"
+    );
+    const payment = professional
+      ? exactProfessionalPaymentBinding(professionalPayment)
+      : null;
+    invariant(
+      !professional || payment.paymentIntentId === paymentIntentId,
+      "stripe_professional_reversal_mismatch",
+      "The durable professional payment intent binding changed",
+      { status: 502 }
     );
     const observedAt = canonicalIso(
       clock.now(),
@@ -6791,12 +6861,17 @@ export function createStripeProviderAdapter(options = {}) {
       "Stripe Alakazam Charge identity or amount changed",
       { status: 502 }
     );
+    invariant(
+      !professional ||
+        (charge.amount === payment.totalMinor &&
+          payment.currency === "USD"),
+      "stripe_professional_reversal_mismatch",
+      "Stripe Charge amount changed from the durable paid receipt",
+      { status: 502 }
+    );
     const professionalMetadata = professional
-      ? professionalReversalMetadata(charge.metadata)
+      ? professionalReversalMetadataEvidence(charge.metadata, payment)
       : null;
-    if (professional && professionalMetadata === null) {
-      return Object.freeze({ status: "not_professional_services" });
-    }
     let reversalKind;
     let outcome;
     let amountReversedMinor;
@@ -7013,10 +7088,15 @@ export function createStripeProviderAdapter(options = {}) {
         : ALAKAZAM_REVERSAL_FACTS_SCHEMA,
       provider: "stripe",
       ...(professional ? {
-        paymentPurpose: professionalMetadata.paymentPurpose,
-        organizationId: professionalMetadata.organizationId,
+        paymentPurpose: payment.paymentPurpose,
+        receiptId: payment.receiptId,
+        organizationId: payment.organizationId,
+        projectId: payment.projectId,
+        customerId: payment.customerId,
         livemode: config.livemode,
         metadataDigest: professionalMetadata.metadataDigest,
+        metadataCorroborated:
+          professionalMetadata.metadataCorroborated,
         providerObjectId:
           eventType === "charge.refunded"
             ? chargeId
@@ -7666,12 +7746,13 @@ export function createStripeProviderAdapter(options = {}) {
       invariant(
         exactObjectKeys(request, [
           "eventType",
+          "professionalPayment",
           "stripeChargeId",
           "stripeEventObjectId",
           "stripePaymentIntentId"
         ]),
         "stripe_professional_reversal_read_invalid",
-        "Professional reversal readback requires exact event, Charge, PaymentIntent, and wake-object identity",
+        "Professional reversal readback requires exact event, Charge, PaymentIntent, wake-object, and durable payment identity",
         { status: 500 }
       );
       return retrieveStripeReversalInternal({

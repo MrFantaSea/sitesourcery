@@ -34,6 +34,18 @@ function paymentRow(overrides = {}) {
   };
 }
 
+function paymentSourceRow(overrides = {}) {
+  return {
+    payment_purpose: "assessment",
+    receipt_id: RECEIPT_ID,
+    organization_id: ORGANIZATION_ID,
+    project_id: PROJECT_ID,
+    customer_user_id: CUSTOMER_ID,
+    payment_intent_id: "pi_professional_reversal_1",
+    ...overrides
+  };
+}
+
 function resultRow(overrides = {}) {
   return {
     result_status: "recorded",
@@ -181,6 +193,76 @@ test("payment lookup is organization-bound and rejects multiple matches", async 
   await assert.rejects(
     conflicted.findPaymentByIntent({
       organizationId: ORGANIZATION_ID,
+      paymentIntentId: "pi_professional_reversal_1"
+    }),
+    (error) => error.code === "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT"
+  );
+});
+
+test("exact PaymentIntent resolution derives one local tenant then verifies the normalized binding", async () => {
+  const { repository, calls } = harness((text) => {
+    if (text.includes("service_assessment_payment_receipts")) {
+      assert.match(text,
+        /service_custom_build_final_payment_receipts[\s\S]*payment_intent_id = \$1/u);
+      return { rows: [paymentSourceRow()], rowCount: 1 };
+    }
+    assert.match(text, /service_professional_payment_binding_by_intent/u);
+    return { rows: [paymentRow()], rowCount: 1 };
+  });
+  const selected = await repository.resolvePaymentByIntent({
+    paymentIntentId: "pi_professional_reversal_1"
+  });
+  assert.equal(selected.organizationId, ORGANIZATION_ID);
+  assert.equal(selected.paymentPurpose, "assessment");
+  assert.equal(selected.receiptId, RECEIPT_ID);
+  assert.equal(selected.projectId, PROJECT_ID);
+  assert.equal(selected.customerId, CUSTOMER_ID);
+  assert.deepEqual(calls[0].context, {
+    actorKind: "system",
+    readOnly: true
+  });
+  assert.deepEqual(calls[1].values, ["pi_professional_reversal_1"]);
+  assert.deepEqual(calls[2].context, {
+    actorKind: "system",
+    organizationId: ORGANIZATION_ID,
+    readOnly: true
+  });
+});
+
+test("PaymentIntent resolution rejects cross-source duplicates and normalized tenant drift", async () => {
+  const duplicate = harness((text) => {
+    assert.match(text, /service_assessment_payment_receipts/u);
+    return {
+      rows: [
+        paymentSourceRow(),
+        paymentSourceRow({
+          payment_purpose: "custom_build_initial",
+          receipt_id: EVIDENCE_ID,
+          organization_id: "10000000-0000-4000-8000-000000000099"
+        })
+      ],
+      rowCount: 2
+    };
+  }).repository;
+  await assert.rejects(
+    duplicate.resolvePaymentByIntent({
+      paymentIntentId: "pi_professional_reversal_1"
+    }),
+    (error) => error.code === "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT"
+  );
+
+  const drifted = harness((text) =>
+    text.includes("service_assessment_payment_receipts")
+      ? { rows: [paymentSourceRow()], rowCount: 1 }
+      : {
+          rows: [paymentRow({
+            organization_id: "10000000-0000-4000-8000-000000000099"
+          })],
+          rowCount: 1
+        }
+  ).repository;
+  await assert.rejects(
+    drifted.resolvePaymentByIntent({
       paymentIntentId: "pi_professional_reversal_1"
     }),
     (error) => error.code === "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT"

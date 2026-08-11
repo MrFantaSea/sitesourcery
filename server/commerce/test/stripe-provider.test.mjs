@@ -1994,6 +1994,19 @@ function professionalReversalMetadata(schema) {
   };
 }
 
+function professionalPaymentBinding(paymentPurpose) {
+  return {
+    paymentPurpose,
+    receiptId: "40000000-0000-4000-8000-000000000002",
+    organizationId: "10000000-0000-4000-8000-000000000001",
+    projectId: "30000000-0000-4000-8000-000000000001",
+    customerId: "20000000-0000-4000-8000-000000000001",
+    paymentIntentId: "pi_alakazam_lifecycle_1",
+    totalMinor: 2500,
+    currency: "USD"
+  };
+}
+
 function fakeAlakazamSchedule(
   request,
   {
@@ -3705,7 +3718,8 @@ test("professional reversal readback classifies all four exact payment metadata 
         eventType: "charge.refunded",
         stripeChargeId: "ch_alakazam_lifecycle_1",
         stripePaymentIntentId: "pi_alakazam_lifecycle_1",
-        stripeEventObjectId: "ch_alakazam_lifecycle_1"
+        stripeEventObjectId: "ch_alakazam_lifecycle_1",
+        professionalPayment: professionalPaymentBinding(paymentPurpose)
       });
     assert.equal(facts.paymentPurpose, paymentPurpose);
     assert.equal(facts.organizationId,
@@ -3714,6 +3728,13 @@ test("professional reversal readback classifies all four exact payment metadata 
     assert.equal(facts.stripeRefundId, "re_professional_1");
     assert.equal(facts.providerEffectAuthorized, false);
     assert.equal(facts.automaticRestorationAuthorized, false);
+    assert.equal(facts.metadataCorroborated, true);
+    assert.equal(facts.receiptId,
+      "40000000-0000-4000-8000-000000000002");
+    assert.equal(facts.projectId,
+      "30000000-0000-4000-8000-000000000001");
+    assert.equal(facts.customerId,
+      "20000000-0000-4000-8000-000000000001");
     assert.match(facts.providerFactsDigest, /^[a-f0-9]{64}$/u);
     if (paymentPurpose === "custom_build_initial") {
       assert.equal(
@@ -3725,7 +3746,7 @@ test("professional reversal readback classifies all four exact payment metadata 
   }
 });
 
-test("professional dispute readback is exact and non-professional Charge metadata falls through", async () => {
+test("professional dispute readback is exact and durable identity survives absent metadata", async () => {
   const config = alakazamConfiguration();
   const disputeFake = fakeStripe({
     config,
@@ -3755,7 +3776,8 @@ test("professional dispute readback is exact and non-professional Charge metadat
       eventType: "charge.dispute.updated",
       stripeChargeId: "ch_alakazam_lifecycle_1",
       stripePaymentIntentId: "pi_alakazam_lifecycle_1",
-      stripeEventObjectId: "dp_professional_1"
+      stripeEventObjectId: "dp_professional_1",
+      professionalPayment: professionalPaymentBinding("custom_build_final")
     });
   assert.equal(dispute.paymentPurpose, "custom_build_final");
   assert.equal(dispute.providerObjectId, "dp_professional_1");
@@ -3763,19 +3785,80 @@ test("professional dispute readback is exact and non-professional Charge metadat
 
   const unrelated = fakeStripe({
     config,
-    chargeRetrieveResponse: fakeAlakazamCharge({ metadata: {} })
+    chargeRetrieveResponse: fakeAlakazamCharge({ metadata: {} }),
+    refundListResponse: {
+      has_more: false,
+      data: [{
+        id: "re_professional_1",
+        charge: "ch_alakazam_lifecycle_1",
+        payment_intent: "pi_alakazam_lifecycle_1",
+        livemode: false,
+        currency: "usd",
+        amount: 2500,
+        status: "succeeded"
+      }]
+    }
   });
-  assert.deepEqual(
-    await adapterFixture({ config, fake: unrelated })
+  const absent = await adapterFixture({ config, fake: unrelated })
       .adapter.retrieveProfessionalReversal({
         eventType: "charge.refunded",
         stripeChargeId: "ch_alakazam_lifecycle_1",
         stripePaymentIntentId: "pi_alakazam_lifecycle_1",
-        stripeEventObjectId: "ch_alakazam_lifecycle_1"
-      }),
-    { status: "not_professional_services" }
-  );
-  assert.equal(unrelated.calls.refundLists.length, 0);
+        stripeEventObjectId: "ch_alakazam_lifecycle_1",
+        professionalPayment: professionalPaymentBinding("assessment")
+      });
+  assert.equal(absent.organizationId,
+    "10000000-0000-4000-8000-000000000001");
+  assert.equal(absent.paymentPurpose, "assessment");
+  assert.equal(absent.metadataCorroborated, false);
+  assert.equal(unrelated.calls.refundLists.length, 1);
+});
+
+test("mutated and wrong-tenant Charge metadata cannot override durable professional identity", async () => {
+  const config = alakazamConfiguration();
+  for (const metadata of [
+    {
+      ...professionalReversalMetadata(
+        "sitesourcery_service_assessment_checkout_v1"
+      ),
+      unexpected_mutation: "provider-drift"
+    },
+    {
+      ...professionalReversalMetadata(
+        "sitesourcery_service_assessment_checkout_v1"
+      ),
+      tenant_id: "10000000-0000-4000-8000-000000000099"
+    }
+  ]) {
+    const fake = fakeStripe({
+      config,
+      chargeRetrieveResponse: fakeAlakazamCharge({ metadata }),
+      refundListResponse: {
+        has_more: false,
+        data: [{
+          id: "re_professional_1",
+          charge: "ch_alakazam_lifecycle_1",
+          payment_intent: "pi_alakazam_lifecycle_1",
+          livemode: false,
+          currency: "usd",
+          amount: 2500,
+          status: "succeeded"
+        }]
+      }
+    });
+    const facts = await adapterFixture({ config, fake })
+      .adapter.retrieveProfessionalReversal({
+        eventType: "charge.refunded",
+        stripeChargeId: "ch_alakazam_lifecycle_1",
+        stripePaymentIntentId: "pi_alakazam_lifecycle_1",
+        stripeEventObjectId: "ch_alakazam_lifecycle_1",
+        professionalPayment: professionalPaymentBinding("assessment")
+      });
+    assert.equal(facts.metadataCorroborated, false);
+    assert.equal(facts.organizationId,
+      "10000000-0000-4000-8000-000000000001");
+    assert.equal(facts.paymentPurpose, "assessment");
+  }
 });
 
 test("professional reversal readback fails closed on ambiguous multiple refunds", async () => {
@@ -3819,7 +3902,9 @@ test("professional reversal readback fails closed on ambiguous multiple refunds"
         eventType: "charge.refunded",
         stripeChargeId: "ch_alakazam_lifecycle_1",
         stripePaymentIntentId: "pi_alakazam_lifecycle_1",
-        stripeEventObjectId: "ch_alakazam_lifecycle_1"
+        stripeEventObjectId: "ch_alakazam_lifecycle_1",
+        professionalPayment:
+          professionalPaymentBinding("custom_build_initial")
       }),
     (error) => error.status === 502
   );

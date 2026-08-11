@@ -133,6 +133,50 @@ function paymentFromRow(row) {
   });
 }
 
+function paymentSourceFromRow(row) {
+  exactKeys(
+    row,
+    [
+      "customer_user_id",
+      "organization_id",
+      "payment_intent_id",
+      "payment_purpose",
+      "project_id",
+      "receipt_id"
+    ],
+    "professionalPaymentSourceRow"
+  );
+  return Object.freeze({
+    paymentPurpose: row.payment_purpose,
+    receiptId: exactUuid(row.receipt_id, "professionalPaymentSourceRow.receiptId"),
+    organizationId: exactUuid(
+      row.organization_id,
+      "professionalPaymentSourceRow.organizationId"
+    ),
+    projectId: exactUuid(row.project_id, "professionalPaymentSourceRow.projectId"),
+    customerId: exactUuid(
+      row.customer_user_id,
+      "professionalPaymentSourceRow.customerId"
+    ),
+    paymentIntentId: row.payment_intent_id
+  });
+}
+
+function assertSamePaymentSource(payment, source) {
+  invariant(
+    payment.paymentPurpose === source.paymentPurpose &&
+      payment.receiptId === source.receiptId &&
+      payment.organizationId === source.organizationId &&
+      payment.projectId === source.projectId &&
+      payment.customerId === source.customerId &&
+      payment.paymentIntentId === source.paymentIntentId,
+    "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT",
+    "The normalized professional payment binding changed identity.",
+    { status: 500 }
+  );
+  return payment;
+}
+
 function resultFromRow(row) {
   exactKeys(
     row,
@@ -376,6 +420,78 @@ export function createPostgresProfessionalServicesReversalRepository({
     ));
   }
 
+  async function resolvePaymentByIntent({ paymentIntentId } = {}) {
+    invariant(PAYMENT_INTENT_ID.test(String(paymentIntentId ?? "")), "invalid_input", "paymentIntentId is invalid", { status: 400 });
+    const source = await translated(() => database.service(
+      { actorKind: "system", readOnly: true },
+      async (client) => {
+        const selected = one(await client.query(`
+          select candidate.*
+          from (
+            select
+              'assessment'::text as payment_purpose,
+              receipt.id as receipt_id,
+              receipt.organization_id,
+              receipt.project_id,
+              receipt.customer_user_id,
+              receipt.payment_intent_id
+            from ss.service_assessment_payment_receipts receipt
+            where receipt.payment_intent_id = $1
+
+            union all
+
+            select
+              'custom_build_initial'::text,
+              receipt.id,
+              receipt.organization_id,
+              receipt.project_id,
+              receipt.customer_user_id,
+              receipt.payment_intent_id
+            from ss.service_custom_build_payment_receipts receipt
+            where receipt.payment_intent_id = $1
+
+            union all
+
+            select
+              'custom_build_change'::text,
+              receipt.id,
+              receipt.organization_id,
+              receipt.project_id,
+              receipt.customer_user_id,
+              receipt.payment_intent_id
+            from ss.service_custom_build_change_payment_receipts receipt
+            where receipt.payment_intent_id = $1
+
+            union all
+
+            select
+              'custom_build_final'::text,
+              receipt.id,
+              receipt.organization_id,
+              receipt.project_id,
+              receipt.customer_user_id,
+              receipt.payment_intent_id
+            from ss.service_custom_build_final_payment_receipts receipt
+            where receipt.payment_intent_id = $1
+          ) candidate
+        `, [paymentIntentId]), "professionalPaymentSource", { optional: true });
+        return selected === null ? null : paymentSourceFromRow(selected);
+      }
+    ));
+    if (source === null) return null;
+    const payment = await findPaymentByIntent({
+      organizationId: source.organizationId,
+      paymentIntentId
+    });
+    invariant(
+      payment !== null,
+      "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT",
+      "The professional payment source has no normalized reversal binding.",
+      { status: 500 }
+    );
+    return assertSamePaymentSource(payment, source);
+  }
+
   async function findEvidenceByEvent({
     organizationId,
     providerEventId,
@@ -499,6 +615,7 @@ export function createPostgresProfessionalServicesReversalRepository({
     readiness,
     findEvidenceByEvent,
     findPaymentByIntent,
+    resolvePaymentByIntent,
     recordEvidence,
     reconcileEvidence
   });

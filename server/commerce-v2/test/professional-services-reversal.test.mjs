@@ -108,6 +108,10 @@ function professionalReadback(overrides = {}) {
     amountChargedMinor: 21400,
     amountReversedMinor: 21400,
     currency: "USD",
+    customerId: CUSTOMER_ID,
+    receiptId: RECEIPT_ID,
+    projectId: PROJECT_ID,
+    metadataCorroborated: true,
     providerObservedAt: NOW,
     ...overrides
   };
@@ -292,6 +296,7 @@ test("verified professional webhook readback records one purpose-bound Charge wa
       }
     },
     repository: {
+      async resolvePaymentByIntent() { return payment(); },
       async findEvidenceByEvent(input) {
         calls.replay.push(input);
         return null;
@@ -320,13 +325,73 @@ test("verified professional webhook readback records one purpose-bound Charge wa
     eventType: "charge.refunded",
     stripeChargeId: "ch_professional_reversal_1",
     stripePaymentIntentId: "pi_professional_reversal_1",
-    stripeEventObjectId: "ch_professional_reversal_1"
+    stripeEventObjectId: "ch_professional_reversal_1",
+    professionalPayment: {
+      paymentPurpose: "assessment",
+      receiptId: RECEIPT_ID,
+      organizationId: ORGANIZATION_ID,
+      projectId: PROJECT_ID,
+      customerId: CUSTOMER_ID,
+      paymentIntentId: "pi_professional_reversal_1",
+      totalMinor: 21400,
+      currency: "USD"
+    }
   }]);
   assert.equal(calls.record[0].providerObjectId,
     "ch_professional_reversal_1");
   assert.equal(calls.record[0].providerFacts.stripeRefundId,
     "re_professional_reversal_1");
   assert.equal(calls.record[0].decision.toState, "terminated");
+});
+
+test("an unbound PaymentIntent falls through before any professional provider read", async () => {
+  let providerReads = 0;
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal() {
+        providerReads += 1;
+        throw new Error("not reached");
+      }
+    },
+    repository: {
+      async resolvePaymentByIntent() { return null; },
+      async findPaymentByIntent() { throw new Error("not reached"); },
+      async recordEvidence() { throw new Error("not reached"); },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => NOW },
+    ids: { next: () => EVIDENCE_ID }
+  });
+  assert.deepEqual(await service.ingestStripeEvent(reversalEvent()), {
+    status: "not_professional_reversal"
+  });
+  assert.equal(providerReads, 0);
+});
+
+test("provider readback cannot substitute a different tenant for the durable binding", async () => {
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal() {
+        return professionalReadback({
+          organizationId: "10000000-0000-4000-8000-000000000099"
+        });
+      }
+    },
+    repository: {
+      async resolvePaymentByIntent() { return payment(); },
+      async findPaymentByIntent() { throw new Error("not reached"); },
+      async recordEvidence() { throw new Error("not reached"); },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => NOW },
+    ids: { next: () => EVIDENCE_ID }
+  });
+  await assert.rejects(
+    service.ingestStripeEvent(reversalEvent()),
+    (error) =>
+      error.code === "professional_reversal_readback_invalid" &&
+      error.status === 502
+  );
 });
 
 test("duplicate verified event returns durable replay despite a later readback timestamp", async () => {
@@ -340,6 +405,7 @@ test("duplicate verified event returns durable replay despite a later readback t
       }
     },
     repository: {
+      async resolvePaymentByIntent() { return payment(); },
       async findEvidenceByEvent() { return retained; },
       async findPaymentByIntent() { return payment(); },
       async recordEvidence() {
@@ -401,6 +467,7 @@ test("concurrent duplicate event recovers only the exact durable binding after o
       }
     },
     repository: {
+      async resolvePaymentByIntent() { return payment(); },
       async findEvidenceByEvent(input) {
         lookups.push(input);
         initialLookups += 1;
@@ -460,6 +527,7 @@ test("concurrent repository conflict stays closed when retained binding differs"
       }
     },
     repository: {
+      async resolvePaymentByIntent() { return payment(); },
       async findEvidenceByEvent() {
         return this.afterConflict
           ? {
@@ -505,6 +573,7 @@ test("professional webhook readback ambiguity fails closed before durable eviden
       }
     },
     repository: {
+      async resolvePaymentByIntent() { return payment(); },
       async findEvidenceByEvent() { return null; },
       async findPaymentByIntent() { return payment(); },
       async recordEvidence() { writes += 1; },

@@ -503,15 +503,14 @@ function exactVerifiedReversalEvent(value) {
   });
 }
 
-function exactProfessionalProviderReadback(value, event) {
+function exactProfessionalProviderReadback(value, event, payment) {
   if (value?.status === "not_professional_services") {
-    exactKeys(
-      value,
-      ["status"],
-      "professionalReversalReadback",
+    invariant(
+      false,
+      "professional_reversal_readback_invalid",
+      "Stripe denied an existing durable professional payment binding",
       { status: 502 }
     );
-    return Object.freeze({ status: "not_professional_services" });
   }
   exactKeys(
     value,
@@ -520,17 +519,21 @@ function exactProfessionalProviderReadback(value, event) {
       "amountReversedMinor",
       "automaticRestorationAuthorized",
       "currency",
+      "customerId",
       "evidenceCertainty",
       "livemode",
+      "metadataCorroborated",
       "metadataDigest",
       "organizationId",
       "outcome",
       "paymentPurpose",
+      "projectId",
       "provider",
       "providerEffectAuthorized",
       "providerFactsDigest",
       "providerObjectId",
       "providerObservedAt",
+      "receiptId",
       "reversalKind",
       "schema",
       "stripeChargeId",
@@ -546,8 +549,11 @@ function exactProfessionalProviderReadback(value, event) {
   invariant(
     value.schema === PROFESSIONAL_STRIPE_REVERSAL_FACTS_SCHEMA &&
       value.provider === "stripe" &&
-      PURPOSES.has(value.paymentPurpose) &&
-      UUID.test(value.organizationId) &&
+      value.paymentPurpose === payment.paymentPurpose &&
+      value.receiptId === payment.receiptId &&
+      value.organizationId === payment.organizationId &&
+      value.projectId === payment.projectId &&
+      value.customerId === payment.customerId &&
       value.livemode === event.livemode &&
       value.stripeChargeId === event.stripeChargeId &&
       value.stripePaymentIntentId === event.stripePaymentIntentId &&
@@ -555,11 +561,12 @@ function exactProfessionalProviderReadback(value, event) {
       value.evidenceCertainty === "verified" &&
       PROFESSIONAL_REVERSAL_OUTCOMES[value.outcome] &&
       Number.isSafeInteger(value.amountChargedMinor) &&
-      value.amountChargedMinor > 0 &&
+      value.amountChargedMinor === payment.totalMinor &&
       Number.isSafeInteger(value.amountReversedMinor) &&
       value.amountReversedMinor >= 0 &&
       value.amountReversedMinor <= value.amountChargedMinor &&
-      value.currency === "USD" &&
+      value.currency === payment.currency &&
+      typeof value.metadataCorroborated === "boolean" &&
       requiredDigest(value.metadataDigest, "metadataDigest") &&
       requiredIso(value.providerObservedAt, "providerObservedAt") &&
       value.providerEffectAuthorized === false &&
@@ -639,6 +646,7 @@ export function createProfessionalServicesReversalService(options = {}) {
   const ports = exactPorts(options);
   async function recordEvidence(value, {
     requiredPurpose = null,
+    requiredPayment = null,
     recoverRepositoryConflict = null
   } = {}) {
     const input = exactRecordInput(value);
@@ -659,6 +667,13 @@ export function createProfessionalServicesReversalService(options = {}) {
     invariant(
       (requiredPurpose === null ||
         selectedPayment.paymentPurpose === requiredPurpose) &&
+        (requiredPayment === null ||
+          (selectedPayment.paymentPurpose === requiredPayment.paymentPurpose &&
+            selectedPayment.receiptId === requiredPayment.receiptId &&
+            selectedPayment.organizationId === requiredPayment.organizationId &&
+            selectedPayment.projectId === requiredPayment.projectId &&
+            selectedPayment.customerId === requiredPayment.customerId &&
+            selectedPayment.paymentIntentId === requiredPayment.paymentIntentId)) &&
         selectedPayment.totalMinor === input.amountChargedMinor &&
         selectedPayment.currency === input.currency,
       "reversal_binding_invalid",
@@ -711,6 +726,19 @@ export function createProfessionalServicesReversalService(options = {}) {
       }
       const event = exactVerifiedReversalEvent(value);
       invariant(
+        typeof ports.repository.resolvePaymentByIntent === "function",
+        "invalid_configuration",
+        "professional reversal PaymentIntent resolver is required",
+        { status: 500 }
+      );
+      const resolved = await ports.repository.resolvePaymentByIntent({
+        paymentIntentId: event.stripePaymentIntentId
+      });
+      if (resolved === null) {
+        return deepFreeze({ status: "not_professional_reversal" });
+      }
+      const professionalPayment = exactProfessionalPayment(resolved);
+      invariant(
         ports.provider &&
           typeof ports.provider.retrieveProfessionalReversal === "function" &&
           typeof ports.provider.issueRefund !== "function" &&
@@ -725,7 +753,17 @@ export function createProfessionalServicesReversalService(options = {}) {
           eventType: event.providerEventType,
           stripeChargeId: event.stripeChargeId,
           stripePaymentIntentId: event.stripePaymentIntentId,
-          stripeEventObjectId: event.stripeEventObjectId
+          stripeEventObjectId: event.stripeEventObjectId,
+          professionalPayment: {
+            paymentPurpose: professionalPayment.paymentPurpose,
+            receiptId: professionalPayment.receiptId,
+            organizationId: professionalPayment.organizationId,
+            projectId: professionalPayment.projectId,
+            customerId: professionalPayment.customerId,
+            paymentIntentId: professionalPayment.paymentIntentId,
+            totalMinor: professionalPayment.totalMinor,
+            currency: professionalPayment.currency
+          }
         });
       } catch (error) {
         invariant(
@@ -735,10 +773,11 @@ export function createProfessionalServicesReversalService(options = {}) {
           { status: error?.status === 502 ? 502 : 503 }
         );
       }
-      const readback = exactProfessionalProviderReadback(selected, event);
-      if (readback.status === "not_professional_services") {
-        return deepFreeze({ status: "not_professional_reversal" });
-      }
+      const readback = exactProfessionalProviderReadback(
+        selected,
+        event,
+        professionalPayment
+      );
       invariant(
         typeof ports.repository.findEvidenceByEvent === "function",
         "invalid_configuration",
@@ -772,6 +811,7 @@ export function createProfessionalServicesReversalService(options = {}) {
         providerObservedAt: readback.providerObservedAt
       }, {
         requiredPurpose: readback.paymentPurpose,
+        requiredPayment: professionalPayment,
         async recoverRepositoryConflict({ error, payment }) {
           const concurrent =
             await ports.repository.findEvidenceByEvent(replayIdentity);
