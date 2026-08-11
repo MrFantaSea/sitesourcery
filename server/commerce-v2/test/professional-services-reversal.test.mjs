@@ -369,6 +369,131 @@ test("duplicate verified event returns durable replay despite a later readback t
   assert.equal(records, 1);
 });
 
+test("concurrent duplicate event recovers only the exact durable binding after one repository conflict", async () => {
+  const observed = [
+    "2026-08-10T16:00:00.000Z",
+    "2026-08-10T17:00:00.000Z"
+  ];
+  const attempts = [];
+  const lookups = [];
+  let initialLookups = 0;
+  let releaseInitialLookups;
+  const bothInitialLookups = new Promise((resolve) => {
+    releaseInitialLookups = resolve;
+  });
+  const retained = {
+    status: "replay",
+    evidenceId: EVIDENCE_ID,
+    lifecycleId: LIFECYCLE_ID,
+    organizationId: ORGANIZATION_ID,
+    projectId: PROJECT_ID,
+    customerId: CUSTOMER_ID,
+    paymentPurpose: "assessment",
+    receiptId: RECEIPT_ID,
+    lifecycleState: "terminated"
+  };
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal() {
+        return professionalReadback({
+          providerObservedAt: observed.shift()
+        });
+      }
+    },
+    repository: {
+      async findEvidenceByEvent(input) {
+        lookups.push(input);
+        initialLookups += 1;
+        if (initialLookups <= 2) {
+          if (initialLookups === 2) releaseInitialLookups();
+          await bothInitialLookups;
+          return null;
+        }
+        return retained;
+      },
+      async findPaymentByIntent() { return payment(); },
+      async recordEvidence(input) {
+        attempts.push(input);
+        if (attempts.length === 1) {
+          return { status: "recorded", lifecycleState: "terminated" };
+        }
+        const error = new Error("concurrent immutable event conflict");
+        error.code = "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT";
+        error.status = 500;
+        throw error;
+      },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => "2026-08-10T18:00:00.000Z" },
+    ids: {
+      next(label) {
+        return label === "professional_reversal_evidence"
+          ? EVIDENCE_ID
+          : LIFECYCLE_ID;
+      }
+    }
+  });
+  const results = await Promise.all([
+    service.ingestStripeEvent(reversalEvent()),
+    service.ingestStripeEvent(reversalEvent())
+  ]);
+  assert.deepEqual(results, [
+    { status: "recorded", lifecycleState: "terminated" },
+    retained
+  ]);
+  assert.equal(attempts.length, 2);
+  assert.notEqual(
+    attempts[0].providerFactsDigest,
+    attempts[1].providerFactsDigest
+  );
+  assert.equal(lookups.length, 3);
+  assert.deepEqual(lookups[2], lookups[0]);
+});
+
+test("concurrent repository conflict stays closed when retained binding differs", async () => {
+  const conflict = new Error("concurrent immutable event conflict");
+  conflict.code = "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT";
+  const service = createProfessionalServicesReversalService({
+    provider: {
+      async retrieveProfessionalReversal() {
+        return professionalReadback();
+      }
+    },
+    repository: {
+      async findEvidenceByEvent() {
+        return this.afterConflict
+          ? {
+              status: "replay",
+              organizationId: ORGANIZATION_ID,
+              projectId: PROJECT_ID,
+              customerId: CUSTOMER_ID,
+              paymentPurpose: "custom_build_final",
+              receiptId: RECEIPT_ID
+            }
+          : null;
+      },
+      async findPaymentByIntent() { return payment(); },
+      async recordEvidence() {
+        this.afterConflict = true;
+        throw conflict;
+      },
+      async reconcileEvidence() { throw new Error("not reached"); }
+    },
+    clock: { now: () => "2026-08-10T18:00:00.000Z" },
+    ids: {
+      next(label) {
+        return label === "professional_reversal_evidence"
+          ? EVIDENCE_ID
+          : LIFECYCLE_ID;
+      }
+    }
+  });
+  await assert.rejects(
+    service.ingestStripeEvent(reversalEvent()),
+    (error) => error === conflict
+  );
+});
+
 test("professional webhook readback ambiguity fails closed before durable evidence", async () => {
   let writes = 0;
   const service = createProfessionalServicesReversalService({

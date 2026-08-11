@@ -637,7 +637,10 @@ function exactPorts({ repository, provider, clock, ids } = {}) {
 
 export function createProfessionalServicesReversalService(options = {}) {
   const ports = exactPorts(options);
-  async function recordEvidence(value, { requiredPurpose = null } = {}) {
+  async function recordEvidence(value, {
+    requiredPurpose = null,
+    recoverRepositoryConflict = null
+  } = {}) {
     const input = exactRecordInput(value);
     const payment = await ports.repository.findPaymentByIntent({
       organizationId: input.organizationId,
@@ -668,22 +671,35 @@ export function createProfessionalServicesReversalService(options = {}) {
           payment: selectedPayment
         })
       : null;
-    return deepFreeze(clone(await ports.repository.recordEvidence({
-      ...input,
-      evidenceId: exactUuid(
-        ports.ids.next("professional_reversal_evidence"),
-        "evidenceId",
-        { status: 500 }
-      ),
-      lifecycleId: exactUuid(
-        ports.ids.next("professional_payment_lifecycle"),
-        "lifecycleId",
-        { status: 500 }
-      ),
-      payment: selectedPayment,
-      decision,
-      recordedAt: requiredIso(ports.clock.now(), "clock.now")
-    })));
+    try {
+      return deepFreeze(clone(await ports.repository.recordEvidence({
+        ...input,
+        evidenceId: exactUuid(
+          ports.ids.next("professional_reversal_evidence"),
+          "evidenceId",
+          { status: 500 }
+        ),
+        lifecycleId: exactUuid(
+          ports.ids.next("professional_payment_lifecycle"),
+          "lifecycleId",
+          { status: 500 }
+        ),
+        payment: selectedPayment,
+        decision,
+        recordedAt: requiredIso(ports.clock.now(), "clock.now")
+      })));
+    } catch (error) {
+      if (
+        error?.code !== "PROFESSIONAL_REVERSAL_REPOSITORY_CONFLICT" ||
+        typeof recoverRepositoryConflict !== "function"
+      ) {
+        throw error;
+      }
+      return deepFreeze(clone(await recoverRepositoryConflict({
+        error,
+        payment: selectedPayment
+      })));
+    }
   }
 
   return Object.freeze({
@@ -729,13 +745,16 @@ export function createProfessionalServicesReversalService(options = {}) {
         "professional reversal replay lookup is required",
         { status: 500 }
       );
-      const retained = await ports.repository.findEvidenceByEvent({
+      const replayIdentity = Object.freeze({
         organizationId: readback.organizationId,
         providerEventId: event.providerEventId,
         providerEventType: event.providerEventType,
         paymentIntentId: readback.stripePaymentIntentId,
         providerObjectId: readback.providerObjectId
       });
+      const retained = await ports.repository.findEvidenceByEvent(
+        replayIdentity
+      );
       if (retained !== null) return deepFreeze(clone(retained));
       return recordEvidence({
         organizationId: readback.organizationId,
@@ -751,7 +770,25 @@ export function createProfessionalServicesReversalService(options = {}) {
         providerFacts: readback.providerFacts,
         providerFactsDigest: readback.providerFactsDigest,
         providerObservedAt: readback.providerObservedAt
-      }, { requiredPurpose: readback.paymentPurpose });
+      }, {
+        requiredPurpose: readback.paymentPurpose,
+        async recoverRepositoryConflict({ error, payment }) {
+          const concurrent =
+            await ports.repository.findEvidenceByEvent(replayIdentity);
+          if (
+            concurrent === null ||
+            concurrent.status !== "replay" ||
+            concurrent.organizationId !== payment.organizationId ||
+            concurrent.projectId !== payment.projectId ||
+            concurrent.customerId !== payment.customerId ||
+            concurrent.paymentPurpose !== payment.paymentPurpose ||
+            concurrent.receiptId !== payment.receiptId
+          ) {
+            throw error;
+          }
+          return concurrent;
+        }
+      });
     },
 
     async reconcileEvidence(actor, value) {
