@@ -168,7 +168,7 @@ function receipts(input) {
       step: "browser",
       details: {
         routeCount: 15,
-        viewCount: 45,
+        viewCount: 90,
         widths: [...CI_RELEASE_BROWSER_WIDTHS],
         browserVersion: CI_RELEASE_BROWSER_VERSION,
         artifactManifestSha256: input.legalV4Pages.manifestSha256
@@ -308,6 +308,54 @@ test("final receipt requires every exact proof and grants no authority", async (
     }),
     /every exact proof receipt/u
   );
+});
+
+test("browser receipt binds the reviewed six widths and rejects count or width drift", () => {
+  assert.deepEqual(
+    CI_RELEASE_BROWSER_WIDTHS,
+    [320, 360, 390, 720, 768, 1440]
+  );
+  assert.equal(
+    CI_RELEASE_BROWSER_VERSION,
+    "Google Chrome for Testing 149.0.7827.55"
+  );
+  const input = successorInput();
+  const selectedContext = context(input);
+  const details = {
+    routeCount: 15,
+    viewCount: 90,
+    widths: [...CI_RELEASE_BROWSER_WIDTHS],
+    browserVersion: CI_RELEASE_BROWSER_VERSION,
+    artifactManifestSha256: input.legalV4Pages.manifestSha256
+  };
+  const receipt = createCiReleaseStepReceipt({
+    step: "browser",
+    context: selectedContext,
+    observedAt: "2026-08-10T22:00:00.000Z",
+    details
+  });
+  assert.equal(receipt.details.viewCount, 15 * 6);
+
+  for (const drift of [
+    { ...details, viewCount: 45 },
+    { ...details, viewCount: 89 },
+    { ...details, widths: [320, 390, 1440], viewCount: 45 },
+    { ...details, browserVersion: "Google Chrome for Testing 149.0.7827.54" },
+    {
+      ...details,
+      widths: [320, 360, 390, 768, 720, 1440]
+    }
+  ]) {
+    assert.throws(
+      () => createCiReleaseStepReceipt({
+        step: "browser",
+        context: selectedContext,
+        observedAt: "2026-08-10T22:00:00.000Z",
+        details: drift
+      }),
+      /browser proof dimensions or browser identity/u
+    );
+  }
 });
 
 test("final receipt rejects Legal count or manifest drift from successor authority", () => {
@@ -462,10 +510,16 @@ test("database-absence proof is read-only local and injectable", async () => {
 });
 
 test("workflow is manual protected held and has no effect-bearing action", async () => {
-  const source = await readFile(
-    path.join(projectRoot, ".github/workflows/ci-release-proof-held.yml"),
-    "utf8"
-  );
+  const [source, runbook] = await Promise.all([
+    readFile(
+      path.join(projectRoot, ".github/workflows/ci-release-proof-held.yml"),
+      "utf8"
+    ),
+    readFile(
+      path.join(projectRoot, "ops/SITESOURCERY-CI-RELEASE-PROOF-HELD.md"),
+      "utf8"
+    )
+  ]);
   for (const required of [
     "workflow_dispatch:",
     "environment: ci-release-proof-held",
@@ -475,6 +529,7 @@ test("workflow is manual protected held and has no effect-bearing action", async
     "npm test",
     "npm run check:ops",
     "build:pages:legal-v4",
+    "Run and record six-width browser proof",
     "ss_ci_release_[1-9][0-9]*_[1-9][0-9]*",
     "ci-release-proof.mjs absence"
   ]) assert.ok(source.includes(required), required);
@@ -482,6 +537,10 @@ test("workflow is manual protected held and has no effect-bearing action", async
   assert.doesNotMatch(source, /\b(?:deploy-pages|configure-pages)@/u);
   assert.doesNotMatch(source, /\b(?:stripe|cloudflare|resend)\b/iu);
   assert.doesNotMatch(source, /migration(?:Count| count)[^\n]*63/u);
+  assert.match(
+    runbook,
+    /320, 360, 390, 720, 768, and 1440 CSS[\s\S]*90 route\/view combinations/u
+  );
 });
 
 test("CI implementation contains no fixed Legal V4 file-count authority", async () => {

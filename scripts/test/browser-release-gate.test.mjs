@@ -23,6 +23,7 @@ import {
   HIVE_CUSTOMER_EXAMPLES,
   HIVE_CUSTOMER_FIELDS,
   HIVE_FORBIDDEN_PUBLIC_FIELDS,
+  PRIMARY_BROWSER_AUDIT_VIEWPORTS,
   PRIMARY_NAV_CONTRACT,
   primaryNavContractFailures,
   privateViewerPopupFailures,
@@ -483,6 +484,19 @@ test("browser gate pins one exact reviewed Chromium archive and executable ident
   assert.match(installerSource, /test "\$observed_sha256" = "\$archive_sha256"/u);
   assert.match(installerSource, /test "\$\("\$binary" --version\)" = "\$expected_version"/u);
   assert.doesNotMatch(installerSource, /\blatest\b/iu);
+});
+
+test("browser gate retains the exact six primary viewport widths", () => {
+  assert.deepEqual(
+    PRIMARY_BROWSER_AUDIT_VIEWPORTS.map((viewport) => viewport.width),
+    [320, 360, 390, 720, 768, 1440],
+  );
+  assert.equal(
+    new Set(
+      PRIMARY_BROWSER_AUDIT_VIEWPORTS.map((viewport) => viewport.width),
+    ).size,
+    6,
+  );
 });
 
 test("browser CLI gives every route a fresh reviewed target", () => {

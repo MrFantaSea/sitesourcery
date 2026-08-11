@@ -202,8 +202,8 @@ function receipts(input) {
       ...common,
       step: "browser",
       details: {
-        routeCount: 3,
-        viewCount: 9,
+        routeCount: 15,
+        viewCount: 90,
         widths: [...CI_RELEASE_BROWSER_WIDTHS],
         browserVersion: CI_RELEASE_BROWSER_VERSION,
         artifactManifestSha256:

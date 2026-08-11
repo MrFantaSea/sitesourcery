@@ -3,6 +3,10 @@ import {
   sha256Bytes
 } from "./immutable-evidence.mjs";
 import {
+  PRIMARY_BROWSER_AUDIT_VIEWPORTS,
+  REVIEWED_CHROMIUM
+} from "../scripts/browser-audit-vnext.mjs";
+import {
   ORIGIN_HELD_AUTHORITY,
   originFileManifestSha256,
   validateOriginReleaseInput
@@ -17,13 +21,11 @@ export const CI_RELEASE_FINAL_RECEIPT_SCHEMA =
 export const CI_RELEASE_PROTECTED_ENVIRONMENT =
   "ci-release-proof-held";
 export const CI_RELEASE_PINNED_NODE = "24.18.0";
-export const CI_RELEASE_BROWSER_WIDTHS = Object.freeze([
-  320,
-  390,
-  1440
-]);
+export const CI_RELEASE_BROWSER_WIDTHS = Object.freeze(
+  PRIMARY_BROWSER_AUDIT_VIEWPORTS.map((viewport) => viewport.width)
+);
 export const CI_RELEASE_BROWSER_VERSION =
-  "Google Chrome for Testing 149.0.7827.55";
+  REVIEWED_CHROMIUM.version;
 
 const SHA256 = /^[a-f0-9]{64}$/u;
 const COMMIT_SHA = /^[a-f0-9]{40}$/u;

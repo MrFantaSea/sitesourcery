@@ -125,7 +125,7 @@ jobs:
       - name: Record successor-bound Legal V4 manifest proof
         run: node target/ops/ci-release-proof.mjs legal-v4 --root target --artifact-root target/_site
 
-      - name: Run and record three-width browser proof
+      - name: Run and record six-width browser proof
         run: node target/ops/ci-release-proof.mjs browser --root target --artifact-root target/_site
 
       - name: Run fresh PostgreSQL 16 journey and exact cleanup proof

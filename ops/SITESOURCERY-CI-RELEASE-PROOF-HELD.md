@@ -47,8 +47,11 @@ default migration count and no branch-tip fallback.
    manifest, and records the legal receipt. The current reviewed projection is
    94 files; that number belongs only in its explicit successor evidence and is
    not a workflow or runtime constant.
-7. It audits the exact projection at 320, 390, and 1440 CSS pixels with Google
-   Chrome for Testing `149.0.7827.55`, then records route and view counts.
+7. It audits the exact projection at 320, 360, 390, 720, 768, and 1440 CSS
+   pixels with Google Chrome for Testing `149.0.7827.55`, then records route
+   and view counts. The current 15-route projection therefore produces exactly
+   90 route/view combinations; 720 CSS pixels is the reviewed 1440-pixel
+   display at 200% reflow equivalent.
 8. It starts a runner-local PostgreSQL 16 cluster on loopback and creates only
    `ss_ci_release_<run-id>_<run-attempt>`, after exact regex validation. The
    comprehensive migration/journey verifier receives the successor's ordered

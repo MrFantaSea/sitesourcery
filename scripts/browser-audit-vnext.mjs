@@ -19,7 +19,7 @@ const DEFAULT_CHROMIUM = [
   "/home/simtech/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell-linux64/chrome-headless-shell",
   "/home/simtech/.cache/ms-playwright/chromium_headless_shell-1228/chrome-headless-shell",
 ];
-const VIEWPORTS = Object.freeze([
+export const PRIMARY_BROWSER_AUDIT_VIEWPORTS = Object.freeze([
   Object.freeze({ label: "phone-320", width: 320, height: 720, mobile: true, phone: true }),
   Object.freeze({ label: "phone-360", width: 360, height: 800, mobile: true, phone: true }),
   Object.freeze({ label: "phone-390", width: 390, height: 844, mobile: true, phone: true }),
@@ -4420,8 +4420,8 @@ export async function auditBrowser({
     const errors = [...coldFirstPaint.errors, ...progressiveFailures.errors];
     const results = [...coldFirstPaint.results, ...progressiveFailures.results];
     const viewportPlans = profile === "vnext"
-      ? [...VIEWPORTS, ...HIVE_COMPONENT_VIEWPORTS]
-      : VIEWPORTS;
+      ? [...PRIMARY_BROWSER_AUDIT_VIEWPORTS, ...HIVE_COMPONENT_VIEWPORTS]
+      : PRIMARY_BROWSER_AUDIT_VIEWPORTS;
     for (const viewport of viewportPlans) {
       await cdp.send("Emulation.setDeviceMetricsOverride", {
         width: viewport.width,
@@ -5735,7 +5735,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     } else {
       console.log(
         `Browser audit passed: ${routes.length} canonical routes at `
-        + `${VIEWPORTS.length} primary viewports plus ${HIVE_COMPONENT_VIEWPORTS.length} `
+        + `${PRIMARY_BROWSER_AUDIT_VIEWPORTS.length} primary viewports plus ${HIVE_COMPONENT_VIEWPORTS.length} `
         + `Hive breakpoint views, one no-script phone pass, and one reduced-motion phone pass; `
         + `one fresh reviewed browser target per route; `
         + `${routes.includes("/") ? "ten bounded homepage cold-load checks; " : ""}`
