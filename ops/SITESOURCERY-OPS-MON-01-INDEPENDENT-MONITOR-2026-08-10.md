@@ -8,22 +8,18 @@ or customer or commercial effects. The committed environment files remain
 `held`, and every systemd candidate has an activation-hold banner and marker
 gate.
 
-The exact source base is
-`216142218b88a02ac67a995297c264f24967a17e`. The selected release identity is:
+The production monitor and dead-man entrypoints accept only the exact root-owned
+`sitesourcery.final-release-epoch/v2` file plus its externally anchored origin
+seal and installed readback. Retained V1 release-epoch bytes remain valid
+historical evidence, but these production entrypoints reject them. The selected
+epoch supplies both the independent report identity and the complete expected
+`sitesourcery.hosted-release-identity/v2`; no value in this runbook is a release
+receipt.
 
-- epoch ID: `shape-epoch-20260810`;
-- release binding SHA-256:
-  `50e1bb83a8e2258d35c27e8d33d69757efd2eb9331c312283ae08d99c56c1bc6`;
-- public artifact commit:
-  `69ad11c682dda9d6f792492d322b662dcbc98b4b`;
-- privacy artifact:
-  `SS-HOSTED-PRIVACY-2026-08-09-V4`, 31,451 bytes, SHA-256
-  `2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99`.
-
-The validated release-epoch file is the only release authority. The probe
-configuration is additionally bound into a separate, expiring read-only
-approval digest. Changing any endpoint or the release binding invalidates that
-approval.
+The validated V2 release-epoch chain is the only release authority. The probe
+configuration, including the complete expected hosted release identity, is
+additionally bound into a separate, expiring read-only approval digest.
+Changing an endpoint or any release identity field invalidates that approval.
 
 ## Architecture and failure boundaries
 
@@ -32,7 +28,7 @@ public edge                         independent observer
   apex HTTPS  --------------------> apex status/canonical probe
   sealed privacy bytes -----------> exact bytes + digest probe
   TLS endpoint -------------------> chain/protocol/expiry probe
-  tunnel health ------------------> bounded readiness-contract probe
+  tunnel liveness ---------------> exact hosted-release-identity/v2 probe
                                             |
                                             v
                                private atomic heartbeat file
@@ -48,6 +44,14 @@ The dead-man has no network address family and reads only the release epoch and
 heartbeat. The legacy deep monitor remains a separate origin-side diagnostic
 for database, filesystem, backup, backlog, and local certificate state; it is
 not replaced or weakened by this packet.
+
+The tunnel probe calls only `/api/v1/live`. It requires the exact liveness
+schema and exact hosted release identity derived from the anchored V2 epoch. A
+generic health response, a predecessor identity, an added or missing identity
+field, or any binding/source/tree/migration drift fails closed. Dependency
+readiness remains the separate `/api/v1/ready` observation required by the
+origin cutover runbook; this independent liveness probe never represents or
+amplifies database or provider readiness.
 
 For host-loss detection, run the dead-man on a second failure domain and make
 the primary heartbeat available there through a separately reviewed,
@@ -73,14 +77,13 @@ identifiers, provider identifiers, stack traces, or free-form errors.
 
 ## Offline candidate verification
 
-Run these from the exact candidate checkout with the pinned Node runtime. They
-use repository files and injected/local fixtures only:
+Run these from the reviewed candidate checkout with the pinned Node runtime.
+They use repository files and injected/local fixtures only:
 
 ```sh
-test "$(git rev-parse HEAD^)" = "216142218b88a02ac67a995297c264f24967a17e"
-git diff --check HEAD^
-/private/tmp/sitesourcery-node-24.18.0/node-v24.18.0-darwin-arm64/bin/node ops/verify-release-epoch.mjs
+git diff --check
 /private/tmp/sitesourcery-node-24.18.0/node-v24.18.0-darwin-arm64/bin/node --test ops/test/independent-monitor.test.mjs
+/private/tmp/sitesourcery-node-24.18.0/node-v24.18.0-darwin-arm64/bin/node --test ops/test/final-release-epoch-v2.test.mjs
 ```
 
 Before an owner-authorized installation, separately verify the held unit files
@@ -101,8 +104,10 @@ These are future operator steps, not authority to execute them now.
 3. Copy `ops/independent-monitor.env.example` to
    `/etc/sitesourcery-independent-monitor/monitor.env`, mode `0600`. Keep
    `SITESOURCERY_INDEPENDENT_MONITOR_MODE=held` during review. Confirm the four
-   endpoints and exact epoch file. Do not add provider credentials or an alert
-   destination.
+   endpoints and exact V2 epoch, origin seal, and installed-readback files. The
+   tunnel endpoint must be the exact same-origin `/api/v1/live`; do not replace
+   it with `/api/v1/health` or `/api/v1/ready`. Do not add provider credentials
+   or an alert destination.
 4. Compute `configurationSha256` by importing
    `independentMonitorConfiguration` locally with the reviewed environment and
    exact epoch. Create `monitor-approved.json` with only schema, a safe approval
@@ -115,7 +120,9 @@ These are future operator steps, not authority to execute them now.
    systemd unit names, create the exact empty marker
    `/etc/sitesourcery-independent-monitor/MONITOR_APPROVED`, reload systemd,
    and enable the timer. A manual service run must emit four checks bound to the
-   selected epoch before unattended scheduling is accepted.
+   selected epoch before unattended scheduling is accepted. Confirm the
+   liveness check fails when its injected response carries a predecessor or
+   otherwise mismatched hosted release identity.
 6. On the separately selected dead-man observer, install the sealed code and
    pinned Node under `/opt/sitesourcery-dead-man`, copy the held dead-man unit
    and environment, and arrange the separately approved read-only heartbeat

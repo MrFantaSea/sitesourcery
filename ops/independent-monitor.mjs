@@ -5,11 +5,9 @@ import { pathToFileURL } from "node:url";
 
 import { canonicalJson, sha256Bytes } from "./immutable-evidence.mjs";
 import {
-  FINAL_RELEASE_EPOCH_V2_INSTALLED_PATH,
-  FINAL_RELEASE_EPOCH_V2_SCHEMA,
-  RELEASE_EVIDENCE_PARENT_PATH,
-  readAnchoredJsonFile,
-  readInstalledFinalReleaseEpochV2
+  readInstalledFinalReleaseEpochV2,
+  releaseIdentityFromFinalEpochV2,
+  validateFinalReleaseEpochV2
 } from "./final-release-epoch-v2.mjs";
 import {
   createIndependentMonitorHeartbeat,
@@ -59,10 +57,13 @@ function integer(environment, field, fallback, minimum, maximum) {
 
 export function independentMonitorConfiguration(
   environment,
-  epoch
+  epochValue
 ) {
+  const epoch = validateFinalReleaseEpochV2(epochValue);
   const releaseEvidence = releaseEvidenceFromEpoch(epoch);
   const { releaseIdentity, privacyArtifact } = releaseEvidence;
+  const hostedReleaseIdentity =
+    releaseIdentityFromFinalEpochV2(epoch);
   const apexUrl = required(
     environment,
     "SITESOURCERY_INDEPENDENT_APEX_URL"
@@ -78,7 +79,7 @@ export function independentMonitorConfiguration(
     apex
   ).toString();
   const expectedTunnelUrl = new URL(
-    "/api/v1/health",
+    "/api/v1/live",
     apex
   ).toString();
   const configuration = {
@@ -130,6 +131,7 @@ export function independentMonitorConfiguration(
     Buffer.from(
       `${canonicalJson({
         releaseBindingSha256: releaseIdentity.bindingSha256,
+        hostedReleaseIdentity,
         ...configuration
       })}\n`,
       "utf8"
@@ -137,6 +139,7 @@ export function independentMonitorConfiguration(
   );
   return Object.freeze({
     releaseIdentity,
+    hostedReleaseIdentity,
     privacyArtifact,
     configuration: Object.freeze(configuration),
     configurationSha256
@@ -148,15 +151,6 @@ async function readAnchoredReleaseEpoch(environment, epochPath) {
     environment,
     "SITESOURCERY_RELEASE_EPOCH_SHA256"
   );
-  const unprojected = await readAnchoredJsonFile(epochPath, {
-    expectedSha256: expectedEpochFileSha256,
-    expectedPath: FINAL_RELEASE_EPOCH_V2_INSTALLED_PATH,
-    expectedParentPath: RELEASE_EVIDENCE_PARENT_PATH,
-    expectedOwnerUid: 0
-  });
-  if (unprojected.schema !== FINAL_RELEASE_EPOCH_V2_SCHEMA) {
-    return unprojected;
-  }
   return readInstalledFinalReleaseEpochV2({
     epochPath,
     expectedEpochFileSha256,
@@ -209,9 +203,11 @@ export async function independentMonitorFromEnvironment(
     environment,
     "SITESOURCERY_RELEASE_EPOCH_FILE"
   );
-  const epoch = readEpoch
-    ? await readEpoch(epochPath, "Release epoch")
-    : await readAnchoredReleaseEpoch(environment, epochPath);
+  const epoch = validateFinalReleaseEpochV2(
+    readEpoch
+      ? await readEpoch(epochPath, "Final release epoch V2")
+      : await readAnchoredReleaseEpoch(environment, epochPath)
+  );
   const selected = independentMonitorConfiguration(
     environment,
     epoch
@@ -233,6 +229,8 @@ export async function independentMonitorFromEnvironment(
     fetchImpl,
     ...(tlsProbeImpl ? { tlsProbeImpl } : {}),
     releaseIdentity: selected.releaseIdentity,
+    expectedHostedReleaseIdentity:
+      selected.hostedReleaseIdentity,
     ...selected.configuration,
     expectedContentSha256:
       selected.privacyArtifact.sha256,

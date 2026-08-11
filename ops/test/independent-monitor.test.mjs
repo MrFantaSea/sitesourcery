@@ -28,6 +28,15 @@ import {
   independentMonitorApprovalDigest,
   validateIndependentMonitorApproval
 } from "../independent-monitor-state.mjs";
+import {
+  FINAL_RELEASE_EPOCH_V2_SCHEMA,
+  finalReleaseEpochV2Digest,
+  releaseIdentityFromFinalEpochV2,
+  validateFinalReleaseEpochV2
+} from "../final-release-epoch-v2.mjs";
+import {
+  ORIGIN_HELD_AUTHORITY
+} from "../origin-seal-runtime.mjs";
 
 const NOW = "2026-08-10T12:00:00.000Z";
 const LATER = "2026-08-10T12:02:00.000Z";
@@ -42,6 +51,58 @@ const epoch = JSON.parse(
   )
 );
 const releaseIdentity = releaseIdentityFromEpoch(epoch);
+const v2EpochPayload = {
+  schema: FINAL_RELEASE_EPOCH_V2_SCHEMA,
+  epochId: "final-epoch-v2-monitor-fixture",
+  state: "verified_held",
+  bindingSha256: "1".repeat(64),
+  evidence: {
+    originReleaseInputDigest: "2".repeat(64),
+    originSuccessorBindingSha256: "3".repeat(64),
+    ciFinalReceiptDigest: "4".repeat(64),
+    originSealSha256: "5".repeat(64),
+    originInstalledReadbackDigest: "6".repeat(64),
+    originInstalledReadbackReceiptSha256: "7".repeat(64)
+  },
+  identity: {
+    sourceCommitSha: "a".repeat(40),
+    sourceTreeSha: "b".repeat(40),
+    artifactManifestSha256: "8".repeat(64),
+    unitManifestSha256: "9".repeat(64),
+    environmentSchemaManifestSha256: "a".repeat(64),
+    environmentClassificationSha256: "b".repeat(64),
+    workerManifestSha256: "c".repeat(64),
+    workerContractSha256: "d".repeat(64),
+    migrationCount: 67,
+    latestMigration: "202608100117_direct_custom_reversal_normalization.sql",
+    migrationManifestSha256: "e".repeat(64),
+    legalAuthorityDigest: "f".repeat(64),
+    legalManifestSha256: "1".repeat(64),
+    ingressManifestSha256: "2".repeat(64)
+  },
+  legalV4Pages: {
+    fileCount: 7,
+    manifestSha256: "3".repeat(64)
+  },
+  privacyArtifact: {
+    version: epoch.binding.legal.privacyVersion,
+    sha256: epoch.binding.artifact.privacySha256,
+    byteCount: epoch.binding.artifact.privacyByteCount
+  },
+  rollback: {
+    predecessorCommitSha: "c".repeat(40),
+    predecessorTreeSha: "d".repeat(40),
+    predecessorArtifactManifestSha256: "4".repeat(64)
+  },
+  authority: structuredClone(ORIGIN_HELD_AUTHORITY)
+};
+const v2Epoch = validateFinalReleaseEpochV2({
+  ...v2EpochPayload,
+  digest: finalReleaseEpochV2Digest(v2EpochPayload)
+});
+const v2ReleaseIdentity = releaseIdentityFromEpoch(v2Epoch);
+const hostedReleaseIdentity =
+  releaseIdentityFromFinalEpochV2(v2Epoch);
 
 function healthyProbes() {
   return Object.fromEntries(
@@ -135,10 +196,12 @@ test("apex content TLS and tunnel ports verify exact bounded evidence", async ()
   const contentUrl =
     "https://sitesourcery.example/legal/privacy/current/";
   const tunnelUrl =
-    "https://sitesourcery.example/api/v1/health";
+    "https://sitesourcery.example/api/v1/live";
   const requests = [];
   const probes = createIndependentEdgeProbes({
-    releaseIdentity,
+    releaseIdentity: v2ReleaseIdentity,
+    expectedHostedReleaseIdentity:
+      hostedReleaseIdentity,
     apexUrl,
     contentUrl,
     tunnelUrl,
@@ -157,8 +220,10 @@ test("apex content TLS and tunnel ports verify exact bounded evidence", async ()
       return response(
         tunnelUrl,
         JSON.stringify({
-          ok: true,
-          service: "sitesourcery-hosted-runtime"
+          schema: "sitesourcery.hosted-liveness/v1",
+          live: true,
+          service: "sitesourcery-hosted-runtime",
+          release: hostedReleaseIdentity
         }),
         200,
         "application/json"
@@ -174,7 +239,7 @@ test("apex content TLS and tunnel ports verify exact bounded evidence", async ()
   });
   const report = await runIndependentMonitor({
     probes,
-    releaseIdentity,
+    releaseIdentity: v2ReleaseIdentity,
     now: () => new Date(NOW)
   });
   assert.equal(report.ok, true);
@@ -189,15 +254,62 @@ test("apex content TLS and tunnel ports verify exact bounded evidence", async ()
     ),
     true
   );
+
+  for (const body of [
+    {
+      ok: true,
+      service: "sitesourcery-hosted-runtime"
+    },
+    {
+      schema: "sitesourcery.hosted-liveness/v1",
+      live: true,
+      service: "sitesourcery-hosted-runtime",
+      release: {
+        ...hostedReleaseIdentity,
+        candidateCommitSha: "f".repeat(40)
+      }
+    }
+  ]) {
+    const mismatched = createIndependentEdgeProbes({
+      releaseIdentity: v2ReleaseIdentity,
+      expectedHostedReleaseIdentity:
+        hostedReleaseIdentity,
+      apexUrl,
+      contentUrl,
+      tunnelUrl,
+      tlsHostname: "sitesourcery.example",
+      expectedContentSha256:
+        createHash("sha256").update(contentBytes).digest("hex"),
+      expectedContentByteCount: contentBytes.length,
+      fetchImpl: async () => response(
+        tunnelUrl,
+        JSON.stringify(body),
+        200,
+        "application/json"
+      ),
+      tlsProbeImpl: async () => {
+        throw new Error("not used");
+      }
+    });
+    assert.deepEqual(await mismatched.tunnel(), {
+      schema: "sitesourcery.independent-probe-result/v1",
+      name: "tunnel",
+      ok: false,
+      code: "TUNNEL_READINESS_INVALID",
+      evidenceSha256: null
+    });
+  }
 });
 
 test("content streaming fails closed once its exact byte bound is exceeded", async () => {
   const bytes = Buffer.from("12345", "utf8");
   const probes = createIndependentEdgeProbes({
-    releaseIdentity,
+    releaseIdentity: v2ReleaseIdentity,
+    expectedHostedReleaseIdentity:
+      hostedReleaseIdentity,
     apexUrl: "https://sitesourcery.example/",
     contentUrl: "https://sitesourcery.example/content/",
-    tunnelUrl: "https://sitesourcery.example/api/v1/health",
+    tunnelUrl: "https://sitesourcery.example/api/v1/live",
     tlsHostname: "sitesourcery.example",
     expectedContentSha256:
       createHash("sha256").update(bytes).digest("hex"),
@@ -333,6 +445,43 @@ test("held dead-man stops before epoch or heartbeat state reads", async () => {
   assert.equal(calls, 0);
 });
 
+test("production monitor and dead-man reject retained V1 epoch authority", async () => {
+  let calls = 0;
+  await assert.rejects(
+    independentMonitorFromEnvironment(
+      {
+        SITESOURCERY_INDEPENDENT_MONITOR_MODE: "approved_read_only",
+        SITESOURCERY_OPERATIONS_PROVIDER_EGRESS: "held",
+        SITESOURCERY_RELEASE_EPOCH_FILE: "/fixture/release-epoch.json"
+      },
+      {
+        readEpoch: async () => structuredClone(epoch),
+        readApproval: async () => { calls += 1; },
+        readHeartbeat: async () => { calls += 1; },
+        writeHeartbeat: async () => { calls += 1; },
+        fetchImpl: async () => { calls += 1; }
+      }
+    ),
+    /Final release epoch/u
+  );
+  await assert.rejects(
+    deadManFromEnvironment(
+      {
+        SITESOURCERY_DEAD_MAN_MODE: "approved_read_only",
+        SITESOURCERY_OPERATIONS_PROVIDER_EGRESS: "held",
+        SITESOURCERY_RELEASE_EPOCH_FILE: "/fixture/release-epoch.json",
+        SITESOURCERY_DEAD_MAN_MAXIMUM_AGE_MS: "180000"
+      },
+      {
+        readEpoch: async () => structuredClone(epoch),
+        readHeartbeat: async () => { calls += 1; }
+      }
+    ),
+    /Final release epoch/u
+  );
+  assert.equal(calls, 0);
+});
+
 test("approved fixture composition emits one bound heartbeat without alert or provider ports", async () => {
   const environment = {
     SITESOURCERY_INDEPENDENT_MONITOR_MODE: "approved_read_only",
@@ -344,7 +493,7 @@ test("approved fixture composition emits one bound heartbeat without alert or pr
     SITESOURCERY_INDEPENDENT_CONTENT_URL:
       "https://sitesourcery.example/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/",
     SITESOURCERY_INDEPENDENT_TUNNEL_URL:
-      "https://sitesourcery.example/api/v1/health",
+      "https://sitesourcery.example/api/v1/live",
     SITESOURCERY_INDEPENDENT_TLS_HOSTNAME: "sitesourcery.example",
     SITESOURCERY_INDEPENDENT_HEARTBEAT_FILE:
       "/fixture/current.json"
@@ -355,13 +504,17 @@ test("approved fixture composition emits one bound heartbeat without alert or pr
       opsRoot
     )
   );
-  const selected = independentMonitorConfiguration(environment, epoch);
+  const selected = independentMonitorConfiguration(environment, v2Epoch);
+  assert.deepEqual(
+    selected.hostedReleaseIdentity,
+    hostedReleaseIdentity
+  );
   let approvalExpected;
   let written;
   const result = await independentMonitorFromEnvironment(
     environment,
     {
-      readEpoch: async () => structuredClone(epoch),
+      readEpoch: async () => structuredClone(v2Epoch),
       readApproval: async (_path, expected) => {
         approvalExpected = expected;
       },
@@ -374,12 +527,14 @@ test("approved fixture composition emits one bound heartbeat without alert or pr
       },
       fetchImpl: async (url) => {
         const value = url.toString();
-        if (value.endsWith("/api/v1/health")) {
+        if (value.endsWith("/api/v1/live")) {
           return response(
             value,
             JSON.stringify({
-              ok: true,
-              service: "sitesourcery-hosted-runtime"
+              schema: "sitesourcery.hosted-liveness/v1",
+              live: true,
+              service: "sitesourcery-hosted-runtime",
+              release: hostedReleaseIdentity
             }),
             200,
             "application/json"
@@ -416,19 +571,25 @@ test("configuration rejects content or tunnel authority drift from the release e
     SITESOURCERY_INDEPENDENT_CONTENT_URL:
       "https://sitesourcery.example/legal/privacy/current/",
     SITESOURCERY_INDEPENDENT_TUNNEL_URL:
-      "https://sitesourcery.example/api/v1/health",
+      "https://sitesourcery.example/api/v1/live",
     SITESOURCERY_INDEPENDENT_TLS_HOSTNAME: "sitesourcery.example"
   };
   assert.throws(
-    () => independentMonitorConfiguration(environment, epoch),
+    () => independentMonitorConfiguration(environment, v2Epoch),
     /do not match the selected release epoch/u
   );
   environment.SITESOURCERY_INDEPENDENT_CONTENT_URL =
     "https://sitesourcery.example/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-09-V4/";
   environment.SITESOURCERY_INDEPENDENT_TUNNEL_URL =
+    "https://sitesourcery.example/api/v1/health";
+  assert.throws(
+    () => independentMonitorConfiguration(environment, v2Epoch),
+    /do not match the selected release epoch/u
+  );
+  environment.SITESOURCERY_INDEPENDENT_TUNNEL_URL =
     "https://sitesourcery.example/api/v1/other";
   assert.throws(
-    () => independentMonitorConfiguration(environment, epoch),
+    () => independentMonitorConfiguration(environment, v2Epoch),
     /do not match the selected release epoch/u
   );
 });
@@ -462,4 +623,12 @@ test("held unit candidates have no runtime, database, backup-mount, or provider 
       /SITESOURCERY_DATABASE_URL|sk_(?:live|test)_|whsec_|api[_-]?key|recipient|@/iu
     );
   }
+  assert.match(
+    monitorEnvironment,
+    /^SITESOURCERY_INDEPENDENT_TUNNEL_URL=https:\/\/sitesourcery\.com\/api\/v1\/live$/mu
+  );
+  assert.doesNotMatch(
+    monitorEnvironment,
+    /\/api\/v1\/(?:health|ready)/u
+  );
 });

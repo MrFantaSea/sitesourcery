@@ -352,7 +352,7 @@ test("constructs one exact final v2 receipt from existing held authorities", () 
     SITESOURCERY_INDEPENDENT_CONTENT_URL:
       `https://sitesourcery.example/legal/privacy/versions/${epoch.privacyArtifact.version}/`,
     SITESOURCERY_INDEPENDENT_TUNNEL_URL:
-      "https://sitesourcery.example/api/v1/health",
+      "https://sitesourcery.example/api/v1/live",
     SITESOURCERY_INDEPENDENT_TLS_HOSTNAME:
       "sitesourcery.example"
   }, epoch);

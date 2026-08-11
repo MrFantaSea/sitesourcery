@@ -262,8 +262,10 @@ the unit precheck validate the same paths and digests consumed by the server.
 Only after that precheck may an owner-authorized cutover stop the predecessor
 and start the successor. A successful successor `/api/v1/live` identity,
 `/api/v1/ready` identity and dependency result, plus a fresh independent
-listener observation, are separate required post-start proofs. Failure of any
-post-start proof requires the already-sealed rollback path. The installed
+listener observation, are separate required post-start proofs. The independent
+monitor's `/api/v1/live` check must exact-match that successor identity; it does
+not replace or claim the separate `/api/v1/ready` dependency result. Failure of
+any post-start proof requires the already-sealed rollback path. The installed
 readback alone must never be reported as candidate listener, liveness, or
 readiness proof.
 

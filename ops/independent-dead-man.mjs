@@ -5,11 +5,8 @@ import { pathToFileURL } from "node:url";
 
 import { canonicalJson } from "./immutable-evidence.mjs";
 import {
-  FINAL_RELEASE_EPOCH_V2_INSTALLED_PATH,
-  FINAL_RELEASE_EPOCH_V2_SCHEMA,
-  RELEASE_EVIDENCE_PARENT_PATH,
-  readAnchoredJsonFile,
-  readInstalledFinalReleaseEpochV2
+  readInstalledFinalReleaseEpochV2,
+  validateFinalReleaseEpochV2
 } from "./final-release-epoch-v2.mjs";
 import {
   evaluateIndependentDeadMan,
@@ -51,15 +48,6 @@ async function readAnchoredReleaseEpoch(environment, epochPath) {
     environment,
     "SITESOURCERY_RELEASE_EPOCH_SHA256"
   );
-  const unprojected = await readAnchoredJsonFile(epochPath, {
-    expectedSha256: expectedEpochFileSha256,
-    expectedPath: FINAL_RELEASE_EPOCH_V2_INSTALLED_PATH,
-    expectedParentPath: RELEASE_EVIDENCE_PARENT_PATH,
-    expectedOwnerUid: 0
-  });
-  if (unprojected.schema !== FINAL_RELEASE_EPOCH_V2_SCHEMA) {
-    return unprojected;
-  }
   return readInstalledFinalReleaseEpochV2({
     epochPath,
     expectedEpochFileSha256,
@@ -104,9 +92,11 @@ export async function deadManFromEnvironment(
     environment,
     "SITESOURCERY_RELEASE_EPOCH_FILE"
   );
-  const epoch = readEpoch
-    ? await readEpoch(epochPath, "Release epoch")
-    : await readAnchoredReleaseEpoch(environment, epochPath);
+  const epoch = validateFinalReleaseEpochV2(
+    readEpoch
+      ? await readEpoch(epochPath, "Final release epoch V2")
+      : await readAnchoredReleaseEpoch(environment, epochPath)
+  );
   let heartbeat = null;
   try {
     heartbeat = await readHeartbeat(

@@ -2,6 +2,13 @@ import { createHash } from "node:crypto";
 import tls from "node:tls";
 
 import {
+  canonicalJson,
+  sha256Bytes
+} from "./immutable-evidence.mjs";
+import {
+  HOSTED_RELEASE_IDENTITY_V2_SCHEMA
+} from "./final-release-epoch-v2.mjs";
+import {
   createIndependentProbeResult,
   validateIndependentReleaseIdentity
 } from "./independent-monitor-runtime.mjs";
@@ -9,6 +16,44 @@ import {
 const SHA256 = /^[a-f0-9]{64}$/u;
 const MAXIMUM_CONTENT_BYTES = 1024 * 1024;
 const MAXIMUM_TUNNEL_BYTES = 4096;
+const COMMIT_SHA = /^[a-f0-9]{40}$/u;
+const MIGRATION = /^[0-9]{12}_[a-z0-9_]+\.sql$/u;
+
+function exactHostedReleaseIdentity(value, release) {
+  const fields = [
+    "schema",
+    "state",
+    "epochId",
+    "bindingSha256",
+    "candidateCommitSha",
+    "candidateTreeSha",
+    "migrationCount",
+    "latestMigration"
+  ];
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    canonicalJson(Object.keys(value).sort()) !==
+      canonicalJson([...fields].sort()) ||
+    value.schema !== HOSTED_RELEASE_IDENTITY_V2_SCHEMA ||
+    value.state !== "verified_held" ||
+    value.epochId !== release.epochId ||
+    value.bindingSha256 !== release.bindingSha256 ||
+    value.candidateCommitSha !== release.publicArtifactCommitSha ||
+    !COMMIT_SHA.test(value.candidateTreeSha) ||
+    !Number.isSafeInteger(value.migrationCount) ||
+    value.migrationCount < 1 ||
+    typeof value.latestMigration !== "string" ||
+    !MIGRATION.test(value.latestMigration)
+  ) {
+    throw new Error(
+      "Independent hosted release identity is invalid."
+    );
+  }
+  return Object.freeze(structuredClone(value));
+}
 
 function exactHttpsUrl(value, field, { apex = false } = {}) {
   let selected;
@@ -143,6 +188,7 @@ export function createIndependentEdgeProbes({
   fetchImpl = globalThis.fetch,
   tlsProbeImpl = probeTlsAuthority,
   releaseIdentity,
+  expectedHostedReleaseIdentity,
   apexUrl,
   contentUrl,
   tunnelUrl,
@@ -161,6 +207,10 @@ export function createIndependentEdgeProbes({
     throw new Error("Independent probe ports are required.");
   }
   const release = validateIndependentReleaseIdentity(releaseIdentity);
+  const hostedReleaseIdentity = exactHostedReleaseIdentity(
+    expectedHostedReleaseIdentity,
+    release
+  );
   const apex = exactHttpsUrl(apexUrl, "Apex probe URL", { apex: true });
   const content = exactHttpsUrl(contentUrl, "Content probe URL");
   const tunnel = exactHttpsUrl(tunnelUrl, "Tunnel probe URL");
@@ -280,19 +330,30 @@ export function createIndependentEdgeProbes({
       } catch {
         // The fixed failure code deliberately omits response details.
       }
+      const expectedBody = {
+        schema: "sitesourcery.hosted-liveness/v1",
+        live: true,
+        service: "sitesourcery-hosted-runtime",
+        release: hostedReleaseIdentity
+      };
       const ok =
         response.status === 200 &&
         response.url === tunnel.toString() &&
-        body?.ok === true &&
-        body?.service === "sitesourcery-hosted-runtime";
+        canonicalJson(body) === canonicalJson(expectedBody);
       return createIndependentProbeResult("tunnel", {
         ok,
         code: ok ? null : "TUNNEL_READINESS_INVALID",
         evidence: ok
           ? {
               status: 200,
-              ready: true,
-              serviceContract: "sitesourcery-hosted-runtime"
+              live: true,
+              serviceContract: "sitesourcery-hosted-runtime",
+              hostedReleaseIdentitySha256: sha256Bytes(
+                Buffer.from(
+                  `${canonicalJson(hostedReleaseIdentity)}\n`,
+                  "utf8"
+                )
+              )
             }
           : null
       });
