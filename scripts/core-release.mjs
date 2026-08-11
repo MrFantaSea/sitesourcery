@@ -10,13 +10,19 @@ import {
 
 import pg from "pg";
 
+import {
+  collectOriginMigrationInventory
+} from "../ops/origin-seal-repository.mjs";
+import {
+  resolveMigrationVerificationInventory
+} from "../server/data-plane/tests/migration-verification-inventory.mjs";
+
 const { Client } = pg;
 
 export const CORE_RELEASE_ADMIN_URL_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_ADMIN_URL";
 export const CORE_RELEASE_DATABASE_NAME_ENV =
   "SITESOURCERY_PG_CORE_RELEASE_DATABASE_NAME";
-export const CORE_RELEASE_MIGRATION_COUNT = 54;
 export const CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT = 4;
 export const CORE_RELEASE_ALAKAZAM_CORE_JOURNEY_COUNT = 5;
 export const CORE_RELEASE_ALAKAZAM_LIFECYCLE_JOURNEY_COUNT = 10;
@@ -35,6 +41,8 @@ const ALAKAZAM_LIFECYCLE_TEST_URL_ENV =
 const ALAKAZAM_BILLING_TEST_URL_ENV =
   "SITESOURCERY_PG_ALAKAZAM_BILLING_TEST_URL";
 const EXPECTED_POSTGRES_MAJOR = 16;
+const CORE_RELEASE_MIGRATION_ROOT =
+  "server/data-plane/supabase/migrations";
 const DATABASE_PREFIX = "ss_core_release_";
 const DATABASE_NAME_PATTERN =
   /^ss_core_release_[a-z0-9](?:[a-z0-9_]{6,45}[a-z0-9])$/u;
@@ -53,6 +61,59 @@ export class CoreReleaseError extends Error {
 
 function fail(code, message, options) {
   throw new CoreReleaseError(code, message, options);
+}
+
+export async function resolveCoreReleaseMigrationAuthority({
+  projectRoot = PROJECT_ROOT
+} = {}) {
+  try {
+    const inventory = await collectOriginMigrationInventory({
+      projectRoot,
+      migrationRoot: CORE_RELEASE_MIGRATION_ROOT
+    });
+    const prefix = `${CORE_RELEASE_MIGRATION_ROOT}/`;
+    const files = inventory.files.map((entry) => {
+      if (
+        !entry.path.startsWith(prefix) ||
+        entry.path.slice(prefix.length).includes("/")
+      ) {
+        throw new Error("Core release migration path escaped its exact root.");
+      }
+      return Object.freeze({
+        name: entry.path.slice(prefix.length),
+        byteCount: entry.byteCount,
+        sha256: entry.sha256
+      });
+    });
+    const names = files.map((entry) => entry.name);
+    resolveMigrationVerificationInventory(names);
+    if (
+      inventory.root !== CORE_RELEASE_MIGRATION_ROOT ||
+      inventory.domain !== "origin-migrations" ||
+      inventory.count !== files.length ||
+      inventory.fileCount !== files.length ||
+      inventory.latest !== names.at(-1) ||
+      !/^[a-f0-9]{64}$/u.test(inventory.sha256)
+    ) {
+      throw new Error(
+        "Core release migration inventory is internally inconsistent."
+      );
+    }
+    return Object.freeze({
+      schema: "sitesourcery.core-release-migration-authority/v1",
+      root: CORE_RELEASE_MIGRATION_ROOT,
+      count: inventory.count,
+      latest: inventory.latest,
+      files: Object.freeze(files),
+      manifestSha256: inventory.sha256
+    });
+  } catch (cause) {
+    fail(
+      "CORE_RELEASE_MIGRATION_AUTHORITY_INVALID",
+      "Core release requires the exact reviewed ordered migration inventory.",
+      { cause }
+    );
+  }
 }
 
 function requiredEnvironmentValue(environment, name) {
@@ -534,6 +595,8 @@ export async function runCoreRelease({
     environment,
     ports
   });
+  const migrationAuthority =
+    await resolveCoreReleaseMigrationAuthority({ projectRoot });
   const commands = buildCoreReleaseCommands({
     environment,
     nodeExecutable,
@@ -625,7 +688,8 @@ export async function runCoreRelease({
       ok: true,
       databaseName: configuration.databaseName,
       postgresMajor: postgresIdentity.major,
-      migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
+      migrationsApplied: migrationAuthority.count,
+      migrationAuthority,
       customServicesJourneys:
         CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
       alakazamCoreJourneys:
@@ -685,6 +749,7 @@ async function main() {
       databaseName: result.databaseName,
       postgresMajor: result.postgresMajor,
       migrationsApplied: result.migrationsApplied,
+      migrationAuthority: result.migrationAuthority,
       customServicesJourneys:
         result.customServicesJourneys,
       alakazamCoreJourneys:

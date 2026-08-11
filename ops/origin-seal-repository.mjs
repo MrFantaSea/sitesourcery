@@ -185,7 +185,10 @@ export async function collectOriginTreeManifest({
   });
 }
 
-async function collectMigrations(projectRoot, migrationRoot) {
+export async function collectOriginMigrationInventory({
+  projectRoot,
+  migrationRoot
+}) {
   const entries = await readdir(
     inside(projectRoot, migrationRoot, "Origin migration root"),
     { withFileTypes: true }
@@ -625,7 +628,10 @@ export async function collectOriginRepositorySnapshot({
       }),
       collectOriginEnvironmentSchema(projectRoot),
       collectOriginWorkerRuntime(projectRoot),
-      collectMigrations(projectRoot, layout.migrationRoot),
+      collectOriginMigrationInventory({
+        projectRoot,
+        migrationRoot: layout.migrationRoot
+      }),
       collectLegal(projectRoot, layout.legalConstantsPath),
       collectOriginPathManifest({
         projectRoot,

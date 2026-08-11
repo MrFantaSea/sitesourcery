@@ -9,12 +9,12 @@ import {
   CORE_RELEASE_ADMIN_URL_ENV,
   CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
   CORE_RELEASE_DATABASE_NAME_ENV,
-  CORE_RELEASE_MIGRATION_COUNT,
   CoreReleaseError,
   buildCoreReleaseCommands,
   buildTargetDatabaseUrl,
   generateCoreReleaseDatabaseName,
   parseCoreReleaseAdminUrl,
+  resolveCoreReleaseMigrationAuthority,
   runCoreRelease,
   validateCoreReleaseDatabaseName
 } from "../core-release.mjs";
@@ -26,6 +26,10 @@ import {
 
 const DATABASE_NAME =
   "ss_core_release_unit_20260806";
+const PROJECT_ROOT = path.resolve(
+  import.meta.dirname,
+  "../.."
+);
 const ADMIN_URL =
   "postgresql://release-user:do-not-print@127.0.0.1:55439/postgres?sslmode=disable";
 const BASE_ENVIRONMENT = Object.freeze({
@@ -199,7 +203,7 @@ test("command construction keeps URLs in scoped env and out of argv", () => {
   const commands = buildCoreReleaseCommands({
     environment: BASE_ENVIRONMENT,
     nodeExecutable: "/unit/node-24",
-    projectRoot: "/unit/project",
+    projectRoot: PROJECT_ROOT,
     targetDatabaseUrl: targetUrl
   });
   assert.deepEqual(
@@ -319,7 +323,7 @@ test("candidate npm runs through the exact pinned Node when npm exposes its CLI"
       npm_execpath: "/unit/npm-cli.js"
     },
     nodeExecutable: "/unit/node-24",
-    projectRoot: "/unit/project",
+    projectRoot: PROJECT_ROOT,
     targetDatabaseUrl: buildTargetDatabaseUrl(
       ADMIN_URL,
       DATABASE_NAME
@@ -367,19 +371,67 @@ test("migration verifier keeps caller ownership distinct from standalone ownersh
   );
 });
 
+test("migration authority derives the exact canonical ordered repository inventory", async () => {
+  const authority = await resolveCoreReleaseMigrationAuthority({
+    projectRoot: PROJECT_ROOT
+  });
+  assert.equal(
+    authority.schema,
+    "sitesourcery.core-release-migration-authority/v1"
+  );
+  assert.equal(
+    authority.root,
+    "server/data-plane/supabase/migrations"
+  );
+  assert.equal(authority.count, authority.files.length);
+  assert.equal(authority.latest, authority.files.at(-1).name);
+  assert.match(authority.manifestSha256, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(
+    [...authority.files].map(({ name }) => name),
+    [...authority.files].map(({ name }) => name).sort((left, right) =>
+      left.localeCompare(right)
+    )
+  );
+  assert.ok(
+    authority.files.every((entry) =>
+      Number.isSafeInteger(entry.byteCount) &&
+      entry.byteCount >= 0 &&
+      /^[a-f0-9]{64}$/u.test(entry.sha256)
+    )
+  );
+});
+
+test("release fails closed on missing migration authority before PostgreSQL", async () => {
+  const { ports, state } = createHarness();
+  await assert.rejects(
+    runCoreRelease({
+      environment: BASE_ENVIRONMENT,
+      nodeExecutable: "/unit/node-24",
+      ports,
+      projectRoot: "/unit/missing-project"
+    }),
+    (error) =>
+      error instanceof CoreReleaseError &&
+      error.code === "CORE_RELEASE_MIGRATION_AUTHORITY_INVALID"
+  );
+  assert.equal(state.queries.length, 0);
+  assert.equal(state.commands.length, 0);
+});
+
 test("successful orchestration drops the exact database before npm test", async () => {
   const { ports, state } = createHarness();
   const result = await runCoreRelease({
     environment: BASE_ENVIRONMENT,
     nodeExecutable: "/unit/node-24",
     ports,
-    projectRoot: "/unit/project"
+    projectRoot: PROJECT_ROOT
   });
   assert.deepEqual(result, {
     ok: true,
     databaseName: DATABASE_NAME,
     postgresMajor: 16,
-    migrationsApplied: CORE_RELEASE_MIGRATION_COUNT,
+    migrationsApplied: result.migrationAuthority.count,
+    migrationAuthority: result.migrationAuthority,
     customServicesJourneys:
       CORE_RELEASE_CUSTOM_SERVICES_JOURNEY_COUNT,
     alakazamCoreJourneys:
@@ -433,7 +485,7 @@ test("release refuses a non-PostgreSQL-16 server before creating a database", as
       environment: BASE_ENVIRONMENT,
       nodeExecutable: "/unit/node-24",
       ports,
-      projectRoot: "/unit/project"
+      projectRoot: PROJECT_ROOT
     }),
     (error) =>
       error.code === "CORE_RELEASE_POSTGRES_MAJOR_UNSUPPORTED"
@@ -453,7 +505,7 @@ test("a pre-existing exact name is never created, dropped, or tested", async () 
       environment: BASE_ENVIRONMENT,
       nodeExecutable: "/unit/node-24",
       ports,
-      projectRoot: "/unit/project"
+      projectRoot: PROJECT_ROOT
     }),
     (error) =>
       error.code === "CORE_RELEASE_DATABASE_EXISTS"
@@ -473,7 +525,7 @@ test("a PostgreSQL journey failure cleans only the proven exact target", async (
       environment: BASE_ENVIRONMENT,
       nodeExecutable: "/unit/node-24",
       ports,
-      projectRoot: "/unit/project"
+      projectRoot: PROJECT_ROOT
     }),
     (error) =>
       error.code === "CORE_RELEASE_SUBPROCESS_FAILED"
@@ -500,7 +552,7 @@ test("cleanup refuses active sessions, reports failure, and never terminates the
       environment: BASE_ENVIRONMENT,
       nodeExecutable: "/unit/node-24",
       ports,
-      projectRoot: "/unit/project"
+      projectRoot: PROJECT_ROOT
     }),
     (error) =>
       error.code === "CORE_RELEASE_CLEANUP_FAILED" &&
@@ -528,7 +580,7 @@ test("missing admin URL fails before opening a database or running tests", async
       environment: {},
       nodeExecutable: "/unit/node-24",
       ports,
-      projectRoot: "/unit/project"
+      projectRoot: PROJECT_ROOT
     }),
     (error) =>
       error.code === "CORE_RELEASE_ENV_REQUIRED"
@@ -547,7 +599,7 @@ test("an explicitly blank target name fails instead of silently generating one",
       },
       nodeExecutable: "/unit/node-24",
       ports,
-      projectRoot: "/unit/project"
+      projectRoot: PROJECT_ROOT
     }),
     (error) =>
       error.code ===
