@@ -90,6 +90,9 @@ import {
 import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
+import {
+  createResponderSurfacesHttpBoundary
+} from "./responder-surfaces-http.mjs";
 import { digestUserAgent } from "./project-legal-authority.mjs";
 
 const JSON_HEADERS = Object.freeze({
@@ -652,6 +655,54 @@ function requireCsrf(request, cookies) {
   );
 }
 
+async function authenticatedOrganizationActor({
+  service,
+  request,
+  route,
+  product,
+  selectionCode
+}) {
+  const selected = await service.authenticate(
+    parseCookies(request.headers.get("cookie")).ss_session
+  );
+  if (selected === null || selected === undefined) return null;
+  if (route.audience === "operator") {
+    return Object.freeze({
+      ...selected,
+      organizationId: route.params.organizationId
+    });
+  }
+  invariant(
+    typeof service.listOrganizations === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    `Hosted ${product} organization authority is unavailable.`,
+    { status: 500 }
+  );
+  const roster = await service.listOrganizations(selected);
+  const organizations = Array.isArray(roster?.organizations)
+    ? roster.organizations
+    : [];
+  const requestedOrganizationId = request.headers.get(
+    "x-sitesourcery-organization-id"
+  );
+  invariant(
+    requestedOrganizationId !== null || organizations.length === 1,
+    selectionCode,
+    `Select the organization whose ${product} account you want to open.`,
+    { status: 409 }
+  );
+  const organizationId = requestedOrganizationId ?? organizations[0].id;
+  invariant(
+    organizations.some((organization) =>
+      organization?.id === organizationId && organization?.state === "active"
+    ),
+    "NOT_FOUND",
+    `The requested ${product} account was not found.`,
+    { status: 404 }
+  );
+  return Object.freeze({ ...selected, organizationId });
+}
+
 export function createHostedApi(
   service,
   {
@@ -677,6 +728,7 @@ export function createHostedApi(
     customServicesOwner = null,
     engagementBootstrap = null,
     careSurfaces = null,
+    responderSurfaces = null,
     operatorWorkQueue = null,
     supportCases = null,
     resendMailEvents = null,
@@ -753,48 +805,46 @@ export function createHostedApi(
     ? null
     : createCareSurfacesHttpBoundary({
         service: careSurfaces,
-        async authenticate(request, route) {
-          const selected = await service.authenticate(
-            parseCookies(request.headers.get("cookie")).ss_session
+        authenticate: (request, route) => authenticatedOrganizationActor({
+          service,
+          request,
+          route,
+          product: "Care",
+          selectionCode: "CARE_ORGANIZATION_SELECTION_REQUIRED"
+        }),
+        async requireWriteGuard(request) {
+          requireCsrf(
+            request,
+            parseCookies(request.headers.get("cookie"))
           );
-          if (selected === null || selected === undefined) return null;
-          if (route.audience === "operator") {
-            return Object.freeze({
-              ...selected,
-              organizationId: route.params.organizationId
-            });
-          }
-          invariant(
-            typeof service.listOrganizations === "function",
-            "RUNTIME_CONFIGURATION_ERROR",
-            "Hosted Care organization authority is unavailable.",
-            { status: 500 }
-          );
-          const roster = await service.listOrganizations(selected);
-          const organizations = Array.isArray(roster?.organizations)
-            ? roster.organizations
-            : [];
-          const requestedOrganizationId = request.headers.get(
-            "x-sitesourcery-organization-id"
-          );
-          invariant(
-            requestedOrganizationId !== null || organizations.length === 1,
-            "CARE_ORGANIZATION_SELECTION_REQUIRED",
-            "Select the organization whose Care account you want to open.",
-            { status: 409 }
-          );
-          const organizationId = requestedOrganizationId ?? organizations[0].id;
-          invariant(
-            organizations.some((organization) =>
-              organization?.id === organizationId &&
-              organization?.state === "active"
-            ),
-            "NOT_FOUND",
-            "The requested Care account was not found.",
-            { status: 404 }
-          );
-          return Object.freeze({ ...selected, organizationId });
-        },
+          return true;
+        }
+      });
+  invariant(
+    responderSurfaces === null ||
+      (
+        responderSurfaces?.kind === "responder-surfaces" &&
+        responderSurfaces.mode === "held" &&
+        responderSurfaces.providerEffects === false &&
+        responderSurfaces.billingEffects === false &&
+        responderSurfaces.sellable === false &&
+        typeof responderSurfaces.readiness === "function"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Responder surfaces must use the verified effect-held composition.",
+    { status: 500 }
+  );
+  const responderSurfacesHttpBoundary = responderSurfaces === null
+    ? null
+    : createResponderSurfacesHttpBoundary({
+        service: responderSurfaces,
+        authenticate: (request, route) => authenticatedOrganizationActor({
+          service,
+          request,
+          route,
+          product: "Responder",
+          selectionCode: "RESPONDER_ORGANIZATION_SELECTION_REQUIRED"
+        }),
         async requireWriteGuard(request) {
           requireCsrf(
             request,
@@ -1131,7 +1181,8 @@ export function createHostedApi(
           alakazamRetainedPremiumReadiness,
           alakazamPublicationReadiness,
           resendMailEventReadiness,
-          careReadiness
+          careReadiness,
+          responderReadiness
         ] = await Promise.all([
           service.readiness(),
           typeof downloadBoundary.readiness === "function"
@@ -1155,7 +1206,16 @@ export function createHostedApi(
                 paymentEffects: false,
                 providerEffects: false
               }
-            : careSurfaces.readiness()
+            : careSurfaces.readiness(),
+          responderSurfaces === null
+            ? {
+                ready: false,
+                verified: false,
+                providerEffects: false,
+                billingEffects: false,
+                sellable: false
+              }
+            : responderSurfaces.readiness()
         ]);
         const registration =
           readiness?.registration ?? {};
@@ -1199,6 +1259,12 @@ export function createHostedApi(
             careReadiness?.mailReservation?.deliveryEffects === false &&
             careReadiness?.paymentEffects === false &&
             careReadiness?.providerEffects === false,
+          responder:
+            responderReadiness?.ready === true &&
+            responderReadiness?.verified === true &&
+            responderReadiness?.providerEffects === false &&
+            responderReadiness?.billingEffects === false &&
+            responderReadiness?.sellable === false,
           domainPurchase:
             domains.ready === true &&
             domains.registrar === "ready",
@@ -1395,6 +1461,14 @@ export function createHostedApi(
             await careSurfacesHttpBoundary.dispatch(request);
           if (careResponse !== null) {
             return rootedResponse(careResponse, requestId);
+          }
+        }
+
+        if (responderSurfacesHttpBoundary !== null) {
+          const responderResponse =
+            await responderSurfacesHttpBoundary.dispatch(request);
+          if (responderResponse !== null) {
+            return rootedResponse(responderResponse, requestId);
           }
         }
 

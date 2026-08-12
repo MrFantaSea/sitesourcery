@@ -186,6 +186,19 @@ import {
   createCareSurfacesService
 } from "../care-surfaces.mjs";
 import {
+  createFakeResponderProvider,
+  createResponderCore
+} from "../responder-core.mjs";
+import {
+  createPostgresResponderCoreRepository
+} from "../responder-core-postgres.mjs";
+import {
+  createPostgresResponderSurfaceRepository
+} from "../responder-surfaces-postgres.mjs";
+import {
+  createResponderSurfacesService
+} from "../responder-surfaces.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -862,6 +875,33 @@ async function start() {
       "Canonical effect-held Care surfaces are not ready."
     );
   }
+  const responderCore = createResponderCore({
+    repository: createPostgresResponderCoreRepository({ authority }),
+    provider: createFakeResponderProvider(),
+    clock: commerceV2.clock
+  });
+  const responderSurfaces = createResponderSurfacesService({
+    core: responderCore,
+    repository: createPostgresResponderSurfaceRepository({ authority })
+  });
+  const [responderCoreReadiness, responderReadiness] = await Promise.all([
+    responderCore.readiness(),
+    responderSurfaces.readiness()
+  ]);
+  if (
+    responderCoreReadiness.ready !== true ||
+    responderCoreReadiness.verified !== true ||
+    responderCoreReadiness.globalKillEngagedByDefault !== true ||
+    responderReadiness.ready !== true ||
+    responderReadiness.verified !== true ||
+    responderReadiness.providerEffects !== false ||
+    responderReadiness.billingEffects !== false ||
+    responderReadiness.sellable !== false
+  ) {
+    throw new Error(
+      "Canonical effect-held Responder surfaces are not ready."
+    );
+  }
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -972,6 +1012,7 @@ async function start() {
         customServicesCustomBuildWork,
         customServicesOwner,
         careSurfaces,
+        responderSurfaces,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         supportCases,
         resendMailEvents,

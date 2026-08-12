@@ -303,6 +303,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     alakazamPublication: false,
     mailProviderEvents: false,
     care: false,
+    responder: false,
     domainPurchase: false,
     publishing: false
   });
@@ -326,6 +327,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     alakazamPublication: false,
     mailProviderEvents: false,
     care: false,
+    responder: false,
     domainPurchase: false,
     publishing: false
   });
