@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-001 in progress
+Status: FIN-002 proved; FIN-003 is next
 
 ## Governing inputs
 
@@ -19,8 +19,8 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | Work ID | State | Input | Approved scope | Required proof |
 |---|---|---|---|---|
 | FIN-000 | proved | Complete system map, cleanup ledger, owner decision ledger | Scope and authority decisions only | No unresolved questionnaire item |
-| FIN-001 | in-progress | Exact base `b03cccbd…` | Clean worktree, environment, dependency install, untouched baseline | Clean index, exact runtime identities, classified baseline result |
-| FIN-002 | pending | `a81d1438…` runtime/release paths | Phase 2.1 runtime and release controls | Focused release tests plus cumulative suite |
+| FIN-001 | proved | Exact base `b03cccbd…` | Clean worktree, environment, dependency install, untouched baseline | Node 24.18.0 baseline passed; base dependency audit defects classified |
+| FIN-002 | proved | `a81d1438…` runtime/release paths | Phase 2.1 runtime and release controls | Zero-vulnerability audit, focused proofs, and complete `npm test` passed |
 | FIN-003 | pending | `a81d1438…` migrations 118–124 | Schema/repository foundation | Empty PostgreSQL migration proof |
 | FIN-004 | pending | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations | Per-cohort commits and proofs |
 | FIN-005 | pending | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition | No unclassified preserved lane |
@@ -34,3 +34,6 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 
 Every implementation commit must record its donor SHA, imported path allowlist, excluded overlaps, migrations, routes, capabilities, workers, provider purposes, focused tests, cumulative tests, and remaining blocker IDs. No archive branch or predecessor is deleted during this build.
 
+FIN-002's exact path and proof record is `FIN-002-PROVENANCE.md`. Product,
+schema, provider, worker, adjacent-integration, and public-cutover changes were
+not part of this cohort and remain assigned to FIN-003 through FIN-010.

@@ -44,6 +44,7 @@ import {
   validateFirstUseWorkflowRuns,
   validatePagesObservationV3,
   validateSuccessorGraph,
+  validateWorkflowContractV3,
 } from "../verify-public-truth-release-v3.mjs";
 
 const executeFile = promisify(execFile);
@@ -519,7 +520,7 @@ test("Pages artifact manifest rejects symlink traversal", async () => {
   }
 });
 
-test("V2 workflow, verifier, and tests retain exact historical blobs", async () => {
+test("retired V2 workflow, verifier, and tests retain exact historical blobs", async () => {
   for (const [file, expected] of Object.entries(IMMUTABLE_V2_BLOBS)) {
     assert.equal(await git(ROOT, ["hash-object", file]), expected, file);
   }
@@ -530,10 +531,22 @@ test("V3 workflow is manual, least-privilege, Pages-only, and receipt-free", asy
     path.join(ROOT, ".github/workflows/public-truth-reconciliation-v3.yml"),
     "utf8",
   );
+  assert.equal(validateWorkflowContractV3(workflow), workflow);
   assert.match(workflow, /^on:\n  workflow_dispatch:/mu);
   assert.match(workflow, /^permissions: \{\}$/mu);
   assert.match(workflow, /actions: read/u);
   assert.match(workflow, /pages: write/u);
+  assert.doesNotMatch(workflow, /actions\/upload-pages-artifact@/u);
+  assert.match(
+    workflow,
+    /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0/u,
+  );
+  assert.match(
+    workflow,
+    /artifact_id: \$\{\{ steps\.pages-artifact\.outputs\.artifact-id \}\}/u,
+  );
+  assert.match(workflow, /--file "\$RUNNER_TEMP\/artifact\.tar"/u);
+  assert.match(workflow, /--directory target\/_site/u);
   assert.match(workflow, /PUBLIC_TRUTH_V3_FIRST_USE=verified/u);
   assert.match(workflow, /--mode browser/u);
   assert.match(workflow, /--browser-proof/u);
@@ -542,6 +555,12 @@ test("V3 workflow is manual, least-privilege, Pages-only, and receipt-free", asy
     workflow.indexOf("  validate:"),
     workflow.indexOf("\n  deploy:"),
   );
+  const deployJob = workflow.slice(
+    workflow.indexOf("\n  deploy:"),
+    workflow.indexOf("\n  prove:"),
+  );
+  assert.equal([...deployJob.matchAll(/^      pages:/gmu)].length, 1);
+  assert.match(deployJob, /^      pages: write$/mu);
   const checkoutIndex = validateJob.indexOf(
     "- name: Check out exact publication control P'",
   );
@@ -561,11 +580,95 @@ test("V3 workflow is manual, least-privilege, Pages-only, and receipt-free", asy
   );
   assert.match(
     workflow,
-    /concurrency:\n  group: public-truth-v3-\$\{\{ inputs\.authority_receipt_sha256 \}\}/u,
+    /concurrency:\n  group: pages\n  cancel-in-progress: false/u,
   );
   assert.doesNotMatch(workflow, /secrets\./u);
   assert.doesNotMatch(workflow, /stripe|resend|cloudflare|\bdig\b/iu);
   assert.equal(await readFile(path.join(ROOT, RECEIPT_PATH_V3)).catch(
     (error) => error.code,
   ), "ENOENT");
+});
+
+test("V3 workflow contract rejects permission, pin, artifact, and extraction substitutions", async () => {
+  const workflow = await readFile(
+    path.join(ROOT, ".github/workflows/public-truth-reconciliation-v3.yml"),
+    "utf8",
+  );
+  const mutate = (from, to) => {
+    assert.equal(
+      workflow.split(from).length - 1,
+      1,
+      `mutation source must occur once: ${JSON.stringify(from)}`,
+    );
+    return workflow.replace(from, to);
+  };
+  const variants = [
+    mutate(
+      "on:\n  workflow_dispatch:",
+      "on:\n  push:\n  workflow_dispatch:",
+    ),
+    mutate("  group: pages", "  group: receipt-specific"),
+    mutate(
+      "      pages: write\n      id-token: write",
+      "      pages: read\n      pages: write\n      id-token: write",
+    ),
+    mutate(
+      "      - name: Upload exact validated Pages artifact\n        id: pages-artifact\n        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+      "      - name: Upload exact validated Pages artifact\n        id: pages-artifact\n        uses: actions/upload-artifact@v7\n        # uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+    ),
+    mutate(
+      "      - name: Upload exact validated Pages artifact\n        id: pages-artifact\n        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+      "      - name: Upload exact validated Pages artifact\n        id: pages-artifact\n        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # composite",
+    ),
+    mutate(
+      "artifact_id: ${{ steps.pages-artifact.outputs.artifact-id }}",
+      "artifact_id: ${{ steps.pages-artifact.outputs.artifact_id }}\n      # artifact_id: ${{ steps.pages-artifact.outputs.artifact-id }}",
+    ),
+    mutate("            --hard-dereference \\", "            --no-recursion \\"),
+    mutate("            --directory target/_site \\", "            --directory control/_site \\"),
+    mutate("          archive: true", "          archive: false"),
+    mutate(
+      "if (!artifact.workflow_run || String(artifact.workflow_run.id) !== runId) {",
+      "if (!artifact.workflow_run || String(artifact.workflow_run.id) === runId) {",
+    ),
+    mutate(
+      "if (artifact.workflow_run.head_sha !== publicationControlSha) {",
+      "if (artifact.workflow_run.head_sha === publicationControlSha) {",
+    ),
+    mutate(
+      "if (run.total_count !== 1 || !Array.isArray(run.artifacts) || run.artifacts.length !== 1) {",
+      "if (run.total_count < 100) {",
+    ),
+    mutate(
+      "test \"$(wc -l < \"$zip_inventory\")\" -eq 1",
+      "test \"$(wc -l < \"$zip_inventory\")\" -ge 1",
+    ),
+    mutate('or ".." in selected.parts', 'or ".." not in selected.parts'),
+    mutate("or member.issym()", "or False  # symbolic links allowed"),
+    mutate("or member.islnk()", "or False  # hard links allowed"),
+    mutate(
+      "or not (member.isdir() or member.isreg())",
+      "or not (member.isdir() or member.isreg() or member.isfifo())",
+    ),
+    mutate("if normalized in seen:", "if False and normalized in seen:"),
+    mutate("max_members = 1024", "max_members = 65536"),
+    mutate(
+      '--artifact-root "$SITE_ARTIFACT_ROOT"',
+      "--artifact-root ../target/_site",
+    ),
+    mutate(
+      "          artifact_name: github-pages",
+      "          artifact_name: substituted",
+    ),
+    mutate(
+      'unzip -p "$archive" artifact.tar > "$artifact_tar"',
+      'unzip "$archive" -d "$site"\n          unzip -p "$archive" artifact.tar > "$artifact_tar"',
+    ),
+  ];
+  for (const changed of variants) {
+    assert.throws(
+      () => validateWorkflowContractV3(changed),
+      /V3 workflow contract violation/iu,
+    );
+  }
 });

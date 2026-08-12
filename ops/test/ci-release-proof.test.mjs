@@ -1,20 +1,30 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import {
+  access,
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
+  rename,
   rm,
+  symlink,
   writeFile
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import {
   collectOriginRepositorySnapshot,
   collectOriginTreeManifest
 } from "../origin-seal-repository.mjs";
+import {
+  canonicalJson,
+  sha256Bytes
+} from "../immutable-evidence.mjs";
 import {
   ORIGIN_HELD_AUTHORITY,
   ORIGIN_SUCCESSOR_EPOCH_SCHEMA,
@@ -33,10 +43,22 @@ import {
   validateCiReleaseSuccessorInput
 } from "../ci-release-proof-runtime.mjs";
 import {
+  assertCiReleaseSafeEnvironment,
+  ciReleaseGitArguments,
+  ciReleaseSuccessorInputRelativePath,
+  collectCiRollbackArtifactEvidence,
+  createCiReleaseSuccessorInputFromRepository,
+  requireCiReleaseContainedDirectory,
   verifyCiLegalV4Artifact,
-  verifyCiReleaseCandidate
+  verifyCiReleaseCandidate,
+  verifyCiReleaseGenerationState,
+  verifyCiReleaseGitCheckout,
+  verifyCiReleaseSuccessorControl
 } from "../ci-release-proof-repository.mjs";
-import { proveDatabaseAbsent } from "../ci-release-proof.mjs";
+import {
+  proveDatabaseAbsent,
+  writeCiReleaseSuccessorInputAnchored
+} from "../ci-release-proof.mjs";
 import {
   resolveMigrationVerificationInventory
 } from "../../server/data-plane/tests/migration-verification-inventory.mjs";
@@ -45,6 +67,8 @@ const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../.."
 );
+const executeFile = promisify(execFile);
+const canonicalTemporaryRoot = await realpath(os.tmpdir());
 
 function protectedImplementationPaths(workflow) {
   const selected = workflow.match(
@@ -61,6 +85,51 @@ function assertProtectedImplementationPaths(workflow) {
     protectedImplementationPaths(workflow),
     CI_RELEASE_PROTECTED_IMPLEMENTATION_PATHS
   );
+}
+
+async function git(root, arguments_) {
+  const { stdout } = await executeFile("git", arguments_, {
+    cwd: root,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      GIT_AUTHOR_NAME: "CI security fixture",
+      GIT_AUTHOR_EMAIL: "ci-security@example.invalid",
+      GIT_COMMITTER_NAME: "CI security fixture",
+      GIT_COMMITTER_EMAIL: "ci-security@example.invalid"
+    }
+  });
+  return stdout.trim();
+}
+
+async function gitSecurityFixture() {
+  const root = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-security-git-")
+  );
+  await git(root, ["init", "--initial-branch=main"]);
+  await writeFile(path.join(root, "tracked.txt"), "first\n", "utf8");
+  await git(root, ["add", "tracked.txt"]);
+  await git(root, ["commit", "-m", "first"]);
+  await writeFile(path.join(root, "tracked.txt"), "second\n", "utf8");
+  await git(root, ["commit", "-am", "second"]);
+  return {
+    root,
+    head: await git(root, ["rev-parse", "HEAD"]),
+    tree: await git(root, ["rev-parse", "HEAD^{tree}"])
+  };
+}
+
+async function waitForPath(selected) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    try {
+      await access(selected);
+      return;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw new Error(`Timed out waiting for ${selected}.`);
 }
 const layout = Object.freeze({
   artifactRoot:
@@ -282,11 +351,15 @@ test("successor inventory admits later migrations without a count constant", () 
 test("candidate verifier rejects Git and migration-byte drift", async () => {
   const input = successorInput();
   const gitRunner = async (arguments_) => {
-    if (arguments_.join(" ") === "rev-parse HEAD") return SOURCE_COMMIT;
-    if (
-      arguments_.join(" ") ===
-      "status --porcelain=v1 --untracked-files=no"
-    ) return "";
+    const command = arguments_.join(" ");
+    if (command === "for-each-ref --format=%(refname) refs/replace/") return "";
+    if (command === "rev-parse --git-path info/grafts") {
+      return path.join(projectRoot, ".nonexistent-ci-grafts");
+    }
+    if (command === "ls-files -v -z" || command === "ls-files -t -z") return "";
+    if (command === "rev-parse HEAD") return SOURCE_COMMIT;
+    if (command === "rev-parse HEAD^{tree}") return SOURCE_TREE;
+    if (command === "status --porcelain=v1 --untracked-files=all") return "";
     throw new Error("unexpected Git fixture call");
   };
   const proof = await verifyCiReleaseCandidate({
@@ -300,11 +373,371 @@ test("candidate verifier rejects Git and migration-byte drift", async () => {
     verifyCiReleaseCandidate({
       projectRoot,
       successorInput: input,
-      gitRunner: async (arguments_) =>
-        arguments_.join(" ") === "rev-parse HEAD" ? "2".repeat(40) : ""
+      gitRunner: async (arguments_) => {
+        const command = arguments_.join(" ");
+        if (command === "for-each-ref --format=%(refname) refs/replace/") return "";
+        if (command === "rev-parse --git-path info/grafts") {
+          return path.join(projectRoot, ".nonexistent-ci-grafts");
+        }
+        if (command === "ls-files -v -z" || command === "ls-files -t -z") return "";
+        if (command === "rev-parse HEAD") return "2".repeat(40);
+        if (command === "rev-parse HEAD^{tree}") return SOURCE_TREE;
+        if (command === "status --porcelain=v1 --untracked-files=all") return "";
+        throw new Error("unexpected drift fixture call");
+      }
     }),
-    /Git identity is dirty or drifted/u
+    /checkout identity or status drifted/u
   );
+});
+
+test("Git runner rejects ambient spoofing and forces no-replace semantics", () => {
+  assert.equal(assertCiReleaseSafeEnvironment({ GIT_PAGER: "cat" }), true);
+  for (const environment of [
+    { GIT_DIR: "/tmp/rogue" },
+    { GIT_CONFIG_COUNT: "1" },
+    { GIT_CONFIG_KEY_0: "core.fsmonitor" },
+    { GIT_REPLACE_REF_BASE: "refs/rogue/" },
+    { NODE_OPTIONS: "--import=/tmp/rogue.mjs" },
+    { NODE_PATH: "/tmp/rogue-modules" }
+  ]) {
+    assert.throws(
+      () => assertCiReleaseSafeEnvironment(environment),
+      /rejects ambient Git or Node overrides/u
+    );
+  }
+  assert.deepEqual(
+    ciReleaseGitArguments(["rev-list", "--parents", "-n", "1", SOURCE_COMMIT]),
+    [
+      "--no-replace-objects",
+      "-c",
+      "core.fsmonitor=false",
+      "-c",
+      "core.untrackedCache=false",
+      "rev-list",
+      "--parents",
+      "-n",
+      "1",
+      SOURCE_COMMIT
+    ]
+  );
+});
+
+test("checkout verifier rejects assume-unchanged without clearing it", async () => {
+  const fixture = await gitSecurityFixture();
+  try {
+    await git(fixture.root, ["update-index", "--assume-unchanged", "tracked.txt"]);
+    await writeFile(path.join(fixture.root, "tracked.txt"), "hidden mutation\n", "utf8");
+    await assert.rejects(
+      verifyCiReleaseGitCheckout({
+        projectRoot: fixture.root,
+        expectedHead: fixture.head,
+        expectedTree: fixture.tree
+      }),
+      /rejects hidden Git index flags without mutating them/u
+    );
+    assert.match(
+      await git(fixture.root, ["ls-files", "-v", "tracked.txt"]),
+      /^h tracked\.txt$/u
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("checkout verifier rejects replace refs and graft files before graph use", async () => {
+  const fixture = await gitSecurityFixture();
+  try {
+    await git(fixture.root, ["replace", fixture.head, `${fixture.head}^`]);
+    await assert.rejects(
+      verifyCiReleaseGitCheckout({
+        projectRoot: fixture.root,
+        expectedHead: fixture.head,
+        expectedTree: fixture.tree
+      }),
+      /rejects Git replace refs/u
+    );
+    await git(fixture.root, ["replace", "-d", fixture.head]);
+    const grafts = await git(fixture.root, ["rev-parse", "--git-path", "info/grafts"]);
+    await mkdir(path.dirname(path.resolve(fixture.root, grafts)), { recursive: true });
+    await writeFile(
+      path.resolve(fixture.root, grafts),
+      `${fixture.head} ${fixture.head}^\n`,
+      "utf8"
+    );
+    await assert.rejects(
+      verifyCiReleaseGitCheckout({
+        projectRoot: fixture.root,
+        expectedHead: fixture.head,
+        expectedTree: fixture.tree
+      }),
+      /rejects Git graft files/u
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("rollback artifact evidence is byte-derived and rejects digest injection or symlinks", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-rollback-artifact-")
+  );
+  try {
+    await writeFile(path.join(fixture, "index.html"), "first\n", "utf8");
+    const first = await collectCiRollbackArtifactEvidence({
+      artifactRoot: fixture
+    });
+    assert.equal(first.fileCount, 1);
+    assert.equal(first.byteCount, Buffer.byteLength("first\n"));
+    assert.equal(first.files[0].byteCount, Buffer.byteLength("first\n"));
+    await writeFile(path.join(fixture, "index.html"), "second\n", "utf8");
+    const second = await collectCiRollbackArtifactEvidence({
+      artifactRoot: fixture
+    });
+    assert.notEqual(first.sha256, second.sha256);
+    await assert.rejects(
+      createCiReleaseSuccessorInputFromRepository({
+        projectRoot,
+        epochId: "ci-rollback-injection-fixture",
+        rollback: {
+          predecessorCommitSha: PREDECESSOR_COMMIT,
+          predecessorTreeSha: PREDECESSOR_TREE,
+          artifactRoot: fixture,
+          predecessorArtifactManifestSha256: "e".repeat(64)
+        }
+      }),
+      /only its exact fields/u
+    );
+    await symlink(path.join(fixture, "index.html"), path.join(fixture, "rogue-link"));
+    await assert.rejects(
+      collectCiRollbackArtifactEvidence({ artifactRoot: fixture }),
+      /must not contain symbolic links/u
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("contained-directory verifier rejects a symlink ancestor", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-contained-root-")
+  );
+  const outside = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-contained-outside-")
+  );
+  try {
+    await mkdir(path.join(outside, "releases"));
+    await symlink(outside, path.join(fixture, "ops"));
+    await assert.rejects(
+      requireCiReleaseContainedDirectory({
+        root: fixture,
+        selected: path.join(fixture, "ops/releases"),
+        label: "CI symlink fixture"
+      }),
+      /every ancestor must be real non-symlink directories/u
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
+test("generation-state verifier rejects head and status drift", async () => {
+  const fixture = await gitSecurityFixture();
+  try {
+    await assert.rejects(
+      verifyCiReleaseGenerationState({
+        projectRoot: fixture.root,
+        expectedHead: "f".repeat(40),
+        expectedTree: fixture.tree
+      }),
+      /checkout identity or status drifted/u
+    );
+    await writeFile(path.join(fixture.root, "unexpected.txt"), "drift\n", "utf8");
+    await assert.rejects(
+      verifyCiReleaseGenerationState({
+        projectRoot: fixture.root,
+        expectedHead: fixture.head,
+        expectedTree: fixture.tree
+      }),
+      /checkout identity or status drifted/u
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("anchored writer removes output when an approved ancestor is swapped", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-anchored-swap-")
+  );
+  const relativePath = "ops/releases/ci-successor-inputs/candidate.json";
+  const readyPath = path.join(fixture, "writer-ready");
+  const continuePath = path.join(fixture, "writer-continue");
+  try {
+    await mkdir(
+      path.join(fixture, "ops/releases/ci-successor-inputs"),
+      { recursive: true }
+    );
+    const writing = writeCiReleaseSuccessorInputAnchored({
+      projectRoot: fixture,
+      relativePath,
+      successorInput: { authority: "held" },
+      testControl: { readyPath, continuePath }
+    });
+    await waitForPath(readyPath);
+    await rename(path.join(fixture, "ops"), path.join(fixture, "moved-ops"));
+    await mkdir(
+      path.join(fixture, "ops/releases/ci-successor-inputs"),
+      { recursive: true }
+    );
+    await writeFile(continuePath, "continue\n", "utf8");
+    await assert.rejects(writing, /anchored successor write failed cleanly/u);
+    for (const selected of [
+      path.join(fixture, relativePath),
+      path.join(
+        fixture,
+        "moved-ops/releases/ci-successor-inputs/candidate.json"
+      )
+    ]) {
+      await assert.rejects(access(selected), /ENOENT/u);
+    }
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("anchored writer removes output when the post-write identity check fails", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-anchored-postcheck-")
+  );
+  const relativePath = "ops/releases/ci-successor-inputs/candidate.json";
+  try {
+    await mkdir(
+      path.join(fixture, "ops/releases/ci-successor-inputs"),
+      { recursive: true }
+    );
+    await assert.rejects(
+      writeCiReleaseSuccessorInputAnchored({
+        projectRoot: fixture,
+        relativePath,
+        successorInput: { authority: "held" },
+        postWriteCheck: async () => {
+          throw new Error("synthetic HEAD drift");
+        }
+      }),
+      /synthetic HEAD drift/u
+    );
+    await assert.rejects(access(path.join(fixture, relativePath)), /ENOENT/u);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("successor control requires the exact one-file C2-to-K2 graph", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-successor-control-")
+  );
+  const candidateSha = SOURCE_COMMIT;
+  const workflowSha = "1".repeat(40);
+  const expectedPath = ciReleaseSuccessorInputRelativePath(candidateSha);
+  const inputPath = path.join(fixture, ...expectedPath.split("/"));
+  const input = successorInput();
+  const bytes = Buffer.from(`${canonicalJson(input)}\n`, "utf8");
+  await mkdir(path.dirname(inputPath), { recursive: true });
+  await writeFile(inputPath, bytes);
+
+  const baseline = Object.freeze({
+    head: workflowSha,
+    tree: "3".repeat(40),
+    status: "",
+    parents: `${workflowSha} ${candidateSha}`,
+    changedPaths: `A\t${expectedPath}`,
+    candidateInputs: "",
+    workflowInputs: expectedPath
+  });
+  const runner = (mutations = {}) => async (arguments_) => {
+    const selected = { ...baseline, ...mutations };
+    const command = arguments_.join(" ");
+    if (command === "for-each-ref --format=%(refname) refs/replace/") {
+      return selected.replaceRefs ?? "";
+    }
+    if (command === "rev-parse --git-path info/grafts") {
+      return path.join(fixture, ".git/info/grafts");
+    }
+    if (command === "ls-files -v -z") return selected.assumeEntries ?? "";
+    if (command === "ls-files -t -z") return selected.skipEntries ?? "";
+    if (command === "rev-parse HEAD") return selected.head;
+    if (command === "rev-parse HEAD^{tree}") return selected.tree;
+    if (arguments_[0] === "status") return selected.status;
+    if (arguments_[0] === "rev-list") return selected.parents;
+    if (arguments_[0] === "diff-tree") return selected.changedPaths;
+    if (arguments_[0] === "ls-tree") {
+      return arguments_[3] === candidateSha
+        ? selected.candidateInputs
+        : selected.workflowInputs;
+    }
+    throw new Error("unexpected CI successor graph fixture command");
+  };
+  const verify = (options = {}) => verifyCiReleaseSuccessorControl({
+    controlRoot: fixture,
+    inputPath,
+    expectedInputSha256: sha256Bytes(bytes),
+    candidateSha,
+    workflowSha,
+    gitRunner: runner(options)
+  });
+
+  try {
+    const proof = await verify();
+    assert.equal(proof.inputPath, expectedPath);
+    assert.equal(proof.successorInput.digest, input.digest);
+
+    await assert.rejects(
+      verify({ parents: `${workflowSha} ${candidateSha} ${"2".repeat(40)}` }),
+      /exact candidate as its sole parent/u
+    );
+    await assert.rejects(
+      verify({ changedPaths: `A\t${expectedPath}\nM\tunexpected.txt` }),
+      /add only its exact successor input/u
+    );
+    await assert.rejects(
+      verify({
+        candidateInputs:
+          "ops/releases/ci-successor-inputs/stale-candidate.json"
+      }),
+      /candidate must contain zero successor-input files/u
+    );
+    await assert.rejects(
+      verify({
+        workflowInputs: `${expectedPath}\nops/releases/ci-successor-inputs/stale-workflow.json`
+      }),
+      /workflow must contain only the exact candidate successor input/u
+    );
+    await assert.rejects(
+      verifyCiReleaseSuccessorControl({
+        controlRoot: fixture,
+        inputPath: path.join(fixture, "wrong-input.json"),
+        expectedInputSha256: sha256Bytes(bytes),
+        candidateSha,
+        workflowSha,
+        gitRunner: runner()
+      }),
+      /exact candidate-named control file/u
+    );
+    await assert.rejects(
+      verifyCiReleaseSuccessorControl({
+        controlRoot: fixture,
+        inputPath,
+        expectedInputSha256: "2".repeat(64),
+        candidateSha,
+        workflowSha,
+        gitRunner: runner()
+      }),
+      /bytes drifted from their explicit digest/u
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });
 
 test("final receipt requires every exact proof and grants no authority", async () => {
@@ -528,7 +961,7 @@ test("database-absence proof is read-only local and injectable", async () => {
 });
 
 test("workflow is manual protected held and has no effect-bearing action", async () => {
-  const [source, runbook] = await Promise.all([
+  const [source, runbook, cliSource, repositorySource, wiringNotes] = await Promise.all([
     readFile(
       path.join(projectRoot, ".github/workflows/ci-release-proof-held.yml"),
       "utf8"
@@ -536,7 +969,13 @@ test("workflow is manual protected held and has no effect-bearing action", async
     readFile(
       path.join(projectRoot, "ops/SITESOURCERY-CI-RELEASE-PROOF-HELD.md"),
       "utf8"
-    )
+    ),
+    readFile(path.join(projectRoot, "ops/ci-release-proof.mjs"), "utf8"),
+    readFile(
+      path.join(projectRoot, "ops/ci-release-proof-repository.mjs"),
+      "utf8"
+    ),
+    readFile(path.join(projectRoot, "WIRING-NOTES-CI-01.md"), "utf8")
   ]);
   for (const required of [
     "workflow_dispatch:",
@@ -547,11 +986,19 @@ test("workflow is manual protected held and has no effect-bearing action", async
     "npm test",
     "npm run check:ops",
     "build:pages:legal-v4",
-    "Run and record six-width browser proof",
+    "record Legal V4 and browser evidence",
     "build:hosted:legal-v4",
     "check:hosted:legal-v4",
     "ss_ci_release_[1-9][0-9]*_[1-9][0-9]*",
-    "ci-release-proof.mjs absence"
+    "ci-release-proof.mjs absence",
+    "--control-root control",
+    "--candidate-sha \"$CI_RELEASE_CANDIDATE_SHA\"",
+    "--workflow-sha \"$CI_RELEASE_WORKFLOW_SHA\"",
+    "final --root target --control-root control",
+    "Re-bind protected proof after full candidate npm",
+    "git --no-replace-objects -c core.fsmonitor=false",
+    "ls-files -v",
+    "ls-files -t"
   ]) assert.ok(source.includes(required), required);
   assertProtectedImplementationPaths(source);
   assert.throws(
@@ -579,10 +1026,43 @@ test("workflow is manual protected held and has no effect-bearing action", async
   assert.doesNotMatch(source, /\b(?:deploy-pages|configure-pages)@/u);
   assert.doesNotMatch(source, /\b(?:stripe|cloudflare|resend)\b/iu);
   assert.doesNotMatch(source, /migration(?:Count| count)[^\n]*63/u);
+  assert.doesNotMatch(source, /node target\/ops\/ci-release-proof\.mjs/u);
+  assert.equal(
+    source.match(/for checkout in control target/gmu)?.length,
+    5
+  );
+  assert.doesNotMatch(source, /GIT_\*\|NODE_OPTIONS\|NODE_PATH/u);
+  assert.equal(
+    source.match(/node control\/ops\/ci-release-proof\.mjs/gmu)?.length,
+    12
+  );
   assert.match(
     runbook,
     /320, 360, 390, 720, 768, and 1440 CSS[\s\S]*90 route\/view combinations/u
   );
+  for (const required of [
+    "if (command === \"generate\")",
+    '"--epoch-id"',
+    '"--rollback-commit"',
+    '"--rollback-tree"',
+    '"--rollback-artifact-root"',
+    "createCiReleaseSuccessorInputFromRepository",
+    "writeCiReleaseSuccessorInputAnchored",
+    "verifyCiReleaseGeneratedOutput"
+  ]) assert.ok(cliSource.includes(required), required);
+  assert.doesNotMatch(cliSource, /--rollback-artifact-sha/u);
+  for (const required of [
+    "fileConstants.O_NOFOLLOW",
+    "handle.readFile()",
+    "before.mtimeNs !== after.mtimeNs",
+    '"--no-replace-objects"',
+    "rejects hidden Git index flags without mutating them"
+  ]) assert.ok(repositorySource.includes(required), required);
+  assert.doesNotMatch(repositorySource, /--no-assume-unchanged|--no-skip-worktree/u);
+  assert.match(wiringNotes, /these nine proof implementation files/u);
+  for (const relativePath of CI_RELEASE_PROTECTED_IMPLEMENTATION_PATHS) {
+    assert.ok(wiringNotes.includes(`\`${relativePath}\``), relativePath);
+  }
 });
 
 test("CI implementation contains no fixed Legal V4 file-count authority", async () => {

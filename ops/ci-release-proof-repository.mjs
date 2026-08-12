@@ -1,8 +1,11 @@
 import { execFile } from "node:child_process";
+import { constants as fileConstants } from "node:fs";
 import {
   lstat,
+  open,
   readFile,
-  readdir
+  readdir,
+  realpath
 } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -12,21 +15,59 @@ import {
   sha256Bytes
 } from "./immutable-evidence.mjs";
 import {
+  collectOriginRepositorySnapshot,
   collectOriginTreeManifest,
   verifyOriginReleaseRepository
 } from "./origin-seal-repository.mjs";
 import {
   CI_RELEASE_PINNED_NODE,
   ciReleaseProofSteps,
+  createCiReleaseSuccessorInput,
   createCiReleaseFinalReceipt,
   validateCiReleaseStepReceipt,
   validateCiReleaseSuccessorInput
 } from "./ci-release-proof-runtime.mjs";
+import {
+  SHAPE_EPOCH_ID,
+  releaseEpochBindingSha256
+} from "./release-epoch.mjs";
+import {
+  ORIGIN_HELD_AUTHORITY,
+  ORIGIN_SUCCESSOR_EPOCH_SCHEMA,
+  ORIGIN_UNION_BASE_COMMIT,
+  createOriginReleaseInput,
+  originFileManifestSha256
+} from "./origin-seal-runtime.mjs";
 
 const executeFile = promisify(execFile);
+const COMMIT_SHA = /^[a-f0-9]{40}$/u;
+const MAXIMUM_ROLLBACK_ARTIFACT_FILES = 100_000;
+const MAXIMUM_ROLLBACK_ARTIFACT_BYTES = 4 * 1024 * 1024 * 1024;
+
+export const CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY =
+  "ops/releases/ci-successor-inputs";
+export const CI_RELEASE_GENERATION_LAYOUT = Object.freeze({
+  artifactRoot: "_hosted",
+  migrationRoot: "server/data-plane/supabase/migrations",
+  legalConstantsPath:
+    "ops/releases/joint-legal-v4-2026-08-09T214211Z/joint-legal-v4-release-constants.json"
+});
 
 function fail(message) {
   throw new Error(message);
+}
+
+function exactObject(value, keys, label) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    Object.getPrototypeOf(value) !== Object.prototype ||
+    JSON.stringify(Object.keys(value).sort()) !== JSON.stringify([...keys].sort())
+  ) {
+    fail(`${label} must contain only its exact fields.`);
+  }
+  return value;
 }
 
 function inside(root, selected, label) {
@@ -52,6 +93,84 @@ async function regularFile(selected, label) {
   return metadata;
 }
 
+export async function requireCiReleaseRealDirectory(selected, label) {
+  const absolute = path.resolve(selected);
+  const root = path.parse(absolute).root;
+  let current = root;
+  for (const component of absolute.slice(root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    const metadata = await lstat(current);
+    if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+      fail(`${label} and every ancestor must be real non-symlink directories.`);
+    }
+  }
+  if (await realpath(absolute) !== absolute) {
+    fail(`${label} must use its exact canonical real path.`);
+  }
+  return absolute;
+}
+
+export async function requireCiReleaseContainedDirectory({
+  root,
+  selected,
+  label
+}) {
+  const absoluteRoot = await requireCiReleaseRealDirectory(root, `${label} root`);
+  const absolute = await requireCiReleaseRealDirectory(selected, label);
+  const relation = path.relative(absoluteRoot, absolute);
+  if (
+    relation === "" ||
+    relation === ".." ||
+    relation.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relation)
+  ) {
+    fail(`${label} must remain below its exact real root.`);
+  }
+  return absolute;
+}
+
+export function assertCiReleaseSafeEnvironment(environment = process.env) {
+  const dangerous = Object.keys(environment).filter((name) =>
+    [
+      "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+      "GIT_CEILING_DIRECTORIES",
+      "GIT_COMMON_DIR",
+      "GIT_CONFIG_GLOBAL",
+      "GIT_CONFIG_NOSYSTEM",
+      "GIT_CONFIG_PARAMETERS",
+      "GIT_CONFIG_SYSTEM",
+      "GIT_DIR",
+      "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+      "GIT_GRAFT_FILE",
+      "GIT_INDEX_FILE",
+      "GIT_NAMESPACE",
+      "GIT_OBJECT_DIRECTORY",
+      "GIT_REPLACE_REF_BASE",
+      "GIT_WORK_TREE",
+      "NODE_OPTIONS",
+      "NODE_PATH"
+    ].includes(name) ||
+    name.startsWith("GIT_CONFIG_KEY_") ||
+    name.startsWith("GIT_CONFIG_VALUE_") ||
+    name === "GIT_CONFIG_COUNT"
+  );
+  if (dangerous.length > 0) {
+    fail(`CI release proof rejects ambient Git or Node overrides: ${dangerous.sort().join(", ")}.`);
+  }
+  return true;
+}
+
+export function ciReleaseGitArguments(arguments_) {
+  return [
+    "--no-replace-objects",
+    "-c",
+    "core.fsmonitor=false",
+    "-c",
+    "core.untrackedCache=false",
+    ...arguments_
+  ];
+}
+
 export async function readCiReleaseSuccessorInput({
   inputPath,
   expectedSha256
@@ -70,12 +189,520 @@ export async function readCiReleaseSuccessorInput({
 }
 
 async function defaultGitRunner(arguments_, projectRoot) {
-  const result = await executeFile("git", arguments_, {
+  assertCiReleaseSafeEnvironment();
+  const result = await executeFile("git", ciReleaseGitArguments(arguments_), {
     cwd: projectRoot,
     encoding: "utf8",
-    maxBuffer: 1024 * 1024
+    maxBuffer: 1024 * 1024,
+    env: {
+      ...process.env,
+      GIT_NO_REPLACE_OBJECTS: "1",
+      GIT_CONFIG_NOSYSTEM: "1"
+    }
   });
   return result.stdout.trim();
+}
+
+async function requireGit(gitRunner, projectRoot, arguments_, label) {
+  try {
+    return await gitRunner(arguments_, projectRoot);
+  } catch {
+    fail(`${label} is unavailable or invalid.`);
+  }
+}
+
+function exactCommit(value, label) {
+  if (typeof value !== "string" || !COMMIT_SHA.test(value)) {
+    fail(`${label} must be an exact lowercase commit SHA.`);
+  }
+  return value;
+}
+
+function lines(value) {
+  return value === "" ? [] : value.split("\n");
+}
+
+function nulEntries(value) {
+  return value === "" ? [] : value.split("\0").filter(Boolean);
+}
+
+async function rejectGitGraphOverrides({
+  projectRoot,
+  gitRunner
+}) {
+  assertCiReleaseSafeEnvironment();
+  const [replaceRefs, graftsPath] = await Promise.all([
+    requireGit(
+      gitRunner,
+      projectRoot,
+      ["for-each-ref", "--format=%(refname)", "refs/replace/"],
+      "CI Git replace-ref inventory"
+    ),
+    requireGit(
+      gitRunner,
+      projectRoot,
+      ["rev-parse", "--git-path", "info/grafts"],
+      "CI Git graft path"
+    )
+  ]);
+  if (replaceRefs !== "") {
+    fail("CI release proof rejects Git replace refs.");
+  }
+  const absoluteGraftsPath = path.isAbsolute(graftsPath)
+    ? graftsPath
+    : path.resolve(projectRoot, graftsPath);
+  try {
+    await lstat(absoluteGraftsPath);
+    fail("CI release proof rejects Git graft files.");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+}
+
+async function rejectHiddenIndexFlags({ projectRoot, gitRunner }) {
+  const [verboseEntries, taggedEntries] = await Promise.all([
+    requireGit(
+      gitRunner,
+      projectRoot,
+      ["ls-files", "-v", "-z"],
+      "CI assume-unchanged inventory"
+    ),
+    requireGit(
+      gitRunner,
+      projectRoot,
+      ["ls-files", "-t", "-z"],
+      "CI skip-worktree inventory"
+    )
+  ]);
+  const flagged = new Set();
+  for (const entry of nulEntries(verboseEntries)) {
+    if (/^[a-z] /u.test(entry)) flagged.add(entry.slice(2));
+  }
+  for (const entry of nulEntries(taggedEntries)) {
+    if (entry.startsWith("S ")) flagged.add(entry.slice(2));
+  }
+  if (flagged.size > 0) {
+    fail("CI release proof rejects hidden Git index flags without mutating them.");
+  }
+}
+
+export async function verifyCiReleaseGitCheckout({
+  projectRoot,
+  expectedHead,
+  expectedTree,
+  expectedStatus = "",
+  gitRunner = defaultGitRunner
+}) {
+  const absoluteRoot = await requireCiReleaseRealDirectory(
+    projectRoot,
+    "CI Git checkout"
+  );
+  await rejectGitGraphOverrides({ projectRoot: absoluteRoot, gitRunner });
+  await rejectHiddenIndexFlags({ projectRoot: absoluteRoot, gitRunner });
+  const [head, tree, status] = await Promise.all([
+    requireGit(gitRunner, absoluteRoot, ["rev-parse", "HEAD"], "CI Git HEAD"),
+    requireGit(
+      gitRunner,
+      absoluteRoot,
+      ["rev-parse", "HEAD^{tree}"],
+      "CI Git tree"
+    ),
+    requireGit(
+      gitRunner,
+      absoluteRoot,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      "CI Git status"
+    )
+  ]);
+  exactCommit(head, "CI Git HEAD");
+  if (!COMMIT_SHA.test(tree)) fail("CI Git tree is invalid.");
+  if (
+    (expectedHead !== undefined && head !== expectedHead) ||
+    (expectedTree !== undefined && tree !== expectedTree) ||
+    status !== expectedStatus
+  ) {
+    fail("CI Git checkout identity or status drifted.");
+  }
+  return Object.freeze({ projectRoot: absoluteRoot, head, tree, status });
+}
+
+export async function collectCiRollbackArtifactEvidence({ artifactRoot }) {
+  const absoluteRoot = await requireCiReleaseRealDirectory(
+    artifactRoot,
+    "CI rollback artifact evidence"
+  );
+  const pending = [{ absolute: absoluteRoot, relative: "" }];
+  const files = [];
+  let byteCount = 0;
+  while (pending.length > 0) {
+    const current = pending.pop();
+    const entries = await readdir(current.absolute, { withFileTypes: true });
+    entries.sort((left, right) => right.name.localeCompare(left.name));
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) {
+        fail("CI rollback artifact evidence must not contain symbolic links.");
+      }
+      const absolute = path.join(current.absolute, entry.name);
+      const relative = current.relative
+        ? path.posix.join(current.relative, entry.name)
+        : entry.name;
+      if (entry.isDirectory()) {
+        pending.push({ absolute, relative });
+      } else if (entry.isFile()) {
+        const handle = await open(
+          absolute,
+          fileConstants.O_RDONLY | fileConstants.O_NOFOLLOW
+        );
+        try {
+          const before = await handle.stat({ bigint: true });
+          if (!before.isFile() || before.size > BigInt(MAXIMUM_ROLLBACK_ARTIFACT_BYTES)) {
+            fail("CI rollback artifact evidence contains an invalid file.");
+          }
+          const expectedSize = Number(before.size);
+          if (
+            files.length + 1 > MAXIMUM_ROLLBACK_ARTIFACT_FILES ||
+            byteCount + expectedSize > MAXIMUM_ROLLBACK_ARTIFACT_BYTES
+          ) {
+            fail("CI rollback artifact evidence exceeded its exact bounds.");
+          }
+          const bytes = await handle.readFile();
+          const after = await handle.stat({ bigint: true });
+          if (
+            bytes.length !== expectedSize ||
+            before.dev !== after.dev ||
+            before.ino !== after.ino ||
+            before.size !== after.size ||
+            before.mtimeNs !== after.mtimeNs ||
+            before.ctimeNs !== after.ctimeNs
+          ) {
+            fail("CI rollback artifact evidence changed during its no-follow read.");
+          }
+          byteCount += expectedSize;
+          files.push({
+            path: path.posix.join(CI_RELEASE_GENERATION_LAYOUT.artifactRoot, relative),
+            byteCount: expectedSize,
+            sha256: sha256Bytes(bytes)
+          });
+        } finally {
+          await handle.close();
+        }
+      } else {
+        fail("CI rollback artifact evidence contains an unsupported entry.");
+      }
+    }
+  }
+  files.sort((left, right) => left.path.localeCompare(right.path));
+  if (files.length === 0) {
+    fail("CI rollback artifact evidence must contain at least one file.");
+  }
+  const manifest = {
+    domain: "origin-artifact",
+    fileCount: files.length,
+    byteCount,
+    files
+  };
+  return Object.freeze({
+    ...manifest,
+    files: Object.freeze(files.map((entry) => Object.freeze(entry))),
+    sha256: originFileManifestSha256(manifest)
+  });
+}
+
+export function ciReleaseSuccessorInputRelativePath(candidateSha) {
+  return path.posix.join(
+    CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY,
+    `${exactCommit(candidateSha, "CI successor candidate")}.json`
+  );
+}
+
+export async function verifyCiReleaseSuccessorControl({
+  controlRoot,
+  inputPath,
+  expectedInputSha256,
+  candidateSha,
+  workflowSha,
+  gitRunner = defaultGitRunner
+}) {
+  const candidate = exactCommit(candidateSha, "CI successor candidate");
+  const workflow = exactCommit(workflowSha, "CI successor workflow");
+  const expectedRelativePath = ciReleaseSuccessorInputRelativePath(candidate);
+  const expectedInputPath = inside(
+    controlRoot,
+    path.join(controlRoot, ...expectedRelativePath.split("/")),
+    "CI successor control input"
+  );
+  if (path.resolve(inputPath) !== expectedInputPath) {
+    fail("CI successor input path is not the exact candidate-named control file.");
+  }
+
+  await verifyCiReleaseGitCheckout({
+    projectRoot: controlRoot,
+    expectedHead: workflow,
+    gitRunner
+  });
+
+  const [
+    parentLine,
+    changedPaths,
+    candidateInputs,
+    workflowInputs
+  ] = await Promise.all([
+    requireGit(
+      gitRunner,
+      controlRoot,
+      ["rev-list", "--parents", "-n", "1", workflow],
+      "CI successor parent graph"
+    ),
+    requireGit(
+      gitRunner,
+      controlRoot,
+      ["diff-tree", "--no-commit-id", "--name-status", "-r", candidate, workflow, "--"],
+      "CI successor changed paths"
+    ),
+    requireGit(
+      gitRunner,
+      controlRoot,
+      ["ls-tree", "-r", "--name-only", candidate, "--", CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY],
+      "CI candidate successor-input inventory"
+    ),
+    requireGit(
+      gitRunner,
+      controlRoot,
+      ["ls-tree", "-r", "--name-only", workflow, "--", CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY],
+      "CI workflow successor-input inventory"
+    )
+  ]);
+  if (parentLine !== `${workflow} ${candidate}`) {
+    fail("CI successor workflow must have the exact candidate as its sole parent.");
+  }
+  if (changedPaths !== `A\t${expectedRelativePath}`) {
+    fail("CI candidate-to-workflow change must add only its exact successor input.");
+  }
+  if (lines(candidateInputs).length !== 0) {
+    fail("CI candidate must contain zero successor-input files.");
+  }
+  if (
+    lines(workflowInputs).length !== 1 ||
+    lines(workflowInputs)[0] !== expectedRelativePath
+  ) {
+    fail("CI workflow must contain only the exact candidate successor input.");
+  }
+
+  const successorInput = await readCiReleaseSuccessorInput({
+    inputPath: expectedInputPath,
+    expectedSha256: expectedInputSha256
+  });
+  if (successorInput.originReleaseInput.epoch.source.commitSha !== candidate) {
+    fail("CI successor input source does not match the exact candidate parent.");
+  }
+  return Object.freeze({
+    candidateSha: candidate,
+    workflowSha: workflow,
+    inputPath: expectedRelativePath,
+    successorInput
+  });
+}
+
+export async function verifyCiReleaseGenerationState({
+  projectRoot,
+  expectedHead,
+  expectedTree,
+  expectedStatus = "",
+  gitRunner = defaultGitRunner
+}) {
+  const checkout = await verifyCiReleaseGitCheckout({
+    projectRoot,
+    expectedHead,
+    expectedTree,
+    expectedStatus,
+    gitRunner
+  });
+  const [repositoryRoot, existingInputs] = await Promise.all([
+    requireGit(
+      gitRunner,
+      checkout.projectRoot,
+      ["rev-parse", "--show-toplevel"],
+      "CI candidate root"
+    ),
+    requireGit(
+      gitRunner,
+      checkout.projectRoot,
+      [
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "HEAD",
+        "--",
+        CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY
+      ],
+      "CI candidate successor-input inventory"
+    )
+  ]);
+  if (path.resolve(repositoryRoot) !== checkout.projectRoot) {
+    fail("CI successor generation requires the exact candidate root.");
+  }
+  if (lines(existingInputs).length !== 0) {
+    fail("CI successor generation requires zero candidate successor-input files.");
+  }
+  return Object.freeze({
+    projectRoot: checkout.projectRoot,
+    head: checkout.head,
+    tree: checkout.tree
+  });
+}
+
+export async function verifyCiReleaseGeneratedOutput({
+  projectRoot,
+  candidateSha,
+  candidateTreeSha,
+  relativePath,
+  gitRunner = defaultGitRunner
+}) {
+  if (relativePath !== ciReleaseSuccessorInputRelativePath(candidateSha)) {
+    fail("CI generated successor output path drifted from its candidate.");
+  }
+  const state = await verifyCiReleaseGenerationState({
+    projectRoot,
+    expectedHead: candidateSha,
+    expectedTree: candidateTreeSha,
+    expectedStatus: `?? ${relativePath}`,
+    gitRunner
+  });
+  const selected = inside(
+    state.projectRoot,
+    path.join(state.projectRoot, ...relativePath.split("/")),
+    "CI generated successor output"
+  );
+  await regularFile(selected, "CI generated successor output");
+  return state;
+}
+
+export async function createCiReleaseSuccessorInputFromRepository({
+  projectRoot,
+  epochId,
+  rollback,
+  gitRunner = defaultGitRunner
+}) {
+  exactObject(
+    rollback,
+    ["predecessorCommitSha", "predecessorTreeSha", "artifactRoot"],
+    "CI rollback evidence request"
+  );
+  const predecessorCommitSha = exactCommit(
+    rollback.predecessorCommitSha,
+    "CI rollback predecessor"
+  );
+  if (!COMMIT_SHA.test(rollback.predecessorTreeSha ?? "")) {
+    fail("CI rollback predecessor tree must be an exact lowercase Git tree SHA.");
+  }
+  const initial = await verifyCiReleaseGenerationState({
+    projectRoot,
+    gitRunner
+  });
+  const absoluteRoot = initial.projectRoot;
+  const [predecessorTree, rollbackArtifact] = await Promise.all([
+    requireGit(
+      gitRunner,
+      absoluteRoot,
+      ["rev-parse", `${predecessorCommitSha}^{tree}`],
+      "CI rollback predecessor tree"
+    ),
+    collectCiRollbackArtifactEvidence({ artifactRoot: rollback.artifactRoot })
+  ]);
+  if (predecessorTree !== rollback.predecessorTreeSha) {
+    fail("CI rollback predecessor commit and tree do not match.");
+  }
+
+  const snapshot = await collectOriginRepositorySnapshot({
+    projectRoot: absoluteRoot,
+    layout: CI_RELEASE_GENERATION_LAYOUT
+  });
+  const legalV4Pages = await collectOriginTreeManifest({
+    projectRoot: absoluteRoot,
+    domain: "ci-legal-v4-pages",
+    relativeRoot: "_site"
+  });
+  const originReleaseInput = createOriginReleaseInput({
+    releaseId: initial.head,
+    epoch: {
+      schema: ORIGIN_SUCCESSOR_EPOCH_SCHEMA,
+      epochId,
+      supersedes: {
+        epochId: SHAPE_EPOCH_ID,
+        bindingSha256: releaseEpochBindingSha256()
+      },
+      basis: { unionBaseCommitSha: ORIGIN_UNION_BASE_COMMIT },
+      layout: structuredClone(CI_RELEASE_GENERATION_LAYOUT),
+      source: { commitSha: initial.head, treeSha: initial.tree },
+      artifact: { manifestSha256: snapshot.artifact.sha256 },
+      units: { manifestSha256: snapshot.units.sha256 },
+      environmentSchema: {
+        manifestSha256: snapshot.environmentSchema.sha256,
+        classificationSha256:
+          snapshot.environmentSchema.classificationSha256
+      },
+      worker: {
+        manifestSha256: snapshot.worker.sha256,
+        contractSha256: snapshot.worker.contractSha256
+      },
+      migration: {
+        count: snapshot.migration.count,
+        latest: snapshot.migration.latest,
+        manifestSha256: snapshot.migration.sha256
+      },
+      legal: {
+        authorityDigest: snapshot.legal.authorityDigest,
+        privacyVersion: snapshot.legal.privacyVersion,
+        privacySha256: snapshot.legal.privacySha256,
+        privacyByteCount: snapshot.legal.privacyByteCount,
+        websiteTermsVersion: snapshot.legal.websiteTermsVersion,
+        websiteTermsSha256: snapshot.legal.websiteTermsSha256,
+        websiteTermsByteCount: snapshot.legal.websiteTermsByteCount,
+        manifestSha256: snapshot.legal.sha256
+      },
+      ingress: { manifestSha256: snapshot.ingress.sha256 },
+      rollback: {
+        predecessorCommitSha,
+        predecessorTreeSha: predecessorTree,
+        predecessorArtifactManifestSha256: rollbackArtifact.sha256
+      },
+      authority: structuredClone(ORIGIN_HELD_AUTHORITY)
+    }
+  });
+  const successorInput = createCiReleaseSuccessorInput({
+    originReleaseInput,
+    migrationInventory: {
+      count: snapshot.migration.count,
+      latest: snapshot.migration.latest,
+      files: snapshot.migration.files.map((entry) => ({
+        name: entry.path.split("/").at(-1),
+        byteCount: entry.byteCount,
+        sha256: entry.sha256
+      })),
+      manifestSha256: snapshot.migration.sha256
+    },
+    legalV4Pages: {
+      fileCount: legalV4Pages.fileCount,
+      manifestSha256: legalV4Pages.sha256
+    }
+  });
+  await verifyOriginReleaseRepository({
+    projectRoot: absoluteRoot,
+    releaseInput: originReleaseInput,
+    gitRunner
+  });
+  await verifyCiLegalV4Artifact({
+    projectRoot: absoluteRoot,
+    artifactRoot: path.join(absoluteRoot, "_site"),
+    successorInput
+  });
+  return Object.freeze({
+    candidateSha: initial.head,
+    candidateTreeSha: initial.tree,
+    rollbackArtifactManifestSha256: rollbackArtifact.sha256,
+    relativePath: ciReleaseSuccessorInputRelativePath(initial.head),
+    successorInput
+  });
 }
 
 export async function verifyCiReleaseCandidate({
@@ -85,17 +712,13 @@ export async function verifyCiReleaseCandidate({
 }) {
   const input = validateCiReleaseSuccessorInput(successorInput);
   const expectedCommit = input.originReleaseInput.epoch.source.commitSha;
-  const [head, status, nodeVersion] = await Promise.all([
-    gitRunner(["rev-parse", "HEAD"], projectRoot),
-    gitRunner(
-      ["status", "--porcelain=v1", "--untracked-files=no"],
-      projectRoot
-    ),
-    readFile(path.join(projectRoot, ".nvmrc"), "utf8")
-  ]);
-  if (head !== expectedCommit || status !== "") {
-    fail("CI candidate Git identity is dirty or drifted.");
-  }
+  const checkout = await verifyCiReleaseGitCheckout({
+    projectRoot,
+    expectedHead: expectedCommit,
+    expectedTree: input.originReleaseInput.epoch.source.treeSha,
+    gitRunner
+  });
+  const nodeVersion = await readFile(path.join(projectRoot, ".nvmrc"), "utf8");
   if (nodeVersion.trim() !== CI_RELEASE_PINNED_NODE) {
     fail("CI candidate Node version drifted from the pinned release runtime.");
   }
@@ -135,7 +758,7 @@ export async function verifyCiReleaseCandidate({
     }
   }
   return Object.freeze({
-    candidateSha: head,
+    candidateSha: checkout.head,
     migrationCount: names.length,
     latestMigration: names.at(-1)
   });

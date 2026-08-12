@@ -16,6 +16,151 @@ const DEFAULT_BROWSER_CANDIDATES = Object.freeze([
 const delay = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+export function reviewedLinuxCiSandboxArguments({
+  platform = process.platform,
+  githubActions = process.env.GITHUB_ACTIONS === "true",
+  origin
+} = {}) {
+  let loopback = false;
+  try {
+    const parsed = new URL(origin);
+    loopback =
+      parsed.protocol === "http:" &&
+      parsed.hostname === "127.0.0.1" &&
+      /^[0-9]{1,5}$/u.test(parsed.port) &&
+      parsed.pathname === "/" &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      parsed.username === "" &&
+      parsed.password === "";
+  } catch {
+    loopback = false;
+  }
+  return Object.freeze(
+    platform === "linux" && githubActions && loopback
+      ? ["--no-sandbox"]
+      : []
+  );
+}
+
+export function reviewedBrowserLaunchArguments({
+  origin,
+  port,
+  profile,
+  platform = process.platform,
+  githubActions = process.env.GITHUB_ACTIONS === "true"
+} = {}) {
+  const argumentsList = [
+    "--headless",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-default-apps",
+    "--disable-extensions",
+    "--disable-sync",
+    "--metrics-recording-only",
+    "--no-default-browser-check",
+    "--no-first-run"
+  ];
+  // Ubuntu 24.04 GitHub runners restrict the downloaded headless shell's
+  // unprivileged namespace sandbox. This browser sees only local fixtures.
+  argumentsList.push(...reviewedLinuxCiSandboxArguments({
+    platform,
+    githubActions,
+    origin
+  }));
+  argumentsList.push(
+    `--remote-debugging-port=${port}`,
+    `--unsafely-treat-insecure-origin-as-secure=${origin}`,
+    `--user-data-dir=${profile}`,
+    "about:blank"
+  );
+  return Object.freeze(argumentsList);
+}
+
+export function createReviewedBrowserCleanup({
+  browserExited,
+  signalBrowser,
+  waitForExit,
+  closeConnection = () => {},
+  removeProfile = async () => {}
+} = {}) {
+  for (const [name, dependency] of [
+    ["browserExited", browserExited],
+    ["signalBrowser", signalBrowser],
+    ["waitForExit", waitForExit],
+    ["closeConnection", closeConnection],
+    ["removeProfile", removeProfile]
+  ]) {
+    if (typeof dependency !== "function") {
+      throw new TypeError(
+        `Reviewed browser cleanup requires ${name}.`
+      );
+    }
+  }
+
+  let closed = false;
+  let closePromise = null;
+
+  function exitTimeout() {
+    const error = new Error(
+      "Reviewed browser remained alive after SIGKILL."
+    );
+    error.code = "REVIEWED_BROWSER_EXIT_TIMEOUT";
+    return error;
+  }
+
+  async function stopBrowser() {
+    if (browserExited()) return;
+    const gracefulWait = waitForExit(2000);
+    signalBrowser("SIGTERM");
+    const gracefulExit = await gracefulWait;
+    if (gracefulExit || browserExited()) return;
+
+    const forcedWait = waitForExit(2000);
+    signalBrowser("SIGKILL");
+    const forcedExit = await forcedWait;
+    if (!forcedExit && !browserExited()) throw exitTimeout();
+  }
+
+  async function closeAttempt() {
+    const failures = [];
+    try {
+      closeConnection();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await stopBrowser();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await removeProfile();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length > 1) {
+      throw new AggregateError(
+        failures,
+        "Reviewed browser cleanup failed."
+      );
+    }
+    closed = true;
+  }
+
+  async function close() {
+    if (closed) return;
+    if (closePromise) return closePromise;
+    closePromise = closeAttempt().finally(() => {
+      closePromise = null;
+    });
+    return closePromise;
+  }
+
+  return Object.freeze({ close });
+}
+
 async function reviewedBrowserPath(candidates) {
   const failures = [];
   for (const candidate of candidates) {
@@ -177,21 +322,11 @@ export async function openReviewedBrowser({
     exited: false,
     stderr: ""
   };
-  const child = spawn(executable, [
-    "--headless",
-    "--disable-background-networking",
-    "--disable-component-update",
-    "--disable-default-apps",
-    "--disable-extensions",
-    "--disable-sync",
-    "--metrics-recording-only",
-    "--no-default-browser-check",
-    "--no-first-run",
-    `--remote-debugging-port=${port}`,
-    `--unsafely-treat-insecure-origin-as-secure=${origin}`,
-    `--user-data-dir=${profile}`,
-    "about:blank"
-  ], {
+  const child = spawn(executable, reviewedBrowserLaunchArguments({
+    origin,
+    port,
+    profile
+  }), {
     stdio: ["ignore", "ignore", "pipe"]
   });
   child.stderr.setEncoding("utf8");
@@ -200,28 +335,48 @@ export async function openReviewedBrowser({
       processState.stderr + chunk
     ).slice(-32768);
   });
+  child.once("error", (error) => {
+    processState.exited = true;
+    processState.stderr = (
+      processState.stderr +
+      `\nBrowser process error: ${error?.code ?? "SPAWN_FAILED"}`
+    ).slice(-32768);
+  });
   child.once("exit", () => {
     processState.exited = true;
   });
 
   let cdp = null;
-  let closed = false;
   const browserErrors = [];
-  async function close() {
-    if (closed) return;
-    closed = true;
-    if (cdp) cdp.close();
-    if (!processState.exited) child.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolve) => child.once("exit", resolve)),
-      delay(2000)
-    ]);
-    if (!processState.exited) child.kill("SIGKILL");
-    await rm(profile, {
-      recursive: true,
-      force: true
+
+  function waitForExit(milliseconds) {
+    if (processState.exited) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (exited) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        child.removeListener("exit", onExit);
+        resolve(exited);
+      };
+      const onExit = () => finish(true);
+      const timer = setTimeout(() => finish(false), milliseconds);
+      child.once("exit", onExit);
     });
   }
+
+  const cleanup = createReviewedBrowserCleanup({
+    browserExited: () => processState.exited,
+    signalBrowser: (signal) => child.kill(signal),
+    waitForExit,
+    closeConnection: () => cdp?.close(),
+    removeProfile: () => rm(profile, {
+      recursive: true,
+      force: true
+    })
+  });
+  const close = cleanup.close;
 
   try {
     cdp = new Cdp(await pageSocket(port, processState));
@@ -317,7 +472,14 @@ export async function openReviewedBrowser({
       waitFor
     });
   } catch (error) {
-    await close();
+    try {
+      await close();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Reviewed browser bootstrap and cleanup failed."
+      );
+    }
     throw error;
   }
 }

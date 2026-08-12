@@ -14,16 +14,24 @@ release input, run PostgreSQL, push, deploy, or grant release authority.
    manifest digest to the successor input. The current reviewed projection is
    94 files, but later successors must derive their own exact count rather than
    copying that checkpoint.
-3. Construct the CI successor input with
-   `createCiReleaseSuccessorInput`; write its canonical bytes at
-   `ops/releases/ci-successor-inputs/<candidate-sha>.json` in a successor
-   control commit. Supply the SHA-256 of those exact file bytes to the manual
-   workflow.
-4. Keep these five proof implementation files byte-identical between the
+3. After building exact `_site` and `_hosted` artifacts, run the candidate's
+   `node ops/ci-release-proof.mjs generate --root . --epoch-id <new-id> --rollback-commit <sha> --rollback-tree <sha> --rollback-artifact-root <path>`. The command requires a clean held
+   candidate with zero prior CI successor inputs, derives current migration and
+   artifact facts, verifies exact ancestry, derives the predecessor artifact
+   manifest from bounded retained bytes, and uses an anchored fail-clean write
+   at `ops/releases/ci-successor-inputs/<candidate-sha>.json`. The rollback
+   artifact root is a later operator-supplied retained evidence directory; this
+   packet freezes no real path or digest. Supply the reported raw SHA-256 to the
+   manual workflow; do not substitute the semantic `digest` field.
+4. Keep these nine proof implementation files byte-identical between the
    protected workflow commit and candidate:
    - `ops/ci-release-proof-runtime.mjs`
    - `ops/ci-release-proof-repository.mjs`
    - `ops/ci-release-proof.mjs`
+   - `scripts/audit-artifact-from-sitemap.mjs`
+   - `scripts/browser-audit-vnext.mjs`
+   - `scripts/check-routes.mjs`
+   - `scripts/install-reviewed-chromium.sh`
    - `server/data-plane/tests/migration-verification-inventory.mjs`
    - `server/data-plane/tests/verify-empty-postgres-migrations.mjs`
 5. Configure the GitHub environment named `ci-release-proof-held` with required
@@ -31,6 +39,11 @@ release input, run PostgreSQL, push, deploy, or grant release authority.
    deployment protection rule that can perform an external action.
 6. Invoke `.github/workflows/ci-release-proof-held.yml` manually with only the
    exact candidate SHA and exact successor-input file SHA-256.
+
+The held workflow executes receipt and final-proof code only from the protected
+control checkout. It rejects ambient Git/Node overrides, replace refs, grafts,
+assume-unchanged and skip-worktree flags, any tracked checkout drift, and any
+post-candidate mismatch across all nine protected implementation paths.
 
 The final `verified_held` receipt is evidence only. It cannot authorize a
 deployment, publication, provider call, DNS change, commercial transition, or

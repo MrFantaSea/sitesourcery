@@ -62,12 +62,19 @@ export const AUTHORITY_STATEMENT_V3 =
   "Authorize one exact held, inquiry-only GitHub Pages publication from a successor-bound candidate; deny hosted runtime, customer data, commerce, provider, DNS, tunnel, containment, and general deployment authority.";
 export const POSTDEPLOY_EVIDENCE_FILE_V3 =
   "public-truth-production-proof-v3.json";
+export const V2_RETIREMENT_CAPSULE_ROOT =
+  "ops/releases/public-truth-v2-retired-2026-08-11";
+export const V2_RETIREMENT_POLICY_PATHS = Object.freeze([
+  `${V2_RETIREMENT_CAPSULE_ROOT}/README.md`,
+  `${V2_RETIREMENT_CAPSULE_ROOT}/manifest.json`,
+  "scripts/test/public-truth-v2-retirement.test.mjs",
+]);
 export const IMMUTABLE_V2_BLOBS = Object.freeze({
-  ".github/workflows/public-truth-reconciliation-v2.yml":
+  [`${V2_RETIREMENT_CAPSULE_ROOT}/workflow/public-truth-reconciliation-v2.yml`]:
     "10eb1a5e912fd9633cee3c9476d934b6be2964f0",
-  "scripts/test/public-truth-release-v2.test.mjs":
+  [`${V2_RETIREMENT_CAPSULE_ROOT}/scripts/test/public-truth-release-v2.test.mjs`]:
     "182c0ebe546b7fea791536ad503583da01839940",
-  "scripts/verify-public-truth-release-v2.mjs":
+  [`${V2_RETIREMENT_CAPSULE_ROOT}/scripts/verify-public-truth-release-v2.mjs`]:
     "62e57317f2321b9d17e4d80893626a9c8f18f4c4",
 });
 export const V3_PROOF_IDENTITY_PATHS = Object.freeze([
@@ -82,6 +89,7 @@ export const V3_PROOF_IDENTITY_PATHS = Object.freeze([
   "scripts/audit-artifact-from-sitemap.mjs",
   "scripts/check-routes.mjs",
   "scripts/hosted-truth/pages-legal-v4.mjs",
+  ...V2_RETIREMENT_POLICY_PATHS,
   ...Object.keys(IMMUTABLE_V2_BLOBS),
 ].sort());
 
@@ -211,6 +219,263 @@ export function cleanCheckoutV3(root) {
   ) {
     fail("checkout contains tracked bytes that differ from HEAD.");
   }
+}
+
+function workflowContractFailV3(message) {
+  fail(`V3 workflow contract violation: ${message}`);
+}
+
+function regexEscapeV3(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function workflowJobBodyV3(workflowText, jobName) {
+  const header = new RegExp(`^  ${regexEscapeV3(jobName)}:\\s*$`, "gmu");
+  const matches = [...workflowText.matchAll(header)];
+  if (matches.length !== 1) {
+    workflowContractFailV3(`job ${jobName} must occur exactly once`);
+  }
+  const start = matches[0].index;
+  const remainder = workflowText.slice(start + matches[0][0].length);
+  const next = /^  [a-zA-Z0-9_-]+:\s*$/mu.exec(remainder);
+  const end = next
+    ? start + matches[0][0].length + next.index
+    : workflowText.length;
+  return workflowText.slice(start, end).trimEnd();
+}
+
+function workflowStepByNameV3(jobBody, stepName) {
+  const header = new RegExp(
+    `^ {6}- name: ${regexEscapeV3(stepName)}\\s*$`,
+    "gmu",
+  );
+  const matches = [...jobBody.matchAll(header)];
+  if (matches.length !== 1) {
+    workflowContractFailV3(`step ${stepName} must occur exactly once`);
+  }
+  const start = matches[0].index;
+  const afterHeader = start + matches[0][0].length;
+  const next = /^ {6}- /mu.exec(jobBody.slice(afterHeader));
+  const end = next ? afterHeader + next.index : jobBody.length;
+  return jobBody.slice(start, end).trimEnd();
+}
+
+function exactJobPermissionsV3(jobBody, expected, label) {
+  const headers = [...jobBody.matchAll(/^ {4}permissions:\s*$/gmu)];
+  if (headers.length !== 1) {
+    workflowContractFailV3(`${label} permissions must occur exactly once`);
+  }
+  const start = headers[0].index;
+  const afterHeader = start + headers[0][0].length;
+  const next = /^ {4}\S/mu.exec(jobBody.slice(afterHeader));
+  const end = next ? afterHeader + next.index : jobBody.length;
+  const actual = jobBody.slice(start, end).trimEnd();
+  const required = [
+    "    permissions:",
+    ...expected.map(([name, access]) => `      ${name}: ${access}`),
+  ].join("\n");
+  if (actual !== required) {
+    workflowContractFailV3(`${label} permissions are not the exact reviewed mapping`);
+  }
+}
+
+function requireWorkflowPatternV3(source, pattern, label) {
+  const flags = [...new Set(`${pattern.flags.replace("g", "")}g`.split(""))]
+    .join("");
+  const matches = [...source.matchAll(new RegExp(pattern.source, flags))];
+  if (matches.length !== 1) {
+    workflowContractFailV3(`${label} must occur exactly once`);
+  }
+}
+
+export function validateWorkflowContractV3(workflowText) {
+  if (
+    typeof workflowText !== "string" ||
+    workflowText.length === 0 ||
+    Buffer.byteLength(workflowText, "utf8") > 512 * 1024
+  ) workflowContractFailV3("workflow text must be bounded nonempty UTF-8 text");
+
+  const onBlock = /^on:\s*$\n([\s\S]*?)(?=^permissions: \{\}\s*$)/mu.exec(
+    workflowText,
+  );
+  if (!onBlock) workflowContractFailV3("top-level trigger block is missing");
+  const triggers = [...onBlock[1].matchAll(
+    /^ {2}([a-zA-Z0-9_-]+):(?:\s.*)?$/gmu,
+  )].map((match) => match[1]);
+  if (canonicalJson(triggers) !== canonicalJson(["workflow_dispatch"])) {
+    workflowContractFailV3("workflow must expose only workflow_dispatch");
+  }
+  requireWorkflowPatternV3(
+    workflowText,
+    /^permissions: \{\}\s*$/mu,
+    "deny-by-default top-level permissions",
+  );
+  requireWorkflowPatternV3(
+    workflowText,
+    /^concurrency:\s*$\n^ {2}group: pages\s*$\n^ {2}cancel-in-progress: false\s*$/mu,
+    "global Pages concurrency",
+  );
+  if (/^\s+(?:push|pull_request|schedule|repository_dispatch):/mu.test(workflowText)) {
+    workflowContractFailV3("non-manual trigger is forbidden");
+  }
+  if (/actions\/upload-pages-artifact@/u.test(workflowText)) {
+    workflowContractFailV3("composite upload-pages-artifact is forbidden");
+  }
+  if (/^\s*continue-on-error:\s*true(?:\s+#.*)?$/imu.test(workflowText)) {
+    workflowContractFailV3("release steps must fail closed");
+  }
+
+  const usesLines = workflowText.split("\n").filter((line) => (
+    /^\s*(?:-\s*)?uses:\s*/u.test(line)
+  ));
+  if (usesLines.length === 0) {
+    workflowContractFailV3("workflow must contain pinned actions");
+  }
+  for (const line of usesLines) {
+    const selected = /^\s*(?:-\s*)?uses:\s*([^\s#]+)(?:\s+#.*)?$/u.exec(line);
+    if (!selected || !/^[^@\s]+@[a-f0-9]{40}$/u.test(selected[1])) {
+      workflowContractFailV3(`action is not pinned to a full commit SHA: ${line.trim()}`);
+    }
+  }
+
+  const validateJob = workflowJobBodyV3(workflowText, "validate");
+  const deployJob = workflowJobBodyV3(workflowText, "deploy");
+  workflowJobBodyV3(workflowText, "prove");
+  exactJobPermissionsV3(validateJob, [
+    ["actions", "read"],
+    ["contents", "read"],
+    ["pages", "read"],
+  ], "validate job");
+  exactJobPermissionsV3(deployJob, [
+    ["actions", "read"],
+    ["contents", "read"],
+    ["pages", "write"],
+    ["id-token", "write"],
+  ], "deploy job");
+  if ([...deployJob.matchAll(/^ {6}pages:/gmu)].length !== 1) {
+    workflowContractFailV3("deploy job must contain one unique pages permission");
+  }
+
+  requireWorkflowPatternV3(
+    validateJob,
+    /^ {4}outputs:\s*$\n^ {6}artifact_id: \$\{\{ steps\.pages-artifact\.outputs\.artifact-id \}\}\s*$/mu,
+    "hyphenated upload-artifact ID output",
+  );
+  if (/steps\.pages-artifact\.outputs\.artifact_id/u.test(workflowText)) {
+    workflowContractFailV3("underscore upload-artifact output is forbidden");
+  }
+
+  const packageStep = workflowStepByNameV3(
+    validateJob,
+    "Package exact validated Pages artifact",
+  );
+  const expectedPackageStep = [
+    "      - name: Package exact validated Pages artifact",
+    "        run: |",
+    "          tar \\",
+    "            --create \\",
+    "            --file \"$RUNNER_TEMP/artifact.tar\" \\",
+    "            --dereference \\",
+    "            --hard-dereference \\",
+    "            --directory target/_site \\",
+    "            --exclude=.git \\",
+    "            --exclude=.github \\",
+    "            .",
+    "          test -s \"$RUNNER_TEMP/artifact.tar\"",
+  ].join("\n");
+  if (packageStep !== expectedPackageStep) {
+    workflowContractFailV3("artifact.tar packaging flags or source drifted");
+  }
+
+  const uploadStep = workflowStepByNameV3(
+    validateJob,
+    "Upload exact validated Pages artifact",
+  );
+  const expectedUploadStep = [
+    "      - name: Upload exact validated Pages artifact",
+    "        id: pages-artifact",
+    "        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1",
+    "        with:",
+    "          name: github-pages",
+    "          path: ${{ runner.temp }}/artifact.tar",
+    "          retention-days: 1",
+    "          if-no-files-found: error",
+    "          overwrite: false",
+    "          include-hidden-files: false",
+    "          archive: true",
+  ].join("\n");
+  if (uploadStep !== expectedUploadStep) {
+    workflowContractFailV3("direct Pages artifact upload contract drifted");
+  }
+
+  const downloadStep = workflowStepByNameV3(
+    deployJob,
+    "Download and extract the exact validated artifact",
+  );
+  for (const [pattern, label] of [
+    [/^ {10}ARTIFACT_ID: \$\{\{ needs\.validate\.outputs\.artifact_id \}\}\s*$/mu, "artifact ID handoff"],
+    [/^ {10}PUBLICATION_CONTROL_SHA: \$\{\{ inputs\.publication_control_sha \}\}\s*$/mu, "P head handoff"],
+    [/^ {12}"https:\/\/api\.github\.com\/repos\/\$GITHUB_REPOSITORY\/actions\/artifacts\/\$ARTIFACT_ID" \\\s*$/mu, "artifact metadata request"],
+    [/^ {12}"https:\/\/api\.github\.com\/repos\/\$GITHUB_REPOSITORY\/actions\/runs\/\$GITHUB_RUN_ID\/artifacts\?name=github-pages&per_page=100" \\\s*$/mu, "current-run artifact request"],
+    [/^ {10}if \(String\(artifact\.id\) !== id\) throw new Error\("artifact metadata ID mismatch"\);\s*$/mu, "artifact metadata ID binding"],
+    [/^ {10}if \(artifact\.name !== "github-pages"\) throw new Error\("artifact metadata name mismatch"\);\s*$/mu, "artifact metadata name binding"],
+    [/^ {10}if \(artifact\.expired !== false\) throw new Error\("artifact is expired"\);\s*$/mu, "artifact expiry rejection"],
+    [/^ {10}if \(!artifact\.workflow_run \|\| String\(artifact\.workflow_run\.id\) !== runId\) \{\s*$/mu, "artifact current-run binding"],
+    [/^ {10}if \(artifact\.workflow_run\.head_sha !== publicationControlSha\) \{\s*$/mu, "artifact P-head binding"],
+    [/^ {10}if \(run\.total_count !== 1 \|\| !Array\.isArray\(run\.artifacts\) \|\| run\.artifacts\.length !== 1\) \{\s*$/mu, "unique current-run artifact check"],
+    [/^ {10}if \(String\(run\.artifacts\[0\]\.id\) !== id \|\| run\.artifacts\[0\]\.name !== "github-pages"\) \{\s*$/mu, "current-run artifact identity binding"],
+    [/^ {12}"https:\/\/api\.github\.com\/repos\/\$GITHUB_REPOSITORY\/actions\/artifacts\/\$ARTIFACT_ID\/zip" \\\s*$/mu, "exact artifact ZIP request"],
+    [/^ {10}unzip -Z1 "\$archive" > "\$zip_inventory"\s*$/mu, "ZIP inventory"],
+    [/^ {10}test "\$\(wc -l < "\$zip_inventory"\)" -eq 1\s*$/mu, "single-member ZIP bound"],
+    [/^ {10}test "\$\(sed -n '1p' "\$zip_inventory"\)" = "artifact\.tar"\s*$/mu, "artifact.tar member identity"],
+    [/^ {10}unzip -p "\$archive" artifact\.tar > "\$artifact_tar"\s*$/mu, "streamed artifact.tar extraction"],
+    [/^ {10}max_members = 1024\s*$/mu, "tar member bound"],
+    [/^ {10}max_expanded_bytes = 128 \* 1024 \* 1024\s*$/mu, "tar expanded-byte bound"],
+    [/^ {10,}if not 1 <= len\(members\) <= max_members:\s*$/mu, "tar member-count enforcement"],
+    [/^ {10,}if any\(ord\(char\) < 32 or ord\(char\) == 127 for char in raw\):\s*$/mu, "tar control-character rejection"],
+    [/^ {10,}or selected\.is_absolute\(\)\s*$/mu, "tar absolute-path rejection"],
+    [/^ {10,}or normalized != name\s*$/mu, "tar normalized-path rejection"],
+    [/^ {10,}or "\.\." in selected\.parts\s*$/mu, "tar traversal rejection"],
+    [/^ {10,}or member\.issym\(\)\s*$/mu, "tar symbolic-link rejection"],
+    [/^ {10,}or member\.islnk\(\)\s*$/mu, "tar hard-link rejection"],
+    [/^ {10,}or not \(member\.isdir\(\) or member\.isreg\(\)\)\s*$/mu, "tar special-file rejection"],
+    [/^ {10,}if normalized in seen:\s*$/mu, "tar duplicate-path rejection"],
+    [/^ {10,}if total > max_expanded_bytes:\s*$/mu, "tar expanded-size enforcement"],
+    [/^ {10,}if site != target and site not in target\.parents:\s*$/mu, "tar extraction-root containment"],
+    [/^ {10,}with source, target\.open\("xb"\) as output:\s*$/mu, "exclusive artifact file creation"],
+  ]) requireWorkflowPatternV3(downloadStep, pattern, label);
+  if (/\bextractall\s*\(|\bunpack_archive\s*\(/u.test(downloadStep)) {
+    workflowContractFailV3("bulk archive extraction is forbidden");
+  }
+  if (/^\s*unzip\b[^\n]*\s-d(?:\s|$)/mu.test(downloadStep)) {
+    workflowContractFailV3("artifact ZIP must not be extracted directly");
+  }
+  requireWorkflowPatternV3(
+    downloadStep,
+    /^ {10}echo "SITE_ARTIFACT_ROOT=\$site" >> "\$GITHUB_ENV"\s*$/mu,
+    "extracted artifact root export",
+  );
+  requireWorkflowPatternV3(
+    deployJob,
+    /^ {10}--artifact-root "\$SITE_ARTIFACT_ROOT"\s*$/mu,
+    "predeploy verification of uploaded artifact bytes",
+  );
+
+  const deploymentStep = workflowStepByNameV3(
+    deployJob,
+    "Deploy exact validated Pages artifact",
+  );
+  const expectedDeploymentStep = [
+    "      - name: Deploy exact validated Pages artifact",
+    "        id: deployment",
+    "        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4",
+    "        with:",
+    "          artifact_name: github-pages",
+  ].join("\n");
+  if (deploymentStep !== expectedDeploymentStep) {
+    workflowContractFailV3("deploy-pages artifact identity contract drifted");
+  }
+  return workflowText;
 }
 
 function heldControl(control, label) {
@@ -347,6 +612,9 @@ export function validateSuccessorGraph({
       fail(`immutable V2 bytes drifted: ${file}.`);
     }
   }
+  validateWorkflowContractV3(
+    gitFile(root, candidateSha, WORKFLOW_PATH_V3).toString("utf8"),
+  );
   for (const file of V3_PROOF_IDENTITY_PATHS) {
     const candidateBlob = gitBlob(root, candidateSha, file);
     if (
