@@ -1,0 +1,36 @@
+# Final successor build ledger
+
+Candidate branch: `integration/final-successor-20260811`  
+Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
+Public placeholder: `50b13ce…`, deliberately unchanged  
+Status: FIN-001 in progress
+
+## Governing inputs
+
+| Input | SHA-256 |
+|---|---|
+| `/Users/fantaseamac/SITESOURCERY-FINISH-BUILD-PLAN-2026-08-11.md` | `b62255bdcea5f04882ac1b6bbb415069410c915858bb6a4b26fb3598fa28613c` |
+| `/Users/fantaseamac/SITESOURCERY-OWNER-DECISIONS-2026-08-11.md` | `1578917d244ba87503bd0f11f4d7d3c2c3b854abb274f5a588066ecb89df51d8` |
+
+The owner resolved the complete product questionnaire. Later owner approvals are limited to evidence-bound provider changes, final staging acceptance, public cutover, and eventual retirement of retained predecessors/evidence.
+
+## Work register
+
+| Work ID | State | Input | Approved scope | Required proof |
+|---|---|---|---|---|
+| FIN-000 | proved | Complete system map, cleanup ledger, owner decision ledger | Scope and authority decisions only | No unresolved questionnaire item |
+| FIN-001 | in-progress | Exact base `b03cccbd…` | Clean worktree, environment, dependency install, untouched baseline | Clean index, exact runtime identities, classified baseline result |
+| FIN-002 | pending | `a81d1438…` runtime/release paths | Phase 2.1 runtime and release controls | Focused release tests plus cumulative suite |
+| FIN-003 | pending | `a81d1438…` migrations 118–124 | Schema/repository foundation | Empty PostgreSQL migration proof |
+| FIN-004 | pending | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations | Per-cohort commits and proofs |
+| FIN-005 | pending | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition | No unclassified preserved lane |
+| FIN-006 | pending | Integrated source | Root composition and cross-system contracts | Capability/readiness/negative-auth matrix |
+| FIN-007 | pending | Canonical commercial source | Catalog/public/legal/artifact closure | One new version/digest and deterministic artifacts |
+| FIN-008 | pending | Candidate migration epoch | Empty and 201-table upgrade rehearsals | Convergent schema/data/restore invariants |
+| FIN-009 | pending | Clean candidate SHA | Private immutable staging | Installed readback and complete owner acceptance |
+| FIN-010 | pending | Accepted installed SHA | Production-held install and public cutover | Explicit owner approval and rollback-ready probes |
+
+## Ledger rule
+
+Every implementation commit must record its donor SHA, imported path allowlist, excluded overlaps, migrations, routes, capabilities, workers, provider purposes, focused tests, cumulative tests, and remaining blocker IDs. No archive branch or predecessor is deleted during this build.
+
