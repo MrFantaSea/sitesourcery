@@ -143,7 +143,7 @@ export function createCareSurfacesHttpBoundary({
       if (url.search || url.hash) return null;
       const route = matchCareSurfaceHttpRoute(request.method, url.pathname);
       if (!route) return null;
-      const actor = await authenticate(request);
+      const actor = await authenticate(request, route);
       invariant(
         actor !== null && actor !== undefined,
         "AUTHENTICATION_REQUIRED",
