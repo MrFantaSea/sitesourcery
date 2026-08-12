@@ -1,8 +1,13 @@
 # FIN-004H Care root provenance
 
 Date: 2026-08-12  
-State: implementation sealed; exact clean-tree cumulative proof pending  
+State: proved
 Candidate branch: `integration/final-successor-20260811`
+
+Proved implementation commit:
+`265758f69e680b3acbbfc84ba321453ffdc816d6`
+
+Proved tree: `f3bff865bf153b0b44b2d84dd5fb5dee39daace0`
 
 ## Authority and source
 
@@ -83,12 +88,26 @@ Node `24.18.0` focused run:
   regression suites;
 - syntax checks and `git diff --check` passed.
 
-The pre-commit complete `npm test` run proved all 792 application tests with
+The pre-commit complete `npm test` run proved all 792 hosted-service tests with
 782 passes and 10 intentional skips. Operations proved 201/205; the four
 remaining install dry-run assertions rejected only because the implementation
-worktree was intentionally dirty. That is the expected release-control
-behavior. The exact clean-tree run is required immediately after this commit
-and will replace this pending state with its final evidence.
+worktree was intentionally dirty. That was the expected release-control
+behavior.
+
+The immediate clean-tree rerun at the exact implementation commit and tree
+listed above completed with exit `0`:
+
+- the entire `npm test` command ladder passed;
+- the hosted-service suite again reported 782 passes, zero failures, and 10
+  intentional skips from 792 tests;
+- operations reported 205/205 passes;
+- the Pages artifact rebuilt and verified 90 explicitly reviewed files;
+- the hosted artifact rebuilt and passed HTML validation;
+- the browser audit passed 15 hosted routes at 320x720, 390x844, and
+  1440x1000.
+
+The worktree was clean before this exact run. No provider, network, public
+route, database, predecessor, or adjacent-system mutation was performed.
 
 ## Remaining blockers
 
