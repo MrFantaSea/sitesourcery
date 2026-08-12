@@ -152,6 +152,118 @@ async function requireOperator(client, userId) {
   );
 }
 
+async function ingestVerifiedEvent(client, input) {
+  await client.query(
+    "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+    [`${input.provider}:${input.providerEventIdDigest}`]
+  );
+  const prior = await client.query(
+    `select * from ss.responder_provider_events
+      where command_id = $1
+         or (provider = $2 and provider_event_id_digest = $3)`,
+    [input.commandId, input.provider, input.providerEventIdDigest]
+  );
+  if (prior.rowCount > 0) {
+    invariant(
+      prior.rowCount === 1 &&
+        prior.rows[0].command_id === input.commandId &&
+        prior.rows[0].request_digest === input.requestDigest,
+      "RESPONDER_CORE_IDEMPOTENCY_CONFLICT",
+      "Responder provider evidence was reused for different facts.",
+      { status: 409 }
+    );
+    return providerEvent(prior.rows[0], true);
+  }
+  await client.query(
+    `insert into ss.responder_runtime_controls (
+       organization_id, global_kill_engaged, state,
+       revision, created_at, updated_at
+     ) values ($1, true, 'held', 1, $2, $2)
+     on conflict (organization_id) do nothing`,
+    [input.organizationId, input.recordedAt]
+  );
+  const contactAuthority = await client.query(
+    `select * from ss.responder_contact_authorities
+      where organization_id = $1 and project_id = $2
+        and route_digest = $3 and state = 'active'
+        and ($4::uuid is null or id = $4)
+      order by consented_at desc, id desc limit 1 for update`,
+    [
+      input.organizationId,
+      input.projectId,
+      input.routeDigest,
+      input.contactAuthorityId ?? null
+    ]
+  );
+  const contact = contactAuthority.rows[0] ?? null;
+  invariant(
+    input.contactAuthorityId === undefined || contact !== null,
+    "RESPONDER_CORE_UNAVAILABLE",
+    "Responder contact authority is unavailable.",
+    { status: 404 }
+  );
+  if (input.messageIntent === "stop" && contact) {
+    await client.query(
+      `update ss.responder_contact_authorities
+          set state = 'opted_out', opted_out_at = $2,
+              opt_out_evidence_digest = $3,
+              revision = revision + 1, updated_at = $4
+        where id = $1`,
+      [
+        contact.id,
+        input.occurredAt,
+        input.evidenceDigest,
+        input.recordedAt
+      ]
+    );
+  }
+  const interactionState = input.messageIntent === "stop"
+    ? "opted_out"
+    : contact === null || input.messageIntent !== "not_applicable"
+      ? "handoff_required"
+      : "open";
+  const handoffReason = interactionState === "handoff_required"
+    ? contact === null ? "missing_authority" :
+      input.messageIntent === "handoff" ? "customer_request" :
+        "uncertain_intent"
+    : null;
+  const interactionId = systemRandomUUID();
+  await client.query(
+    `insert into ss.responder_interactions (
+       id, organization_id, project_id, contact_authority_id,
+       route_digest, source_kind, state, handoff_reason,
+       opened_at, last_event_at, revision, created_at, updated_at
+     ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10, $10)`,
+    [
+      interactionId, input.organizationId, input.projectId,
+      contact?.id ?? null, input.routeDigest, input.eventKind,
+      interactionState, handoffReason, input.occurredAt,
+      input.recordedAt
+    ]
+  );
+  const inserted = await client.query(
+    `insert into ss.responder_provider_events (
+       id, command_id, request_digest, organization_id, project_id,
+       interaction_id, provider, provider_event_id_digest,
+       route_digest, event_kind, message_intent, payload_digest,
+       signature_verification_digest, evidence_digest,
+       state, occurred_at, recorded_at, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+       $13, $14, 'applied', $15, $16, $16
+     ) returning *`,
+    [
+      systemRandomUUID(), input.commandId, input.requestDigest,
+      input.organizationId, input.projectId, interactionId,
+      input.provider, input.providerEventIdDigest, input.routeDigest,
+      input.eventKind, input.messageIntent, input.payloadDigest,
+      input.signatureVerificationDigest, input.evidenceDigest,
+      input.occurredAt, input.recordedAt
+    ]
+  );
+  return providerEvent(inserted.rows[0]);
+}
+
 async function priorByCommand(client, table, commandId) {
   const selected = await client.query(
     `select * from ss.${table} where command_id = $1`,
@@ -277,106 +389,49 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
           organizationId: input.organizationId,
           isolation: "serializable"
         },
-        async (client) => {
-          await client.query(
-            "select pg_advisory_xact_lock(hashtextextended($1, 0))",
-            [`${input.provider}:${input.providerEventIdDigest}`]
-          );
-          const prior = await client.query(
-            `select * from ss.responder_provider_events
-              where command_id = $1
-                 or (provider = $2 and provider_event_id_digest = $3)`,
-            [input.commandId, input.provider, input.providerEventIdDigest]
-          );
-          if (prior.rowCount > 0) {
-            invariant(
-              prior.rowCount === 1 &&
-                prior.rows[0].command_id === input.commandId &&
-                prior.rows[0].request_digest === input.requestDigest,
-              "RESPONDER_CORE_IDEMPOTENCY_CONFLICT",
-              "Responder provider evidence was reused for different facts.",
-              { status: 409 }
-            );
-            return providerEvent(prior.rows[0], true);
-          }
-          await client.query(
-            `insert into ss.responder_runtime_controls (
-               organization_id, global_kill_engaged, state,
-               revision, created_at, updated_at
-             ) values ($1, true, 'held', 1, $2, $2)
-             on conflict (organization_id) do nothing`,
-            [input.organizationId, input.recordedAt]
-          );
-          const authority = await client.query(
-            `select * from ss.responder_contact_authorities
-              where organization_id = $1 and project_id = $2
-                and route_digest = $3 and state = 'active'
-              order by consented_at desc, id desc limit 1 for update`,
-            [input.organizationId, input.projectId, input.routeDigest]
-          );
-          const contactAuthority = authority.rows[0] ?? null;
-          if (input.messageIntent === "stop" && contactAuthority) {
-            await client.query(
-              `update ss.responder_contact_authorities
-                  set state = 'opted_out', opted_out_at = $2,
-                      opt_out_evidence_digest = $3,
-                      revision = revision + 1, updated_at = $4
-                where id = $1`,
+        (client) => ingestVerifiedEvent(client, input)
+      ));
+    },
+
+    recordStop(selectedActor, input) {
+      return translated(async () => {
+        await database.service(
+          serviceActor(selectedActor),
+          async (client) => {
+            if (selectedActor.kind === "operator") {
+              await requireOperator(client, selectedActor.userId);
+            }
+            const contactAuthority = await client.query(
+              `select id from ss.responder_contact_authorities
+                where id = $1 and organization_id = $2 and project_id = $3
+                  and route_digest = $4 and state in ('active', 'opted_out')
+                  and ($5::text = 'operator' or customer_user_id = $6)`,
               [
-                contactAuthority.id,
-                input.occurredAt,
-                input.evidenceDigest,
-                input.recordedAt
+                input.contactAuthorityId,
+                input.organizationId,
+                input.projectId,
+                input.routeDigest,
+                selectedActor.kind,
+                selectedActor.userId
               ]
             );
+            invariant(
+              contactAuthority.rowCount === 1,
+              "RESPONDER_CORE_UNAVAILABLE",
+              "Responder contact authority is unavailable.",
+              { status: 404 }
+            );
           }
-          const interactionState = input.messageIntent === "stop"
-            ? "opted_out"
-            : contactAuthority === null || input.messageIntent !== "not_applicable"
-              ? "handoff_required"
-              : "open";
-          const handoffReason = interactionState === "handoff_required"
-            ? contactAuthority === null ? "missing_authority" :
-              input.messageIntent === "handoff" ? "customer_request" :
-                "uncertain_intent"
-            : null;
-          const interactionId = systemRandomUUID();
-          await client.query(
-            `insert into ss.responder_interactions (
-               id, organization_id, project_id, contact_authority_id,
-               route_digest, source_kind, state, handoff_reason,
-               opened_at, last_event_at, revision, created_at, updated_at
-             ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9, 1, $10, $10)`,
-            [
-              interactionId, input.organizationId, input.projectId,
-              contactAuthority?.id ?? null, input.routeDigest, input.eventKind,
-              interactionState, handoffReason, input.occurredAt,
-              input.recordedAt
-            ]
-          );
-          const inserted = await client.query(
-            `insert into ss.responder_provider_events (
-               id, command_id, request_digest, organization_id, project_id,
-               interaction_id, provider, provider_event_id_digest,
-               route_digest, event_kind, message_intent, payload_digest,
-               signature_verification_digest, evidence_digest,
-               state, occurred_at, recorded_at, created_at
-             ) values (
-               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-               $13, $14, 'applied', $15, $16, $16
-             ) returning *`,
-            [
-              systemRandomUUID(), input.commandId, input.requestDigest,
-              input.organizationId, input.projectId, interactionId,
-              input.provider, input.providerEventIdDigest, input.routeDigest,
-              input.eventKind, input.messageIntent, input.payloadDigest,
-              input.signatureVerificationDigest, input.evidenceDigest,
-              input.occurredAt, input.recordedAt
-            ]
-          );
-          return providerEvent(inserted.rows[0]);
-        }
-      ));
+        );
+        return database.service(
+          {
+            actorKind: "system",
+            organizationId: input.organizationId,
+            isolation: "serializable"
+          },
+          (client) => ingestVerifiedEvent(client, input)
+        );
+      });
     },
 
     reserveHeldMessage(selectedActor, input) {

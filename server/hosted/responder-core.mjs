@@ -196,6 +196,44 @@ function normalizeEvent(input, verified, recordedAt) {
   return requestFact(selected, recordedAt);
 }
 
+function normalizeStop(input, verified, recordedAt) {
+  exactObject(input, [
+    "commandId", "contactAuthorityId", "occurredAt", "organizationId",
+    "payloadDigest", "projectId", "providerEventIdDigest", "routeDigest"
+  ], "Responder authenticated STOP");
+  invariant(
+    verified.messageIntent === "stop",
+    "RESPONDER_CORE_CONFIGURATION_REQUIRED",
+    "The held Responder STOP verifier is invalid.",
+    { status: 500 }
+  );
+  return requestFact({
+    schema: RESPONDER_PROVIDER_EVENT_SCHEMA,
+    commandId: commandId(input.commandId),
+    organizationId: uuid(input.organizationId, "Organization ID"),
+    projectId: uuid(input.projectId, "Project ID"),
+    contactAuthorityId: uuid(
+      input.contactAuthorityId,
+      "Contact authority ID"
+    ),
+    provider: verified.provider,
+    providerEventIdDigest: sha256(
+      input.providerEventIdDigest,
+      "Provider event ID digest"
+    ),
+    routeDigest: sha256(input.routeDigest, "Contact route digest"),
+    eventKind: "message_received",
+    messageIntent: "stop",
+    payloadDigest: sha256(input.payloadDigest, "Provider payload digest"),
+    signatureVerificationDigest: sha256(
+      verified.signatureVerificationDigest,
+      "Signature verification digest"
+    ),
+    evidenceDigest: sha256(verified.evidenceDigest, "Provider evidence digest"),
+    occurredAt: instant(input.occurredAt, "Provider event time")
+  }, recordedAt);
+}
+
 function normalizeHeldMessage(input, recordedAt) {
   exactObject(input, [
     "commandId", "contactAuthorityId", "contentDigest", "interactionId",
@@ -287,6 +325,14 @@ export function createFakeResponderProvider({
         signatureVerificationDigest,
         evidenceDigest
       });
+    },
+    verifyStop() {
+      return deepFreeze({
+        provider,
+        messageIntent: "stop",
+        signatureVerificationDigest,
+        evidenceDigest
+      });
     }
   });
 }
@@ -295,11 +341,13 @@ export function createResponderCore({ repository, provider, clock } = {}) {
   invariant(
     repository && [
       "readiness", "recordConsent", "ingestProviderEvent",
-      "reserveHeldMessage", "requestHandoff", "engageGlobalKill",
+      "recordStop", "reserveHeldMessage", "requestHandoff", "engageGlobalKill",
       "accountProjection", "operatorProjection"
     ].every((name) => typeof repository[name] === "function") &&
       provider?.kind === "responder-fake-provider" &&
-      provider.effects === false,
+      provider.effects === false &&
+      typeof provider.verifyEvent === "function" &&
+      typeof provider.verifyStop === "function",
     "RESPONDER_CORE_CONFIGURATION_REQUIRED",
     "Responder requires durable storage and the deterministic fake provider.",
     { status: 500 }
@@ -334,6 +382,14 @@ export function createResponderCore({ repository, provider, clock } = {}) {
       const verified = provider.verifyEvent(input);
       return repository.ingestProviderEvent(
         normalizeEvent(input, verified, currentTime(clock))
+      );
+    },
+    recordStop(selectedActor, input) {
+      const selected = actor(selectedActor);
+      const verified = provider.verifyStop(input);
+      return repository.recordStop(
+        selected,
+        normalizeStop(input, verified, currentTime(clock))
       );
     },
     reserveHeldMessage(selectedActor, input) {
@@ -389,6 +445,7 @@ export function createHeldResponderCore() {
     }),
     recordConsent: held,
     ingestProviderEvent: held,
+    recordStop: held,
     reserveHeldMessage: held,
     requestHandoff: held,
     engageGlobalKill: held,

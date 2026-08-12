@@ -22,7 +22,7 @@ function repository() {
   const calls = [];
   const selected = {};
   for (const name of [
-    "recordConsent", "ingestProviderEvent", "reserveHeldMessage",
+    "recordConsent", "ingestProviderEvent", "recordStop", "reserveHeldMessage",
     "requestHandoff", "engageGlobalKill", "accountProjection",
     "operatorProjection"
   ]) {
@@ -127,6 +127,21 @@ test("fake provider deterministically classifies STOP without accepting content"
   assert.equal(normalized.messageIntent, "stop");
   assert.equal(normalized.provider, "fake");
   assert.equal(normalized.schema, "sitesourcery.responder-provider-event/v1");
+
+  service.recordStop(customer(), {
+    commandId: "responder-authenticated-stop-001",
+    organizationId: IDS.organization,
+    projectId: IDS.project,
+    contactAuthorityId: IDS.authority,
+    providerEventIdDigest: "4".repeat(64),
+    routeDigest: "2".repeat(64),
+    payloadDigest: "5".repeat(64),
+    occurredAt: TIME
+  });
+  const authenticated = storage.calls.at(-1);
+  assert.equal(authenticated.name, "recordStop");
+  assert.equal(authenticated.args[1].messageIntent, "stop");
+  assert.equal(authenticated.args[1].contactAuthorityId, IDS.authority);
 });
 
 test("global kill is operator-only and handoff is revision-bound", () => {

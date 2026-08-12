@@ -1,0 +1,19 @@
+.responder-surface{display:grid;min-width:0;gap:1rem;padding:clamp(1rem,3vw,1.5rem);border:1px solid rgba(185,152,255,.34);border-radius:1rem;background:linear-gradient(145deg,rgba(185,152,255,.08),rgba(25,16,35,.78));color:var(--spark-text,#f8f4ff)}
+.responder-surface-heading,.responder-surface-card h3{margin:0;overflow-wrap:anywhere;line-height:1.15}
+.responder-surface-heading{font-size:clamp(1.35rem,5vw,2rem)}
+.responder-surface-summary,.responder-surface-hold,.responder-surface-meta{margin:0;overflow-wrap:anywhere;line-height:1.55;color:var(--spark-muted,#c8bed4)}
+.responder-surface-hold{padding:.8rem .9rem;border-left:3px solid var(--spark-gold,#f1cf89);background:rgba(241,207,137,.07);color:var(--spark-gold,#f1cf89)}
+.responder-surface-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;margin:0}
+.responder-surface-metric,.responder-surface-card{min-width:0;padding:.85rem;border:1px solid rgba(255,255,255,.13);border-radius:.8rem;background:rgba(255,255,255,.025)}
+.responder-surface-metric dt{font-size:.76rem;font-weight:850;letter-spacing:.06em;text-transform:uppercase;color:var(--spark-muted,#c8bed4)}
+.responder-surface-metric dd{margin:.2rem 0 0;overflow-wrap:anywhere;font-size:1.2rem;font-weight:850;color:var(--spark-mint,#82e7c4)}
+.responder-surface-grid{display:grid;min-width:0;grid-template-columns:repeat(auto-fit,minmax(min(100%,18rem),1fr));gap:.85rem}
+.responder-surface-card{display:grid;gap:.7rem}
+.responder-surface-events{display:grid;gap:.45rem;margin:0;padding:0;list-style:none}
+.responder-surface-events li{min-width:0;padding:.6rem .7rem;border-radius:.65rem;background:rgba(255,255,255,.045);overflow-wrap:anywhere}
+.responder-surface-controls{display:flex;flex-wrap:wrap;gap:.65rem}
+.responder-surface-action{min-height:44px;flex:1 1 12rem;padding:.65rem .8rem;border:1px solid var(--spark-mint,#82e7c4);border-radius:.65rem;background:rgba(130,231,196,.1);color:inherit;font:inherit;font-weight:800;cursor:pointer}
+.responder-surface-action:focus-visible{outline:3px solid var(--spark-gold,#f1cf89);outline-offset:3px}
+.responder-surface-action:disabled{cursor:not-allowed;opacity:.62}
+@media(max-width:36rem){.responder-surface-metrics{grid-template-columns:1fr}.responder-surface{padding:1rem}.responder-surface-grid{grid-template-columns:1fr}.responder-surface-controls{display:grid}}
+@media(prefers-reduced-motion:reduce){.responder-surface *{scroll-behavior:auto!important;transition:none!important}}
