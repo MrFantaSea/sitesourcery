@@ -505,6 +505,34 @@ function exactReceipts(value) {
   });
 }
 
+function exactInvoiceFinalization(value) {
+  if (value === null) return null;
+  exactKeys(
+    value,
+    [
+      "attentionRequired",
+      "fulfillmentHeld",
+      "messageCode",
+      "renewalHeld",
+      "state"
+    ],
+    "invoiceFinalization"
+  );
+  invariant(
+    ["failed", "recovered"].includes(value.state) &&
+      value.attentionRequired === (value.state === "failed") &&
+      value.fulfillmentHeld === (value.state === "failed") &&
+      value.renewalHeld === (value.state === "failed") &&
+      value.messageCode === (value.state === "failed"
+        ? "alakazam_invoice_preparation_attention"
+        : "alakazam_invoice_preparation_current"),
+    "repository_conflict",
+    "the customer invoice preparation state changed",
+    { status: 500 }
+  );
+  return deepFreeze(clone(value));
+}
+
 function exactRepositorySite(value, scope, catalog) {
   exactKeys(
     value,
@@ -683,8 +711,11 @@ function exactRepositorySite(value, scope, catalog) {
   });
 }
 
-function accountState(subscription) {
+function accountState(subscription, invoiceFinalization) {
   if (!subscription) return "available";
+  if (invoiceFinalization?.attentionRequired === true) {
+    return "attention_required";
+  }
   if (subscription.status === "pending") {
     return "activation_pending";
   }
@@ -697,7 +728,7 @@ function accountState(subscription) {
   return "active";
 }
 
-function nextRenewal(subscription, pendingChange) {
+function nextRenewal(subscription, pendingChange, invoiceFinalization) {
   if (
     !subscription ||
     !subscription.currentPeriod ||
@@ -716,9 +747,8 @@ function nextRenewal(subscription, pendingChange) {
     amountMinor: scheduledTier.price.amountMinor,
     currency: "USD",
     dueAt: subscription.currentPeriod.endsAt,
-    state: ["grace", "suspended"].includes(
-      subscription.status
-    )
+    state: invoiceFinalization?.renewalHeld === true ||
+      ["grace", "suspended"].includes(subscription.status)
       ? "attention_required"
       : "scheduled"
   });
@@ -728,7 +758,8 @@ function tierChangeAvailable(
   subscription,
   pendingChange,
   catalog,
-  site
+  site,
+  invoiceFinalization
 ) {
   return Boolean(
     subscription &&
@@ -737,6 +768,7 @@ function tierChangeAvailable(
       subscription.currentPeriod !== null &&
       subscription.cancelAtPeriodEnd === false &&
       pendingChange === null &&
+      invoiceFinalization?.attentionRequired !== true &&
       site.state === "live" &&
       catalog.tiers.some(
         (tier) => tier.rank !== subscription.tier.rank
@@ -749,6 +781,7 @@ function exactRepositorySnapshot(value, scope) {
     value,
     [
       "downloadCreditAvailable",
+      "invoiceFinalization",
       "pendingChange",
       "projectId",
       "receipts",
@@ -793,6 +826,9 @@ export function createAlakazamAccountService({
         stored.pendingChange,
         catalog
       );
+      const invoiceFinalization = exactInvoiceFinalization(
+        stored.invoiceFinalization
+      );
       const site = exactRepositorySite(
         stored.site,
         scope,
@@ -815,7 +851,8 @@ export function createAlakazamAccountService({
         subscription,
         pendingChange,
         catalog,
-        site
+        site,
+        invoiceFinalization
       );
       const actionReason =
         site.state === "setup_required" &&
@@ -835,7 +872,7 @@ export function createAlakazamAccountService({
       return deepFreeze({
         schema: ALAKAZAM_ACCOUNT_SCHEMA,
         projectId: scope.projectId,
-        state: accountState(subscription),
+        state: accountState(subscription, invoiceFinalization),
         catalog: clone(catalog),
         downloadCredit: {
           available: downloadCreditAvailable,
@@ -845,10 +882,12 @@ export function createAlakazamAccountService({
           currency: "USD"
         },
         subscription,
+        invoiceFinalization,
         pendingChange,
         nextRenewal: nextRenewal(
           subscription,
-          pendingChange
+          pendingChange,
+          invoiceFinalization
         ),
         site,
         receipts: exactReceipts(stored.receipts),

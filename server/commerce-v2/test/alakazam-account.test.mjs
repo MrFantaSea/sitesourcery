@@ -73,6 +73,7 @@ function stored(overrides = {}) {
   const snapshot = {
     projectId: PROJECT_ID,
     downloadCreditAvailable: false,
+    invoiceFinalization: null,
     subscription: null,
     pendingChange: null,
     receipts: [],
@@ -589,6 +590,34 @@ test("billing attention and cancellation suppress an invented renewal", async ()
   );
   assert.equal(result.pendingChange.targetTier, null);
   assert.equal(result.nextRenewal, null);
+});
+
+test("an open invoice preparation hold is customer-safe and blocks renewal and tier change", async () => {
+  const context = service(stored({
+    subscription: activeSubscription(),
+    invoiceFinalization: {
+      state: "failed",
+      attentionRequired: true,
+      renewalHeld: true,
+      fulfillmentHeld: true,
+      messageCode: "alakazam_invoice_preparation_attention"
+    }
+  }));
+  const result = await context.account.read(scope());
+  assert.equal(result.state, "attention_required");
+  assert.deepEqual(result.invoiceFinalization, {
+    state: "failed",
+    attentionRequired: true,
+    renewalHeld: true,
+    fulfillmentHeld: true,
+    messageCode: "alakazam_invoice_preparation_attention"
+  });
+  assert.equal(result.nextRenewal.state, "attention_required");
+  assert.equal(result.actions.changeTier, false);
+  assert.doesNotMatch(
+    JSON.stringify(result.invoiceFinalization),
+    /stripe|invoiceId|digest|provider/iu
+  );
 });
 
 test("account projection rejects cross-customer scope and malformed durable money", async () => {
