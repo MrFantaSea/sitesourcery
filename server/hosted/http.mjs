@@ -88,6 +88,11 @@ import {
   RESEND_MAIL_EVENT_PATH
 } from "./resend-mail-events-http.mjs";
 import {
+  createHeldTwilioResponderEventsHttpAdapter,
+  TWILIO_RESPONDER_EVENT_MAXIMUM_BYTES,
+  TWILIO_RESPONDER_EVENT_PATH
+} from "./twilio-responder-events-http.mjs";
+import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
 import {
@@ -521,6 +526,40 @@ async function readRawResendWebhook(request, maximumBytes) {
   return bytes;
 }
 
+async function readRawTwilioResponderEvent(request, maximumBytes) {
+  invariant(
+    /^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
+      String(request.headers.get("content-type") ?? "").trim()
+    ),
+    "UNSUPPORTED_MEDIA_TYPE",
+    "The Twilio callback requires form-encoded request bytes.",
+    { status: 415 }
+  );
+  const declared = declaredBodyLength(request, maximumBytes);
+  const bytes = await readBoundedBytes(request, maximumBytes);
+  invariant(
+    bytes.byteLength > 0 && bytes.byteLength <= maximumBytes &&
+      (declared === null || declared === bytes.byteLength),
+    bytes.byteLength === 0
+      ? "TWILIO_RESPONDER_EVENT_BODY_REQUIRED"
+      : declared !== null && declared !== bytes.byteLength
+        ? "INVALID_CONTENT_LENGTH"
+        : "REQUEST_TOO_LARGE",
+    bytes.byteLength === 0
+      ? "The Twilio callback body is required."
+      : declared !== null && declared !== bytes.byteLength
+        ? "Content-Length does not match the request body."
+        : "Request body is too large.",
+    {
+      status: bytes.byteLength === 0 ||
+        (declared !== null && declared !== bytes.byteLength)
+        ? 400
+        : 413
+    }
+  );
+  return bytes;
+}
+
 function exactResendWebhookAcknowledgement(response) {
   invariant(
     response !== null &&
@@ -557,6 +596,40 @@ function exactResendWebhookAcknowledgement(response) {
       ),
     "RESEND_WEBHOOK_HTTP_DURABILITY_REQUIRED",
     "HTTP success requires an exact durable Resend event acknowledgement.",
+    { status: 503, details: { providerEffects: false } }
+  );
+  return response.body;
+}
+
+function exactTwilioResponderEventAcknowledgement(response) {
+  invariant(
+    response && typeof response === "object" && !Array.isArray(response) &&
+      Object.getPrototypeOf(response) === Object.prototype &&
+      response.status === 200 &&
+      response.body && typeof response.body === "object" &&
+      !Array.isArray(response.body) &&
+      Object.getPrototypeOf(response.body) === Object.prototype &&
+      JSON.stringify(Object.keys(response.body).sort()) === JSON.stringify([
+        "attentionRequired", "currentStatus", "eventState",
+        "messageStatus", "received"
+      ]) &&
+      response.body.received === true &&
+      ["pending", "applied", "stale", "conflict"]
+        .includes(response.body.eventState) &&
+      [
+        "queued", "sending", "sent", "delivered",
+        "undelivered", "failed", "canceled"
+      ].includes(response.body.messageStatus) &&
+      (
+        response.body.currentStatus === null ||
+        [
+          "accepted", "queued", "sending", "sent", "delivered",
+          "undelivered", "failed", "canceled"
+        ].includes(response.body.currentStatus)
+      ) &&
+      typeof response.body.attentionRequired === "boolean",
+    "TWILIO_RESPONDER_EVENT_HTTP_DURABILITY_REQUIRED",
+    "HTTP success requires an exact durable Twilio callback acknowledgement.",
     { status: 503, details: { providerEffects: false } }
   );
   return response.body;
@@ -732,6 +805,7 @@ export function createHostedApi(
     operatorWorkQueue = null,
     supportCases = null,
     resendMailEvents = null,
+    twilioResponderEvents = null,
     stripeWebhook = null,
     capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
@@ -871,6 +945,18 @@ export function createHostedApi(
       typeof resendMailEventHttpBoundary.handle === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Resend mail-event ingress is invalid.",
+    { status: 500 }
+  );
+  const twilioResponderEventHttpBoundary = twilioResponderEvents ??
+    createHeldTwilioResponderEventsHttpAdapter();
+  invariant(
+    twilioResponderEventHttpBoundary?.kind ===
+        "twilio-responder-events-http-adapter" &&
+      twilioResponderEventHttpBoundary.providerEffects === false &&
+      typeof twilioResponderEventHttpBoundary.readiness === "function" &&
+      typeof twilioResponderEventHttpBoundary.handle === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Twilio Responder callback ingress is invalid.",
     { status: 500 }
   );
   const customServicesAssessmentWorkBoundary =
@@ -1181,6 +1267,7 @@ export function createHostedApi(
           alakazamRetainedPremiumReadiness,
           alakazamPublicationReadiness,
           resendMailEventReadiness,
+          twilioResponderEventReadiness,
           careReadiness,
           responderReadiness
         ] = await Promise.all([
@@ -1197,6 +1284,7 @@ export function createHostedApi(
           alakazamRetainedPremiumBoundary.readiness(),
           alakazamPublicationBoundary.readiness(),
           resendMailEventHttpBoundary.readiness(),
+          twilioResponderEventHttpBoundary.readiness(),
           careSurfaces === null
             ? {
                 ready: false,
@@ -1252,6 +1340,10 @@ export function createHostedApi(
           mailProviderEvents:
             resendMailEventReadiness?.ready === true &&
             resendMailEventReadiness?.verified === true,
+          responderProviderEvents:
+            twilioResponderEventReadiness?.ready === true &&
+            twilioResponderEventReadiness?.verified === true &&
+            twilioResponderEventReadiness?.providerEffects === false,
           care:
             careReadiness?.ready === true &&
             careReadiness?.verified === true &&
@@ -1454,6 +1546,32 @@ export function createHostedApi(
           return json(exactResendWebhookAcknowledgement(response), 200, {
             "X-Request-Id": requestId
           });
+        }
+
+        if (pathname === TWILIO_RESPONDER_EVENT_PATH) {
+          invariant(
+            method === "POST",
+            "METHOD_NOT_ALLOWED",
+            "The Twilio Responder callback requires POST.",
+            { status: 405 }
+          );
+          const response = await twilioResponderEventHttpBoundary.handle({
+            method,
+            pathname,
+            headers: request.headers,
+            rawBody: await readRawTwilioResponderEvent(
+              request,
+              Math.min(
+                ingress.body.webhookBytes,
+                TWILIO_RESPONDER_EVENT_MAXIMUM_BYTES
+              )
+            )
+          });
+          return json(
+            exactTwilioResponderEventAcknowledgement(response),
+            200,
+            { "X-Request-Id": requestId }
+          );
         }
 
         if (careSurfacesHttpBoundary !== null) {

@@ -13,6 +13,7 @@ const NAMES = Object.freeze([
   "retained",
   "publication",
   "mailEvents",
+  "responderEvents",
   "care",
   "responder"
 ]);
@@ -29,6 +30,7 @@ const EXPECTED = Object.freeze({
   alakazamRetainedPremium: true,
   alakazamPublication: true,
   mailProviderEvents: true,
+  responderProviderEvents: true,
   care: true,
   responder: true,
   domainPurchase: true,
@@ -135,6 +137,19 @@ function apiFixture({
       readiness: counted("mailEvents", {
         ready: true,
         verified: true
+      }),
+      async handle() {
+        throw new Error("not reached");
+      }
+    },
+    twilioResponderEvents: {
+      kind: "twilio-responder-events-http-adapter",
+      mode: "raw-form",
+      providerEffects: false,
+      readiness: counted("responderEvents", {
+        ready: true,
+        verified: true,
+        providerEffects: false
       }),
       async handle() {
         throw new Error("not reached");

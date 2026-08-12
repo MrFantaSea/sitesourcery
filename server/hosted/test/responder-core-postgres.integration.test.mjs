@@ -20,6 +20,8 @@ import { createPostgresResponderPrivateMaterialResolver } from
   "../responder-private-material-postgres.mjs";
 import { createResponderPrivateMaterialVault } from
   "../responder-private-material-vault.mjs";
+import { createPostgresTwilioResponderEventsRepository } from
+  "../twilio-responder-events-postgres.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 import { digest } from "../security.mjs";
 
@@ -337,6 +339,36 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
     assert.equal(materialReceipt.state, "active");
     assert.equal(materialReceipt.providerEffects, false);
 
+    const providerMessageIdDigest = "7".repeat(64);
+    const providerEvents = createPostgresTwilioResponderEventsRepository({
+      authority
+    });
+    assert.equal((await providerEvents.readiness()).ready, true);
+    function deliveryEvent(messageStatus, receivedAt) {
+      const input = {
+        provider: "twilio",
+        providerMessageIdDigest,
+        accountSidDigest: "6".repeat(64),
+        messageStatus,
+        errorCodeDigest: null,
+        signatureVerificationDigest: digest(
+          `twilio-signature:${messageStatus}`
+        ),
+        payloadDigest: digest(`twilio-payload:${messageStatus}`),
+        receivedAt
+      };
+      return {
+        ...input,
+        providerEventDigest: input.payloadDigest
+      };
+    }
+    const callbackBeforeAcceptance = deliveryEvent("delivered", selectedNow);
+    assert.equal(
+      (await providerEvents.ingestDeliveryStatus(callbackBeforeAcceptance))
+        .eventState,
+      "pending"
+    );
+
     const fulfillmentRepository =
       createPostgresResponderFulfillmentRepository({ authority });
     assert.equal((await fulfillmentRepository.readiness()).ready, true);
@@ -354,6 +386,7 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
             status: "accepted",
             provider: "twilio",
             idempotencyKey: input.idempotencyKey,
+            providerMessageIdDigest,
             providerReceiptDigest: "8".repeat(64),
             acceptedAt: new Date(
               Date.parse(selectedNow) + 1
@@ -373,6 +406,7 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
     const acceptedOperation = await pool.query(
       `select operation.state, operation.attempt_count,
               operation.provider, operation.provider_receipt_digest,
+              operation.provider_message_id_digest,
               count(event.id)::integer as events
          from ss.responder_delivery_operations operation
          join ss.responder_delivery_operation_events event
@@ -385,9 +419,47 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       state: "accepted",
       attempt_count: 1,
       provider: "twilio",
+      provider_message_id_digest: "7".repeat(64),
       provider_receipt_digest: "8".repeat(64),
       events: 3
     });
+    const reconciledBeforeAcceptance = await pool.query(
+      `select event.event_state, projection.current_status,
+              projection.terminal, projection.attention_required
+         from ss.responder_delivery_provider_events event
+         join ss.responder_delivery_provider_statuses projection
+           on projection.operation_id = event.operation_id
+        where event.provider_event_digest = $1`,
+      [callbackBeforeAcceptance.providerEventDigest]
+    );
+    assert.deepEqual(reconciledBeforeAcceptance.rows[0], {
+      event_state: "applied",
+      current_status: "delivered",
+      terminal: true,
+      attention_required: false
+    });
+    assert.equal(
+      (await providerEvents.ingestDeliveryStatus(callbackBeforeAcceptance))
+        .replayed,
+      true
+    );
+    const staleSent = await providerEvents.ingestDeliveryStatus(
+      deliveryEvent(
+        "sent",
+        new Date(Date.parse(selectedNow) + 2).toISOString()
+      )
+    );
+    assert.equal(staleSent.eventState, "stale");
+    assert.equal(staleSent.currentStatus, "delivered");
+    const conflictingFailure = await providerEvents.ingestDeliveryStatus(
+      deliveryEvent(
+        "failed",
+        new Date(Date.parse(selectedNow) + 3).toISOString()
+      )
+    );
+    assert.equal(conflictingFailure.eventState, "conflict");
+    assert.equal(conflictingFailure.currentStatus, "delivered");
+    assert.equal(conflictingFailure.attentionRequired, true);
 
     selectedNow = new Date(Date.now() + 15).toISOString();
     const handoff = await service.requestHandoff(customer, {

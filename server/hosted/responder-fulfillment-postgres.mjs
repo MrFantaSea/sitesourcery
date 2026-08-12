@@ -188,16 +188,23 @@ export function createPostgresResponderFulfillmentRepository({
                ) is not null
                and ss.hosted_responder_private_material_contract_v1() =
                  'canonical-responder-private-material-v1-operation-bound-aes-gcm'
+               and to_regprocedure(
+                 'ss.hosted_responder_twilio_delivery_events_contract_v1()'
+               ) is not null
+               and ss.hosted_responder_twilio_delivery_events_contract_v1() =
+                 'canonical-responder-twilio-delivery-events-v1-digest-only-race-safe'
                  as contract_ready,
                count(*) filter (
                  where relation.relname in (
                    'responder_delivery_operations',
                    'responder_delivery_operation_events',
-                   'responder_private_delivery_materials'
+                   'responder_private_delivery_materials',
+                   'responder_delivery_provider_events',
+                   'responder_delivery_provider_statuses'
                  )
                    and relation.relrowsecurity
                    and relation.relforcerowsecurity
-               ) = 3 as tables_ready,
+               ) = 5 as tables_ready,
                exists (
                  select 1 from information_schema.columns
                   where table_schema = 'ss'
@@ -329,12 +336,16 @@ export function createPostgresResponderFulfillmentRepository({
     recordDeliveryAccepted(input) {
       exactObject(input, [
         "operationId", "workerId", "attemptCount", "provider",
-        "providerReceiptDigest", "acceptedAt"
+        "providerMessageIdDigest", "providerReceiptDigest", "acceptedAt"
       ], "Responder provider acceptance");
       const selected = {
         operationId: uuid(input.operationId, "Operation ID"),
         workerId: safeId(input.workerId, "Worker ID"),
         attemptCount: attempt(input.attemptCount),
+        providerMessageIdDigest: sha256(
+          input.providerMessageIdDigest,
+          "Provider message ID digest"
+        ),
         providerReceiptDigest: sha256(
           input.providerReceiptDigest,
           "Provider receipt digest"
@@ -361,6 +372,8 @@ export function createPostgresResponderFulfillmentRepository({
               Number(row.attempt_count) === selected.attemptCount &&
                 row.last_worker_id === selected.workerId &&
                 row.provider === input.provider &&
+                row.provider_message_id_digest ===
+                  selected.providerMessageIdDigest &&
                 row.provider_receipt_digest ===
                   selected.providerReceiptDigest &&
                 iso(row.provider_accepted_at, "Stored acceptance time") ===
@@ -377,13 +390,17 @@ export function createPostgresResponderFulfillmentRepository({
                 set state = 'accepted', lease_owner = null,
                     lease_started_at = null, lease_expires_at = null,
                     provider = $2, provider_receipt_digest = $3,
-                    provider_accepted_at = $4, updated_at = $4
+                    provider_message_id_digest = $4,
+                    provider_accepted_at = $5,
+                    provider_mapping_recorded_at = $5,
+                    updated_at = $5
               where id = $1 and state = 'claimed'
               returning id`,
             [
               selected.operationId,
               input.provider,
               selected.providerReceiptDigest,
+              selected.providerMessageIdDigest,
               selected.acceptedAt
             ]
           );

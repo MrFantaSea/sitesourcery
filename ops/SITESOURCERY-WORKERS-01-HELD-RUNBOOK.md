@@ -46,6 +46,12 @@ idempotency fence: a missing exact acceptance receipt therefore goes to manual
 reconciliation and is never blindly retried. The HQ phone bridge remains the
 separate read-only Pixel/operator surface. The held composition has no latent
 provider port.
+The hosted API owns the separate held-by-default Twilio status-callback
+boundary. It verifies the exact production URL and every received form field
+with Twilio's maintained validator, stores only digests, and reconciles
+out-of-order status evidence against the worker's digest-only provider mapping.
+The worker never receives the webhook Account Auth Token, and the API never
+receives the worker's restricted message-send API secret through this config.
 There is no standalone publication loop: publication remains the lease-fenced
 stage of Alakazam fulfillment, and synchronous customer release commands
 retain their existing authority.
