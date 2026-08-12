@@ -132,6 +132,7 @@ test("provider acceptance is exact, durable, and replayable", async () => {
   const accepted = operation({
     state: "accepted",
     provider: "twilio",
+    provider_message_id_digest: "d".repeat(64),
     provider_receipt_digest: "c".repeat(64),
     provider_accepted_at: NOW
   });
@@ -154,6 +155,7 @@ test("provider acceptance is exact, durable, and replayable", async () => {
     workerId: WORKER_ID,
     attemptCount: 1,
     provider: "twilio",
+    providerMessageIdDigest: "d".repeat(64),
     providerReceiptDigest: "c".repeat(64),
     acceptedAt: NOW
   };

@@ -199,6 +199,12 @@ import {
   createResponderSurfacesService
 } from "../responder-surfaces.mjs";
 import {
+  createConfiguredTwilioResponderEventsHttp
+} from "../twilio-responder-events-config.mjs";
+import {
+  createPostgresTwilioResponderEventsRepository
+} from "../twilio-responder-events-postgres.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -884,6 +890,14 @@ async function start() {
     core: responderCore,
     repository: createPostgresResponderSurfaceRepository({ authority })
   });
+  const twilioResponderEvents =
+    createConfiguredTwilioResponderEventsHttp({
+      environment: process.env,
+      repository: createPostgresTwilioResponderEventsRepository({
+        authority
+      }),
+      clock: commerceV2.clock
+    });
   const [responderCoreReadiness, responderReadiness] = await Promise.all([
     responderCore.readiness(),
     responderSurfaces.readiness()
@@ -900,6 +914,20 @@ async function start() {
   ) {
     throw new Error(
       "Canonical effect-held Responder surfaces are not ready."
+    );
+  }
+  const twilioResponderEventReadiness =
+    await twilioResponderEvents.readiness();
+  if (
+    twilioResponderEvents.mode === "raw-form" &&
+    (
+      twilioResponderEventReadiness.ready !== true ||
+      twilioResponderEventReadiness.verified !== true ||
+      twilioResponderEventReadiness.providerEffects !== false
+    )
+  ) {
+    throw new Error(
+      "Verified Twilio Responder callback ingress was requested but is not ready."
     );
   }
   const service = createCanonicalPostgresService({
@@ -1016,6 +1044,7 @@ async function start() {
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         supportCases,
         resendMailEvents,
+        twilioResponderEvents,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,
@@ -1067,6 +1096,11 @@ async function start() {
         mode: resendMailEvents.mode,
         ready: resendMailEventReadiness.ready === true,
         code: resendMailEventReadiness.code ?? null
+      },
+      responderProviderEvents: {
+        mode: twilioResponderEvents.mode,
+        ready: twilioResponderEventReadiness.ready === true,
+        code: twilioResponderEventReadiness.code ?? null
       },
       database: readiness.persistence.database,
       postgresBudget: authority.budgetReadiness(),

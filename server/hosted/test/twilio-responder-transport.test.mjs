@@ -235,10 +235,12 @@ test("one exact private SMS material record creates one Twilio Message without f
     status: "accepted",
     provider: "twilio",
     idempotencyKey: "responder-delivery-command-0001",
+    providerMessageIdDigest: receipt.providerMessageIdDigest,
     providerReceiptDigest: receipt.providerReceiptDigest,
     acceptedAt: NOW
   });
   assert.match(receipt.providerReceiptDigest, /^[0-9a-f]{64}$/u);
+  assert.match(receipt.providerMessageIdDigest, /^[0-9a-f]{64}$/u);
   const sent = calls.at(-1);
   assert.equal(
     sent.url,

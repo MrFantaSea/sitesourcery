@@ -512,6 +512,7 @@ export function createTwilioResponderTransport({
       status: "accepted",
       provider: PROVIDER,
       idempotencyKey: selectedRequest.idempotencyKey,
+      providerMessageIdDigest: digest(response.sid),
       providerReceiptDigest: digest({
         provider: PROVIDER,
         accountSid,

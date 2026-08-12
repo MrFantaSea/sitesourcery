@@ -91,7 +91,8 @@ prior key evidence cannot be silently reused or collapsed.
 - Syntax checks and `git diff --check` passed.
 
 PostgreSQL 16.14 was exercised only through disposable local databases. A
-fresh database accepted all 126 canonical migrations and passed the complete
+fresh database accepted all 79 ordered migrations through migration 126 and
+passed the complete
 13-case service journey, including the shipped browser/account/core-revenue
 path. A second fresh run passed the corrected one-case Responder journey:
 consent, encrypted snapshot, queue claim, fake-Twilio acceptance, STOP, and

@@ -86,6 +86,7 @@ function fixture({
         status: "accepted",
         provider: "twilio",
         idempotencyKey: input.idempotencyKey,
+        providerMessageIdDigest: "d".repeat(64),
         providerReceiptDigest: "c".repeat(64),
         acceptedAt: NOW
       };
@@ -142,6 +143,7 @@ test("one lease-bound claim reaches the provider with digests and stable idempot
     false
   );
   assert.equal(calls.accepted[0].provider, "twilio");
+  assert.equal(calls.accepted[0].providerMessageIdDigest, "d".repeat(64));
   assert.equal(calls.accepted[0].providerReceiptDigest, "c".repeat(64));
   assert.deepEqual(calls.retries, []);
   assert.deepEqual(calls.reviews, []);

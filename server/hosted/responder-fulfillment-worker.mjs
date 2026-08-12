@@ -184,6 +184,10 @@ function acceptedReceipt(value, selectedClaim) {
     status: "accepted",
     provider: value.provider,
     idempotencyKey: value.idempotencyKey,
+    providerMessageIdDigest: sha256(
+      value.providerMessageIdDigest,
+      "Provider message ID digest"
+    ),
     providerReceiptDigest: sha256(
       value.providerReceiptDigest,
       "Provider receipt digest"
@@ -325,6 +329,7 @@ export function createResponderFulfillmentWorker({
         workerId,
         attemptCount: selected.attemptCount,
         provider: receipt.provider,
+        providerMessageIdDigest: receipt.providerMessageIdDigest,
         providerReceiptDigest: receipt.providerReceiptDigest,
         acceptedAt: receipt.acceptedAt
       });
