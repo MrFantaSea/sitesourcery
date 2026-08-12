@@ -183,15 +183,21 @@ export function createPostgresResponderFulfillmentRepository({
                ) is not null
                and ss.hosted_responder_fulfillment_queue_contract_v1() =
                  'canonical-responder-fulfillment-queue-v1-held-default'
+               and to_regprocedure(
+                 'ss.hosted_responder_private_material_contract_v1()'
+               ) is not null
+               and ss.hosted_responder_private_material_contract_v1() =
+                 'canonical-responder-private-material-v1-operation-bound-aes-gcm'
                  as contract_ready,
                count(*) filter (
                  where relation.relname in (
                    'responder_delivery_operations',
-                   'responder_delivery_operation_events'
+                   'responder_delivery_operation_events',
+                   'responder_private_delivery_materials'
                  )
                    and relation.relrowsecurity
                    and relation.relforcerowsecurity
-               ) = 2 as tables_ready,
+               ) = 3 as tables_ready,
                exists (
                  select 1 from information_schema.columns
                   where table_schema = 'ss'
@@ -260,6 +266,16 @@ export function createPostgresResponderFulfillmentRepository({
                join ss.responder_interactions interaction
                  on interaction.id = operation.interaction_id
                 and interaction.organization_id = operation.organization_id
+               join ss.responder_private_delivery_materials material
+                 on material.operation_id = operation.id
+                and material.organization_id = operation.organization_id
+                and material.project_id = operation.project_id
+                and material.interaction_id = operation.interaction_id
+                and material.contact_authority_id =
+                  operation.contact_authority_id
+                and material.message_kind = operation.message_kind
+                and material.route_digest = operation.route_digest
+                and material.content_digest = operation.content_digest
               where operation.state in ('queued', 'retry_wait')
                 and operation.provider_effects_authorized
                 and operation.available_at <= $1
@@ -268,6 +284,16 @@ export function createPostgresResponderFulfillmentRepository({
                 and not control.global_kill_engaged
                 and authority.state = 'active'
                 and interaction.state = 'open'
+                and material.state = 'active'
+                and material.envelope_digest =
+                  ss.responder_private_material_envelope_digest(
+                    material.operation_id, material.organization_id,
+                    material.project_id, material.interaction_id,
+                    material.contact_authority_id, material.message_kind,
+                    material.route_digest, material.content_digest,
+                    material.key_version, material.nonce,
+                    material.authentication_tag, material.ciphertext
+                  )
               order by operation.available_at, operation.created_at,
                        operation.id
               for update of operation skip locked

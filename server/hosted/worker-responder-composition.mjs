@@ -6,6 +6,15 @@ import {
   createResponderFulfillmentWorker,
   responderFulfillmentWorkerOptionsFromEnvironment
 } from "./responder-fulfillment-worker.mjs";
+import {
+  createPostgresResponderPrivateMaterialResolver
+} from "./responder-private-material-postgres.mjs";
+import {
+  responderPrivateMaterialVaultFromEnvironment
+} from "./responder-private-material-vault.mjs";
+import {
+  createTwilioResponderTransport
+} from "./twilio-responder-transport.mjs";
 import { WORKER_PURPOSES } from "./worker-config.mjs";
 
 const PURPOSE = "responder-fulfillment";
@@ -78,12 +87,17 @@ function heldProvider() {
   });
 }
 
-function unavailableProviderFactory() {
-  const error = new Error(
-    "The reviewed Twilio fulfillment adapter is unavailable."
-  );
-  error.code = "WORKER_DEPENDENCY_NOT_READY";
-  throw error;
+function configuredProviderFactory({ authority, environment, clock }) {
+  const materialResolver =
+    createPostgresResponderPrivateMaterialResolver({
+      authority,
+      vault: responderPrivateMaterialVaultFromEnvironment(environment)
+    });
+  return createTwilioResponderTransport({
+    environment,
+    materialResolver,
+    clock
+  });
 }
 
 function validateRepository(repository) {
@@ -125,7 +139,7 @@ export function createResponderWorkerFactories({
   environment = process.env,
   log = () => {},
   repositoryFactory = createPostgresResponderFulfillmentRepository,
-  providerFactory = unavailableProviderFactory,
+  providerFactory = configuredProviderFactory,
   clock = { now: () => new Date().toISOString() }
 } = {}) {
   const selected = selectedPurpose(purposes);

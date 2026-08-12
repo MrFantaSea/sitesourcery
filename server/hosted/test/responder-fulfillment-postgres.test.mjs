@@ -123,6 +123,9 @@ test("claim selects one eligible operation with SKIP LOCKED and returns digest-o
   assert.match(source, /not control\.global_kill_engaged/u);
   assert.match(source, /authority\.state = 'active'/u);
   assert.match(source, /interaction\.state = 'open'/u);
+  assert.match(source, /responder_private_delivery_materials material/u);
+  assert.match(source, /material\.state = 'active'/u);
+  assert.match(source, /responder_private_material_envelope_digest/u);
 });
 
 test("provider acceptance is exact, durable, and replayable", async () => {
