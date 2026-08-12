@@ -145,7 +145,7 @@ export function createResponderSurfacesHttpBoundary({
       if (url.search || url.hash) return null;
       const route = matchResponderSurfaceHttpRoute(request.method, url.pathname);
       if (!route) return null;
-      const authenticated = await authenticate(request);
+      const authenticated = await authenticate(request, route);
       invariant(
         authenticated !== null && authenticated !== undefined,
         "AUTHENTICATION_REQUIRED",
