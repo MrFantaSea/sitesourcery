@@ -58,12 +58,13 @@ function provider({ ready = true, sends = [] } = {}) {
   return Object.freeze({
     kind: "responder-fulfillment-provider",
     providerEffects: true,
-    idempotency: "provider-enforced",
+    idempotency: "provider-unsupported",
+    effectCertainty: "receipt-or-manual-review",
     async readiness() {
       return {
         ready,
         verified: ready,
-        provider: "phone_bridge"
+        provider: "twilio"
       };
     },
     async sendMessage(input) {
@@ -150,7 +151,7 @@ test("approved Responder composition binds exact queue and provider readiness", 
     mode: "approved_live",
     code: null,
     queueReady: true,
-    provider: "phone_bridge",
+    provider: "twilio",
     providerEffects: true
   });
   assert.deepEqual(await composition.worker.runOnce(), { status: "idle" });

@@ -40,8 +40,12 @@ cancellation remains held unless the complete reviewed Stripe adapter reads
 back `approved_live`, and every selected purpose must pass PostgreSQL and
 purpose-specific readiness before any loop starts.
 Responder fulfillment additionally remains held until its durable queue and a
-separately reviewed, provider-idempotent phone-bridge adapter both read back
-ready. The held composition has no latent provider port.
+separately reviewed Twilio adapter plus private material resolver both read
+back ready. Twilio Programmable Messaging does not provide a create-message
+idempotency fence: a missing exact acceptance receipt therefore goes to manual
+reconciliation and is never blindly retried. The HQ phone bridge remains the
+separate read-only Pixel/operator surface. The held composition has no latent
+provider port.
 There is no standalone publication loop: publication remains the lease-fenced
 stage of Alakazam fulfillment, and synchronous customer release commands
 retain their existing authority.

@@ -295,12 +295,13 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       fulfillmentPort: {
         kind: "responder-fulfillment-provider",
         providerEffects: true,
-        idempotency: "provider-enforced",
+        idempotency: "provider-unsupported",
+        effectCertainty: "receipt-or-manual-review",
         async sendMessage(input) {
           providerCalls.push(input);
           return {
             status: "accepted",
-            provider: "phone_bridge",
+            provider: "twilio",
             idempotencyKey: input.idempotencyKey,
             providerReceiptDigest: "8".repeat(64),
             acceptedAt: new Date(
@@ -332,7 +333,7 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
     assert.deepEqual(acceptedOperation.rows[0], {
       state: "accepted",
       attempt_count: 1,
-      provider: "phone_bridge",
+      provider: "twilio",
       provider_receipt_digest: "8".repeat(64),
       events: 3
     });

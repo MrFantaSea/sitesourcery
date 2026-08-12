@@ -196,10 +196,12 @@ function validatePorts(repository, fulfillmentPort, clock, enabled) {
   const providerReady = enabled
     ? fulfillmentPort?.kind === "responder-fulfillment-provider" &&
       fulfillmentPort.providerEffects === true &&
-      fulfillmentPort.idempotency === "provider-enforced"
+      fulfillmentPort.idempotency === "provider-unsupported" &&
+      fulfillmentPort.effectCertainty === "receipt-or-manual-review"
     : fulfillmentPort?.kind === "responder-fulfillment-held-provider" &&
       fulfillmentPort.providerEffects === false &&
-      fulfillmentPort.idempotency === "none";
+      fulfillmentPort.idempotency === "none" &&
+      fulfillmentPort.effectCertainty === "none";
   invariant(
     repository &&
       [
@@ -340,7 +342,10 @@ export function createResponderFulfillmentWorker({
       if (providerAccepted) throw error;
       const failureCode = safeFailureCode(error);
       const failedAt = now();
-      if (error?.deliveryDisposition === "retryable") {
+      if (
+        error?.deliveryDisposition === "retryable" &&
+        error?.providerEffectCertainty === "none"
+      ) {
         const result = await ports.repository.recordDeliveryRetry({
           operationId: selected.operationId,
           workerId,

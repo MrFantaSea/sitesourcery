@@ -35,7 +35,7 @@ delivery claim at a time. Each claim is bound to:
 - one organization, project, interaction, and consent authority;
 - one approved Responder message kind;
 - opaque route and content digests only; and
-- one stable provider-enforced idempotency key.
+- one stable internal delivery/reconciliation identity.
 
 The worker has bounded lease and loop durations, bounded exponential error
 backoff, an external abort bridge, graceful drain, fixed safe logging, and an
@@ -47,11 +47,23 @@ Only a provider error explicitly classified `retryable` may enter the retry
 transition. Every unclassified, terminal, or ambiguous pre-acceptance failure
 enters manual review. If the provider accepts but durable finalization becomes
 uncertain, the worker records neither retry nor a second effect instruction;
-the stable provider idempotency key remains the reconciliation fence.
+the stable internal delivery identity remains the reconciliation fence.
 
 The provider port must explicitly declare provider effects and
-provider-enforced idempotency. Its narrow request contains digests and durable
-identities, never raw contact information or message content.
+its effect-certainty contract. Its narrow request contains digests and durable
+identities, never raw contact information or message content. If the provider
+does not support create idempotency, an uncertain create result must enter
+manual reconciliation and can never be automatically replayed.
+
+### 2026-08-12 provider-boundary correction
+
+This proof originally described the internal identity as
+"provider-enforced." The later provider audit proved that ordinary Twilio
+Programmable Messaging message creation does not expose that contract. The
+worker boundary is therefore corrected to require
+`idempotency: provider-unsupported` and
+`effectCertainty: receipt-or-manual-review`. This correction narrows retry
+authority; it does not change the proved held-mode or digest-only behavior.
 
 ## Focused and cumulative proof
 
@@ -78,8 +90,9 @@ adjacent-system mutation occurred.
 - Responder PostgreSQL delivery-operation, lease, retry, dead-letter, and
   operator-review authority.
 - Held production worker factory and process-purpose composition.
-- Phone-bridge fulfillment adapter/readback contract and owner-gated provider
-  release.
+- Twilio fulfillment adapter/readback contract and owner-gated provider
+  release. The separately mapped HQ phone bridge remains an adjacent operator
+  integration, not the SMS provider.
 - The other mandatory worker purposes and hosted Care/Responder UI shell.
 - FIN-005 through FIN-010 outside-lane, integration, catalog, database,
   staging, acceptance, and owner-approved cutover work.
