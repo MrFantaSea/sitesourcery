@@ -17,8 +17,14 @@ import {
   isAlakazamPaymentRecoveryEvent
 } from "../commerce-v2/alakazam-lifecycle-state.mjs";
 import {
+  isAlakazamInvoiceFinalizationEvent
+} from "../commerce-v2/alakazam-invoice-finalization.mjs";
+import {
   isPotentialProfessionalServicesReversalEvent
 } from "../commerce-v2/professional-services-reversal.mjs";
+import {
+  exactStripeWebhookVerification
+} from "../commerce/stripe-webhook-rotation.mjs";
 import {
   isPotentialCustomServicesAssessmentStripeEvent
 } from "./custom-services-assessment-settlement-postgres.mjs";
@@ -81,6 +87,8 @@ export function createStripeWebhookRouter({
       typeof alakazamCommerce.ingestStripeEvent ===
         "function" &&
       alakazamLifecycle &&
+      typeof alakazamLifecycle.finalization
+        ?.ingestStripeEvent === "function" &&
       typeof alakazamLifecycle.renewal
         ?.ingestStripeEvent === "function" &&
       typeof alakazamLifecycle.incident
@@ -109,10 +117,14 @@ export function createStripeWebhookRouter({
       );
       let event;
       try {
-        event = await provider.verifyWebhook({
+        const verified = await provider.verifyWebhook({
           rawBody,
           signature
         });
+        event = exactStripeWebhookVerification(
+          verified,
+          { rawBody, signature }
+        ).event;
       } catch (error) {
         if (error instanceof HostedError) throw error;
         const code = String(error?.code ?? "");
@@ -190,6 +202,17 @@ export function createStripeWebhookRouter({
             .ingestStripeEvent(event);
         if (result?.status !==
           "not_alakazam_reversal") {
+          return result;
+        }
+      }
+      if (isAlakazamInvoiceFinalizationEvent(event)) {
+        const result =
+          await alakazamLifecycle.finalization
+            .ingestStripeEvent(event);
+        if (
+          result?.status !== "not_alakazam_finalization" &&
+          result?.next !== "continue"
+        ) {
           return result;
         }
       }

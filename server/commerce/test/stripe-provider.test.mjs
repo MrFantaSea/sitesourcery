@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import "./stripe-webhook-rotation.test.mjs";
+
 import { digest } from "../../domain/canonical.mjs";
 import {
   STRIPE_API_VERSION,
@@ -189,6 +191,24 @@ function configuration(overrides = {}) {
       }
     ],
     ...selectedOverrides
+  };
+}
+
+function approvedConfiguration() {
+  const config = configuration();
+  return {
+    ...config,
+    webhookRotation: {
+      schema: "sitesourcery.stripe-webhook-rotation/v1",
+      current: {
+        version: "approved-test-v1",
+        secret: config.webhookSecret,
+        activatedAt: "1970-01-01T00:00:00.000Z",
+        retiresAt: null
+      },
+      next: null,
+      overlapSeconds: 0
+    }
   };
 }
 
@@ -1729,6 +1749,8 @@ function fakeStripe({
               "customer.subscription.created",
               "customer.subscription.deleted",
               "customer.subscription.updated",
+              "invoice.finalization_failed",
+              "invoice.finalized",
               "invoice.paid",
               "invoice.payment_action_required",
               "invoice.payment_failed",
@@ -2454,7 +2476,31 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     ready: false,
     reason: "stripe_not_configured",
     provider: "stripe",
-    mode: "held"
+    mode: "held",
+    webhookRotation: {
+      schema:
+        "sitesourcery.stripe-webhook-rotation-readiness/v1",
+      ready: false,
+      state: "held",
+      activeKeyCount: 0,
+      currentVersion: null,
+      currentFingerprint: null,
+      nextConfigured: false,
+      nextVersion: null,
+      nextFingerprint: null,
+      overlapSeconds: 0
+    },
+    credentialTopology: {
+      schema:
+        "sitesourcery.credential-topology-verification/v1",
+      mode: "held",
+      selection: "stripe",
+      ready: false,
+      state: "held",
+      enabledPurposes: [],
+      domainsHeld: true,
+      effectsAllowed: false
+    }
   });
   assert.deepEqual(
     await adapter.readinessForPurpose("download"),
@@ -2484,6 +2530,7 @@ test("held mode exposes every operation but cannot perform a provider effect", a
     "retrieveAlakazamPayment",
     "retrieveAlakazamRenewalInvoice",
     "retrieveAlakazamIncidentInvoice",
+    "retrieveAlakazamFinalizationInvoice",
     "retrieveAlakazamCancellation",
     "retrieveAlakazamReversal",
     "retrieveProfessionalReversal",
@@ -2743,6 +2790,81 @@ test("readiness reads back every exact owner-approved Price", async () => {
   assert.deepEqual(calls.webhookEndpoints, [
     "we_contract_test"
   ]);
+});
+
+test("readiness projects exact webhook rotation state and holds after current retirement", async () => {
+  const base = configuration();
+  const config = configuration({
+    webhookRotation: {
+      schema: "sitesourcery.stripe-webhook-rotation/v1",
+      current: {
+        version: "rotation-current-v1",
+        secret: base.webhookSecret,
+        activatedAt: "2026-07-27T00:00:00.000Z",
+        retiresAt: "2026-07-28T12:10:00.000Z"
+      },
+      next: {
+        version: "rotation-next-v2",
+        secret: "whsec_contract_test_next",
+        activatedAt: "2026-07-28T12:00:00.000Z",
+        retiresAt: null
+      },
+      overlapSeconds: 600
+    }
+  });
+  const ready = await adapterFixture({
+    config,
+    clockNow: "2026-07-28T12:05:00.000Z"
+  }).adapter.readiness();
+  assert.equal(ready.ready, true);
+  assert.deepEqual(
+    {
+      ready: ready.webhookRotation.ready,
+      state: ready.webhookRotation.state,
+      activeKeyCount:
+        ready.webhookRotation.activeKeyCount,
+      currentVersion:
+        ready.webhookRotation.currentVersion,
+      nextVersion: ready.webhookRotation.nextVersion,
+      overlapSeconds:
+        ready.webhookRotation.overlapSeconds
+    },
+    {
+      ready: true,
+      state: "overlap",
+      activeKeyCount: 2,
+      currentVersion: "rotation-current-v1",
+      nextVersion: "rotation-next-v2",
+      overlapSeconds: 600
+    }
+  );
+  assert.doesNotMatch(
+    JSON.stringify(ready.webhookRotation),
+    /whsec_/u
+  );
+
+  const held = await adapterFixture({
+    config,
+    clockNow: "2026-07-28T12:10:00.000Z"
+  }).adapter.readiness();
+  assert.equal(held.ready, false);
+  assert.equal(
+    held.code,
+    "stripe_webhook_rotation_not_ready"
+  );
+  assert.deepEqual(
+    {
+      ready: held.webhookRotation.ready,
+      state: held.webhookRotation.state,
+      activeKeyCount:
+        held.webhookRotation.activeKeyCount
+    },
+    {
+      ready: false,
+      state: "promotion_required",
+      activeKeyCount: 1
+    }
+  );
 });
 
 test("Download readiness is isolated from Alakazam Product, Coupon, Portal, subscription, and Price dependencies", async () => {
@@ -3545,6 +3667,73 @@ test("Alakazam lifecycle invoice readbacks bind the exact Invoice, Subscription,
     "requires_payment_method"
   );
   assert.match(incident.providerFactsDigest, /^[a-f0-9]{64}$/u);
+});
+
+test("Alakazam finalization readback binds the failed draft and later authoritative recovery", async () => {
+  const config = alakazamConfiguration();
+  const request = {
+    stripeInvoiceId: "in_alakazam_lifecycle_1",
+    stripeSubscriptionId: "sub_alakazam_subscription_1",
+    stripeCustomerId: "cus_alakazam_customer_1"
+  };
+  const draft = fakeAlakazamLifecycleInvoice({
+    paid: false,
+    overrides: {
+      object: "invoice",
+      status: "draft",
+      automatic_tax: { enabled: true, status: "failed" },
+      last_finalization_error: {
+        code: "invoice_tax_calculation_failed",
+        param: "automatic_tax"
+      }
+    }
+  });
+  const failedFake = fakeStripe({
+    config,
+    invoiceRetrieveResponse: draft,
+    subscriptionRetrieveResponses: [fakeAlakazamSubscription()]
+  });
+  const failed = await adapterFixture({
+    config,
+    fake: failedFake
+  }).adapter.retrieveAlakazamFinalizationInvoice(request);
+  assert.equal(
+    failed.schema,
+    "sitesourcery.stripe-alakazam-finalization-invoice/v1"
+  );
+  assert.equal(failed.finalizationState, "failed");
+  assert.equal(failed.status, "draft");
+  assert.equal(failed.reasonCode, "automatic_tax");
+  assert.equal(failed.amountDueMinor, 2500);
+  assert.equal(failed.subscription.tierId, "alakazam_25");
+  assert.match(failed.providerFactsDigest, /^[a-f0-9]{64}$/u);
+  assert.equal(Object.isFrozen(failed), true);
+  assert.deepEqual(failedFake.calls.invoiceReads, [{
+    id: "in_alakazam_lifecycle_1",
+    params: {
+      expand: ["lines.data.pricing.price_details.price"]
+    }
+  }]);
+
+  const recoveredFake = fakeStripe({
+    config,
+    invoiceRetrieveResponse: fakeAlakazamLifecycleInvoice({
+      overrides: {
+        object: "invoice",
+        status: "open",
+        last_finalization_error: null
+      }
+    }),
+    subscriptionRetrieveResponses: [fakeAlakazamSubscription()]
+  });
+  const recovered = await adapterFixture({
+    config,
+    fake: recoveredFake
+  }).adapter.retrieveAlakazamFinalizationInvoice(request);
+  assert.equal(recovered.finalizationState, "recovered");
+  assert.equal(recovered.status, "open");
+  assert.equal(recovered.reasonCode, null);
+  assert.match(recovered.providerFactsDigest, /^[a-f0-9]{64}$/u);
 });
 
 test("Alakazam lifecycle invoice readback fails closed on provider identity or payment drift", async () => {
@@ -7741,7 +7930,11 @@ test("webhooks require raw bytes, an exact signature, and matching livemode", as
     rawBody,
     signature: "t=1,v1=signature"
   });
-  assert.equal(event.id, "evt_test_1");
+  assert.equal(event.event.id, "evt_test_1");
+  assert.equal(
+    event.receipt.keyVersion,
+    "contract-test-v1"
+  );
   assert.deepEqual(calls.webhooks, [
     {
       rawBody: '{"id":"evt_test_1"}',
@@ -7848,7 +8041,7 @@ test("approved effects require exact owner approval and a pinned official client
       createStripeProviderAdapter({
         mode: "approved_live",
         client: fake.client,
-        config: configuration(),
+        config: approvedConfiguration(),
         liveApproval: approval
       }),
     (error) => error.code === "stripe_client_invalid"
@@ -7858,7 +8051,7 @@ test("approved effects require exact owner approval and a pinned official client
       createStripeProviderAdapter({
         mode: "approved_live",
         client: fake.client,
-        config: configuration(),
+        config: approvedConfiguration(),
         liveApproval: {
           ...approval,
           apiVersion: "unreviewed"
@@ -7891,6 +8084,14 @@ test("official client construction enforces pinned version and key/mode pairing 
       secretKey: "sk_test_wrong_version",
       livemode: false,
       apiVersion: "unreviewed"
+    },
+    {
+      secretKey: "sk_test_standard_forbidden",
+      livemode: false
+    },
+    {
+      secretKey: "sk_live_standard_forbidden",
+      livemode: true
     }
   ]) {
     assert.throws(
@@ -7901,9 +8102,7 @@ test("official client construction enforces pinned version and key/mode pairing 
     );
   }
   for (const [secretKey, livemode] of [
-    ["sk_test_contract_only", false],
     ["rk_test_contract_only", false],
-    ["sk_live_contract_only", true],
     ["rk_live_contract_only", true]
   ]) {
     const client = createOfficialStripeClient({

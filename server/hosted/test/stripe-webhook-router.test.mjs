@@ -10,6 +10,9 @@ import {
 import {
   CUSTOM_BUILD_FINAL_PAYMENT_METADATA_SCHEMA
 } from "../custom-services-custom-build-final-payment-postgres.mjs";
+import {
+  verifyStripeWebhookWithRotation
+} from "../../commerce/stripe-webhook-rotation.mjs";
 import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
 
 function event(metadata = {}) {
@@ -48,6 +51,9 @@ function fixture(
     renewalResult = {
       status: "not_alakazam_renewal"
     },
+    finalizationResult = {
+      status: "not_alakazam_finalization"
+    },
     incidentResult = {
       status: "not_alakazam_incident"
     },
@@ -59,7 +65,8 @@ function fixture(
     },
     reversalResult = {
       status: "not_alakazam_reversal"
-    }
+    },
+    providerResult = selectedEvent
   } = {}
 ) {
   const calls = {
@@ -74,6 +81,7 @@ function fixture(
     professional: [],
     alakazam: [],
     renewal: [],
+    finalization: [],
     incident: [],
     recovery: [],
     cancellation: [],
@@ -83,7 +91,7 @@ function fixture(
     provider: {
       async verifyWebhook(input) {
         calls.verify.push(input);
-        return structuredClone(selectedEvent);
+        return structuredClone(providerResult);
       }
     },
     canonicalService: {
@@ -143,6 +151,12 @@ function fixture(
       }
     },
     alakazamLifecycle: {
+      finalization: {
+        async ingestStripeEvent(input) {
+          calls.finalization.push(structuredClone(input));
+          return structuredClone(finalizationResult);
+        }
+      },
       renewal: {
         async ingestStripeEvent(input) {
           calls.renewal.push(structuredClone(input));
@@ -531,6 +545,7 @@ test("shared webhook router composes held Alakazam lifecycle events after existi
     { status: "settled" }
   );
   assert.equal(renewed.calls.renewal.length, 1);
+  assert.equal(renewed.calls.finalization.length, 1);
   assert.equal(renewed.calls.recovery.length, 0);
   assert.equal(renewed.calls.canonical.length, 0);
 
@@ -563,7 +578,34 @@ test("shared webhook router composes held Alakazam lifecycle events after existi
     { status: "recorded" }
   );
   assert.equal(incident.calls.incident.length, 1);
+  assert.equal(incident.calls.finalization.length, 0);
   assert.equal(incident.calls.canonical.length, 0);
+
+  const finalizationFailed = {
+    ...paidInvoice,
+    type: "invoice.finalization_failed"
+  };
+  const finalization = fixture(finalizationFailed, {
+    finalizationResult: {
+      status: "finalization_recorded",
+      state: "failed",
+      next: "complete"
+    }
+  });
+  assert.deepEqual(
+    await finalization.router.ingestStripeWebhook({
+      rawBody: Buffer.from("finalization-event"),
+      signature: "stripe-signature"
+    }),
+    {
+      status: "finalization_recorded",
+      state: "failed",
+      next: "complete"
+    }
+  );
+  assert.equal(finalization.calls.finalization.length, 1);
+  assert.equal(finalization.calls.renewal.length, 0);
+  assert.equal(finalization.calls.canonical.length, 0);
 
   const cancellationEvent = {
     ...event(),
@@ -628,4 +670,57 @@ test("shared webhook router rejects missing raw bytes before provider verificati
       error.code === "STRIPE_WEBHOOK_BODY_REQUIRED"
   );
   assert.equal(context.calls.verify.length, 0);
+});
+
+test("shared webhook router binds a verification receipt to exact request bytes", async () => {
+  const rawBody = Buffer.from("receipt-bound-event");
+  const signature = "t=1,v1=receipt-bound";
+  const selectedEvent = {
+    ...event(),
+    type: "unhandled.contract.event"
+  };
+  const providerResult = verifyStripeWebhookWithRotation({
+    rotation: {
+      schema: "sitesourcery.stripe-webhook-rotation/v1",
+      current: {
+        version: "router-test-v1",
+        secret: "whsec_router-test-only",
+        activatedAt: "1970-01-01T00:00:00.000Z",
+        retiresAt: null
+      },
+      next: null,
+      overlapSeconds: 0
+    },
+    now: "2026-08-11T12:00:00.000Z",
+    rawBody,
+    signature,
+    constructEvent() {
+      return selectedEvent;
+    }
+  });
+  const accepted = fixture(selectedEvent, {
+    providerResult
+  });
+  assert.deepEqual(
+    await accepted.router.ingestStripeWebhook({
+      rawBody,
+      signature
+    }),
+    { status: "canonical" }
+  );
+  assert.deepEqual(accepted.calls.canonical, [selectedEvent]);
+
+  const rejected = fixture(selectedEvent, {
+    providerResult
+  });
+  await assert.rejects(
+    rejected.router.ingestStripeWebhook({
+      rawBody: Buffer.from("changed-body"),
+      signature
+    }),
+    (error) =>
+      error.code === "STRIPE_WEBHOOK_SIGNATURE_INVALID" &&
+      error.status === 400
+  );
+  assert.equal(rejected.calls.canonical.length, 0);
 });

@@ -9,6 +9,152 @@ export const CREDENTIAL_TOPOLOGY_JSON_SCHEMA_ID =
 
 const MODE = "held";
 const SHA256 = /^[a-f0-9]{64}$/u;
+const STRIPE_ACCOUNT = /^acct_[A-Za-z0-9_]{1,250}$/u;
+const SAFE_TOKEN = /^[A-Za-z0-9._:-]{1,200}$/u;
+const STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS =
+  15 * 60 * 1000;
+const STRIPE_PROVISIONER_MAXIMUM_LIFETIME_MS =
+  24 * 60 * 60 * 1000;
+const STRIPE_STANDARD_MAXIMUM_OVERLAP_MS =
+  60 * 60 * 1000;
+const STRIPE_REVOCATION_CONFIRMATION_MAXIMUM_MS =
+  15 * 60 * 1000;
+const STRIPE_PURPOSES = Object.freeze([
+  "alakazam",
+  "customBuildChange",
+  "customBuildFinal",
+  "customBuildStart",
+  "download",
+  "serviceAssessment"
+]);
+const STRIPE_COMMON_OPERATIONS = Object.freeze([
+  "prices.retrieve",
+  "webhookEndpoints.retrieve"
+]);
+const STRIPE_CHECKOUT_OPERATIONS = Object.freeze([
+  "checkout.sessions.create",
+  "checkout.sessions.retrieve"
+]);
+const STRIPE_REVERSAL_OPERATIONS = Object.freeze([
+  "charges.retrieve",
+  "disputes.list",
+  "refunds.list"
+]);
+const STRIPE_OPERATIONS_BY_PURPOSE = deepFreeze({
+  alakazam: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS,
+    ...STRIPE_CHECKOUT_OPERATIONS,
+    ...STRIPE_REVERSAL_OPERATIONS,
+    "billingPortal.configurations.retrieve",
+    "billingPortal.sessions.create",
+    "coupons.retrieve",
+    "customers.create",
+    "customers.retrieve",
+    "invoices.retrieve",
+    "products.retrieve",
+    "subscriptionSchedules.create",
+    "subscriptionSchedules.retrieve",
+    "subscriptionSchedules.update",
+    "subscriptions.retrieve",
+    "subscriptions.update"
+  ]),
+  customBuildChange: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS,
+    ...STRIPE_CHECKOUT_OPERATIONS,
+    ...STRIPE_REVERSAL_OPERATIONS
+  ]),
+  customBuildFinal: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS,
+    ...STRIPE_CHECKOUT_OPERATIONS,
+    ...STRIPE_REVERSAL_OPERATIONS
+  ]),
+  customBuildStart: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS,
+    ...STRIPE_CHECKOUT_OPERATIONS,
+    ...STRIPE_REVERSAL_OPERATIONS
+  ]),
+  download: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS,
+    ...STRIPE_CHECKOUT_OPERATIONS
+  ]),
+  serviceAssessment: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS,
+    ...STRIPE_CHECKOUT_OPERATIONS,
+    ...STRIPE_REVERSAL_OPERATIONS
+  ])
+});
+const STRIPE_OPERATION_SCOPE = Object.freeze({
+  "billingPortal.configurations.retrieve":
+    "billing_portal_configurations:read",
+  "billingPortal.sessions.create":
+    "billing_portal_sessions:write",
+  "charges.retrieve": "charges:read",
+  "checkout.sessions.create": "checkout_sessions:write",
+  "checkout.sessions.retrieve": "checkout_sessions:write",
+  "coupons.retrieve": "coupons:read",
+  "customers.create": "customers:write",
+  "customers.retrieve": "customers:write",
+  "disputes.list": "disputes:read",
+  "invoices.retrieve": "invoices:read",
+  "prices.retrieve": "prices:read",
+  "products.retrieve": "products:read",
+  "refunds.list": "refunds:read",
+  "subscriptionSchedules.create":
+    "subscription_schedules:write",
+  "subscriptionSchedules.retrieve":
+    "subscription_schedules:write",
+  "subscriptionSchedules.update":
+    "subscription_schedules:write",
+  "subscriptions.retrieve": "subscriptions:write",
+  "subscriptions.update": "subscriptions:write",
+  "webhookEndpoints.retrieve": "webhook_endpoints:read"
+});
+const STRIPE_SCOPES_BY_PURPOSE = deepFreeze(
+  Object.fromEntries(
+    STRIPE_PURPOSES.map((purpose) => [
+      purpose,
+      sortedUnique(
+        STRIPE_OPERATIONS_BY_PURPOSE[purpose].map(
+          (operation) => STRIPE_OPERATION_SCOPE[operation]
+        )
+      )
+    ])
+  )
+);
+const STRIPE_ALL_RUNTIME_OPERATIONS = sortedUnique(
+  Object.values(STRIPE_OPERATIONS_BY_PURPOSE).flat()
+);
+const STRIPE_ALL_RUNTIME_SCOPES = sortedUnique(
+  STRIPE_ALL_RUNTIME_OPERATIONS.map(
+    (operation) => STRIPE_OPERATION_SCOPE[operation]
+  )
+);
+const STRIPE_PROVISIONER_OPERATIONS = sortedUnique([
+  "billingPortal.configurations.create",
+  "billingPortal.configurations.retrieve",
+  "coupons.create",
+  "coupons.retrieve",
+  "prices.create",
+  "prices.retrieve",
+  "products.create",
+  "products.retrieve",
+  "tax.registrations.create",
+  "tax.registrations.list",
+  "tax.settings.retrieve",
+  "tax.settings.update",
+  "webhookEndpoints.create",
+  "webhookEndpoints.retrieve",
+  "webhookEndpoints.update"
+]);
+const STRIPE_PROVISIONER_SCOPES = sortedUnique([
+  "billing_portal_configurations:write",
+  "coupons:write",
+  "prices:write",
+  "products:write",
+  "tax_registrations:write",
+  "tax_settings:write",
+  "webhook_endpoints:write"
+]);
 const ITEM_FIELDS = Object.freeze([
   "evidenceDigest",
   "kind",
@@ -16,10 +162,38 @@ const ITEM_FIELDS = Object.freeze([
   "materialPresent",
   "name",
   "purpose",
+  "providerBinding",
   "rotationState",
   "scopes",
   "storageBoundary"
 ]);
+
+export const STRIPE_RUNTIME_API_OPERATIONS_BY_PURPOSE =
+  STRIPE_OPERATIONS_BY_PURPOSE;
+export const STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE =
+  STRIPE_SCOPES_BY_PURPOSE;
+export const STRIPE_RESTRICTED_KEY_CONTRACT = deepFreeze({
+  effectsAllowed: false,
+  allRuntimeOperations: STRIPE_ALL_RUNTIME_OPERATIONS,
+  allRuntimeScopes: STRIPE_ALL_RUNTIME_SCOPES,
+  runtimeOperationsByPurpose:
+    STRIPE_OPERATIONS_BY_PURPOSE,
+  runtimeScopesByPurpose: STRIPE_SCOPES_BY_PURPOSE,
+  provisionerOperations: STRIPE_PROVISIONER_OPERATIONS,
+  provisionerScopes: STRIPE_PROVISIONER_SCOPES,
+  domainsHeld: true,
+  forbiddenKeyClasses: [
+    "standard",
+    "full_access",
+    "shared"
+  ],
+  maximumProvisionerLifetimeMs:
+    STRIPE_PROVISIONER_MAXIMUM_LIFETIME_MS,
+  maximumRuntimeReadbackAgeMs:
+    STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS,
+  maximumStandardOverlapMs:
+    STRIPE_STANDARD_MAXIMUM_OVERLAP_MS
+});
 const TOP_LEVEL_FIELDS = Object.freeze([
   "items",
   "mode",
@@ -195,13 +369,8 @@ const DEFINITIONS = Object.freeze([
     kind: "provider_api_restricted",
     purpose: "stripe_ephemeral_provisioning_status",
     scopes: [
-      "billing_portal_configurations:write",
-      "coupons:write",
-      "prices:write",
-      "products:write",
-      "tax_registrations:write",
-      "tax_settings:write",
-      "webhook_endpoints:write"
+      ...STRIPE_RESTRICTED_KEY_CONTRACT
+        .provisionerScopes
     ],
     storageBoundary: "operator-ephemeral-provider-session",
     allowedStates: ["ephemeral_revoked", "unproven"],
@@ -212,10 +381,7 @@ const DEFINITIONS = Object.freeze([
     kind: "provider_api_restricted",
     purpose: "stripe_runtime_production",
     scopes: [
-      "checkout:create",
-      "checkout:read",
-      "prices:read",
-      "webhook_endpoints:read"
+      ...STRIPE_RESTRICTED_KEY_CONTRACT.allRuntimeScopes
     ],
     storageBoundary: "dell-hosted-production-secret-store",
     allowedStates: ["active", "unproven"],
@@ -265,6 +431,10 @@ function definition(value) {
     allowedStates: [...value.allowedStates].sort(),
     completeStates: [...value.completeStates].sort()
   });
+}
+
+function sortedUnique(values) {
+  return Object.freeze([...new Set(values)].sort());
 }
 
 function deepFreeze(value) {
@@ -336,6 +506,213 @@ function instant(value) {
   return value;
 }
 
+function requiredInstant(value) {
+  const selected = instant(value);
+  if (selected === null) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+      "Stripe credential binding requires an exact UTC instant."
+    );
+  }
+  return selected;
+}
+
+function requiredDigest(value) {
+  const selected = evidenceDigest(value);
+  if (selected === null) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+      "Stripe credential binding requires a non-secret SHA-256 digest."
+    );
+  }
+  return selected;
+}
+
+function requiredToken(value) {
+  if (typeof value !== "string" || !SAFE_TOKEN.test(value)) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+      "Stripe credential binding requires a safe non-secret token."
+    );
+  }
+  return value;
+}
+
+function stripeScopesForPurposes(purposes) {
+  return sortedUnique(
+    purposes.flatMap(
+      (purpose) => STRIPE_SCOPES_BY_PURPOSE[purpose]
+    )
+  );
+}
+
+function normalizeStripeProviderBinding(
+  value,
+  expected,
+  rotationState
+) {
+  const isStripeCredential = [
+    "stripe.provisioner.production.restricted",
+    "stripe.runtime.production.restricted",
+    "stripe.standard.production.compromised"
+  ].includes(expected.name);
+  if (!isStripeCredential) {
+    if (value !== null) {
+      fail(
+        "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+        "Only reviewed Stripe credential records accept provider binding."
+      );
+    }
+    return null;
+  }
+  const complete = expected.completeStates.includes(
+    rotationState
+  );
+  if (!complete) {
+    if (value !== null) {
+      fail(
+        "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+        "Unproven Stripe credential records cannot claim provider binding."
+      );
+    }
+    return null;
+  }
+  if (expected.name === "stripe.runtime.production.restricted") {
+    exactObject(
+      value,
+      [
+        "accountId",
+        "activatedAt",
+        "enabledPurposes",
+        "environment",
+        "keyClass",
+        "keyFingerprint",
+        "keyVersion",
+        "livemode",
+        "provider"
+      ],
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID"
+    );
+    const purposes = exactArray(
+      value.enabledPurposes,
+      sortedUnique(value.enabledPurposes ?? []),
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID"
+    );
+    if (
+      value.provider !== "stripe" ||
+      value.environment !== "production" ||
+      value.livemode !== true ||
+      value.keyClass !== "restricted" ||
+      !STRIPE_ACCOUNT.test(value.accountId) ||
+      purposes.length === 0 ||
+      !purposes.every((purpose) =>
+        STRIPE_PURPOSES.includes(purpose)
+      )
+    ) {
+      fail(
+        "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+        "Stripe runtime binding does not match the production restricted-key contract."
+      );
+    }
+    return deepFreeze({
+      provider: "stripe",
+      environment: "production",
+      livemode: true,
+      accountId: value.accountId,
+      keyClass: "restricted",
+      keyVersion: requiredToken(value.keyVersion),
+      keyFingerprint: requiredDigest(value.keyFingerprint),
+      activatedAt: requiredInstant(value.activatedAt),
+      enabledPurposes: purposes
+    });
+  }
+  if (
+    expected.name ===
+    "stripe.provisioner.production.restricted"
+  ) {
+    exactObject(
+      value,
+      [
+        "accountId",
+        "activatedAt",
+        "environment",
+        "keyClass",
+        "keyFingerprint",
+        "keyVersion",
+        "livemode",
+        "provider",
+        "revokedAt",
+        "scopeEvidenceDigest",
+        "scopeProvenAt"
+      ],
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID"
+    );
+    if (
+      value.provider !== "stripe" ||
+      value.environment !== "production" ||
+      value.livemode !== true ||
+      value.keyClass !== "restricted" ||
+      !STRIPE_ACCOUNT.test(value.accountId)
+    ) {
+      fail(
+        "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+        "Stripe provisioner binding does not match the production restricted-key contract."
+      );
+    }
+    return deepFreeze({
+      provider: "stripe",
+      environment: "production",
+      livemode: true,
+      accountId: value.accountId,
+      keyClass: "restricted",
+      keyVersion: requiredToken(value.keyVersion),
+      keyFingerprint: requiredDigest(value.keyFingerprint),
+      activatedAt: requiredInstant(value.activatedAt),
+      revokedAt: requiredInstant(value.revokedAt),
+      scopeProvenAt: requiredInstant(value.scopeProvenAt),
+      scopeEvidenceDigest: requiredDigest(
+        value.scopeEvidenceDigest
+      )
+    });
+  }
+  exactObject(
+    value,
+    [
+      "accountId",
+      "environment",
+      "keyClass",
+      "keyFingerprint",
+      "keyVersion",
+      "livemode",
+      "provider",
+      "revokedAt"
+    ],
+    "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID"
+  );
+  if (
+    value.provider !== "stripe" ||
+    value.environment !== "production" ||
+    value.livemode !== true ||
+    value.keyClass !== "standard_status_only" ||
+    !STRIPE_ACCOUNT.test(value.accountId)
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_BINDING_INVALID",
+      "Compromised Stripe Standard-key binding is status-only."
+    );
+  }
+  return deepFreeze({
+    provider: "stripe",
+    environment: "production",
+    livemode: true,
+    accountId: value.accountId,
+    keyClass: "standard_status_only",
+    keyVersion: requiredToken(value.keyVersion),
+    keyFingerprint: requiredDigest(value.keyFingerprint),
+    revokedAt: requiredInstant(value.revokedAt)
+  });
+}
+
 function hasForbiddenFullAccessScope(value) {
   return (
     Array.isArray(value?.scopes) &&
@@ -372,11 +749,6 @@ function normalizeItem(value, expected) {
       );
     }
   }
-  const scopes = exactArray(
-    value.scopes,
-    expected.scopes,
-    "CREDENTIAL_TOPOLOGY_SCOPE_MISMATCH"
-  );
   if (!expected.allowedStates.includes(value.rotationState)) {
     fail(
       "CREDENTIAL_TOPOLOGY_ROTATION_STATE_INVALID",
@@ -435,6 +807,24 @@ function normalizeItem(value, expected) {
       );
     }
   }
+  const providerBinding = normalizeStripeProviderBinding(
+    value.providerBinding,
+    expected,
+    state
+  );
+  const expectedScopes =
+    expected.name ===
+      "stripe.runtime.production.restricted" &&
+    providerBinding !== null
+      ? stripeScopesForPurposes(
+          providerBinding.enabledPurposes
+        )
+      : expected.scopes;
+  const scopes = exactArray(
+    value.scopes,
+    expectedScopes,
+    "CREDENTIAL_TOPOLOGY_SCOPE_MISMATCH"
+  );
 
   return deepFreeze({
     evidenceDigest: selectedDigest,
@@ -443,6 +833,7 @@ function normalizeItem(value, expected) {
     materialPresent: value.materialPresent,
     name: value.name,
     purpose: value.purpose,
+    providerBinding,
     rotationState: state,
     scopes,
     storageBoundary: value.storageBoundary
@@ -693,6 +1084,7 @@ export function createHeldCredentialTopologyTemplate() {
       materialPresent: false,
       name: entry.name,
       purpose: entry.purpose,
+      providerBinding: null,
       rotationState:
         entry.name ===
         "stripe.standard.production.compromised"
@@ -766,6 +1158,206 @@ export function verifyCredentialTopology(
     itemCount: topology.items.length,
     topologyDigest: digest(topology),
     blockers: [...new Set(blockers)]
+  });
+}
+
+export function verifyStripeCredentialReadiness(
+  value,
+  {
+    now,
+    purpose = null,
+    environment = "production",
+    livemode = true,
+    runtimeFingerprint
+  } = {}
+) {
+  const topology = normalizeCredentialTopology(value);
+  const nowMs =
+    typeof now === "string" &&
+    Number.isFinite(Date.parse(now)) &&
+    new Date(now).toISOString() === now
+      ? Date.parse(now)
+      : fail(
+          "CREDENTIAL_TOPOLOGY_CLOCK_INVALID",
+          "Stripe credential readiness requires an exact UTC clock."
+        );
+  if (environment !== "production" || livemode !== true) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_MODE_MISMATCH",
+      "Authoritative Stripe credential topology is production-live only."
+    );
+  }
+  const runtime = itemByName(
+    topology,
+    "stripe.runtime.production.restricted"
+  );
+  const provisioner = itemByName(
+    topology,
+    "stripe.provisioner.production.restricted"
+  );
+  const standard = itemByName(
+    topology,
+    "stripe.standard.production.compromised"
+  );
+  if (
+    runtime.rotationState !== "active" ||
+    runtime.materialPresent !== true ||
+    runtime.providerBinding === null ||
+    provisioner.rotationState !== "ephemeral_revoked" ||
+    provisioner.materialPresent !== false ||
+    provisioner.providerBinding === null ||
+    standard.rotationState !== "compromised_revoked" ||
+    standard.materialPresent !== false ||
+    standard.providerBinding === null
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_NOT_READY",
+      "Stripe runtime, provisioner revocation, and Standard-key revocation evidence are required."
+    );
+  }
+  const runtimeBinding = runtime.providerBinding;
+  const provisionerBinding = provisioner.providerBinding;
+  const standardBinding = standard.providerBinding;
+  if (
+    runtimeBinding.accountId !==
+      provisionerBinding.accountId ||
+    runtimeBinding.accountId !== standardBinding.accountId ||
+    runtimeBinding.environment !== environment ||
+    runtimeBinding.livemode !== livemode ||
+    typeof runtimeFingerprint !== "string" ||
+    !SHA256.test(runtimeFingerprint) ||
+    runtimeBinding.keyFingerprint !== runtimeFingerprint
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_IDENTITY_MISMATCH",
+      "Stripe credential account, mode, or runtime fingerprint does not match."
+    );
+  }
+  if (
+    new Set([
+      runtimeBinding.keyFingerprint,
+      provisionerBinding.keyFingerprint,
+      standardBinding.keyFingerprint
+    ]).size !== 3 ||
+    runtime.storageBoundary ===
+      provisioner.storageBoundary ||
+    new Set([
+      runtime.evidenceDigest,
+      provisioner.evidenceDigest,
+      provisionerBinding.scopeEvidenceDigest,
+      standard.evidenceDigest
+    ]).size !== 4
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_IDENTITY_SHARED",
+      "Stripe credential identity, custody, or evidence cannot be shared."
+    );
+  }
+  if (
+    purpose !== null &&
+    (!STRIPE_PURPOSES.includes(purpose) ||
+      !runtimeBinding.enabledPurposes.includes(purpose))
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_PURPOSE_HELD",
+      "Stripe payment purpose is not enabled by credential topology."
+    );
+  }
+  const instants = {
+    provisionerActivated: Date.parse(
+      provisionerBinding.activatedAt
+    ),
+    runtimeActivated: Date.parse(runtimeBinding.activatedAt),
+    standardRevoked: Date.parse(standardBinding.revokedAt),
+    provisionerRevoked: Date.parse(
+      provisionerBinding.revokedAt
+    ),
+    provisionerScopeProven: Date.parse(
+      provisionerBinding.scopeProvenAt
+    ),
+    provisionerRevocationProven: Date.parse(
+      provisioner.lastProvenAt
+    ),
+    standardRevocationProven: Date.parse(
+      standard.lastProvenAt
+    ),
+    runtimeScopeProven: Date.parse(runtime.lastProvenAt)
+  };
+  if (
+    !(
+      instants.provisionerActivated <
+        instants.runtimeActivated &&
+      instants.runtimeActivated <= instants.standardRevoked &&
+      instants.standardRevoked <=
+        instants.provisionerRevoked &&
+      instants.provisionerScopeProven >=
+        instants.provisionerActivated &&
+      instants.provisionerScopeProven <=
+        instants.provisionerRevoked &&
+      instants.provisionerRevocationProven >=
+        instants.provisionerRevoked &&
+      instants.standardRevocationProven >=
+        instants.standardRevoked &&
+      instants.runtimeScopeProven >=
+        instants.provisionerRevoked &&
+      instants.provisionerRevoked -
+        instants.provisionerActivated <=
+        STRIPE_PROVISIONER_MAXIMUM_LIFETIME_MS &&
+      instants.standardRevoked -
+        instants.runtimeActivated <=
+        STRIPE_STANDARD_MAXIMUM_OVERLAP_MS &&
+      instants.provisionerRevocationProven -
+        instants.provisionerRevoked <=
+        STRIPE_REVOCATION_CONFIRMATION_MAXIMUM_MS &&
+      instants.standardRevocationProven -
+        instants.standardRevoked <=
+        STRIPE_REVOCATION_CONFIRMATION_MAXIMUM_MS
+    )
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_CHRONOLOGY_INVALID",
+      "Stripe credential activation and revocation chronology is invalid."
+    );
+  }
+  if (
+    instants.runtimeActivated > nowMs ||
+    instants.provisionerRevocationProven > nowMs ||
+    instants.standardRevocationProven > nowMs ||
+    instants.runtimeScopeProven > nowMs ||
+    nowMs - instants.runtimeScopeProven >
+      STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_SCOPE_STALE",
+      "Stripe runtime scope evidence is stale or future-dated."
+    );
+  }
+  const operations = sortedUnique(
+    runtimeBinding.enabledPurposes.flatMap(
+      (selectedPurpose) =>
+        STRIPE_OPERATIONS_BY_PURPOSE[selectedPurpose]
+    )
+  );
+  return deepFreeze({
+    schema: CREDENTIAL_TOPOLOGY_VERIFICATION_SCHEMA,
+    mode: MODE,
+    selection: "stripe",
+    ready: true,
+    effectsAllowed: false,
+    topologyDigest: digest(topology),
+    accountId: runtimeBinding.accountId,
+    environment: runtimeBinding.environment,
+    livemode: runtimeBinding.livemode,
+    enabledPurposes: runtimeBinding.enabledPurposes,
+    runtimeVersion: runtimeBinding.keyVersion,
+    runtimeFingerprint: runtimeBinding.keyFingerprint,
+    runtimeScopeCount: runtime.scopes.length,
+    runtimeScopeDigest: digest(runtime.scopes),
+    runtimeOperationCount: operations.length,
+    runtimeOperationDigest: digest(operations),
+    provisionerRevoked: true,
+    compromisedStandardRevoked: true,
+    domainsHeld: true
   });
 }
 

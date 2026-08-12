@@ -295,6 +295,48 @@ function requireRevision(row, input) {
   );
 }
 
+async function requireActorScope(client, input, actorKind) {
+  const result = actorKind === "operator"
+    ? await client.query(
+        `select
+           ss.service_operator_has_capability(
+             $1, 'service_case_manage', clock_timestamp()
+           )
+           and exists (
+             select 1
+               from ss.organizations organization
+               join ss.organization_memberships membership
+                 on membership.organization_id = organization.id
+                and membership.user_id = $1
+              where organization.id = $2
+                and organization.state = 'active'
+                and membership.state = 'active'
+           ) as allowed`,
+        [input.actorId, input.operatorOrganizationId]
+      )
+    : await client.query(
+        `select exists (
+           select 1
+             from ss.organizations organization
+             join ss.organization_memberships membership
+               on membership.organization_id = organization.id
+              and membership.user_id = $1
+            where organization.id = $2
+              and organization.state = 'active'
+              and membership.state = 'active'
+         ) as allowed`,
+        [input.actorId, input.organizationId]
+      );
+  invariant(
+    result.rows[0]?.allowed === true,
+    "SUPPORT_CASE_UNAVAILABLE",
+    actorKind === "operator"
+      ? "The support case queue is unavailable."
+      : "The support case scope is unavailable.",
+    { status: 404 }
+  );
+}
+
 export function createPostgresSupportCaseRepository({ authority } = {}) {
   const database = validateAuthority(authority);
 
@@ -303,6 +345,7 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
     return translated(() => database.service(
       actorContext(input, actorKind),
       async (client) => {
+        await requireActorScope(client, input, actorKind);
         await client.query(
           "select pg_advisory_xact_lock(hashtextextended($1, 0))",
           [input.commandId]
@@ -375,6 +418,7 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
     return translated(() => database.service(
       actorContext(input, "operator"),
       async (client) => {
+        await requireActorScope(client, input, "operator");
         await client.query(
           "select pg_advisory_xact_lock(hashtextextended($1, 0))",
           [input.commandId]
@@ -410,16 +454,7 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
     return translated(() => database.service(
       actorContext(input, actorKind, true),
       async (client) => {
-        if (actorKind === "operator") {
-          const capability = await client.query(
-            `select ss.service_operator_has_capability(
-               $1, 'service_case_manage', clock_timestamp()
-             ) as allowed`,
-            [input.actorId]
-          );
-          invariant(capability.rows[0]?.allowed === true,
-            "SUPPORT_CASE_UNAVAILABLE", "The support case is unavailable.", { status: 404 });
-        }
+        await requireActorScope(client, input, actorKind);
         const selected = await client.query(
           `select * from ss.hosted_support_cases
             where id = $1
@@ -446,16 +481,7 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
     return translated(() => database.service(
       actorContext(input, actorKind, true),
       async (client) => {
-        if (actorKind === "operator") {
-          const capability = await client.query(
-            `select ss.service_operator_has_capability(
-               $1, 'service_case_manage', clock_timestamp()
-             ) as allowed`,
-            [input.actorId]
-          );
-          invariant(capability.rows[0]?.allowed === true,
-            "SUPPORT_CASE_UNAVAILABLE", "The support case queue is unavailable.", { status: 404 });
-        }
+        await requireActorScope(client, input, actorKind);
         const selected = await client.query(
           `select * from ss.hosted_support_cases
             ${actorKind === "customer"

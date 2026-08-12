@@ -6,6 +6,9 @@ import {
   validateOfferCatalog
 } from "../commerce/catalog.mjs";
 import {
+  exactStripeWebhookVerification
+} from "../commerce/stripe-webhook-rotation.mjs";
+import {
   CANCELLATION_PREVIEW_TTL_MS,
   RETENTION_DAYS
 } from "./constants.mjs";
@@ -7635,10 +7638,15 @@ function createCanonicalPostgresRuntime({
       );
       let event;
       try {
-        event = await paymentProvider.verifyWebhook({
+        const verified =
+          await paymentProvider.verifyWebhook({
           rawBody,
           signature
         });
+        event = exactStripeWebhookVerification(
+          verified,
+          { rawBody, signature }
+        ).event;
       } catch (error) {
         if (error instanceof HostedError) throw error;
         const code = String(error?.code ?? "");

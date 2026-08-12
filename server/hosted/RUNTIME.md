@@ -130,6 +130,33 @@ Activation remains a separate operator step. Follow `ops/RESEND-SETUP.md`; do
 not change either mail mode from `held` until its DNS and private end-to-end
 proof are complete.
 
+Resend provider-event ingress is independently held by
+`SITESOURCERY_RESEND_WEBHOOK_MODE=held`. The only enabled value is `verified`,
+which also requires the root-owned
+`SITESOURCERY_RESEND_WEBHOOK_SIGNING_SECRET`. The hosted route accepts only
+`POST /api/v1/webhooks/resend`, exact JSON media type, at most 64 KiB of raw
+bytes, and an exact declared length when present. It returns 200 only after the
+signature-verifying lifecycle boundary durably accepts the event or recognizes
+its durable replay. Raw bodies and signature headers are never logged.
+
+Support/commerce notification dispatch runs only in the separate worker
+process under the `notification-mail` purpose. Its dedicated mode defaults to
+`held`; `approved_live` additionally requires verified Resend credentials and
+a bounded regular private-renderer module under `/etc/sitesourcery/mail/`
+whose exact SHA-256 is configured. The module bytes are opened without
+following a final symlink, bounded, hashed, and loaded from the verified bytes.
+The reviewed source is `ops/notification-mail-private-renderer.mjs`. It is
+independently held unless its mode is `reviewed`, the configured registry digest
+is exactly `7d9d2c440484930d30fc0440c8976f5447463c0c2d81bae332832924498e4b57`,
+and a private operator recipient resolves to one currently authorized payment-
+reconciliation operator. The registry pins five support, 21 commerce, and three
+Care template versions with typed variables and fixed text/HTML. Care previews
+are implemented, but Care delivery stays reservation-only until a separately
+reviewed durable dispatch source exists.
+Claims remain 30 seconds through five minutes, batches are at most 25, retries
+reuse one provider idempotency key, and shutdown drains the active batch within
+the supervisor deadline.
+
 No registration or recovery token, recipient, or action URL is included in
 public API responses, startup output, or durable provider-receipt facts.
 
@@ -191,17 +218,38 @@ Approved composition requires every item below:
 - `SITESOURCERY_STRIPE_APPROVAL_JSON`: the exact JSON approval object, with no
   extra fields. It contains `provider`, `approved`, `environment`, `livemode`,
   `apiVersion`, `approvalId`, `approvedAt`, and `capabilities`.
-- `SITESOURCERY_STRIPE_SECRET_KEY`: preferably a least-privilege server-only
-  `rk_test_` or `rk_live_` restricted key matching the bound environment and
-  livemode. Matching `sk_test_`/`sk_live_` keys remain accepted only for
-  bootstrap and emergency rotation.
-- `SITESOURCERY_STRIPE_WEBHOOK_SECRET`: the server-only `whsec_` signing secret
-  for the same Stripe endpoint.
+- `SITESOURCERY_STRIPE_SECRET_KEY`: a least-privilege server-only `rk_test_` or
+  `rk_live_` restricted key matching the bound environment and livemode.
+  Standard `sk_`, full-access, and shared credentials are rejected.
+- `SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON`: the existing exact non-secret
+  `sitesourcery.credential-topology/v1` manifest. Its authoritative
+  `stripe.runtime.production.restricted`,
+  `stripe.provisioner.production.restricted`, and
+  `stripe.standard.production.compromised` records bind the live Stripe
+  account, enabled payment purposes, runtime version/fingerprint, existing
+  custody boundaries, exact purpose-derived scopes, proof times/digests, and
+  activation/revocation chronology. The provisioner must be revoked within 24
+  hours; runtime scope proof must be no more than 15 minutes old at readiness.
+  Domain operations and Payment Intent/Refund write scope remain absent and
+  held. This production manifest is not accepted as staging authority.
+- `SITESOURCERY_STRIPE_WEBHOOK_SECRET`: the server-only current `whsec_`
+  signing secret for the same Stripe endpoint.
+- `SITESOURCERY_STRIPE_WEBHOOK_ROTATION_JSON`: exact non-secret
+  `sitesourcery.stripe-webhook-rotation-metadata/v1` current/next key versions,
+  activation/retirement timestamps, and overlap seconds. A sole current key
+  has no retirement and zero overlap. During rotation, overlap must be 5
+  minutes through 24 hours and equal the exact interval from next activation
+  until current retirement.
+- `SITESOURCERY_STRIPE_WEBHOOK_NEXT_SECRET`: the server-only next `whsec_`
+  signing secret, required exactly when the rotation metadata has a next slot.
 - `SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_ID` and
   `SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_URL`: the exact mode-matched `we_` ID
   and public HTTPS ingress URL. Startup reads the endpoint back and requires it
   to be enabled, pinned to `2026-06-24.dahlia`, application-unowned, and bound
-  to the exact reviewed event set.
+  to the exact reviewed event set. Rotation readiness is held after the
+  current key retires until the next slot is promoted into a new current-only
+  contract; verification accepts no key before activation and no current key
+  at or after retirement.
 - `SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON`: a non-empty JSON array of exact
   Price ID, livemode, USD amount, recurrence, and `exclusive` tax-behavior
   expectations.
@@ -256,15 +304,18 @@ only migration 109; the integration verifier must seal the exact 62-file union.
 The approval must include all hosted capabilities: `checkout:create`,
 `billing_portal:create`, `prices:read`, `subscriptions:cancel`,
 `webhook_endpoints:read`, and `webhooks:verify`. Domain capabilities are
-all-or-none. If approved, they also require:
+rejected until a separate restricted key is represented in the authoritative
+credential inventory and separately approved.
+Domain templates do not grant authority and must remain absent.
+The future held Domain configuration fields are:
 
 - `SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE`;
 - `SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE`;
 - `SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE`.
 
 Both templates contain the exact `{ORDER_ID}` placeholder, and the success
-template also contains `{CHECKOUT_SESSION_ID}`. Configuring domain templates
-without the complete manual-authorization capability set fails startup.
+template also contains `{CHECKOUT_SESSION_ID}`. Configuring Domain capabilities
+or templates fails startup.
 
 `SITESOURCERY_STRIPE_CHECKOUT_TTL_SECONDS` is optional and remains bounded by the
 adapter. Approved startup calls Stripe readiness, including exact Price

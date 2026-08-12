@@ -23,6 +23,7 @@ import {
   assertNoHeldAlakazamExecutableSemantics,
   buildHostedArtifact,
   hostedFileAllowlist,
+  hostedOperatorAssets,
   hostedFilesForPrivacyV3Render,
   verifyHostedArtifact,
 } from "../build-hosted.mjs";
@@ -253,6 +254,15 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
   assert.deepEqual(hostedCodeTransforms, []);
   assert.deepEqual(hostedStagingAssets, EXPECTED_HOSTED_STAGING_ASSETS);
   assert.deepEqual(Object.keys(hostedStagingAssetSha256), hostedStagingAssets);
+  assert.deepEqual(hostedOperatorAssets, [
+    "operator/index.html",
+    "operator/operator.css",
+    "operator/operator.js",
+  ]);
+  for (const operatorAsset of hostedOperatorAssets) {
+    assert.equal(publicFileAllowlist.includes(operatorAsset), false);
+    assert.equal(hostedFileAllowlist.includes(operatorAsset), true);
+  }
 
   for (const hostedOnlyAsset of [
     "abracadabra/app/abracadabra-alakazam-35.css",

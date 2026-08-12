@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -15,6 +16,17 @@ import {
   createAlakazamPaymentIncidentService,
   createAlakazamPaymentRecoveryService
 } from "../../commerce-v2/alakazam-lifecycle-state.mjs";
+import {
+  createAlakazamInvoiceFinalizationService
+} from "../../commerce-v2/alakazam-invoice-finalization.mjs";
+import {
+  STRIPE_RESTRICTED_KEY_CONTRACT,
+  STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE,
+  createHeldCredentialTopologyTemplate
+} from "../../../ops/credential-topology.mjs";
+import {
+  stripeRuntimeKeyFingerprint
+} from "../../commerce/adapters/stripe.mjs";
 
 import {
   STRIPE_PRODUCTION_CONTRACT,
@@ -41,8 +53,19 @@ const COMPLETE_ALAKAZAM_CAPABILITIES = [
     ...ALAKAZAM_CAPABILITIES
   ])
 ];
-const SECRET_KEY = "sk_live_do-not-log-this";
+const SECRET_KEY = "rk_live_do-not-log-this";
 const WEBHOOK_SECRET = "whsec_do-not-log-this";
+const WEBHOOK_ROTATION_METADATA = Object.freeze({
+  schema:
+    "sitesourcery.stripe-webhook-rotation-metadata/v1",
+  current: Object.freeze({
+    version: "webhook-2026-08-current",
+    activatedAt: "2026-08-01T00:00:00.000Z",
+    retiresAt: null
+  }),
+  next: null,
+  overlapSeconds: 0
+});
 const ALAKAZAM_PRODUCT_ID =
   "prod_alakazam_contract_only";
 const ALAKAZAM_COUPON_ID =
@@ -69,6 +92,105 @@ function approval(overrides = {}) {
   };
 }
 
+function credentialTopology({
+  secretKey = SECRET_KEY,
+  enabledPurposes = ["download"]
+} = {}) {
+  const evidence = (value) =>
+    createHash("sha256")
+      .update(`stripe-topology:${value}`, "utf8")
+      .digest("hex");
+  const runtimeScopes = [
+    ...new Set(
+      enabledPurposes.flatMap(
+        (purpose) =>
+          STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE[purpose]
+      )
+    )
+  ].sort();
+  const accountId = "acct_production_contract";
+  const runtimeVersion = "runtime-production-v1";
+  const provisionerVersion =
+    "provisioner-production-v1";
+  const standardVersion =
+    "standard-compromised-production-v1";
+  const runtimeFingerprint = secretKey.startsWith("rk_")
+    ? stripeRuntimeKeyFingerprint(secretKey)
+    : evidence("invalid-standard-placeholder");
+  const provisionerFingerprint = evidence(
+    "provisioner-key"
+  );
+  const standardFingerprint = evidence("standard-key");
+  const input = structuredClone(
+    createHeldCredentialTopologyTemplate()
+  );
+  const selected = (name) =>
+    input.items.find((entry) => entry.name === name);
+  const runtime = selected(
+    "stripe.runtime.production.restricted"
+  );
+  Object.assign(runtime, {
+    rotationState: "active",
+    materialPresent: true,
+    lastProvenAt: "2026-08-11T16:00:00.000Z",
+    evidenceDigest: evidence("runtime-scope"),
+    scopes: runtimeScopes,
+    providerBinding: {
+      provider: "stripe",
+      environment: "production",
+      livemode: true,
+      accountId,
+      keyClass: "restricted",
+      keyVersion: runtimeVersion,
+      keyFingerprint: runtimeFingerprint,
+      activatedAt: "2026-08-11T14:30:00.000Z",
+      enabledPurposes
+    }
+  });
+  const provisioner = selected(
+    "stripe.provisioner.production.restricted"
+  );
+  Object.assign(provisioner, {
+    rotationState: "ephemeral_revoked",
+    materialPresent: false,
+    lastProvenAt: "2026-08-11T14:41:00.000Z",
+    evidenceDigest: evidence("provisioner-revoked"),
+    providerBinding: {
+      provider: "stripe",
+      environment: "production",
+      livemode: true,
+      accountId,
+      keyClass: "restricted",
+      keyVersion: provisionerVersion,
+      keyFingerprint: provisionerFingerprint,
+      activatedAt: "2026-08-11T14:00:00.000Z",
+      revokedAt: "2026-08-11T14:40:00.000Z",
+      scopeProvenAt: "2026-08-11T14:01:00.000Z",
+      scopeEvidenceDigest: evidence("provisioner-scope")
+    }
+  });
+  const standard = selected(
+    "stripe.standard.production.compromised"
+  );
+  Object.assign(standard, {
+    rotationState: "compromised_revoked",
+    materialPresent: false,
+    lastProvenAt: "2026-08-11T14:36:00.000Z",
+    evidenceDigest: evidence("standard-revoked"),
+    providerBinding: {
+      provider: "stripe",
+      environment: "production",
+      livemode: true,
+      accountId,
+      keyClass: "standard_status_only",
+      keyVersion: standardVersion,
+      keyFingerprint: standardFingerprint,
+      revokedAt: "2026-08-11T14:35:00.000Z"
+    }
+  });
+  return input;
+}
+
 function productionEnvironment(overrides = {}) {
   const {
     approval: selectedApproval = approval(),
@@ -86,6 +208,8 @@ function productionEnvironment(overrides = {}) {
     SITESOURCERY_STRIPE_SECRET_KEY: SECRET_KEY,
     SITESOURCERY_STRIPE_WEBHOOK_SECRET:
       WEBHOOK_SECRET,
+    SITESOURCERY_STRIPE_WEBHOOK_ROTATION_JSON:
+      JSON.stringify(WEBHOOK_ROTATION_METADATA),
     SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON:
       JSON.stringify([
         {
@@ -150,7 +274,31 @@ function productionEnvironment(overrides = {}) {
         siteService: "txcd_10701200"
       }),
   };
-  return { ...environment, ...environmentOverrides };
+  const selected = {
+    ...environment,
+    ...environmentOverrides
+  };
+  if (
+    selected.SITESOURCERY_DEPLOYMENT_ENVIRONMENT ===
+      "production" &&
+    selected.SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON ===
+      undefined
+  ) {
+    selected.SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON =
+      JSON.stringify(
+        credentialTopology({
+          secretKey:
+            selected.SITESOURCERY_STRIPE_SECRET_KEY,
+          enabledPurposes:
+            selected[
+              "SITESOURCERY_STRIPE_ALAKAZAM_CONFIGURATION_JSON"
+            ] === undefined
+              ? ["download"]
+              : ["alakazam"]
+        })
+      );
+  }
+  return selected;
 }
 
 function alakazamProviderConfiguration(overrides = {}) {
@@ -315,9 +463,21 @@ test("approved production composition passes one exact bound configuration to th
     constructed.liveApproval,
     approval()
   );
-  assert.equal(
-    constructed.config.webhookSecret,
-    WEBHOOK_SECRET
+  assert.deepEqual(
+    {
+      version:
+        constructed.config.webhookRotation.current
+          .version,
+      secret:
+        constructed.config.webhookRotation.current
+          .secret,
+      next: constructed.config.webhookRotation.next
+    },
+    {
+      version: "webhook-2026-08-current",
+      secret: WEBHOOK_SECRET,
+      next: null
+    }
   );
   assert.equal(
     constructed.config.checkoutTtlSeconds,
@@ -326,6 +486,18 @@ test("approved production composition passes one exact bound configuration to th
   assert.equal(
     constructed.config.domainAuthorization,
     null
+  );
+  assert.deepEqual(
+    constructed.config.credentialTopology.items.find(
+      (item) =>
+        item.name ===
+        "stripe.runtime.production.restricted"
+    ).scopes,
+    [
+      "checkout_sessions:write",
+      "prices:read",
+      "webhook_endpoints:read"
+    ]
   );
   assert.doesNotMatch(
     JSON.stringify(composition),
@@ -478,6 +650,7 @@ test("approved Alakazam environment constructs the pinned adapter without making
     "retrieveAlakazamPayment",
     "retrieveAlakazamRenewalInvoice",
     "retrieveAlakazamIncidentInvoice",
+    "retrieveAlakazamFinalizationInvoice",
     "retrieveAlakazamCancellation",
     "retrieveAlakazamReversal",
     "retrieveAlakazamSubscription",
@@ -503,6 +676,9 @@ test("held and approved production construction satisfy every Alakazam lifecycle
     }).adapter
   ];
   const repository = {
+    async readiness() {},
+    async findFinalizationSubscriptionByInvoice() {},
+    async recordInvoiceFinalization() {},
     async findRenewalSubscriptionByInvoice() {},
     async settleRenewalPayment() {},
     async findIncidentSubscriptionByInvoice() {},
@@ -524,6 +700,12 @@ test("held and approved production construction satisfy every Alakazam lifecycle
   };
   for (const provider of adapters) {
     const services = [
+      createAlakazamInvoiceFinalizationService({
+        repository,
+        provider,
+        clock,
+        ids
+      }),
       createAlakazamRenewalService({
         repository,
         provider,
@@ -603,6 +785,12 @@ test("contract_test and every mismatched approval boundary are impossible in pro
     },
     {
       environment: productionEnvironment({
+        SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON: ""
+      }),
+      code: "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED"
+    },
+    {
+      environment: productionEnvironment({
         approval: approval({
           capabilities:
             HOSTED_CAPABILITIES.slice(1)
@@ -621,7 +809,7 @@ test("contract_test and every mismatched approval boundary are impossible in pro
         })
       }),
       code:
-        "STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE"
+        "STRIPE_PRODUCTION_DOMAIN_KEY_HELD"
     },
     {
       environment: productionEnvironment({
@@ -928,7 +1116,7 @@ test("Alakazam provider configuration rejects every partial, extra, duplicate, o
   }
 });
 
-test("complete domain approval requires and binds exact order templates and disclosure", () => {
+test("Domain approval stays held for a separate future credential record", () => {
   const capture = capturingFactory();
   const domainApproval = approval({
     capabilities: [
@@ -946,32 +1134,26 @@ test("complete domain approval requires and binds exact order templates and disc
       }),
     (error) =>
       error?.code ===
-      "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED"
+      "STRIPE_PRODUCTION_DOMAIN_KEY_HELD"
   );
-  const composition = createConfiguredStripeProvider({
-    environment: productionEnvironment({
-      approval: domainApproval,
-      SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE:
-        "https://sitesourcery.com/domain/{ORDER_ID}/success?session={CHECKOUT_SESSION_ID}",
-      SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE:
-        "https://sitesourcery.com/domain/{ORDER_ID}/cancel",
-      SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE:
-        "Authorize the exact domain total; capture follows verified registrar readback."
-    }),
-    adapterFactory: capture.factory
-  });
-  assert.equal(composition.mode, "approved_live");
-  assert.deepEqual(
-    capture.calls.at(-1).config.domainAuthorization,
-    {
-      successUrlTemplate:
-        "https://sitesourcery.com/domain/{ORDER_ID}/success?session={CHECKOUT_SESSION_ID}",
-      cancelUrlTemplate:
-        "https://sitesourcery.com/domain/{ORDER_ID}/cancel",
-      authorizationDisclosure:
-        "Authorize the exact domain total; capture follows verified registrar readback."
-    }
+  assert.throws(
+    () =>
+      createConfiguredStripeProvider({
+        environment: productionEnvironment({
+          approval: domainApproval,
+          SITESOURCERY_STRIPE_DOMAIN_SUCCESS_URL_TEMPLATE:
+            "https://sitesourcery.com/domain/{ORDER_ID}/success?session={CHECKOUT_SESSION_ID}",
+          SITESOURCERY_STRIPE_DOMAIN_CANCEL_URL_TEMPLATE:
+            "https://sitesourcery.com/domain/{ORDER_ID}/cancel",
+          SITESOURCERY_STRIPE_DOMAIN_AUTHORIZATION_DISCLOSURE:
+            "Authorize only after separate Domain-key approval."
+        }),
+        adapterFactory: capture.factory
+      }),
+    (error) =>
+      error?.code === "STRIPE_PRODUCTION_DOMAIN_KEY_HELD"
   );
+  assert.equal(capture.calls.length, 0);
 });
 
 test("staging is pinned to Stripe test mode and the matching key", () => {
@@ -987,7 +1169,7 @@ test("staging is pinned to Stripe test mode and the matching key", () => {
       "staging",
     SITESOURCERY_STRIPE_LIVEMODE: "false",
     SITESOURCERY_STRIPE_SECRET_KEY:
-      "sk_test_staging-only"
+      "rk_test_staging-only"
   });
   const priceExpectations = JSON.parse(
     environment
@@ -1002,9 +1184,13 @@ test("staging is pinned to Stripe test mode and the matching key", () => {
   });
   assert.equal(composition.environment, "staging");
   assert.equal(composition.livemode, false);
+  assert.equal(
+    "credentialTopology" in capture.calls[0].config,
+    false
+  );
   assert.match(
     capture.calls[0].secretKey,
-    /^sk_test_/u
+    /^rk_test_/u
   );
 });
 
@@ -1026,7 +1212,7 @@ test("Alakazam staging configuration binds every provider expectation to test mo
       "staging",
     SITESOURCERY_STRIPE_LIVEMODE: "false",
     SITESOURCERY_STRIPE_SECRET_KEY:
-      "sk_test_alakazam-staging-only"
+      "rk_test_alakazam-staging-only"
   });
   const composition = createConfiguredStripeProvider({
     environment,
@@ -1066,6 +1252,44 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
       domainAuthorization: true,
       webhookVerification: true,
       webhookEndpoint: true,
+      webhookRotation: {
+        schema:
+          "sitesourcery.stripe-webhook-rotation-readiness/v1",
+        ready: true,
+        state: "overlap",
+        activeKeyCount: 2,
+        currentVersion: "webhook-current-v1",
+        currentFingerprint: "a".repeat(64),
+        nextConfigured: true,
+        nextVersion: "webhook-next-v2",
+        nextFingerprint: "b".repeat(64),
+        overlapSeconds: 600,
+        currentSecret: WEBHOOK_SECRET,
+        nextSecret: "whsec_next-do-not-log"
+      },
+      credentialTopology: {
+        schema:
+          "sitesourcery.credential-topology-verification/v1",
+        mode: "held",
+        selection: "stripe",
+        ready: true,
+        environment: "production",
+        livemode: true,
+        accountId: "acct_production_contract",
+        enabledPurposes: ["download"],
+        runtimeVersion: "runtime-production-v1",
+        runtimeFingerprint: "c".repeat(64),
+        topologyDigest: "f".repeat(64),
+        runtimeScopeCount: 3,
+        runtimeScopeDigest: "d".repeat(64),
+        runtimeOperationCount: 4,
+        runtimeOperationDigest: "e".repeat(64),
+        provisionerRevoked: true,
+        compromisedStandardRevoked: true,
+        domainsHeld: true,
+        effectsAllowed: false,
+        secretKey: SECRET_KEY
+      },
       taxModes: {
         alakazam: "disabled_by_owner",
         customBuildChange: "disabled_by_owner",
@@ -1092,6 +1316,7 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
     "apiVersion",
     "automaticTaxActivation",
     "code",
+    "credentialTopology",
     "domainAuthorization",
     "environment",
     "livemode",
@@ -1103,15 +1328,52 @@ test("readiness and startup diagnostics expose only an allowlisted projection", 
     "taxModes",
     "taxPurposeAuthority",
     "webhookEndpoint",
+    "webhookRotation",
     "webhookVerification"
   ]);
   const output = JSON.stringify(redacted);
+  assert.deepEqual(redacted.webhookRotation, {
+    schema:
+      "sitesourcery.stripe-webhook-rotation-readiness/v1",
+    ready: true,
+    state: "overlap",
+    activeKeyCount: 2,
+    currentVersion: "webhook-current-v1",
+    currentFingerprint: "a".repeat(64),
+    nextConfigured: true,
+    nextVersion: "webhook-next-v2",
+    nextFingerprint: "b".repeat(64),
+    overlapSeconds: 600
+  });
+  assert.deepEqual(redacted.credentialTopology, {
+    schema:
+      "sitesourcery.credential-topology-verification/v1",
+    mode: "held",
+    selection: "stripe",
+    ready: true,
+    environment: "production",
+    livemode: true,
+    accountId: "acct_production_contract",
+    enabledPurposes: ["download"],
+    runtimeVersion: "runtime-production-v1",
+    runtimeFingerprint: "c".repeat(64),
+    topologyDigest: "f".repeat(64),
+    runtimeScopeCount: 3,
+    runtimeScopeDigest: "d".repeat(64),
+    runtimeOperationCount: 4,
+    runtimeOperationDigest: "e".repeat(64),
+    provisionerRevoked: true,
+    compromisedStandardRevoked: true,
+    domainsHeld: true,
+    effectsAllowed: false
+  });
   for (const secret of [
     SECRET_KEY,
     WEBHOOK_SECRET,
     "price_live_secret",
     "approval-secret",
-    "private.example"
+    "private.example",
+    "whsec_next-do-not-log"
   ]) {
     assert.doesNotMatch(output, new RegExp(secret, "u"));
   }

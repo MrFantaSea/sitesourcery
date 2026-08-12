@@ -163,10 +163,17 @@ function assertSortedUnique(values, label) {
   }
 }
 
+export const hostedOperatorAssets = Object.freeze([
+  "operator/index.html",
+  "operator/operator.css",
+  "operator/operator.js",
+]);
+
 export const hostedFileAllowlist = Object.freeze(
   [
     ...publicFileAllowlist,
     ...hostedStagingAssets.filter((file) => !publicFileAllowlist.includes(file)),
+    ...hostedOperatorAssets,
   ].sort(lexical),
 );
 
@@ -411,6 +418,7 @@ export function hostedFilesForPrivacyV3Render(options) {
 }
 
 assertSortedUnique(hostedFileAllowlist, "hosted file allowlist");
+assertSortedUnique(hostedOperatorAssets, "hosted operator assets");
 assertPrivacyV3NotPublished(hostedFileAllowlist, "hosted file allowlist");
 for (const file of heldAlakazamArtifactExcludedFiles) {
   if (hostedFileAllowlist.includes(file)) {

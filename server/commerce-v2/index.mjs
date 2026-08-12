@@ -49,5 +49,6 @@ export * from "./alakazam-lifecycle-policy.mjs";
 export * from "./alakazam-policy-authority.mjs";
 export * from "./alakazam-lifecycle-renewal.mjs";
 export * from "./alakazam-lifecycle-state.mjs";
+export * from "./alakazam-invoice-finalization.mjs";
 export * from "./alakazam-lifecycle-cancellation.mjs";
 export * from "./alakazam-lifecycle-reversal.mjs";

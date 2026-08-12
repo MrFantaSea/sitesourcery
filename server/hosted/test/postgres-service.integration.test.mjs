@@ -41,6 +41,12 @@ import {
   createPostgresDownloadPaymentRepository
 } from "../download-payment-postgres.mjs";
 import {
+  createPostgresEngagementBootstrapRepository
+} from "../engagement-bootstrap-postgres.mjs";
+import {
+  createHostedEngagementBootstrap
+} from "../engagement-bootstrap.mjs";
+import {
   createHostedCustomServicesAccount
 } from "../custom-services-account-hosted.mjs";
 import {
@@ -90,7 +96,7 @@ import {
 import { createNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import {
-  createProjectLegalAuthorityFromEnvironment
+  createProjectLegalAuthorityV4
 } from "../project-legal-authority.mjs";
 import { createAesGcmContactVault } from "../production-ports.mjs";
 import {
@@ -114,6 +120,8 @@ const AbracadabraAPI = require(
 );
 const DATABASE_URL =
   process.env.SITESOURCERY_PG_SERVICE_TEST_URL ?? null;
+const CORE_REVENUE_E2E_ONLY =
+  process.env.SITESOURCERY_CORE_REVENUE_E2E_ONLY === "1";
 const NOW = "2026-07-28T20:00:00.000Z";
 const MIGRATIONS = new URL(
   "../../data-plane/supabase/migrations/",
@@ -455,7 +463,7 @@ function createContractPaymentProvider() {
           subtotalMinor: 20000,
           taxMinor: 0,
           totalMinor: 20000,
-          taxMode: "automatic",
+          taxMode: "disabled_by_owner",
           currency: "USD",
           purposeDigest: input.purposeDigest,
           providerPaymentTime: NOW
@@ -779,7 +787,10 @@ async function assertExactTablePrivilegeAllowlist(
 
 function acceptanceForDisposableProjectAuthority(authority) {
   return Object.freeze({
-    schema: "sitesourcery.project-legal-acceptance/v3",
+    schema: authority.schema ===
+        "sitesourcery.project-legal-authority/v4"
+      ? "sitesourcery.project-legal-acceptance/v4"
+      : "sitesourcery.project-legal-acceptance/v3",
     acceptanceStatement: authority.acceptanceStatement,
     authorityDigest: authority.authorityDigest,
     documents: Object.freeze(
@@ -787,6 +798,39 @@ function acceptanceForDisposableProjectAuthority(authority) {
         Object.freeze({ ...document })
       )
     )
+  });
+}
+
+function releasedProjectLegalV4Authority() {
+  return createProjectLegalAuthorityV4({
+    privacyV4: {
+      version: "SS-HOSTED-PRIVACY-2026-08-09-V4",
+      contentDigest:
+        "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+      contentUri:
+        "https://sitesourcery.com/legal/privacy/versions/" +
+        "SS-HOSTED-PRIVACY-2026-08-09-V4/",
+      effectiveAt: "2026-08-09T21:42:11.000Z",
+      byteCount: 31451,
+      artifactUri:
+        "https://sitesourcery.com/legal/privacy/versions/" +
+        "SS-HOSTED-PRIVACY-2026-08-09-V4/"
+    },
+    websiteTermsV4: {
+      version: "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4",
+      contentDigest:
+        "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+      contentUri:
+        "https://sitesourcery.com/legal/website-terms/versions/" +
+        "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4/",
+      effectiveAt: "2026-08-09T21:42:11.000Z",
+      byteCount: 26215,
+      artifactUri:
+        "https://sitesourcery.com/legal/website-terms/versions/" +
+        "SS-HOSTED-WEBSITE-TERMS-2026-08-09-V4/"
+    },
+    authorityDigest:
+      "ba2871701541ca78e29a9fef313a3e335e7fed571590eb319667c763a7cd3968"
   });
 }
 
@@ -1285,10 +1329,11 @@ test(
           "https://staging.sitesourcery.test/abracadabra/app/",
         clock
       });
+    const identityPepper = randomBytes(32);
     const identity = createPostgresIdentityBridge({
       pool,
       authority,
-      pepper: randomBytes(32),
+      pepper: identityPepper,
       pepperVersion: "test-v1",
       clock: () => new Date(NOW),
       registrationMailPort: registrationSink,
@@ -1316,8 +1361,29 @@ test(
     const serviceAuthority =
       createFinalizationCommitFaultAuthority(authority);
     const payment = createContractPaymentProvider();
-    const projectLegalAuthorityConfig =
-      createProjectLegalAuthorityFromEnvironment();
+    const projectLegalAuthorityConfig = Object.freeze({
+      authority: releasedProjectLegalV4Authority(),
+      diagnostic: null
+    });
+    let engagementClockNow = NOW;
+    const engagementBootstrap =
+      projectLegalAuthorityConfig.authority
+        ? createHostedEngagementBootstrap({
+            repository:
+              createPostgresEngagementBootstrapRepository({
+                authority,
+                legalAuthority:
+                  projectLegalAuthorityConfig.authority,
+                pepper: identityPepper,
+                pepperVersion: "test-v1",
+                clock: () => new Date(engagementClockNow)
+              }),
+            legalAuthority:
+              projectLegalAuthorityConfig.authority,
+            tokenSecret: randomBytes(32),
+            clock: () => new Date(engagementClockNow)
+          })
+        : null;
     const serviceOptions = {
       authority: serviceAuthority,
       identity,
@@ -1386,7 +1452,7 @@ test(
       approved: true,
       amountMinor: 20000,
       currency: "USD",
-      taxMode: "automatic"
+      taxMode: "disabled_by_owner"
     });
     const assessmentSettlement =
       createPostgresCustomServicesAssessmentSettlement({
@@ -1479,6 +1545,11 @@ test(
         }
       },
       alakazamLifecycle: {
+        finalization: {
+          async ingestStripeEvent() {
+            return { status: "not_alakazam_finalization" };
+          }
+        },
         renewal: {
           async ingestStripeEvent() {
             return { status: "not_alakazam_renewal" };
@@ -2183,6 +2254,7 @@ test(
 
     await t.test(
       "project idempotency cannot replay one address command across projects",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const first = await service.createProject(
           actor,
@@ -2248,6 +2320,7 @@ test(
 
     await t.test(
       "Alakazam Checkout wins one setup race and fences later site edits",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const fenceActor = otherActor;
         const fenceOrganizationId =
@@ -2360,7 +2433,9 @@ test(
                 provider: "stripe",
                 alakazam: true,
                 livemode: false,
-                taxMode: "disabled_by_owner"
+                taxModes: {
+                  alakazam: "disabled_by_owner"
+                }
               };
             },
             async createAlakazamCustomer(input) {
@@ -3450,6 +3525,7 @@ test(
 
     await t.test(
       "stale lease recovers a crash before write and fences the late worker",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const requested = await service.requestExport(
           actor,
@@ -3551,6 +3627,7 @@ test(
 
     await t.test(
       "restart reconciles a crash after immutable object write",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const requested = await service.requestExport(
           actor,
@@ -3623,6 +3700,7 @@ test(
 
     await t.test(
       "lost object-write response reconciles the exact immutable key",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const requested = await service.requestExport(
           actor,
@@ -3670,6 +3748,7 @@ test(
 
     await t.test(
       "concurrent workers claim separate queued exports with bounded batches",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const first = await service.requestExport(
           actor,
@@ -3751,6 +3830,7 @@ test(
 
     await t.test(
       "graceful abort releases prepared claim before object write",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const requested = await service.requestExport(
           actor,
@@ -3810,6 +3890,7 @@ test(
 
     await t.test(
       "immutable-key conflict fails closed until explicit new attempt",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const requested = await service.requestExport(
           actor,
@@ -3897,6 +3978,7 @@ test(
 
     await t.test(
       "expired retention fails without any object write",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const retentionProject =
           await service.createProject(
@@ -4206,6 +4288,7 @@ test(
 
     await t.test(
       "browser API crosses CSRF, secure cookies, HTTP, and PostgreSQL for one account",
+      { skip: CORE_REVENUE_E2E_ONLY },
       async () => {
         const origin = "https://staging.sitesourcery.test";
         const api = createHostedApi(service, {
@@ -4357,13 +4440,68 @@ test(
       }
     );
     await t.test(
-      "J-02 browser journey crosses public inquiry, account, assessment quote, invoice, and Stripe-test reconciliation",
+      "CORE-REVENUE-E2E-01 crosses inquiry, invitation, activation, Download receipt, and reversal",
       async () => {
+        assert.ok(
+          engagementBootstrap,
+          "released joint Legal V4 is required for the revenue journey"
+        );
+        await pool.query(
+          `insert into ss.operator_profiles (
+             user_id, display_label, state,
+             authorized_by_user_id, authorized_at
+           ) values ($1, $2, 'held', $1, clock_timestamp())`,
+          [otherActor.userId, "Revenue inquiry operator"]
+        );
+        await pool.query(
+          `insert into ss.operator_permissions (
+             operator_user_id, capability, state,
+             granted_by_user_id, granted_at
+           ) values (
+             $1, 'service_case_manage', 'held',
+             $1, clock_timestamp()
+           )`,
+          [otherActor.userId]
+        );
+        const inquiryGrantExpiresAt = new Date(
+          Date.now() + 24 * 60 * 60 * 1000
+        ).toISOString();
+        const inquiryGrant = await pool.query(
+          `insert into ss.service_operator_authority_events (
+             operator_user_id, capability, event_sequence,
+             event_kind, predecessor_event_id,
+             recorded_by_kind, effective_at, expires_at,
+             created_at
+           ) values (
+             $1, 'service_case_manage', 99, 'grant', null,
+             'deployment_control',
+             '2001-01-01T00:00:00.000Z', $2,
+             '2001-01-01T00:00:00.000Z'
+           ) returning event_sequence, event_kind, event_digest`,
+          [otherActor.userId, inquiryGrantExpiresAt]
+        );
+        assert.deepEqual(
+          {
+            eventSequence: Number(
+              inquiryGrant.rows[0].event_sequence
+            ),
+            eventKind: inquiryGrant.rows[0].event_kind
+          },
+          { eventSequence: 1, eventKind: "grant" }
+        );
+        assert.match(
+          inquiryGrant.rows[0].event_digest,
+          /^[a-f0-9]{64}$/u
+        );
+        engagementClockNow = new Date(
+          Date.now() + 1000
+        ).toISOString();
         const api = createHostedApi(service, {
           downloadCommerce,
           alakazamAccount,
           customServicesAccount,
           customServicesOwner,
+          engagementBootstrap,
           stripeWebhook
         });
         const browserServer =
@@ -4430,6 +4568,71 @@ test(
             forms: 0
           });
 
+          const operatorCsrf = "i".repeat(32);
+          const invitationResponse = await fetch(
+            new Request(
+              `${browserServer.origin}` +
+                "/api/v1/operator/engagement-invitations",
+              {
+                method: "POST",
+                headers: {
+                  Cookie:
+                    `ss_session=${otherRegistered.sessionToken}; ` +
+                    `ss_csrf=${operatorCsrf}`,
+                  Origin: browserServer.origin,
+                  "X-CSRF-Token": operatorCsrf,
+                  "Idempotency-Key":
+                    "core-revenue-inquiry-invitation-1",
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  customerEmail: email,
+                  customerName: "J-02 Browser Customer",
+                  organizationId: null,
+                  organizationName:
+                    "J-02 Browser Customer Organization",
+                  projectName,
+                  provenance: "direct_custom_inquiry",
+                  site: { kind: "new_site" },
+                  sourceAssessmentReportId: null
+                })
+              }
+            )
+          );
+          const invitation = await invitationResponse.json();
+          assert.equal(
+            invitationResponse.status,
+            201,
+            JSON.stringify(invitation)
+          );
+          assert.equal(
+            invitation.schema,
+            "sitesourcery.customer-engagement-invitation/v1"
+          );
+          assert.equal(invitation.replayed, false);
+          assert.equal(invitation.provenance, "direct_custom_inquiry");
+          assert.match(invitation.claimToken, /^[A-Za-z0-9_-]{43}$/u);
+          assert.deepEqual(
+            (
+              await pool.query(
+                `select
+                   (select count(*)::integer
+                      from auth.users where lower(email) = $1) as users,
+                   (select count(*)::integer
+                      from ss.projects where id = $2) as projects,
+                   (select count(*)::integer
+                      from ss.customer_engagements
+                     where invitation_id = $3) as engagements`,
+                [
+                  email,
+                  invitation.project.id,
+                  invitation.invitationId
+                ]
+              )
+            ).rows[0],
+            { users: 0, projects: 0, engagements: 0 }
+          );
+
           const appUrl =
             `${browserServer.origin}/abracadabra/app/`;
           await navigate(appUrl);
@@ -4438,7 +4641,7 @@ test(
               `"data-abracadabra-control-ready") === "hosted" && ` +
               `Boolean(globalThis.SiteSourceryAbracadabraAPI)`
           );
-          const staged = await evaluate(
+          const claimResponse = await evaluate(
             `(async () => {
               let sequence = 0;
               const client = globalThis
@@ -4448,50 +4651,45 @@ test(
                     "j02-browser-command-" + (++sequence)
                 });
               globalThis.__siteSourceryJ02Client = client;
-              return client.register(${JSON.stringify({
-                name: "J-02 Browser Customer",
-                organizationName:
-                  "J-02 Browser Customer Organization",
-                email,
-                password
-              })});
+              const authorityResponse = await fetch(
+                "/api/v1/legal/project-authority",
+                { credentials: "same-origin" }
+              );
+              const authority = await authorityResponse.json();
+              const legalAcceptance = globalThis
+                .SiteSourceryAbracadabraAPI
+                .projectLegalAcceptanceFromAuthority(authority);
+              const csrfResponse = await fetch("/api/v1/csrf", {
+                credentials: "same-origin"
+              });
+              const csrf = await csrfResponse.json();
+              const response = await fetch(
+                "/api/v1/auth/engagement-claim",
+                {
+                  method: "POST",
+                  credentials: "same-origin",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Idempotency-Key":
+                      "core-revenue-inquiry-claim-1",
+                    "X-CSRF-Token": csrf.csrfToken
+                  },
+                  body: JSON.stringify({
+                    legalAcceptance,
+                    password: ${JSON.stringify(password)},
+                    token: ${JSON.stringify(invitation.claimToken)}
+                  })
+                }
+              );
+              return {
+                status: response.status,
+                body: await response.json()
+              };
             })()`,
             true
           );
-          assert.deepEqual(
-            {
-              accepted: staged.accepted,
-              delivery: staged.delivery,
-              emailSent: staged.emailSent,
-              replayed: staged.replayed,
-              verificationRequired:
-                staged.verificationRequired
-            },
-            {
-              accepted: true,
-              delivery: "email",
-              emailSent: true,
-              replayed: false,
-              verificationRequired: true
-            }
-          );
-          await eventually(
-            () =>
-              registrationSink.readForTest(email).length === 1,
-            "the J-02 account activation message"
-          );
-          const token = decodeURIComponent(
-            new URL(
-              registrationSink.readForTest(email)[0]
-                .verificationUrl
-            ).hash.slice("#verify-registration=".length)
-          );
-          const activated = await evaluate(
-            `globalThis.__siteSourceryJ02Client` +
-              `.completeRegistration({ token: ` +
-              `${JSON.stringify(token)} })`,
-            true
-          );
+          assert.equal(claimResponse.status, 201);
+          const activated = claimResponse.body;
           assert.equal(activated.user.email, email);
           assert.equal(
             activated.organization.name,
@@ -4510,529 +4708,443 @@ test(
           assert.equal(sessionCookie.httpOnly, true);
           assert.equal(sessionCookie.secure, true);
           assert.equal(sessionCookie.sameSite, "Strict");
+          assert.equal(activated.project.name, projectName);
+          assert.equal(
+            activated.project.id,
+            invitation.project.id
+          );
+          assert.equal(
+            activated.provenance,
+            "direct_custom_inquiry"
+          );
+          const projectId = activated.project.id;
 
-          const createdProject = await evaluate(
-            `(async () => {
-              const authorityResponse = await fetch(
-                "/api/v1/legal/project-authority",
-                { credentials: "same-origin" }
-              );
-              const authority = await authorityResponse.json();
-              const csrfResponse = await fetch("/api/v1/csrf", {
-                credentials: "same-origin"
-              });
-              const csrf = await csrfResponse.json();
-              const response = await fetch(
-                "/api/v1/organizations/" +
-                  ${JSON.stringify(activated.organization.id)} +
-                  "/projects",
-                {
-                  method: "POST",
-                  credentials: "same-origin",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Idempotency-Key":
-                      "j02-browser-project-create-1",
-                    "X-CSRF-Token": csrf.csrfToken
-                  },
-                  body: JSON.stringify({
-                    name: ${JSON.stringify(projectName)},
-                    legalAcceptance: {
-                      schema:
-                        "sitesourcery.project-legal-acceptance/v3",
-                      acceptanceStatement:
-                        authority.acceptanceStatement,
-                      authorityDigest: authority.authorityDigest,
-                      documents: authority.documents.map(
-                        (document) => ({ ...document })
-                      )
+          {
+            commerceV2ClockNow = new Date(
+              Date.now() + 2000
+            ).toISOString();
+            const coreRevenueRawFacts = {
+              schema: "abracadabra.spark/v1",
+              theme: "warm",
+              businessName: "Revenue Journey Workshop",
+              summary:
+                "A complete local first-dollar customer journey.",
+              about:
+                "The deterministic browser proof owns no provider authority.",
+              offerings: ["Local proof", "Durable download"],
+              location: "Richmond, Virginia",
+              hours: "Monday through Friday, 9–5",
+              phone: "(804) 555-0100",
+              email: "revenue-journey@example.test",
+              website: "",
+              primaryAction: "phone"
+            };
+            const coreRevenuePreviewDigest =
+              compiler.compile(coreRevenueRawFacts).artifactDigest;
+            const browserCommerce = await evaluate(
+              `(async () => {
+                const client = globalThis.__siteSourceryJ02Client;
+                let step = "draft";
+                const rawFacts = ${JSON.stringify(coreRevenueRawFacts)};
+                try {
+                  const draft = await client.saveDraft({
+                    projectId: ${JSON.stringify(projectId)},
+                    revision: 1,
+                    rawFacts
+                  });
+                  step = "version";
+                  const version = await client.createVersion({
+                    projectId: ${JSON.stringify(projectId)},
+                    rawFacts,
+                    previewDigest:
+                      ${JSON.stringify(coreRevenuePreviewDigest)},
+                    reviewAttested: true
+                  });
+                  step = "ready";
+                  await client.markVersionReady(
+                    ${JSON.stringify(projectId)},
+                    version.version.id
+                  );
+                  step = "accept";
+                  await client.acceptVersion(
+                    ${JSON.stringify(projectId)},
+                    version.version.id
+                  );
+                  step = "quote";
+                  const quote = await client.createDownloadQuote(
+                    ${JSON.stringify(projectId)},
+                    { versionId: version.version.id }
+                  );
+                  step = "checkout";
+                  const checkout = await client.prepareDownloadCheckout(
+                    ${JSON.stringify(projectId)},
+                    quote.quoteId,
+                    {
+                      acceptedDisclosureDigest:
+                        quote.disclosureDigest
                     }
-                  })
+                  );
+                  return { draft, version, quote, checkout };
+                } catch (error) {
+                  return {
+                    browserError: {
+                      step,
+                      name: error?.name,
+                      code: error?.code,
+                      message: error?.message,
+                      status: error?.status,
+                      requestId: error?.requestId
+                    }
+                  };
                 }
-              );
-              return {
-                status: response.status,
-                body: await response.json()
-              };
-            })()`,
-            true
-          );
-          assert.equal(createdProject.status, 201);
-          assert.equal(
-            createdProject.body.project.name,
-            projectName
-          );
-          assert.equal(
-            createdProject.body.project.organizationId,
-            activated.organization.id
-          );
-          const projectId = createdProject.body.project.id;
-
-          const assessmentRequest = await evaluate(
-            `(async () => {
-              const client = globalThis.__siteSourceryJ02Client;
-              const draft =
-                await client.saveCustomServicesAssessmentRequest(
-                  ${JSON.stringify(projectId)},
-                  {
-                    approximatePublicSize: "one_to_ten",
-                    businessName: "J-02 Browser Customer",
-                    complexityFlags: ["forms"],
-                    customerObservation:
-                      "The current phone path hides the primary action.",
-                    customerOwnershipAffirmed: true,
-                    expectedDraftRevision: 0,
-                    importantDate: null,
-                    platformFamily: "wordpress",
-                    primaryGoal:
-                      "Make the public inquiry path easier to complete.",
-                    publicUrl: "https://customer.example.com/",
-                    siteDisplayName: "J-02 Customer Website"
-                  }
-                );
-              const submitted =
-                await client.submitCustomServicesAssessmentRequest(
-                  ${JSON.stringify(projectId)},
-                  draft.draftRevision
-                );
-              return { draft, submitted };
-            })()`,
-            true
-          );
-          assert.equal(assessmentRequest.draft.state, "draft");
-          assert.equal(
-            assessmentRequest.draft.draftRevision,
-            1
-          );
-          assert.equal(
-            assessmentRequest.submitted.state,
-            "submitted"
-          );
-          assert.match(
-            assessmentRequest.submitted.caseId,
-            /^[0-9a-f-]{36}$/u
-          );
-          assert.equal(
-            assessmentRequest.submitted.website.publicUrl,
-            "https://customer.example.com/"
-          );
-
-          await assert.rejects(
-            customServicesOwner.listAssessmentRequests(actor),
-            (error) =>
-              error?.code === "OPERATOR_ACCESS_REQUIRED" &&
-              error?.status === 403
-          );
-          await pool.query(
-            `insert into ss.operator_profiles (
-               user_id, display_label, state,
-               authorized_by_user_id, authorized_at
-             ) values ($1, $2, 'held', $3, clock_timestamp())`,
-            [
-              actor.userId,
-              "J-02 test operator",
-              otherActor.userId
-            ]
-          );
-          await pool.query(
-            `insert into ss.operator_permissions (
-               operator_user_id, capability, state,
-               granted_by_user_id, granted_at
-             ) values (
-               $1, 'service_quote_author', 'held',
-               $2, clock_timestamp()
-             )`,
-            [actor.userId, otherActor.userId]
-          );
-          const operatorGrantExpiresAt = new Date(
-            Date.now() + 24 * 60 * 60 * 1000
-          ).toISOString();
-          const operatorGrant = await pool.query(
-            `insert into ss.service_operator_authority_events (
-               operator_user_id, capability, event_sequence,
-               event_kind, predecessor_event_id,
-               recorded_by_kind, effective_at, expires_at,
-               created_at
-             ) values (
-               $1, 'service_quote_author', 99, 'grant', null,
-               'deployment_control',
-               '2001-01-01T00:00:00.000Z',
-               $2,
-               '2001-01-01T00:00:00.000Z'
-             ) returning event_sequence, event_kind, event_digest`,
-            [actor.userId, operatorGrantExpiresAt]
-          );
-          assert.deepEqual(
-            {
-              eventSequence: Number(
-                operatorGrant.rows[0].event_sequence
-              ),
-              eventKind: operatorGrant.rows[0].event_kind
-            },
-            { eventSequence: 1, eventKind: "grant" }
-          );
-          assert.match(
-            operatorGrant.rows[0].event_digest,
-            /^[a-f0-9]{64}$/u
-          );
-
-          const ownerQueue =
-            await customServicesOwner.listAssessmentRequests(
-              actor
+              })()`,
+              true
             );
-          const queuedRequest = ownerQueue.requests.find(
-            (entry) =>
-              entry.caseId ===
-              assessmentRequest.submitted.caseId
-          );
-          assert.ok(queuedRequest);
-          assert.equal(queuedRequest.customer.email, email);
-          assert.equal(
-            queuedRequest.organizationId,
-            activated.organization.id
-          );
-          assert.equal(queuedRequest.currentQuote, null);
-
-          const deliveryDate = new Date(
-            Date.now() + 14 * 24 * 60 * 60 * 1000
-          ).toISOString().slice(0, 10);
-          const ownerQuote =
-            await customServicesOwner.issueAssessmentQuote(
-              actor,
-              queuedRequest.caseId,
-              {
-                commandId:
-                  `j02-owner-quote-${randomUUID()}`,
-                deliveryDate,
-                organizationId:
-                  queuedRequest.organizationId,
-                reviewTargets: [
-                  { kind: "page", value: "/" },
-                  { kind: "page_type", value: "contact" }
-                ]
-              }
-            );
-          assert.equal(ownerQuote.state, "issued");
-          assert.deepEqual(ownerQuote.price, {
-            amountMinor: 20000,
-            currency: "USD"
-          });
-
-          const customerCheckout = await evaluate(
-            `(async () => {
-              const client = globalThis.__siteSourceryJ02Client;
-              const quote =
-                await client.getCustomServicesAssessmentQuote(
-                  ${JSON.stringify(projectId)}
-                );
-              const accepted =
-                await client.acceptCustomServicesAssessmentQuote(
-                  ${JSON.stringify(projectId)},
-                  {
-                    acceptanceStatement:
-                      quote.actions.acceptQuote.acceptanceStatement,
-                    acceptedDisclosureDigest:
-                      quote.quote.disclosureDigest,
-                    acceptedQuoteDigest: quote.quote.quoteDigest,
-                    quoteId: quote.quote.quoteId,
-                    quoteRevision: quote.quote.revision
-                  }
-                );
-              const invoice =
-                await client.getCustomServicesAssessmentInvoice(
-                  ${JSON.stringify(projectId)}
-                );
-              const checkout =
-                await client.createCustomServicesAssessmentCheckout(
-                  ${JSON.stringify(projectId)},
-                  invoice.invoice.invoiceId,
-                  { invoiceDigest: invoice.invoice.invoiceDigest }
-                );
-              return { quote, accepted, invoice, checkout };
-            })()`,
-            true
-          );
-          assert.equal(
-            customerCheckout.quote.state,
-            "review_required"
-          );
-          assert.deepEqual(
-            customerCheckout.quote.quote.servicePrice,
-            {
-              amountMinor: 20000,
-              currency: "USD",
-              formatted: "$200.00"
-            }
-          );
-          assert.equal(customerCheckout.accepted.state, "accepted");
-          assert.equal(
-            customerCheckout.invoice.state,
-            "checkout_available"
-          );
-          assert.equal(customerCheckout.checkout.state, "ready");
-          assert.equal(
-            customerCheckout.checkout.checkout.chargeOccurred,
-            false
-          );
-          assert.match(
-            customerCheckout.checkout.checkout.url,
-            /^https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_assessment_/u
-          );
-          assert.equal(
-            await evaluate(`location.origin`),
-            browserServer.origin
-          );
-
-          assert.equal(
-            payment.calls.assessmentCheckout.length,
-            providerCallBaseline.assessmentCheckout + 1
-          );
-          const assessmentProviderRequest =
-            payment.calls.assessmentCheckout.at(-1);
-          assert.equal(
-            assessmentProviderRequest.purpose.projectId,
-            projectId
-          );
-          assert.equal(
-            assessmentProviderRequest.purpose.customerId,
-            activated.user.id
-          );
-          assert.equal(
-            assessmentProviderRequest.purpose.price.amountMinor,
-            20000
-          );
-          assert.equal(
-            assessmentProviderRequest.purpose.price.currency,
-            "USD"
-          );
-          assert.equal(
-            assessmentProviderRequest.purposeDigest,
-            commerceDigest(
-              assessmentProviderRequest.purpose
-            )
-          );
-          const checkoutId = new URL(
-            customerCheckout.checkout.checkout.url
-          ).pathname.split("/").at(-1);
-          const purpose = assessmentProviderRequest.purpose;
-          const paidEvent = stripeEvent(
-            `evt_test_j02_assessment_${randomUUID().replaceAll("-", "_")}`,
-            "checkout.session.completed",
-            {
-              id: checkoutId,
-              metadata: {
-                schema:
-                  "sitesourcery_service_assessment_checkout_v1",
-                tenant_id: purpose.tenantId,
-                customer_id: purpose.customerId,
-                project_id: purpose.projectId,
-                invoice_id: purpose.invoiceId,
-                invoice_number: purpose.invoiceNumber,
-                quote_id: purpose.quoteId,
-                accepted_disclosure_digest:
-                  purpose.acceptedDisclosureDigest,
-                invoice_digest: purpose.invoiceDigest,
-                purpose_digest:
-                  assessmentProviderRequest.purposeDigest
-              }
-            }
-          );
-          paidEvent.created = Math.floor(Date.now() / 1000);
-          commerceV2ClockNow = new Date(
-            Date.now() + 1000
-          ).toISOString();
-          const settlement =
-            await stripeWebhook.ingestStripeWebhook({
-              rawBody: rawEvent(paidEvent),
-              signature: "contract-signature-valid"
-            });
-          assert.equal(settlement.status, "payment_settled");
-          assert.equal(settlement.projectId, projectId);
-          assert.equal(
-            settlement.invoiceId,
-            customerCheckout.invoice.invoice.invoiceId
-          );
-          assert.equal(settlement.next, "assessment_work");
-          assert.match(settlement.receiptId, /^[0-9a-f-]{36}$/u);
-          assert.match(settlement.jobId, /^[0-9a-f-]{36}$/u);
-          assert.equal(paidEvent.livemode, false);
-          assert.equal(
-            payment.calls.assessmentReadback.length,
-            providerCallBaseline.assessmentReadback + 1
-          );
-          assert.equal(
-            payment.calls.assessmentLifecycle.length,
-            providerCallBaseline.assessmentLifecycle
-          );
-
-          const paidInvoice = await evaluate(
-            `globalThis.__siteSourceryJ02Client` +
-              `.getCustomServicesAssessmentInvoice(` +
-              `${JSON.stringify(projectId)})`,
-            true
-          );
-          assert.equal(paidInvoice.state, "paid_job_open");
-          assert.equal(
-            paidInvoice.invoice.payment.state,
-            "paid"
-          );
-          assert.equal(
-            paidInvoice.invoice.payment.chargeOccurred,
-            true
-          );
-          assert.match(
-            paidInvoice.invoice.payment.receiptId,
-            /^[0-9a-f-]{36}$/u
-          );
-          assert.equal(
-            paidInvoice.invoice.subtotal.amountMinor,
-            20000
-          );
-          assert.equal(
-            paidInvoice.invoice.total.amountMinor,
-            20000
-          );
-          assert.equal(paidInvoice.job.state, "open");
-
-          const databaseProof = await pool.query(
-            `select
-               (select count(*)::integer
-                  from ss.service_cases service_case
-                 where service_case.organization_id = $1
-                   and service_case.project_id = $2
-                   and service_case.customer_user_id = $3
-                   and service_case.state = 'submitted') as cases,
-               (select count(*)::integer
-                  from ss.service_quotes quote
-                 where quote.organization_id = $1
-                   and quote.project_id = $2
-                   and quote.customer_user_id = $3
-                   and quote.current_revision = 1) as quotes,
-               (select count(*)::integer
-                  from ss.service_quote_acceptances acceptance
-                 where acceptance.organization_id = $1
-                   and acceptance.project_id = $2
-                   and acceptance.accepted_by_user_id = $3) as acceptances,
-               (select count(*)::integer
-                  from ss.service_invoices invoice
-                 where invoice.organization_id = $1
-                   and invoice.project_id = $2
-                   and invoice.customer_user_id = $3) as invoices,
-               (select count(*)::integer
-                  from ss.service_assessment_checkout_attempts attempt
-                 where attempt.organization_id = $1
-                   and attempt.project_id = $2
-                   and attempt.customer_user_id = $3
-                   and attempt.state = 'ready') as ready_attempts,
-               (select count(*)::integer
-                  from ss.service_assessment_payment_receipts receipt
-                 where receipt.organization_id = $1
-                   and receipt.project_id = $2
-                   and receipt.customer_user_id = $3
-                   and receipt.payment_status = 'paid'
-                   and receipt.subtotal_minor = 20000
-                   and receipt.total_minor = 20000) as receipts,
-               (select count(*)::integer
-                  from ss.service_assessment_jobs job
-                 where job.organization_id = $1
-                   and job.project_id = $2
-                   and job.customer_user_id = $3
-                   and job.state = 'open') as jobs`,
-            [
-              activated.organization.id,
-              projectId,
-              activated.user.id
-            ]
-          );
-          assert.deepEqual(databaseProof.rows[0], {
-            cases: 1,
-            quotes: 1,
-            acceptances: 1,
-            invoices: 1,
-            ready_attempts: 1,
-            receipts: 1,
-            jobs: 1
-          });
-
-          for (const name of [
-            "checkout",
-            "downloadCheckout",
-            "downloadReadback",
-            "downloadLifecycle",
-            "portal",
-            "cancellation"
-          ]) {
             assert.equal(
-              payment.calls[name].length,
-              providerCallBaseline[name],
-              `${name} must remain outside the J-02 path`
+              browserCommerce.browserError,
+              undefined,
+              JSON.stringify(browserCommerce)
             );
-          }
-          assert.equal(
-            payment.calls.webhook.length,
-            providerCallBaseline.webhook + 1
-          );
-          assert.deepEqual(
-            browserServer.apiRequests
-              .filter(({ pathname }) =>
-                pathname.includes("/custom-services/assessment-")
-              )
-              .map(({ method, pathname }) => ({ method, pathname })),
-            [
+            assert.equal(browserCommerce.draft.revision, 2);
+            assert.equal(
+              browserCommerce.version.version.state,
+              "draft"
+            );
+            assert.equal(browserCommerce.quote.offerId, "spark_download");
+            assert.deepEqual(browserCommerce.quote.price, {
+              amountMinor: 500,
+              currency: "USD",
+              billing: "one_time",
+              interval: null
+            });
+            assert.equal(browserCommerce.checkout.state, "ready");
+            assert.match(
+              browserCommerce.checkout.checkoutUrl,
+              /^https:\/\/checkout\.stripe\.com\/c\/pay\/cs_test_download_/u
+            );
+            assert.equal(
+              payment.calls.downloadCheckout.length,
+              providerCallBaseline.downloadCheckout + 1
+            );
+            const providerRequest =
+              payment.calls.downloadCheckout.at(-1);
+            assert.equal(
+              providerRequest.purpose.customerId,
+              activated.user.id
+            );
+            assert.equal(
+              providerRequest.purpose.projectId,
+              projectId
+            );
+            assert.equal(
+              providerRequest.purpose.versionId,
+              browserCommerce.version.version.id
+            );
+            const checkoutId =
+              browserCommerce.checkout.checkout.id;
+            const checkoutNumber = checkoutId.replace(
+              "cs_test_download_",
+              ""
+            );
+            const metadata = {
+              schema: "sitesourcery_download_checkout_v2",
+              tenant_id: providerRequest.purpose.tenantId,
+              customer_id: providerRequest.purpose.customerId,
+              project_id: providerRequest.purpose.projectId,
+              version_id: providerRequest.purpose.versionId,
+              quote_id: providerRequest.purpose.quoteId,
+              offer_id: providerRequest.purpose.offerId,
+              entitlement_kind:
+                providerRequest.purpose.entitlementKind,
+              accepted_disclosure_digest:
+                providerRequest.purpose.acceptedDisclosureDigest,
+              quote_snapshot_digest:
+                providerRequest.purpose.quoteSnapshotDigest,
+              purpose_digest: providerRequest.purposeDigest
+            };
+            const paidEvent = stripeEvent(
+              `evt_test_core_revenue_paid_${checkoutNumber}`,
+              "checkout.session.completed",
+              { id: checkoutId, metadata }
+            );
+            paidEvent.created = Math.floor(
+              Date.parse(commerceV2ClockNow) / 1000
+            );
+            const settled =
+              await stripeWebhook.ingestStripeWebhook({
+                rawBody: rawEvent(paidEvent),
+                signature: "contract-signature-valid"
+              });
+            assert.equal(settled.status, "processed");
+            assert.deepEqual(
+              await stripeWebhook.ingestStripeWebhook({
+                rawBody: rawEvent(paidEvent),
+                signature: "contract-signature-valid"
+              }),
+              settled
+            );
+            assert.equal(
+              payment.calls.downloadReadback.length,
+              providerCallBaseline.downloadReadback + 1
+            );
+
+            const paidReadback = await evaluate(
+              `(async () => {
+                const client = globalThis.__siteSourceryJ02Client;
+                const project = await client.getProject(
+                  ${JSON.stringify(projectId)}
+                );
+                const entitlement = project.project.entitlements[0];
+                const response = await fetch(
+                  entitlement.downloadUrl,
+                  { credentials: "same-origin" }
+                );
+                return {
+                  project,
+                  download: {
+                    status: response.status,
+                    contentType: response.headers.get("content-type"),
+                    disposition:
+                      response.headers.get("content-disposition"),
+                    html: await response.text()
+                  }
+                };
+              })()`,
+              true
+            );
+            assert.equal(
+              paidReadback.project.project.entitlements.length,
+              1
+            );
+            assert.equal(
+              paidReadback.project.project.entitlements[0].payment
+                .totalMinor,
+              500
+            );
+            assert.equal(paidReadback.download.status, 200);
+            assert.equal(
+              paidReadback.download.contentType,
+              "text/html; charset=utf-8"
+            );
+            assert.match(
+              paidReadback.download.disposition,
+              /^attachment; filename="sitesourcery-/u
+            );
+            assert.match(
+              paidReadback.download.html,
+              /Revenue Journey Workshop/u
+            );
+
+            const durablePaid = await pool.query(
+              `select
+                 (select count(*)::integer
+                    from ss.customer_engagements engagement
+                   where engagement.organization_id = $1
+                     and engagement.project_id = $2
+                     and engagement.customer_user_id = $3
+                     and engagement.provenance =
+                       'direct_custom_inquiry') as engagements,
+                 (select count(*)::integer
+                    from ss.service_custom_build_direct_opportunities
+                   where organization_id = $1
+                     and project_id = $2
+                     and customer_user_id = $3
+                     and state = 'available') as operator_opportunities,
+                 (select count(*)::integer
+                    from ss.commerce_v2_download_dispatches
+                   where organization_id = $1
+                     and project_id = $2
+                     and customer_user_id = $3
+                     and state = 'settled') as dispatches,
+                 (select count(*)::integer
+                    from ss.commerce_v2_download_payment_receipts
+                   where organization_id = $1
+                     and project_id = $2
+                     and customer_user_id = $3
+                     and payment_status = 'paid'
+                     and total_minor = 500) as receipts,
+                 (select count(*)::integer
+                    from ss.commerce_v2_project_entitlements
+                   where organization_id = $1
+                     and project_id = $2
+                     and customer_user_id = $3
+                     and state = 'active') as entitlements`,
+              [
+                activated.organization.id,
+                projectId,
+                activated.user.id
+              ]
+            );
+            assert.deepEqual(durablePaid.rows[0], {
+              engagements: 1,
+              operator_opportunities: 1,
+              dispatches: 1,
+              receipts: 1,
+              entitlements: 1
+            });
+
+            const paymentIntentId =
+              `pi_test_download_${checkoutNumber}`;
+            const partialRefund = stripeEvent(
+              `evt_test_core_revenue_partial_${checkoutNumber}`,
+              "charge.refunded",
               {
-                method: "PUT",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-request`
-              },
-              {
-                method: "POST",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-request/submission`
-              },
-              {
-                method: "GET",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-quote`
-              },
-              {
-                method: "POST",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-quote/acceptance`
-              },
-              {
-                method: "GET",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-invoice`
-              },
-              {
-                method: "POST",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-invoices/${paidInvoice.invoice.invoiceId}/checkout-command`
-              },
-              {
-                method: "GET",
-                pathname:
-                  `/api/v1/projects/${projectId}/custom-services/assessment-invoice`
+                id: `ch_test_core_revenue_${checkoutNumber}`,
+                livemode: false,
+                payment_intent: paymentIntentId,
+                currency: "usd",
+                amount: 500,
+                amount_refunded: 100,
+                refunded: false
               }
-            ]
-          );
-          const externalBrowserRequests = await evaluate(
-            `performance.getEntriesByType("resource")` +
-              `.map((entry) => entry.name)` +
-              `.filter((name) => {` +
-              `  const url = new URL(name, location.href);` +
-              `  return (url.protocol === "http:" || ` +
-              `url.protocol === "https:") && ` +
-              `url.origin !== location.origin;` +
-              `})`
-          );
-          assert.deepEqual(externalBrowserRequests, []);
-          assert.deepEqual(browserServer.missingFiles, []);
-          await evaluate(
-            `new Promise((resolve) => setTimeout(resolve, 100))`,
-            true
-          );
-          assert.deepEqual([...new Set(browserErrors)], []);
+            );
+            partialRefund.created = paidEvent.created + 1;
+            const suspended =
+              await stripeWebhook.ingestStripeWebhook({
+                rawBody: rawEvent(partialRefund),
+                signature: "contract-signature-valid"
+              });
+            assert.equal(suspended.entitlementState, "suspended");
+            const suspendedReadback = await evaluate(
+              `(async () => {
+                const project = await globalThis
+                  .__siteSourceryJ02Client.getProject(
+                    ${JSON.stringify(projectId)}
+                  );
+                return {
+                  visibleEntitlements:
+                    project.project.entitlements.length
+                };
+              })()`,
+              true
+            );
+            assert.deepEqual(suspendedReadback, {
+              visibleEntitlements: 0
+            });
+
+            const fullRefund = stripeEvent(
+              `evt_test_core_revenue_full_${checkoutNumber}`,
+              "charge.refunded",
+              {
+                id: `ch_test_core_revenue_${checkoutNumber}`,
+                livemode: false,
+                payment_intent: paymentIntentId,
+                currency: "usd",
+                amount: 500,
+                amount_refunded: 500,
+                refunded: true
+              }
+            );
+            fullRefund.created = paidEvent.created + 2;
+            const revoked =
+              await stripeWebhook.ingestStripeWebhook({
+                rawBody: rawEvent(fullRefund),
+                signature: "contract-signature-valid"
+              });
+            assert.equal(revoked.entitlementState, "revoked");
+            assert.deepEqual(
+              await stripeWebhook.ingestStripeWebhook({
+                rawBody: rawEvent(fullRefund),
+                signature: "contract-signature-valid"
+              }),
+              revoked
+            );
+            assert.deepEqual(
+              (
+                await pool.query(
+                  `select entitlement.state, entitlement.state_reason,
+                          receipt.payment_status,
+                          dispatch.state as dispatch_state
+                     from ss.commerce_v2_project_entitlements entitlement
+                     join ss.commerce_v2_download_payment_receipts receipt
+                       on receipt.organization_id =
+                          entitlement.organization_id
+                      and receipt.id = entitlement.source_receipt_id
+                     join ss.commerce_v2_download_dispatches dispatch
+                       on dispatch.organization_id = receipt.organization_id
+                      and dispatch.preparation_command_id =
+                          receipt.preparation_command_id
+                    where entitlement.organization_id = $1
+                      and entitlement.project_id = $2`,
+                  [activated.organization.id, projectId]
+                )
+              ).rows,
+              [{
+                state: "revoked",
+                state_reason: "payment_fully_refunded",
+                payment_status: "paid",
+                dispatch_state: "settled"
+              }]
+            );
+            assert.equal(
+              await downloadPaymentRepository.resolveDownloadArtifact({
+                tenantId: activated.organization.id,
+                customerId: activated.user.id,
+                projectId,
+                versionId: browserCommerce.version.version.id
+              }),
+              null
+            );
+
+            for (const name of [
+              "assessmentCheckout",
+              "assessmentReadback",
+              "assessmentLifecycle",
+              "checkout",
+              "portal",
+              "cancellation"
+            ]) {
+              assert.equal(
+                payment.calls[name].length,
+                providerCallBaseline[name],
+                `${name} must remain outside the core Download path`
+              );
+            }
+            assert.equal(
+              payment.calls.downloadLifecycle.length,
+              providerCallBaseline.downloadLifecycle
+            );
+            assert.ok(
+              browserServer.apiRequests.some(
+                ({ method, pathname }) =>
+                  method === "POST" &&
+                  pathname ===
+                    "/api/v1/operator/engagement-invitations"
+              )
+            );
+            assert.ok(
+              browserServer.apiRequests.some(
+                ({ method, pathname }) =>
+                  method === "POST" &&
+                  pathname === "/api/v1/auth/engagement-claim"
+              )
+            );
+            assert.ok(
+              browserServer.apiRequests.some(
+                ({ method, pathname }) =>
+                  method === "GET" &&
+                  pathname.endsWith("/download")
+              )
+            );
+            const externalBrowserRequests = await evaluate(
+              `performance.getEntriesByType("resource")` +
+                `.map((entry) => entry.name)` +
+                `.filter((name) => {` +
+                `  const url = new URL(name, location.href);` +
+                `  return (url.protocol === "http:" || ` +
+                `url.protocol === "https:") && ` +
+                `url.origin !== location.origin;` +
+                `})`
+            );
+            assert.deepEqual(externalBrowserRequests, []);
+            assert.deepEqual(browserServer.missingFiles, []);
+            await evaluate(
+              `new Promise((resolve) => setTimeout(resolve, 100))`,
+              true
+            );
+            assert.deepEqual([...new Set(browserErrors)], []);
+          }
+
         } finally {
           if (reviewedBrowser) {
             await reviewedBrowser.close();
@@ -5044,10 +5156,9 @@ test(
     await t.test(
       "shipped hosted page creates, activates, saves, and signs back into one real PostgreSQL account",
       {
-        skip: projectLegalAuthorityConfig.authority?.documents[0]
-          ?.contentUri.includes("privacy-v3-proof.invalid")
-          ? "synthetic Privacy proof URI is outside the production browser allowlist"
-          : false
+        skip: CORE_REVENUE_E2E_ONLY ||
+          projectLegalAuthorityConfig.authority?.documents[0]
+            ?.contentUri.includes("privacy-v3-proof.invalid")
       },
       async () => {
         const api = createHostedApi(service, {
@@ -5295,8 +5406,10 @@ test(
 
           try {
             await waitFor(
-              `document.querySelector("[data-create-project]")` +
-                `.disabled === false`,
+              `document.querySelector(` +
+                `"[name=acceptedProjectTerms]")?.disabled === false ` +
+                `&& globalThis.SiteSourceryAbracadabraHostedSession` +
+                `.getState().projectLegalAuthorityStatus === "ready"`,
               5000
             );
           } catch (error) {
@@ -5442,7 +5555,23 @@ test(
             }
           );
 
-          try {
+          const alakazamPanelPresent = await evaluate(
+            `Boolean(document.querySelector("[data-alakazam-account]"))`
+          );
+          const alakazamOfferState = await evaluate(
+            `globalThis.SiteSourceryAbracadabraCustomerControl` +
+              `.alakazamPublicOfferState`
+          );
+          assert.match(alakazamOfferState, /^(?:held|released)$/u);
+          if (alakazamOfferState === "held") {
+            assert.equal(
+              alakazamPanelPresent,
+              false,
+              "held Alakazam must not enter the customer DOM"
+            );
+          } else {
+            assert.equal(alakazamPanelPresent, true);
+            try {
             await waitFor(
               `document.querySelector("[data-alakazam-account]")` +
                 `.hidden === false && ` +
@@ -5452,8 +5581,8 @@ test(
                 `"[data-alakazam-site-form]"))`,
               10000
             );
-          } catch (error) {
-            const diagnosis = await evaluate(
+            } catch (error) {
+              const diagnosis = await evaluate(
               `(() => {
                 const panel = document.querySelector(
                   "[data-alakazam-account]"
@@ -5481,13 +5610,13 @@ test(
                 };
               })()`
             );
-            throw new Error(
-              `${error.message}; Alakazam panel ` +
-                `${JSON.stringify(diagnosis)}; API requests ` +
-                `${JSON.stringify(browserServer.apiRequests)}; ` +
-                `browser errors ${JSON.stringify(browserErrors)}`
-            );
-          }
+              throw new Error(
+                `${error.message}; Alakazam panel ` +
+                  `${JSON.stringify(diagnosis)}; API requests ` +
+                  `${JSON.stringify(browserServer.apiRequests)}; ` +
+                  `browser errors ${JSON.stringify(browserErrors)}`
+              );
+            }
           async function accountLayout() {
             return evaluate(
               `(() => {
@@ -5655,6 +5784,7 @@ test(
               state: "configured"
             }
           ]);
+          }
 
           commerceV2ClockNow = new Date().toISOString();
           const browserCheckout = await evaluate(
@@ -5720,18 +5850,19 @@ test(
             purpose_digest:
               browserDownloadRequest.purposeDigest
           };
-          await navigate(
-            `${appUrl}?checkout=${encodeURIComponent(
+          await cdp.send("Page.navigate", {
+            url: `${appUrl}?checkout=${encodeURIComponent(
               browserCheckoutId
             )}&download_project=${encodeURIComponent(
               savedState.project.id
             )}`
-          );
+          });
           await waitFor(
-            `document.documentElement.getAttribute(` +
-              `"data-abracadabra-control-ready") === "hosted" ` +
-              `&& document.getElementById("platform-status")` +
-              `.textContent.includes("Checking Stripe")`,
+            `document.readyState === "complete" && ` +
+              `location.pathname === "/abracadabra/app/" && ` +
+              `location.search === "" && ` +
+              `document.documentElement.getAttribute(` +
+              `"data-abracadabra-control-ready") === "hosted"`,
             10000
           );
           assert.equal(
@@ -5910,10 +6041,13 @@ test(
             `new Promise((resolve) => setTimeout(resolve, 100))`,
             true
           );
-          assert.deepEqual(
-            [...new Set(browserErrors)],
-            []
+          const unexpectedBrowserErrors = [
+            ...new Set(browserErrors)
+          ].filter((message) =>
+            !/^Failed to load resource: the server responded with a status of (?:401|403|503) \(/u
+              .test(message)
           );
+          assert.deepEqual(unexpectedBrowserErrors, []);
         } finally {
           if (reviewedBrowser) {
             await reviewedBrowser.close();

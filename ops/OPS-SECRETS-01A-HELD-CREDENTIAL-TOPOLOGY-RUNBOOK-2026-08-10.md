@@ -14,9 +14,12 @@ when all non-secret topology evidence is complete.
 The verifier accepts one explicit JSON file containing only exact logical
 names, non-sensitive kinds, purposes, bounded scopes, logical storage
 boundaries, rotation states, last-proven UTC timestamps, SHA-256 evidence
-digests, and material-presence booleans. It does not accept credential values,
-provider prefixes, environment values, Keychain contents, browser DOM,
-provider responses, commands, or raw evidence documents.
+digests, material-presence booleans, and the three reviewed non-secret Stripe
+provider bindings. Those bindings reuse the existing Stripe item records and
+add only account/mode, key class/version/fingerprint, enabled purposes, and
+activation/revocation chronology. It does not accept credential values,
+provider prefixes, Keychain contents, browser DOM, raw provider responses,
+commands, or raw evidence documents.
 
 `materialPresent: false` on an `unproven` or
 `compromised_pending_revocation` record means only that this manifest makes no
@@ -29,7 +32,7 @@ The repository can prove code shape without proving that any credential exists:
 
 | Boundary | Code support | Runtime/custody proof |
 | --- | --- | --- |
-| Stripe restricted runtime | The hosted Stripe configuration accepts a mode-bound server credential and bounded capability approval. | **Not proven.** No key presence, restriction, storage, or provider state was read. |
+| Stripe restricted runtime | The hosted Stripe configuration rejects Standard/full/shared authority and requires a mode/account/fingerprint-bound restricted key with the exact enabled-purpose scope union. | **Not proven.** No key presence, restriction, storage, or provider state was read. |
 | Stripe webhook rotation | The base runtime verifies one configured signing secret. | **Not proven and not overlap-ready on this base.** A later packet must add bounded current/prior verification before overlap can be claimed. |
 | Stripe provisioner and compromised Standard credential | The reviewed readiness document separates the short-lived provisioner from runtime and records the Standard live credential as compromised pending authenticated revocation proof. | **Not proven.** Both records are status only; neither is runtime authority. |
 | Resend | The transport has a bounded API contract and provider readiness response. | **Not proven.** This base has one credential input, no production/staging separation receipt, and no revocation proof for any historical shared full-access credential. |
@@ -47,13 +50,17 @@ packet.
 
 - [ ] Confirm the 21 logical records exported by
   `CREDENTIAL_TOPOLOGY_CONTRACT.names` are the complete launch inventory.
-- [ ] Confirm the Stripe runtime record is restricted to the four declared
-  runtime API scopes and is not a Standard/full-access credential.
-- [ ] Keep the compromised Stripe Standard record status-only until an
-  authenticated, non-secret revocation receipt exists; never reuse it for a
+- [ ] Confirm the held Stripe runtime inventory matches
+  `STRIPE_RESTRICTED_KEY_CONTRACT.allRuntimeScopes`, the maximum union for all
+  supported non-Domain purposes. Separately require the installed runtime
+  record to narrow that inventory to the exact enabled-purpose union and to
+  reject Standard/full-access/shared credentials. Domain write scope remains
+  absent from both contracts.
+- [ ] Keep the compromised Stripe Standard record status-only until
+  authenticated, non-secret revocation evidence exists; never reuse it for a
   runtime or provisioning purpose.
 - [ ] Require the short-lived Stripe provisioner to have its own bounded scope
-  receipt and a separate revocation receipt before marking it
+  evidence and separate revocation evidence before marking it
   `ephemeral_revoked`.
 - [ ] Select either verified current/prior Stripe webhook overlap or verified
   prior-secret revocation. Do not select overlap until runtime code accepts and
@@ -91,34 +98,43 @@ packet.
    that states only the logical record name, reviewed scopes, logical storage
    boundary, rotation result, and proof time. Store only the attestation's
    SHA-256 digest in the topology input.
-3. Keep `stripe.standard.production.compromised` at
+3. On `stripe.runtime.production.restricted`, store the exact enabled-purpose
+   scope union in the existing `scopes` field and use existing
+   `lastProvenAt`/`evidenceDigest` for its provider scope readback. Its
+   `providerBinding` contains only production/live account ID, restricted key
+   class, non-secret version/fingerprint, activation time, and enabled
+   purposes. This proof must be refreshed within 15 minutes of readiness.
+4. On `stripe.provisioner.production.restricted`, retain the existing custody,
+   scopes, `ephemeral_revoked` state, `lastProvenAt`, and `evidenceDigest`; the
+   latter pair is revocation evidence. Its `providerBinding` adds only the
+   non-secret account/key binding, activation/revocation times, and the distinct
+   scope-proof time/digest. The active lifetime cannot exceed 24 hours.
+5. Keep `stripe.standard.production.compromised` at
    `compromised_pending_revocation` until a real revocation attestation exists.
    Then set `compromised_revoked`, `materialPresent: false`, and bind its proof
-   timestamp/digest.
-4. Keep `stripe.provisioner.production.restricted` unproven until its bounded
-   provisioning work is complete and revocation is separately proven. Only
-   `ephemeral_revoked` can complete the topology.
-5. For Stripe webhook rotation, prove the current record and either:
+   timestamp/digest plus the status-only non-secret `providerBinding`. Never
+   put Standard key material or a hash derived locally from key material here.
+6. For Stripe webhook rotation, prove the current record and either:
    - mark the prior record `overlap` with material-presence evidence and bind a
      `proven` rotation-control receipt; or
    - mark it `revoked` with absence/revocation evidence and bind the same
      control receipt.
-6. Repeat that evidence shape for the current/prior identity peppers. Use the
+7. Repeat that evidence shape for the current/prior identity peppers. Use the
    successor commit only for code-support evidence; obtain separate material
    and custody evidence.
-7. Prove Resend production and staging use their two exact distinct logical
+8. Prove Resend production and staging use their two exact distinct logical
    storage boundaries, bind a `proven` separation-control receipt, and set the
    historical shared-full-access record to `shared_revoked` only with a
    separate timestamped digest.
-8. Prove the backup identity is held in
+9. Prove the backup identity is held in
    `independent-off-zen-recovery-custody`, ciphertext is held in
    `zen-off-machine-ciphertext-store`, and bind their separation-control
    receipt. Never inspect or move either artifact in this verification step.
-9. Bind presence/custody evidence for the registrant encryption key and the
+10. Bind presence/custody evidence for the registrant encryption key and the
    Cloudflare Tunnel connector without reading either value.
-10. Bind distinct requester and approver recovery evidence plus the dual-control
+11. Bind distinct requester and approver recovery evidence plus the dual-control
     receipt. Stop if one operator can both request and approve recovery.
-11. Run the read-only verifier using only an absolute path to the non-secret
+12. Run the read-only verifier using only an absolute path to the non-secret
     JSON input:
 
     ```text
@@ -126,7 +142,7 @@ packet.
       --input /absolute/path/to/nonsecret-credential-topology.json
     ```
 
-12. Preserve the verifier's topology digest and blockers as non-secret release
+13. Preserve the verifier's topology digest and blockers as non-secret release
     evidence. Exit status `2` means the input is valid but incomplete; `1`
     means the contract is invalid. Exit status `0` still leaves every effect
     held.
