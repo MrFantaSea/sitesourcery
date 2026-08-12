@@ -221,7 +221,7 @@ test("purpose loop environment cannot drift from the supervisor contract", async
   assert.equal(stripeFactories, 0);
 });
 
-test("worker composition is mail and identity blind while the API remains loop-free", async () => {
+test("worker composition remains identity blind while the API remains loop-free", async () => {
   const [composition, worker, api] = await Promise.all([
     readFile(
       new URL(
@@ -241,11 +241,12 @@ test("worker composition is mail and identity blind while the API remains loop-f
   ]);
   assert.doesNotMatch(
     `${composition}\n${worker}`,
-    /identity-postgres|identity-pepper|registrationMail|recoveryMail|resend-mail/iu
+    /identity-postgres|identity-pepper|registrationMail|recoveryMail/iu
   );
   assert.match(worker, /createCoreWorkerFactories/u);
+  assert.match(worker, /createNotificationMailWorkerFactories/u);
   assert.doesNotMatch(
     api,
-    /createExportWorker|createCancellationWorker|createCoreWorkerFactories/u
+    /createExportWorker|createCancellationWorker|createCoreWorkerFactories|createNotificationMailWorkerFactories/u
   );
 });

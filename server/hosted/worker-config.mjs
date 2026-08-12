@@ -9,6 +9,7 @@ export const WORKER_READINESS_SCHEMA =
 export const WORKER_PURPOSES = Object.freeze([
   "export",
   "cancellation",
+  "notification-mail",
   "alakazam-fulfillment",
   "alakazam-retained-lifecycle"
 ]);

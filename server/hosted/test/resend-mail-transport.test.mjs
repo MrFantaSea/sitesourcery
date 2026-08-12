@@ -8,6 +8,7 @@ import {
 } from "../resend-mail-transport.mjs";
 import { createProductionRecoveryMailPort } from "../recovery-mail-port.mjs";
 import { createProductionRegistrationMailPort } from "../registration-mail-port.mjs";
+import { digest } from "../security.mjs";
 
 const API_KEY = [
   "re",
@@ -377,6 +378,51 @@ test("Resend sends recovery with a separate idempotency namespace", async () => 
       value: "password_recovery"
     }
   ]);
+});
+
+test("Resend notification provider preserves the durable idempotency key and payload digest", async () => {
+  const calls = [];
+  const transport = createResendMailTransport({
+    environment: ENVIRONMENT,
+    clock: { now: () => NOW },
+    async fetchImpl(url, init) {
+      calls.push({ url, init });
+      return jsonResponse({
+        id: "b8fdb8d8-d4d0-4a75-bcb3-1adbbab73968"
+      });
+    }
+  });
+  assert.equal(transport.kind, "notification-mail-provider");
+  assert.equal(transport.providerEffects, true);
+  const input = {
+    messageType: "support_notification",
+    templateVersion: "support-update.v1",
+    to: "customer@example.test",
+    subject: "Your support update",
+    text: "Your requested update is available in your account.",
+    html: null,
+    idempotencyKey:
+      "sitesourcery-notification/40000000-0000-4000-8000-000000000001"
+  };
+  assert.deepEqual(await transport.sendNotification(input), {
+    state: "provider_accepted",
+    provider: "resend",
+    providerMessageId: "b8fdb8d8-d4d0-4a75-bcb3-1adbbab73968",
+    idempotencyKey: input.idempotencyKey,
+    payloadDigest: digest(input),
+    acceptedAt: NOW
+  });
+  assert.equal(calls[0].url, "https://api.resend.com/emails");
+  const headers = new Headers(calls[0].init.headers);
+  assert.equal(headers.get("idempotency-key"), input.idempotencyKey);
+  const body = JSON.parse(calls[0].init.body);
+  assert.equal(body.from, "Site Sourcery <accounts@sitesourcery.com>");
+  assert.deepEqual(body.to, [input.to]);
+  assert.deepEqual(body.tags, [{
+    name: "message_type",
+    value: "support_notification"
+  }]);
+  assert.equal("html" in body, false);
 });
 
 test("Resend rejects off-site action links before any provider call", async () => {

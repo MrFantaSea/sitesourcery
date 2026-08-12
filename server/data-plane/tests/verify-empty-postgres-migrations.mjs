@@ -30,6 +30,8 @@ import { createCommerceTransitionNotifications } from
   "../../hosted/commerce-transition-notifications.mjs";
 import { createPostgresCommerceTransitionNotificationRepository } from
   "../../hosted/commerce-transition-notifications-postgres.mjs";
+import { createPostgresNotificationMailDispatchSource } from
+  "../../hosted/notification-mail-dispatch-postgres.mjs";
 import { createPostgresAlakazamPolicyAuthorityRepository } from
   "../../hosted/alakazam-policy-authority-postgres.mjs";
 import { resolveMigrationVerificationInventory } from
@@ -1305,6 +1307,218 @@ async function verifyCommerceTransitionNotifications(pool, queueProof) {
     mail_state: "pending"
   });
 }
+
+async function verifyNotificationMailDispatchClaims(pool) {
+  const selected = (await pool.query(`
+    select mail.id, mail.requested_at, mail.expires_at
+      from ss.commerce_transition_notification_outbox notification
+      join ss.hosted_mail_deliveries mail
+        on mail.id = notification.mail_message_id
+     where mail.state = 'pending'
+     order by notification.reserved_at desc, notification.id
+     limit 1
+  `)).rows[0];
+  assert.ok(selected, "mail dispatch proof requires one held commerce reservation");
+
+  let current = new Date(selected.requested_at).toISOString();
+  const clock = { now: () => current };
+  const authority = createCanonicalPostgresAuthority({ pool });
+  const source = createPostgresNotificationMailDispatchSource({
+    authority,
+    clock
+  });
+  assert.equal((await source.readiness()).ready, true);
+  const first = await source.claimForDispatch({
+    messageId: selected.id,
+    workerId: "mail-pg-worker-0001",
+    leaseMs: 120_000
+  });
+  assert.equal(first.status, "claimed");
+  assert.equal(first.attemptNumber, 1);
+  assert.equal(first.fenceToken, 1);
+  assert.equal(first.sourceKind, "commerce");
+  const replay = await source.claimForDispatch({
+    messageId: selected.id,
+    workerId: "mail-pg-worker-0001",
+    leaseMs: 120_000
+  });
+  assert.equal(replay.fenceToken, first.fenceToken);
+  assert.equal(replay.providerIdempotencyKey, first.providerIdempotencyKey);
+  const busy = await source.claimForDispatch({
+    messageId: selected.id,
+    workerId: "mail-pg-worker-0002",
+    leaseMs: 120_000
+  });
+  assert.equal(busy.status, "busy");
+
+  current = new Date(Date.parse(current) + 121_000).toISOString();
+  const reclaimed = await source.claimForDispatch({
+    messageId: selected.id,
+    workerId: "mail-pg-worker-0002",
+    leaseMs: 120_000
+  });
+  assert.equal(reclaimed.status, "claimed");
+  assert.equal(reclaimed.attemptNumber, 2);
+  assert.equal(reclaimed.fenceToken, 2);
+  assert.equal(reclaimed.providerIdempotencyKey, first.providerIdempotencyKey);
+
+  current = new Date(Date.parse(current) + 1_000).toISOString();
+  const acceptanceEvidenceDigest = "8".repeat(64);
+  const lifecycle = createMailLifecycle({
+    repository: createPostgresMailLifecycleRepository({ authority }),
+    clock
+  });
+  await lifecycle.recordProviderAcceptance({
+    commandId: "mail.dispatch.pg.accept.0001",
+    messageId: selected.id,
+    provider: "resend",
+    providerMessageIdDigest: "0".repeat(64),
+    evidenceDigest: acceptanceEvidenceDigest,
+    acceptedAt: current
+  });
+  await assert.rejects(
+    source.completeDispatch({
+      messageId: selected.id,
+      workerId: "mail-pg-worker-0001",
+      fenceToken: first.fenceToken,
+      closureEvidenceDigest: acceptanceEvidenceDigest
+    }),
+    (error) => error?.code === "NOTIFICATION_DISPATCH_CLAIM_CONFLICT"
+  );
+
+  // Simulate a crash after MAIL-01 acceptance but before claim completion.
+  // The next worker must reconcile/close the claim and never reclaim a send.
+  current = new Date(Date.parse(current) + 1_000).toISOString();
+  const reconciled = await source.claimForDispatch({
+    messageId: selected.id,
+    workerId: "mail-pg-worker-0003",
+    leaseMs: 120_000
+  });
+  assert.equal(reconciled.status, "already_recorded");
+  assert.equal(reconciled.lifecycleState, "provider_accepted");
+  const persisted = (await pool.query(
+    `select state, worker_id, attempt_number, fence_token,
+            lease_started_at, lease_expires_at, lifecycle_state,
+            closure_evidence_digest
+       from ss.hosted_mail_dispatch_claims
+      where message_id = $1`,
+    [selected.id]
+  )).rows[0];
+  assert.deepEqual(persisted, {
+    state: "closed",
+    worker_id: null,
+    attempt_number: "2",
+    fence_token: "2",
+    lease_started_at: null,
+    lease_expires_at: null,
+    lifecycle_state: "provider_accepted",
+    closure_evidence_digest: acceptanceEvidenceDigest
+  });
+
+  const selectedSupport = (await pool.query(`
+    select mail.id, mail.requested_at, mail.expires_at
+      from ss.hosted_support_case_mail_reservations reservation
+      join ss.hosted_mail_deliveries mail
+        on mail.id = reservation.mail_message_id
+     where mail.state = 'pending'
+     order by reservation.reserved_at desc, reservation.case_id
+     limit 1
+  `)).rows[0];
+  assert.ok(
+    selectedSupport,
+    "mail dispatch completion proof requires one held support reservation"
+  );
+  let supportCurrent = new Date(
+    Date.parse(selectedSupport.requested_at) + 1_000
+  ).toISOString();
+  const supportClock = { now: () => supportCurrent };
+  const supportSource = createPostgresNotificationMailDispatchSource({
+    authority,
+    clock: supportClock
+  });
+  const supportClaim = await supportSource.claimForDispatch({
+    messageId: selectedSupport.id,
+    workerId: "mail-pg-worker-0004",
+    leaseMs: 120_000
+  });
+  assert.equal(supportClaim.status, "claimed");
+  assert.equal(supportClaim.sourceKind, "support");
+  supportCurrent = new Date(Date.parse(supportCurrent) + 1_000).toISOString();
+  const supportEvidenceDigest = "91".repeat(32);
+  const supportLifecycle = createMailLifecycle({
+    repository: createPostgresMailLifecycleRepository({ authority }),
+    clock: supportClock
+  });
+  await supportLifecycle.recordProviderAcceptance({
+    commandId: "mail.dispatch.pg.accept.0002",
+    messageId: selectedSupport.id,
+    provider: "resend",
+    providerMessageIdDigest: "92".repeat(32),
+    evidenceDigest: supportEvidenceDigest,
+    acceptedAt: supportCurrent
+  });
+  supportCurrent = new Date(Date.parse(supportCurrent) + 1_000).toISOString();
+  const completed = await supportSource.completeDispatch({
+    messageId: selectedSupport.id,
+    workerId: "mail-pg-worker-0004",
+    fenceToken: supportClaim.fenceToken,
+    closureEvidenceDigest: supportEvidenceDigest
+  });
+  assert.deepEqual(completed, {
+    status: "closed",
+    messageId: selectedSupport.id,
+    lifecycleState: "provider_accepted",
+    fenceToken: supportClaim.fenceToken,
+    providerEffects: false
+  });
+  assert.deepEqual(await supportSource.completeDispatch({
+    messageId: selectedSupport.id,
+    workerId: "mail-pg-worker-0004",
+    fenceToken: supportClaim.fenceToken,
+    closureEvidenceDigest: supportEvidenceDigest
+  }), completed);
+  await assert.rejects(
+    supportSource.completeDispatch({
+      messageId: selectedSupport.id,
+      workerId: "mail-pg-worker-0004",
+      fenceToken: supportClaim.fenceToken,
+      closureEvidenceDigest: "93".repeat(32)
+    }),
+    (error) => error?.code === "NOTIFICATION_DISPATCH_CLAIM_CONFLICT"
+  );
+  const completedTruth = (await pool.query(
+    `select state, worker_id, lease_started_at, lease_expires_at,
+            lifecycle_state, closure_evidence_digest
+       from ss.hosted_mail_dispatch_claims
+      where message_id = $1`,
+    [selectedSupport.id]
+  )).rows[0];
+  assert.deepEqual(completedTruth, {
+    state: "closed",
+    worker_id: null,
+    lease_started_at: null,
+    lease_expires_at: null,
+    lifecycle_state: "provider_accepted",
+    closure_evidence_digest: supportEvidenceDigest
+  });
+
+  let deleteError = null;
+  await pool.query("begin");
+  try {
+    await pool.query("set local role service_role");
+    await pool.query(
+      "delete from ss.hosted_mail_dispatch_claims where message_id = $1",
+      [selected.id]
+    );
+  } catch (error) {
+    deleteError = error;
+  } finally {
+    await pool.query("rollback");
+  }
+  assert.equal(deleteError?.code, "42501");
+}
+
+
 
 async function verifyAccountingPurposeJournal(pool) {
   const proof = await pool.query(`
@@ -6241,6 +6455,7 @@ export async function runMigrationVerification({
     await verifySupportPrivacyCaseLifecycle(pool);
     const queueProof = await verifyOperatorWorkQueue(pool);
     await verifyCommerceTransitionNotifications(pool, queueProof);
+    await verifyNotificationMailDispatchClaims(pool);
     await verifyAccountingPurposeJournal(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
@@ -6268,6 +6483,7 @@ export async function runMigrationVerification({
     writeOutput("operatorWorkQueuePostgresProof true\n");
     writeOutput("accountingPurposeJournalHeldPostgresProof true\n");
     writeOutput("commerceTransitionNotificationPostgresProof true\n");
+    writeOutput("notificationMailDispatchClaimPostgresProof true\n");
     writeOutput("alakazamPolicyAuthorityPostgresProof true\n");
     writeOutput("directCustomReversalNormalizationPostgresProof true\n");
     proof = Object.freeze({

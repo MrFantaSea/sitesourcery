@@ -1,4 +1,5 @@
 import { HostedError, invariant } from "./errors.mjs";
+import { digest } from "./security.mjs";
 
 const PROVIDER = "resend";
 const API_ORIGIN = "https://api.resend.com";
@@ -11,6 +12,11 @@ const REPLY_TO = "sitesourcery@proton.me";
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const NOTIFICATION_TYPES = new Set([
+  "support_notification",
+  "commerce_customer_notification",
+  "commerce_operator_notification"
+]);
 
 function configurationError(message) {
   return new HostedError(
@@ -296,6 +302,73 @@ function normalizeDelivery(input, kind, actionBases) {
   };
 }
 
+function normalizeNotification(input) {
+  invariant(
+    input !== null &&
+      typeof input === "object" &&
+      !Array.isArray(input) &&
+      Object.getPrototypeOf(input) === Object.prototype &&
+      JSON.stringify(Object.keys(input).sort()) === JSON.stringify([
+        "html",
+        "idempotencyKey",
+        "messageType",
+        "subject",
+        "templateVersion",
+        "text",
+        "to"
+      ]),
+    "RESEND_DELIVERY_INVALID",
+    "Notification mail input is invalid.",
+    { status: 500 }
+  );
+  const idempotencyKey = text(
+    input.idempotencyKey,
+    "Notification idempotency key",
+    256,
+    8
+  );
+  invariant(
+    idempotencyKey.startsWith("sitesourcery-notification/") &&
+      UUID.test(idempotencyKey.slice("sitesourcery-notification/".length)) &&
+      NOTIFICATION_TYPES.has(input.messageType) &&
+      /^[a-z0-9][a-z0-9._:-]{1,79}$/u.test(input.templateVersion),
+    "RESEND_DELIVERY_INVALID",
+    "Notification mail identity is invalid.",
+    { status: 500 }
+  );
+  const recipient = email(input.to);
+  const subject = text(input.subject, "Notification subject", 300);
+  const bodyText = String(input.text ?? "");
+  const html = input.html === null ? null : String(input.html ?? "");
+  invariant(
+    bodyText.length >= 1 && bodyText.length <= 100_000 &&
+      !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(bodyText) &&
+      (html === null || (
+        html.length >= 1 && html.length <= 200_000 &&
+        !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(html)
+      )),
+    "RESEND_DELIVERY_INVALID",
+    "Notification mail content is invalid.",
+    { status: 500 }
+  );
+  return {
+    idempotencyKey,
+    payloadDigest: digest(input),
+    body: {
+      from: FROM,
+      to: [recipient],
+      reply_to: REPLY_TO,
+      subject,
+      text: bodyText,
+      ...(html === null ? {} : { html }),
+      tags: [{
+        name: "message_type",
+        value: input.messageType
+      }]
+    }
+  };
+}
+
 async function responseJson(response) {
   let raw;
   try {
@@ -572,15 +645,46 @@ export function createResendMailTransport({
     });
   }
 
+  async function sendNotification(input) {
+    const delivery = normalizeNotification(input);
+    const result = await apiRequest({
+      fetchImpl,
+      apiKey: selectedApiKey,
+      timeoutMs: selectedTimeout,
+      path: "/emails",
+      method: "POST",
+      idempotencyKey: delivery.idempotencyKey,
+      body: delivery.body
+    });
+    invariant(
+      UUID.test(String(result?.id ?? "")),
+      "RESEND_RESPONSE_INVALID",
+      "Resend returned an invalid message receipt.",
+      { status: 502 }
+    );
+    return Object.freeze({
+      state: "provider_accepted",
+      provider: PROVIDER,
+      providerMessageId: result.id,
+      idempotencyKey: delivery.idempotencyKey,
+      payloadDigest: delivery.payloadDigest,
+      acceptedAt: currentTime(clock)
+    });
+  }
+
   return Object.freeze({
+    kind: "notification-mail-provider",
+    mode: "production",
     provider: PROVIDER,
+    providerEffects: true,
     readiness,
     sendRegistration(input) {
       return send(input, "registration");
     },
     sendRecovery(input) {
       return send(input, "recovery");
-    }
+    },
+    sendNotification
   });
 }
 

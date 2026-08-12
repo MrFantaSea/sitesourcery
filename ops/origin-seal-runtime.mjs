@@ -59,6 +59,8 @@ export const ORIGIN_LOOPBACK_EXPECTATIONS = deepFreeze({
 export const ORIGIN_WORKER_PATHS = deepFreeze({
   apiEntrypoint: "server/hosted/bin/server.mjs",
   workerEntrypoint: "server/hosted/bin/worker.mjs",
+  notificationMailPrivateRenderer:
+    "ops/notification-mail-private-renderer.mjs",
   unit: "ops/sitesourcery-workers.service.held",
   environmentSchema: "ops/workers.env.example"
 });
@@ -66,6 +68,7 @@ export const ORIGIN_WORKER_PATHS = deepFreeze({
 export const ORIGIN_WORKER_PURPOSES = Object.freeze([
   "export",
   "cancellation",
+  "notification-mail",
   "alakazam-fulfillment",
   "alakazam-retained-lifecycle"
 ]);

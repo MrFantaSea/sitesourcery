@@ -17,6 +17,9 @@ import {
   createCoreWorkerFactories
 } from "../worker-core-composition.mjs";
 import {
+  createNotificationMailWorkerFactories
+} from "../notification-mail-worker-composition.mjs";
+import {
   workerConfigurationFromEnvironment
 } from "../worker-config.mjs";
 import { createWorkerSupervisor } from "../worker-supervisor.mjs";
@@ -81,6 +84,12 @@ if (selected.configuration.activation === "held") {
     await authority.assertReady();
     const factories = Object.freeze({
       ...createCoreWorkerFactories({
+        authority,
+        purposes: selected.configuration.purposes,
+        environment: process.env,
+        log: write
+      }),
+      ...createNotificationMailWorkerFactories({
         authority,
         purposes: selected.configuration.purposes,
         environment: process.env,
