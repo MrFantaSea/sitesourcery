@@ -10,7 +10,18 @@ export {
   DOMAIN_PROVIDER_PIN_SCHEMA,
   DOMAIN_PROVIDER_ROUTE_SCHEMA
 } from "./provider-contingency.mjs";
+export {
+  createHeldDomainProviderLifecycle,
+  DOMAIN_PROVIDER_LIFECYCLE_CUSTOMER_SCHEMA,
+  DOMAIN_PROVIDER_LIFECYCLE_OPERATOR_SCHEMA,
+  DOMAIN_PROVIDER_LIFECYCLE_OUTCOME_SCHEMA,
+  DOMAIN_PROVIDER_LIFECYCLE_READBACK_SCHEMA,
+  DOMAIN_PROVIDER_LIFECYCLE_SCHEMA,
+  DOMAIN_PROVIDER_RENEWAL_QUOTE_SCHEMA
+} from "./provider-lifecycle.mjs";
 export { createMemoryDomainRepository } from "./adapters/memory-repository.mjs";
+export { createMemoryDomainLifecycleRepository } from
+  "./adapters/memory-lifecycle-repository.mjs";
 export { createHeldExternalPorts } from "./adapters/held.mjs";
 export {
   createHeldSpaceshipPricePreview,

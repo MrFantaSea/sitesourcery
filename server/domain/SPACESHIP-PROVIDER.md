@@ -155,12 +155,14 @@ Still required before live construction is permitted:
 - publication-release approval;
 - API credentials in an encrypted secret vault, never environment plaintext;
 - an encrypted contact vault implementing the durable claim contract;
-- a separately reviewed authenticated exact-price preview bridge;
+- a real-provider implementation for the reviewed authenticated exact-price
+  boundary's standard/premium preview contract;
 - approved, versioned registrant/agency/privacy disclosures;
 - the exact API scopes listed by `spaceship-readiness.mjs`;
 - staging reconciliation procedures for unknown contact and registration
   effects; and
-- a way to verify the final registrar charge before customer payment capture.
+- a real-provider final-charge readback implementation and staging proof for
+  the reviewed pre-capture evidence boundary.
 
 Run the non-mutating assessment with exact Node 24.18.0:
 
