@@ -87,6 +87,9 @@ import {
   RESEND_MAIL_EVENT_MAXIMUM_BYTES,
   RESEND_MAIL_EVENT_PATH
 } from "./resend-mail-events-http.mjs";
+import {
+  createCareSurfacesHttpBoundary
+} from "./care-surfaces-http.mjs";
 import { digestUserAgent } from "./project-legal-authority.mjs";
 
 const JSON_HEADERS = Object.freeze({
@@ -240,6 +243,19 @@ function json(payload, status = 200, headers = {}) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { ...JSON_HEADERS, ...headers }
+  });
+}
+
+function rootedResponse(response, requestId) {
+  const headers = new Headers(JSON_HEADERS);
+  for (const [name, value] of response.headers) {
+    headers.set(name, value);
+  }
+  headers.set("X-Request-Id", requestId);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
   });
 }
 
@@ -660,6 +676,7 @@ export function createHostedApi(
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
     engagementBootstrap = null,
+    careSurfaces = null,
     operatorWorkQueue = null,
     supportCases = null,
     resendMailEvents = null,
@@ -717,6 +734,75 @@ export function createHostedApi(
     "Hosted customer engagement bootstrap boundary is invalid.",
     { status: 500 }
   );
+  invariant(
+    careSurfaces === null ||
+      (
+        careSurfaces?.kind === "care-surfaces" &&
+        careSurfaces.mode === "held-local" &&
+        careSurfaces.customerEffects === false &&
+        careSurfaces.mailDeliveryEffects === false &&
+        careSurfaces.paymentEffects === false &&
+        careSurfaces.providerEffects === false &&
+        typeof careSurfaces.readiness === "function"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Care surfaces must use the verified effect-held composition.",
+    { status: 500 }
+  );
+  const careSurfacesHttpBoundary = careSurfaces === null
+    ? null
+    : createCareSurfacesHttpBoundary({
+        service: careSurfaces,
+        async authenticate(request, route) {
+          const selected = await service.authenticate(
+            parseCookies(request.headers.get("cookie")).ss_session
+          );
+          if (selected === null || selected === undefined) return null;
+          if (route.audience === "operator") {
+            return Object.freeze({
+              ...selected,
+              organizationId: route.params.organizationId
+            });
+          }
+          invariant(
+            typeof service.listOrganizations === "function",
+            "RUNTIME_CONFIGURATION_ERROR",
+            "Hosted Care organization authority is unavailable.",
+            { status: 500 }
+          );
+          const roster = await service.listOrganizations(selected);
+          const organizations = Array.isArray(roster?.organizations)
+            ? roster.organizations
+            : [];
+          const requestedOrganizationId = request.headers.get(
+            "x-sitesourcery-organization-id"
+          );
+          invariant(
+            requestedOrganizationId !== null || organizations.length === 1,
+            "CARE_ORGANIZATION_SELECTION_REQUIRED",
+            "Select the organization whose Care account you want to open.",
+            { status: 409 }
+          );
+          const organizationId = requestedOrganizationId ?? organizations[0].id;
+          invariant(
+            organizations.some((organization) =>
+              organization?.id === organizationId &&
+              organization?.state === "active"
+            ),
+            "NOT_FOUND",
+            "The requested Care account was not found.",
+            { status: 404 }
+          );
+          return Object.freeze({ ...selected, organizationId });
+        },
+        async requireWriteGuard(request) {
+          requireCsrf(
+            request,
+            parseCookies(request.headers.get("cookie"))
+          );
+          return true;
+        }
+      });
   const operatorWorkQueueHttpBoundary = operatorWorkQueue === null
     ? createHeldOperatorWorkQueueHttp({
         authenticate: async ({ actor }) => actor
@@ -1044,7 +1130,8 @@ export function createHostedApi(
           alakazam50Readiness,
           alakazamRetainedPremiumReadiness,
           alakazamPublicationReadiness,
-          resendMailEventReadiness
+          resendMailEventReadiness,
+          careReadiness
         ] = await Promise.all([
           service.readiness(),
           typeof downloadBoundary.readiness === "function"
@@ -1058,7 +1145,17 @@ export function createHostedApi(
           alakazam50Boundary.readiness(),
           alakazamRetainedPremiumBoundary.readiness(),
           alakazamPublicationBoundary.readiness(),
-          resendMailEventHttpBoundary.readiness()
+          resendMailEventHttpBoundary.readiness(),
+          careSurfaces === null
+            ? {
+                ready: false,
+                verified: false,
+                customerEffects: false,
+                mailDeliveryEffects: false,
+                paymentEffects: false,
+                providerEffects: false
+              }
+            : careSurfaces.readiness()
         ]);
         const registration =
           readiness?.registration ?? {};
@@ -1095,6 +1192,13 @@ export function createHostedApi(
           mailProviderEvents:
             resendMailEventReadiness?.ready === true &&
             resendMailEventReadiness?.verified === true,
+          care:
+            careReadiness?.ready === true &&
+            careReadiness?.verified === true &&
+            careReadiness?.customerEffects === false &&
+            careReadiness?.mailReservation?.deliveryEffects === false &&
+            careReadiness?.paymentEffects === false &&
+            careReadiness?.providerEffects === false,
           domainPurchase:
             domains.ready === true &&
             domains.registrar === "ready",
@@ -1284,6 +1388,14 @@ export function createHostedApi(
           return json(exactResendWebhookAcknowledgement(response), 200, {
             "X-Request-Id": requestId
           });
+        }
+
+        if (careSurfacesHttpBoundary !== null) {
+          const careResponse =
+            await careSurfacesHttpBoundary.dispatch(request);
+          if (careResponse !== null) {
+            return rootedResponse(careResponse, requestId);
+          }
         }
 
         if (WRITE_METHODS.has(method)) {

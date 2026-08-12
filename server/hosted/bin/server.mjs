@@ -176,6 +176,16 @@ import {
 } from "../support-cases-postgres.mjs";
 import { createSupportCaseService } from "../support-cases.mjs";
 import {
+  createPostgresCareCoreRepository
+} from "../care-core-postgres.mjs";
+import {
+  createPostgresCareSurfaceRepository
+} from "../care-surfaces-postgres.mjs";
+import {
+  createCareMailReservationInterface,
+  createCareSurfacesService
+} from "../care-surfaces.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -827,6 +837,31 @@ async function start() {
       "Canonical auditable support and privacy case storage is not ready."
     );
   }
+  const careCoreRepository = createPostgresCareCoreRepository({ authority });
+  const careSurfaces = createCareSurfacesService({
+    repository: createPostgresCareSurfaceRepository({
+      authority,
+      coreRepository: careCoreRepository
+    }),
+    mailReservations: createCareMailReservationInterface({
+      lifecycle: mailLifecycle,
+      clock: commerceV2.clock
+    }),
+    clock: commerceV2.clock
+  });
+  const careReadiness = await careSurfaces.readiness();
+  if (
+    careReadiness.ready !== true ||
+    careReadiness.verified !== true ||
+    careReadiness.customerEffects !== false ||
+    careReadiness.mailReservation?.deliveryEffects !== false ||
+    careReadiness.paymentEffects !== false ||
+    careReadiness.providerEffects !== false
+  ) {
+    throw new Error(
+      "Canonical effect-held Care surfaces are not ready."
+    );
+  }
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -936,6 +971,7 @@ async function start() {
         customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,
+        careSurfaces,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         supportCases,
         resendMailEvents,

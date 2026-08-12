@@ -12,7 +12,8 @@ const NAMES = Object.freeze([
   "alakazam50",
   "retained",
   "publication",
-  "mailEvents"
+  "mailEvents",
+  "care"
 ]);
 const EXPECTED = Object.freeze({
   accountRegistration: true,
@@ -27,6 +28,7 @@ const EXPECTED = Object.freeze({
   alakazamRetainedPremium: true,
   alakazamPublication: true,
   mailProviderEvents: true,
+  care: true,
   domainPurchase: true,
   publishing: true
 });
@@ -135,6 +137,32 @@ function apiFixture({
       async handle() {
         throw new Error("not reached");
       }
+    },
+    careSurfaces: {
+      kind: "care-surfaces",
+      mode: "held-local",
+      customerEffects: false,
+      mailDeliveryEffects: false,
+      paymentEffects: false,
+      providerEffects: false,
+      readiness: counted("care", {
+        ready: true,
+        verified: true,
+        customerEffects: false,
+        mailReservation: {
+          deliveryEffects: false,
+          providerEffects: false
+        },
+        paymentEffects: false,
+        providerEffects: false
+      }),
+      ...Object.fromEntries([
+        "allocateCapacity", "closePeriod", "openPeriod", "openTicket",
+        "readCustomer", "readOperator", "requestCustomerTicket",
+        "reserveTicketMail", "transitionTicket"
+      ].map((name) => [name, async () => {
+        throw new Error("not reached");
+      }]))
     }
   });
   return { api, calls };
