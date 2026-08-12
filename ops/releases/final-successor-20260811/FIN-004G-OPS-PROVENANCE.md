@@ -1,6 +1,6 @@
 # FIN-004G held operations provenance
 
-State: imported; clean-candidate identity proof pending
+State: proved
 Donor: `a81d1438fd57e62e44b917c803988301945ef2ef`
 Parent integration commit: `6b1cfbb`
 
@@ -76,14 +76,15 @@ database mutation, backup deletion, alert delivery, provider, customer,
 payment, mail, publication, or deployment effect is available through this
 cohort.
 
-## Proof before candidate checkpoint
+## Proof
 
 - backup/restore, load SLO, dead-man, edge binding, rollback, core-revenue
-  wrapper, and Responder/Hive convergence: 58/58 passed;
+  wrapper, Responder/Hive convergence, and clean-tree hosted epoch install:
+  62/62 passed;
 - the four hosted-epoch-install tests correctly refused to attest the dirty
-  worktree with `Origin Git identity is dirty or drifted`;
-- module syntax and `git diff --check`: passed before checkpoint.
-
-The hosted-epoch-install proof must run only after these exact files are part of
-a clean candidate commit. Its result and the cumulative regression result will
-be appended in the next evidence-only checkpoint.
+  worktree with `Origin Git identity is dirty or drifted` before checkpoint,
+  then passed against clean candidate commit `d6a9760`;
+- complete `npm test`: passed, including 205/205 ops tests, deterministic
+  90-file public and hosted artifacts, and the 15-route by 3-viewport browser
+  audit;
+- module syntax and `git diff --check`: passed.
