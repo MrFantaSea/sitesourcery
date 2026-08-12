@@ -3274,9 +3274,13 @@ test("ACCOUNTING-01 reserves migration 115 as a held projection-only journal", a
 
 test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity delivery", async () => {
   const selected = await migrations();
-  assert.equal(selected.length, 70);
+  const identityIndex = selected.findIndex(
+    ({ name }) => name ===
+      "202608100111_hosted_identity_delivery_acceptance.sql"
+  );
+  assert.ok(identityIndex > 0);
   assert.deepEqual(
-    selected.slice(-8).map(({ name }) => name),
+    selected.slice(identityIndex - 1, identityIndex + 7).map(({ name }) => name),
     [
       "202608100110_support_privacy_case_lifecycle.sql",
       "202608100111_hosted_identity_delivery_acceptance.sql",
@@ -3319,6 +3323,225 @@ test("MAIL-COMPOSE-FINAL-03 reserves migration 111 for possession-bound identity
   assert.doesNotMatch(
     migration.sql,
     /provider_effects_authorized\s*=\s*true|create table auth\.users|create table ss\.hosted_sessions/iu
+  );
+});
+
+test("DOMAINS-COMPOSE-01 reserves migration 119 for held route and pin persistence", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name ===
+      "202608110119_domain_provider_route_persistence.sql"
+  );
+  assert.ok(migration, "missing DOMAINS-COMPOSE-01 migration 119");
+  assert.match(migration.sql, /^-- DOMAINS-COMPOSE-01[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "domain_provider_routes",
+    "domain_provider_registration_attempts",
+    "domain_provider_pins"
+  ]) {
+    assert.match(migration.sql, new RegExp(`create table ss\\.${table}`, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /fallback_used[\s\S]*fallback_from_provider_code[\s\S]*provider_code <> primary_provider_code/u
+  );
+  assert.match(
+    migration.sql,
+    /domain_provider_registration_attempt_guard[\s\S]*domain_provider_pin_exact_route/u
+  );
+  assert.match(
+    migration.sql,
+    /project_legal_json_digest\(new\.route_evidence\)[\s\S]*submission outcome is immutable[\s\S]*project_legal_json_digest\(new\.pin_evidence\)/u
+  );
+  assert.match(
+    migration.sql,
+    /priceClass'[\s\S]*standard'[\s\S]*premium'[\s\S]*domain-final-charge-evidence\/v1[\s\S]*captureAuthorized'[\s\S]*refundAuthorized'[\s\S]*domain final registrar charge evidence is invalid/u
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security/u
+  );
+  assert.match(
+    migration.sql,
+    /canonical-domain-provider-route-persistence-v1-held/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /on delete cascade|grant all privileges|provider_effects_authorized\s*=\s*true|domain:renew|dnsrecords:write/iu
+  );
+});
+
+test("DOMAINS-LIFECYCLE-PERSISTENCE-04 reserves migration 123 for held canonical lifecycle state", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name ===
+      "202608110123_domain_lifecycle_persistence.sql"
+  );
+  assert.ok(migration, "missing DOMAINS-LIFECYCLE-PERSISTENCE-04 migration 123");
+  assert.match(
+    migration.sql,
+    /^-- DOMAINS-LIFECYCLE-PERSISTENCE-04[\s\S]*\bbegin;/u
+  );
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "domain_provider_lifecycle_states",
+    "domain_provider_lifecycle_commands"
+  ]) {
+    assert.match(migration.sql, new RegExp(`create table ss\\.${table}`, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /provider_pin_fingerprint[\s\S]*state_digest[\s\S]*command_fingerprint[\s\S]*result_digest/u
+  );
+  assert.match(
+    migration.sql,
+    /references ss\.domain_provider_pins\(organization_id, id\)/u
+  );
+  assert.match(
+    migration.sql,
+    /expiration cannot move backwards[\s\S]*provider observation conflicts or regresses[\s\S]*invalid domain renewal lifecycle transition[\s\S]*completed domain transfer is irreversible/u
+  );
+  assert.match(
+    migration.sql,
+    /providerReference[\s\S]*providerQuoteRef[\s\S]*operationId[\s\S]*providerEffectsAuthorized[\s\S]*paymentEffectsAuthorized[\s\S]*dnsEffectsAuthorized[\s\S]*captureAuthorized[\s\S]*refundAuthorized/u
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*grant select, insert, update on ss\.domain_provider_lifecycle_states\s+to service_role/u
+  );
+  assert.match(
+    migration.sql,
+    /canonical-domain-provider-lifecycle-persistence-v1-held/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /on delete cascade|grant all privileges|provider_effects_authorized\s*=\s*true|payment_effects_authorized\s*=\s*true|dns_effects_authorized\s*=\s*true/iu
+  );
+});
+
+test("ALAKAZAM-INVOICE-FINALIZATION-01 reserves migration 122 as a provider-readback held lifecycle", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608110122_alakazam_invoice_finalization.sql"
+  );
+  assert.ok(migration, "missing Alakazam invoice finalization migration 122");
+  assert.match(migration.sql, /^begin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "alakazam_invoice_finalization_observations",
+    "alakazam_invoice_finalization_projection"
+  ]) {
+    assert.match(migration.sql, new RegExp(`create table ss\\.${table}\\b`, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /provider_effects_authorized boolean not null default false[\s\S]*check \(not provider_effects_authorized\)/u
+  );
+  assert.match(
+    migration.sql,
+    /alakazam_finalization_hold_renewal[\s\S]*alakazam_finalization_hold_fulfillment/u
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects_authorized\s*=\s*true|grant .* to (?:anon|authenticated)/iu
+  );
+});
+
+test("CARE-CORE-01 reserves migration 121 as a wholly held shared ledger", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name === "202608110121_care_core.sql"
+  );
+  assert.ok(migration, "missing reserved CARE-CORE-01 migration 121");
+  assert.match(migration.sql, /^-- CARE-CORE-01[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const relation of [
+    "care_catalog_identities",
+    "care_commands",
+    "care_customer_contracts",
+    "care_periods",
+    "care_period_scope_claims",
+    "care_tickets",
+    "care_capacity_entries"
+  ]) {
+    assert.match(migration.sql, new RegExp(`create table ss\\.${relation}`, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /commercial_authority_state in \('exact_held', 'owner_redline_required'\)[\s\S]*availability_state = 'held'/u
+  );
+  assert.match(
+    migration.sql,
+    /unique \([\s\S]*provider_scope_digest, starts_on, ends_on[\s\S]*\)/u
+  );
+  assert.match(
+    migration.sql,
+    /care_period_scope_one_primary[\s\S]*where claim_mode = 'primary'/u
+  );
+  assert.match(
+    migration.sql,
+    /used_carried <> period_record\.carried_units[\s\S]*used_included \+ new\.units > period_record\.included_units/u
+  );
+  assert.match(
+    migration.sql,
+    /service_assessment_report_findings[\s\S]*care ticket assessment basis is not authoritative/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*hosted_care_core_contract_v1/u
+  );
+  assert.match(
+    migration.sql,
+    /revoke all on function ss\.care_actor_is_authorized\(uuid\)[\s\S]*grant execute on function ss\.care_actor_is_authorized\(uuid\)\s+to service_role/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects_authorized\s+boolean[^\n]*(?:default\s+true|check\s*\(\s*provider_effects_authorized)|grant all privileges|on delete cascade|charges[.]create|payment_intents[.]create/iu
+  );
+});
+
+test("CARE-COMMERCE-PERSISTENCE-04 reserves migration 124 for held canonical evidence", async () => {
+  const selected = await migrations();
+  const migration = selected.find(
+    ({ name }) => name === "202608110124_care_commerce_persistence.sql"
+  );
+  assert.ok(migration, "missing reserved CARE-COMMERCE migration 124");
+  assert.match(migration.sql, /^-- CARE-COMMERCE-PERSISTENCE-04[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const relation of [
+    "care_commerce_quotes", "care_commerce_reservations",
+    "care_commerce_reservation_events"
+  ]) {
+    assert.match(migration.sql, new RegExp(`create table ss\\.${relation}`, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /unique \(organization_id, quote_id\)[\s\S]*provider_request is null/u
+  );
+  assert.match(
+    migration.sql,
+    /alter table ss\.care_commands[\s\S]*'care_quote_create'[\s\S]*'commerce_reservation'/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /create table ss\.care_commerce_(?:commands|command_events)/u
+  );
+  assert.match(
+    migration.sql,
+    /care_commerce_terminal_purge_allowed[\s\S]*projects_purge_care_commerce/u
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*hosted_care_commerce_persistence_contract_v1/u
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects_authorized\s+boolean[^\n]*(?:default\s+true|check\s*\(\s*provider_effects_authorized)|grant all privileges|on delete cascade|payment_intents[.]create|charges[.]create/iu
   );
 });
 

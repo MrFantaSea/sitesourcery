@@ -672,7 +672,8 @@ async function verifyDurableMailLifecycle(pool) {
   `);
   assert.equal(
     columns.rows.some(({ column_name: name }) =>
-      /email|body|subject_text|token|raw_payload|action_url/u.test(name)),
+      /email|body|subject_text|raw_payload|action_url/u.test(name) ||
+      (name.includes("token") && name !== "fence_token")),
     false
   );
 }
