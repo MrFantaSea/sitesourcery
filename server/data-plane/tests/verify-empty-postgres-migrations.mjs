@@ -38,6 +38,22 @@ import { resolveMigrationVerificationInventory } from
   "./migration-verification-inventory.mjs";
 import { createPostgresCustomServicesCustomBuild } from
   "../../hosted/custom-services-custom-build-postgres.mjs";
+import {
+  createPostgresDomainProviderRouteComposition,
+  createPostgresDomainProviderRouteRepository
+} from "../../hosted/domain-provider-route-postgres.mjs";
+import {
+  createHeldDomainPriceChargeBoundary
+} from "../../hosted/domain-price-charge-boundary.mjs";
+import {
+  createPostgresDomainLifecycleRepository
+} from "../../hosted/domain-lifecycle-postgres.mjs";
+import {
+  DOMAIN_PROVIDER_LIFECYCLE_OUTCOME_SCHEMA,
+  DOMAIN_PROVIDER_LIFECYCLE_READBACK_SCHEMA,
+  DOMAIN_PROVIDER_RENEWAL_QUOTE_SCHEMA,
+  createHeldDomainProviderLifecycle
+} from "../../domain/provider-lifecycle.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -6392,6 +6408,968 @@ async function verifyProfessionalServicesReversalState(pool) {
   }
 }
 
+async function verifyDomainProviderRoutePersistence(pool) {
+  const userId = randomUUID();
+  const organizationId = randomUUID();
+  const projectId = randomUUID();
+  const domain = "fallback-route.example";
+  const observedAt = "2026-08-11T11:59:00.000Z";
+  const now = "2026-08-11T12:00:00.000Z";
+  const expiresAt = "2026-08-11T12:05:00.000Z";
+  await pool.query(
+    `insert into auth.users (id, email) values ($1, $2)`,
+    [userId, `${userId}@domain-route-proof.invalid`]
+  );
+  await pool.query(
+    `insert into ss.organizations (id, created_by_user_id, name)
+     values ($1, $2, 'Domain route proof')`,
+    [organizationId, userId]
+  );
+  await pool.query(
+    `insert into ss.organization_memberships (
+       organization_id, user_id, role, state, accepted_at
+     ) values ($1, $2, 'owner', 'active', $3)`,
+    [organizationId, userId, now]
+  );
+  await pool.query(
+    `insert into ss.projects (
+       id, organization_id, created_by_user_id, billing_policy_id, name
+     ) values (
+       $1, $2, $3, '00000000-0000-4000-8000-000000000014',
+       'Domain route proof'
+     )`,
+    [projectId, organizationId, userId]
+  );
+
+  const calls = {
+    primaryPreview: 0,
+    primaryConfirm: 0,
+    secondaryPreview: 0,
+    secondaryConfirm: 0,
+    secondaryOperation: 0,
+    secondaryDomain: 0,
+    secondaryCharge: 0
+  };
+  const primary = {
+    async previewRegistration() {
+      calls.primaryPreview += 1;
+      throw new Error("deterministic primary preflight failure");
+    },
+    async confirmRegistration() {
+      calls.primaryConfirm += 1;
+      throw new Error("primary mutation must remain unreachable");
+    }
+  };
+  const secondary = {
+    async previewRegistration(input) {
+      calls.secondaryPreview += 1;
+      const standard = input.domain === "standard-route.example";
+      return {
+        status: "confirmation_required",
+        domain: input.domain,
+        years: input.years,
+        price: {
+          amountMinor: standard ? 1200 : 1400,
+          currency: "USD"
+        },
+        priceClass: standard ? "standard" : "premium",
+        quoteId: `secondary_quote_${input.domain}`,
+        observedAt,
+        expiresAt,
+        noCharge: true
+      };
+    },
+    async confirmRegistration(input) {
+      calls.secondaryConfirm += 1;
+      const beforeEffect = await pool.query(
+        `select state, provider_code, attempt_key
+           from ss.domain_provider_registration_attempts
+          where organization_id = $1 and attempt_key = $2`,
+        [organizationId, input.attemptId]
+      );
+      assert.deepEqual(beforeEffect.rows, [{
+        state: "dispatching",
+        provider_code: "secondary",
+        attempt_key: input.attemptId
+      }]);
+      return {
+        operationId: input.domain === domain
+          ? "secondary_operation_001"
+          : "secondary_operation_crash_001",
+        price: structuredClone(input.expectedPrice)
+      };
+    },
+    async getOperation({ operationId }) {
+      calls.secondaryOperation += 1;
+      assert.equal(operationId, "secondary_operation_001");
+      return { status: "success" };
+    },
+    async getDomain(input) {
+      calls.secondaryDomain += 1;
+      return {
+        name: input.domain,
+        lifecycleStatus: "registered",
+        contacts: { registrant: "secondary_contact_customer" }
+      };
+    },
+    async readRegistrationCharge(input) {
+      calls.secondaryCharge += 1;
+      return {
+        status: "final",
+        ambiguous: false,
+        providerCode: "secondary",
+        domain: input.domain,
+        operationId: input.operationId,
+        quoteId: input.providerQuoteId,
+        quoteExpiresAt: expiresAt,
+        price: { amountMinor: 1400, currency: "USD" },
+        chargeReference: "secondary_charge_001",
+        observedAt: now,
+        evidenceExpiresAt: "2026-08-11T12:04:00.000Z"
+      };
+    }
+  };
+  const registrarProviders = {
+    primary: {
+      code: "primary",
+      registrarOfRecord: "Primary Registrar",
+      configured: true,
+      healthy: true,
+      registrar: primary
+    },
+    secondary: {
+      code: "secondary",
+      registrarOfRecord: "Secondary Registrar",
+      configured: true,
+      healthy: true,
+      registrar: secondary
+    },
+    preference: ["primary", "secondary"]
+  };
+  const authority = createCanonicalPostgresAuthority({ pool });
+  const repository = createPostgresDomainProviderRouteRepository({
+    authority,
+    clock: { now: () => now }
+  });
+  const composition = createPostgresDomainProviderRouteComposition({
+    repository,
+    registrarProviders
+  });
+  const priceCharge = createHeldDomainPriceChargeBoundary({
+    repository,
+    registrarProviders,
+    clock: { now: () => now },
+    async resolveProjectScope({ actor, projectId: requestedProjectId }) {
+      assert.equal(actor.userId, userId);
+      assert.equal(requestedProjectId, projectId);
+      return {
+        actorId: userId,
+        customerId: userId,
+        organizationId,
+        projectId
+      };
+    }
+  });
+  assert.deepEqual(await repository.readiness(), {
+    ready: true,
+    providerEffects: false,
+    paymentEffects: false,
+    dnsEffects: false,
+    renewalEffects: false
+  });
+
+  const exactPremiumQuote = await priceCharge.quoteExactRegistration({
+    actor: { userId },
+    projectId,
+    selectionKey: "domain-route-selection-001",
+    domain,
+    years: 1
+  });
+  assert.equal(exactPremiumQuote.status, "held_exact_price");
+  assert.equal(exactPremiumQuote.priceClass, "premium");
+  assert.deepEqual(exactPremiumQuote.price, {
+    amountMinor: 1400,
+    currency: "USD"
+  });
+  assert.equal(exactPremiumQuote.captureAuthorized, false);
+  const persistedRoute = await repository.readRoute({
+    organizationId,
+    projectId,
+    routeId: exactPremiumQuote.routeRef
+  });
+  assert.equal(persistedRoute.fallbackUsed, true);
+  assert.equal(persistedRoute.fallbackFromProviderCode, "primary");
+  assert.equal(persistedRoute.route.providerCode, "secondary");
+  assert.deepEqual(
+    await repository.persistRoute({
+      organizationId,
+      projectId,
+      selectionKey: "domain-route-selection-001",
+      primaryProviderCode: "primary",
+      fallbackUsed: true,
+      route: persistedRoute.route
+    }),
+    persistedRoute
+  );
+  await assert.rejects(
+    repository.persistRoute({
+      organizationId,
+      projectId,
+      selectionKey: "domain-route-selection-001",
+      primaryProviderCode: "secondary",
+      fallbackUsed: false,
+      route: persistedRoute.route
+    }),
+    (error) => error?.code === "DOMAIN_PROVIDER_ROUTE_CONFLICT"
+  );
+
+  const exactStandardQuote = await priceCharge.quoteExactRegistration({
+    actor: { userId },
+    projectId,
+    selectionKey: "domain-route-selection-standard-001",
+    domain: "standard-route.example",
+    years: 1
+  });
+  assert.equal(exactStandardQuote.priceClass, "standard");
+  assert.deepEqual(exactStandardQuote.price, {
+    amountMinor: 1200,
+    currency: "USD"
+  });
+
+  const attemptKey = "domain-registration-attempt-001";
+  const submitted = await composition.submitRegistration({
+    organizationId,
+    projectId,
+    routeId: persistedRoute.id,
+    attemptKey,
+    input: {
+      contacts: { registrant: "secondary_contact_customer" }
+    }
+  });
+  assert.equal(submitted.replayed, false);
+  assert.equal(submitted.attempt.state, "submitted");
+  assert.equal(submitted.attempt.operationId, "secondary_operation_001");
+  const replayedSubmit = await composition.submitRegistration({
+    organizationId,
+    projectId,
+    routeId: persistedRoute.id,
+    attemptKey,
+    input: {
+      contacts: { registrant: "secondary_contact_customer" }
+    }
+  });
+  assert.equal(replayedSubmit.replayed, true);
+  assert.equal(replayedSubmit.attempt.state, "submitted");
+  assert.equal(calls.secondaryConfirm, 1);
+
+  const chargeBoundary = await priceCharge.prepareFinalCharge({
+    actor: { userId },
+    projectId,
+    routeId: persistedRoute.id,
+    attemptKey,
+    expectedRegistrantContactId: "secondary_contact_customer"
+  });
+  assert.equal(
+    chargeBoundary.status,
+    "ready_for_payment_capture_review"
+  );
+  assert.equal(chargeBoundary.replayed, false);
+  assert.equal(chargeBoundary.customer.priceClass, "premium");
+  assert.equal(chargeBoundary.customer.captureAuthorized, false);
+  assert.match(
+    chargeBoundary.operator.registrarChargeDigest,
+    /^[a-f0-9]{64}$/u
+  );
+  const pinned = await repository.readPin({
+    organizationId,
+    projectId,
+    domain
+  });
+  assert.equal(pinned.pin.providerCode, "secondary");
+  assert.equal(
+    (
+      await priceCharge.prepareFinalCharge({
+        actor: { userId },
+        projectId,
+        routeId: persistedRoute.id,
+        attemptKey,
+        expectedRegistrantContactId: "secondary_contact_customer"
+      })
+    ).replayed,
+    true
+  );
+
+  let simulatePersistenceCrash = true;
+  const crashRepository = Object.freeze({
+    ...repository,
+    async recordRegistrationOutcome(input) {
+      if (simulatePersistenceCrash) {
+        simulatePersistenceCrash = false;
+        throw new Error("simulated post-provider persistence crash");
+      }
+      return repository.recordRegistrationOutcome(input);
+    }
+  });
+  const crashComposition = createPostgresDomainProviderRouteComposition({
+    repository: crashRepository,
+    registrarProviders
+  });
+  const crashRoute = (
+    await crashComposition.preflightRoute({
+      organizationId,
+      projectId,
+      selectionKey: "domain-route-selection-crash-001",
+      input: { domain: "crash-route.example", years: 1 }
+    })
+  ).route;
+  const crashAttemptKey = "domain-registration-attempt-crash-001";
+  await assert.rejects(
+    crashComposition.submitRegistration({
+      organizationId,
+      projectId,
+      routeId: crashRoute.id,
+      attemptKey: crashAttemptKey,
+      input: {
+        contacts: { registrant: "secondary_contact_customer" }
+      }
+    }),
+    /simulated post-provider persistence crash/u
+  );
+  const confirmCallsAfterCrash = calls.secondaryConfirm;
+  const heldAfterCrash = await crashComposition.submitRegistration({
+    organizationId,
+    projectId,
+    routeId: crashRoute.id,
+    attemptKey: crashAttemptKey,
+    input: {
+      contacts: { registrant: "secondary_contact_customer" }
+    }
+  });
+  assert.equal(heldAfterCrash.replayed, true);
+  assert.equal(heldAfterCrash.attempt.state, "dispatching");
+  assert.equal(
+    heldAfterCrash.outcome.reason,
+    "persisted_dispatch_requires_reconciliation"
+  );
+  assert.equal(calls.secondaryConfirm, confirmCallsAfterCrash);
+  await assert.rejects(
+    repository.readRoute({
+      organizationId: randomUUID(),
+      projectId,
+      routeId: persistedRoute.id
+    }),
+    (error) => error?.code === "NOT_FOUND"
+  );
+  await assert.rejects(
+    pool.query(
+      `update ss.domain_provider_routes
+          set registrar_of_record = 'Changed Registrar'
+        where id = $1`,
+      [persistedRoute.id]
+    ),
+    /immutable/u
+  );
+  await assert.rejects(
+    pool.query(
+      `delete from ss.domain_provider_pins where id = $1`,
+      [pinned.id]
+    ),
+    /append-only/u
+  );
+  await assert.rejects(
+    pool.query(
+      `update ss.domain_provider_registration_attempts
+          set submission_outcome =
+                jsonb_set(submission_outcome, '{providerCode}', '"primary"')
+        where id = $1`,
+      [submitted.attempt.id]
+    ),
+    /submission outcome is immutable/u
+  );
+  const malformedAttemptId = randomUUID();
+  const malformedAttemptKey = "domain-registration-attempt-malformed-charge";
+  await pool.query(
+    `with submission as (
+       select jsonb_build_object(
+         'schema', 'sitesourcery.domain-provider-outcome/v1',
+         'status', 'submitted',
+         'providerCode', 'secondary',
+         'operationId', 'malformed_charge_operation'
+       ) as evidence
+     )
+     insert into ss.domain_provider_registration_attempts (
+       id, organization_id, project_id, provider_route_id,
+       provider_code, domain_name, attempt_key, state,
+       external_operation_ref, submission_outcome,
+       submission_outcome_digest, requested_at, updated_at
+     )
+     select $1, $2, $3, $4, 'secondary', 'standard-route.example',
+            $5, 'submitted', 'malformed_charge_operation', evidence,
+            ss.project_legal_json_digest(evidence), $6, $6
+       from submission`,
+    [
+      malformedAttemptId,
+      organizationId,
+      projectId,
+      exactStandardQuote.routeRef,
+      malformedAttemptKey,
+      now
+    ]
+  );
+  await assert.rejects(
+    pool.query(
+      `with reconciliation as (
+         select jsonb_build_object(
+           'schema', 'sitesourcery.domain-provider-outcome/v1',
+           'status', 'active',
+           'operationId', 'malformed_charge_operation',
+           'finalChargeEvidence', jsonb_build_object(
+             'schema', 'sitesourcery.domain-final-charge-evidence/v1',
+             'providerCode', 'secondary',
+             'domain', 'standard-route.example',
+             'captureAuthorized', true,
+             'refundAuthorized', false,
+             'providerEffectsAuthorized', false,
+             'ambiguous', false,
+             'fingerprint', repeat('0', 64)
+           )
+         ) as evidence
+       )
+       update ss.domain_provider_registration_attempts
+          set state = 'succeeded',
+              reconciliation_outcome = reconciliation.evidence,
+              reconciliation_outcome_digest =
+                ss.project_legal_json_digest(reconciliation.evidence),
+              completed_at = $2,
+              updated_at = $2
+         from reconciliation
+        where id = $1`,
+      [malformedAttemptId, now]
+    ),
+    /final registrar charge evidence is invalid/u
+  );
+  assert.deepEqual(calls, {
+    primaryPreview: 3,
+    primaryConfirm: 0,
+    secondaryPreview: 3,
+    secondaryConfirm: 2,
+    secondaryOperation: 1,
+    secondaryDomain: 1,
+    secondaryCharge: 1
+  });
+
+  const proof = await pool.query(`
+    select
+      ss.domain_provider_route_persistence_contract_v1() =
+        'canonical-domain-provider-route-persistence-v1-held'
+        as exact_contract,
+      (select count(*) = 3 from ss.domain_provider_routes)
+        as exact_routes,
+      (select count(*) = 3
+         from ss.domain_provider_routes
+        where fallback_used
+          and provider_code = 'secondary'
+          and fallback_from_provider_code = 'primary')
+        as exact_fallback,
+      (select count(*) = 3
+         from ss.domain_provider_routes
+        where route_evidence ->> 'priceClass' in ('standard', 'premium'))
+        as exact_price_classes,
+      (select count(*) = 1
+         from ss.domain_provider_registration_attempts
+        where state = 'succeeded'
+          and provider_code = 'secondary'
+          and reconciliation_outcome -> 'finalChargeEvidence' ->>
+                'captureAuthorized' = 'false'
+          and reconciliation_outcome -> 'finalChargeEvidence' ->>
+                'refundAuthorized' = 'false')
+        as exact_attempt,
+      (select count(*) = 1
+         from ss.domain_provider_registration_attempts
+        where state = 'dispatching'
+          and provider_code = 'secondary')
+        as exact_crash_fence,
+      (select count(*) = 1
+         from ss.domain_provider_pins
+        where provider_code = 'secondary'
+          and domain_name = 'fallback-route.example')
+        as exact_pin,
+      not has_table_privilege(
+        'anon', 'ss.domain_provider_routes', 'SELECT'
+      ) and not has_table_privilege(
+        'authenticated',
+        'ss.domain_provider_registration_attempts',
+        'SELECT'
+      ) and not has_table_privilege(
+        'service_role', 'ss.domain_provider_routes', 'UPDATE,DELETE'
+      ) and not has_table_privilege(
+        'service_role', 'ss.domain_provider_pins', 'UPDATE,DELETE'
+      ) as exact_least_privilege,
+      not exists (
+        select 1
+          from pg_class table_record
+         where table_record.oid in (
+           'ss.domain_provider_routes'::regclass,
+           'ss.domain_provider_registration_attempts'::regclass,
+           'ss.domain_provider_pins'::regclass
+         ) and not (
+           table_record.relrowsecurity
+           and table_record.relforcerowsecurity
+         )
+      ) as exact_forced_rls
+  `);
+  assert.deepEqual(proof.rows[0], {
+    exact_contract: true,
+    exact_routes: true,
+    exact_fallback: true,
+    exact_price_classes: true,
+    exact_attempt: true,
+    exact_crash_fence: true,
+    exact_pin: true,
+    exact_least_privilege: true,
+    exact_forced_rls: true
+  });
+  return Object.freeze({
+    userId,
+    organizationId,
+    projectId,
+    domain,
+    pin: pinned.pin
+  });
+}
+
+async function verifyDomainLifecyclePersistence(pool, routeProof) {
+  const authority = createCanonicalPostgresAuthority({ pool });
+  const repository = createPostgresDomainLifecycleRepository({ authority });
+  let currentTime = "2026-08-11T12:10:00.000Z";
+  let readback = {
+    lifecycleStatus: "active",
+    expirationDate: "2027-08-11T12:00:00.000Z",
+    transferStatus: "none",
+    transferEligible: true,
+    transferLocked: false,
+    observedAt: "2026-08-11T12:09:00.000Z",
+    providerReference: "secondary_domain_fallback_route_001",
+    renewalOperationId: null,
+    transferOperationId: null
+  };
+  const providerCalls = { lifecycle: 0, quote: 0 };
+  const providerReadPort = Object.freeze({
+    async readLifecycle(input) {
+      providerCalls.lifecycle += 1;
+      assert.deepEqual(input, {
+        providerCode: routeProof.pin.providerCode,
+        domain: routeProof.domain
+      });
+      return {
+        schema: DOMAIN_PROVIDER_LIFECYCLE_READBACK_SCHEMA,
+        providerCode: routeProof.pin.providerCode,
+        domain: routeProof.domain,
+        authoritative: true,
+        autoRenew: false,
+        ...structuredClone(readback)
+      };
+    },
+    async previewRenewal(input) {
+      providerCalls.quote += 1;
+      assert.equal(input.providerCode, routeProof.pin.providerCode);
+      assert.equal(input.domain, routeProof.domain);
+      assert.equal(input.currentExpirationDate, readback.expirationDate);
+      return {
+        schema: DOMAIN_PROVIDER_RENEWAL_QUOTE_SCHEMA,
+        status: "confirmation_required",
+        noCharge: true,
+        providerCode: routeProof.pin.providerCode,
+        domain: routeProof.domain,
+        currentExpirationDate: readback.expirationDate,
+        priceClass: "standard",
+        price: { amountMinor: input.years * 1700, currency: "USD" },
+        quoteId: `held_renewal_quote_${input.years}`,
+        observedAt: currentTime,
+        expiresAt: new Date(
+          Date.parse(currentTime) + 5 * 60 * 1000
+        ).toISOString()
+      };
+    }
+  });
+  const lifecycle = createHeldDomainProviderLifecycle({
+    repository,
+    providerReadPort,
+    clock: { now: () => currentTime }
+  });
+  const scope = Object.freeze({
+    organizationId: routeProof.organizationId,
+    projectId: routeProof.projectId,
+    customerId: routeProof.userId,
+    actorId: routeProof.userId
+  });
+  assert.deepEqual(await repository.readiness(), {
+    ready: true,
+    mode: "canonical_postgres_held",
+    canonicalPersistence: true,
+    providerEffects: false,
+    paymentEffects: false,
+    dnsEffects: false
+  });
+
+  const initial = await lifecycle.refreshAuthoritative({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-refresh-001"
+  });
+  assert.equal(initial.replayed, false);
+  assert.equal(initial.customer.lifecycleStatus, "active");
+  assert.equal(initial.customer.autoRenew, false);
+  assert.equal(initial.customer.providerEffectsAuthorized, false);
+  assert.equal(initial.operator.providerEffectsAuthorized, false);
+  assert.equal(
+    (
+      await lifecycle.refreshAuthoritative({
+        scope,
+        pin: routeProof.pin,
+        commandId: "domain-lifecycle-refresh-001"
+      })
+    ).replayed,
+    true
+  );
+
+  const quoted = await lifecycle.quoteRenewal({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-renewal-quote-001",
+    years: 1
+  });
+  assert.equal(quoted.customer.renewal.status, "quoted");
+  assert.equal(quoted.customer.renewal.quote.price.amountMinor, 1700);
+  await assert.rejects(
+    lifecycle.quoteRenewal({
+      scope,
+      pin: routeProof.pin,
+      commandId: "domain-lifecycle-renewal-quote-001",
+      years: 2
+    }),
+    (error) => error?.code === "lifecycle_idempotency_conflict"
+  );
+  const consentDigest = "a".repeat(64);
+  const reservedRenewal = await lifecycle.reserveRenewal({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-renewal-reserve-001",
+    attemptId: "renewal-attempt-001",
+    quoteFingerprint: quoted.customer.renewal.quote.quoteFingerprint,
+    consentDigest
+  });
+  assert.equal(reservedRenewal.reservation.providerEffectsAuthorized, false);
+  assert.equal(reservedRenewal.reservation.paymentEffectsAuthorized, false);
+  assert.equal(
+    (
+      await lifecycle.reserveRenewal({
+        scope,
+        pin: routeProof.pin,
+        commandId: "domain-lifecycle-renewal-reserve-001",
+        attemptId: "renewal-attempt-001",
+        quoteFingerprint: quoted.customer.renewal.quote.quoteFingerprint,
+        consentDigest
+      })
+    ).replayed,
+    true
+  );
+  const renewalOperationId = "secondary_renewal_operation_001";
+  await lifecycle.recordRenewalOutcome({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-renewal-outcome-001",
+    outcome: {
+      schema: DOMAIN_PROVIDER_LIFECYCLE_OUTCOME_SCHEMA,
+      kind: "renewal",
+      providerCode: routeProof.pin.providerCode,
+      domain: routeProof.domain,
+      attemptId: "renewal-attempt-001",
+      effect: "uncertain",
+      operationId: renewalOperationId,
+      observedAt: currentTime,
+      reason: "fake_provider_timeout_after_submission"
+    }
+  });
+  currentTime = "2026-08-11T12:20:00.000Z";
+  readback = {
+    ...readback,
+    expirationDate: "2028-08-11T12:00:00.000Z",
+    observedAt: "2026-08-11T12:19:00.000Z",
+    renewalOperationId
+  };
+  const renewed = await lifecycle.refreshAuthoritative({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-refresh-renewed-001"
+  });
+  assert.equal(renewed.customer.renewal.status, "succeeded");
+  assert.equal(renewed.customer.expirationDate, readback.expirationDate);
+  const renewalReversal = await lifecycle.recordReversal({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-renewal-reversal-001",
+    kind: "renewal",
+    sourceDigest: "b".repeat(64),
+    reason: "payment_reversal_requires_manual_resolution"
+  });
+  assert.equal(renewalReversal.customer.renewal.status, "reversal_review");
+  assert.equal(renewalReversal.customer.renewal.custodyUnchanged, true);
+
+  currentTime = "2026-08-11T12:30:00.000Z";
+  const reservedTransfer = await lifecycle.reserveTransfer({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-transfer-reserve-001",
+    attemptId: "transfer-attempt-001",
+    consentDigest: "c".repeat(64)
+  });
+  assert.equal(reservedTransfer.reservation.providerEffectsAuthorized, false);
+  const transferOperationId = "secondary_transfer_operation_001";
+  await lifecycle.recordTransferOutcome({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-transfer-outcome-001",
+    outcome: {
+      schema: DOMAIN_PROVIDER_LIFECYCLE_OUTCOME_SCHEMA,
+      kind: "transfer",
+      providerCode: routeProof.pin.providerCode,
+      domain: routeProof.domain,
+      attemptId: "transfer-attempt-001",
+      effect: "uncertain",
+      operationId: transferOperationId,
+      observedAt: currentTime,
+      reason: "fake_provider_timeout_after_submission"
+    }
+  });
+  currentTime = "2026-08-11T12:40:00.000Z";
+  readback = {
+    ...readback,
+    transferStatus: "cancelled",
+    observedAt: "2026-08-11T12:39:00.000Z",
+    transferOperationId
+  };
+  const cancelled = await lifecycle.refreshAuthoritative({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-refresh-transfer-cancelled-001"
+  });
+  assert.equal(cancelled.customer.transfer.status, "cancelled");
+  const transferReversal = await lifecycle.recordReversal({
+    scope,
+    pin: routeProof.pin,
+    commandId: "domain-lifecycle-transfer-reversal-001",
+    kind: "transfer",
+    sourceDigest: "d".repeat(64),
+    reason: "transfer_fee_reversal_requires_manual_resolution"
+  });
+  assert.equal(transferReversal.customer.transfer.status, "reversal_review");
+  assert.equal(transferReversal.customer.transfer.providerPinRetained, true);
+  assert.equal(transferReversal.customer.paymentEffectsAuthorized, false);
+  assert.equal(transferReversal.customer.dnsEffectsAuthorized, false);
+  const operator = await lifecycle.readProjection({
+    scope,
+    pin: routeProof.pin,
+    audience: "operator"
+  });
+  assert.match(operator.providerPinFingerprint, /^[a-f0-9]{64}$/u);
+  assert.match(operator.lifecycleEvidenceDigest, /^[a-f0-9]{64}$/u);
+  assert.equal(operator.transfer.status, "reversal_review");
+  assert.equal(operator.paymentEffectsAuthorized, false);
+  await assert.rejects(
+    repository.read({
+      scope: { ...scope, organizationId: randomUUID() },
+      domain: routeProof.domain
+    }),
+    (error) => error?.code === "lifecycle_not_found"
+  );
+
+  const retained = await pool.query(
+    `select id, state_document, revision, expiration_date, updated_at
+       from ss.domain_provider_lifecycle_states
+      where organization_id = $1 and project_id = $2 and domain_name = $3`,
+    [routeProof.organizationId, routeProof.projectId, routeProof.domain]
+  );
+  assert.equal(retained.rowCount, 1);
+  await assert.rejects(
+    pool.query(
+      `with changed as (
+         select jsonb_set(
+                  state_document,
+                  '{authoritative,expirationDate}',
+                  to_jsonb('2026-08-11T12:00:00.000Z'::text)
+                ) as document
+           from ss.domain_provider_lifecycle_states where id = $1
+       )
+       update ss.domain_provider_lifecycle_states state
+          set expiration_date = '2026-08-11T12:00:00.000Z',
+              state_document = changed.document,
+              state_digest = ss.project_legal_json_digest(changed.document),
+              revision = state.revision + 1,
+              updated_at = state.updated_at + interval '1 second'
+         from changed where state.id = $1`,
+      [retained.rows[0].id]
+    ),
+    /expiration cannot move backwards/u
+  );
+  await assert.rejects(
+    pool.query(
+      `with changed as (
+         select jsonb_set(
+                  state_document,
+                  '{providerEffectsAuthorized}',
+                  'true'::jsonb
+                ) as document
+           from ss.domain_provider_lifecycle_states where id = $1
+       )
+       update ss.domain_provider_lifecycle_states state
+          set state_document = changed.document,
+              state_digest = ss.project_legal_json_digest(changed.document),
+              revision = state.revision + 1,
+              updated_at = state.updated_at + interval '1 second'
+         from changed where state.id = $1`,
+      [retained.rows[0].id]
+    ),
+    /raw provider reference or lifted a held effect/u
+  );
+  await assert.rejects(
+    pool.query(
+      `with changed as (
+         select jsonb_set(
+                  state_document,
+                  '{pin,registrarOfRecord}',
+                  to_jsonb('Impostor Registrar'::text)
+                ) as document
+           from ss.domain_provider_lifecycle_states where id = $1
+       )
+       update ss.domain_provider_lifecycle_states state
+          set state_document = changed.document,
+              state_digest = ss.project_legal_json_digest(changed.document),
+              revision = state.revision + 1,
+              updated_at = state.updated_at + interval '1 second'
+         from changed where state.id = $1`,
+      [retained.rows[0].id]
+    ),
+    /does not match its provider pin/u
+  );
+  await assert.rejects(
+    pool.query(
+      `with changed as (
+         select jsonb_set(
+                  state_document,
+                  '{renewal,providerQuoteRef}',
+                  to_jsonb('raw-provider-quote-reference'::text)
+                ) as document
+           from ss.domain_provider_lifecycle_states where id = $1
+       )
+       update ss.domain_provider_lifecycle_states state
+          set state_document = changed.document,
+              state_digest = ss.project_legal_json_digest(changed.document),
+              revision = state.revision + 1,
+              updated_at = state.updated_at + interval '1 second'
+         from changed where state.id = $1`,
+      [retained.rows[0].id]
+    ),
+    /raw provider reference or lifted a held effect/u
+  );
+  await assert.rejects(
+    pool.query(
+      `with result as (
+         select jsonb_build_object(
+           'providerEffectsAuthorized', true,
+           'paymentEffectsAuthorized', false
+         ) as document
+       )
+       insert into ss.domain_provider_lifecycle_commands (
+         organization_id, project_id, lifecycle_state_id,
+         command_id, command_fingerprint, result_document, result_digest
+       )
+       select $1, $2, $3, 'direct-effect-lift', repeat('e', 64),
+              result.document, ss.project_legal_json_digest(result.document)
+         from result`,
+      [routeProof.organizationId, routeProof.projectId, retained.rows[0].id]
+    ),
+    /raw provider reference or authorized an effect/u
+  );
+
+  const proof = await pool.query(`
+    select
+      ss.domain_provider_lifecycle_persistence_contract_v1() =
+        'canonical-domain-provider-lifecycle-persistence-v1-held'
+        as exact_contract,
+      (select count(*) = 1
+         from ss.domain_provider_lifecycle_states
+        where organization_id = $1
+          and project_id = $2
+          and domain_name = $3
+          and provider_pin_fingerprint = $4
+          and revision = 10
+          and renewal_status = 'reversal_review'
+          and transfer_status = 'reversal_review'
+          and expiration_date = '2028-08-11T12:00:00.000Z')
+        as exact_state,
+      (select count(*) = 10
+         from ss.domain_provider_lifecycle_commands command
+         join ss.domain_provider_lifecycle_states state
+           on state.organization_id = command.organization_id
+          and state.id = command.lifecycle_state_id
+        where state.organization_id = $1
+          and state.project_id = $2
+          and state.domain_name = $3)
+        as exact_commands,
+      not has_table_privilege(
+        'anon', 'ss.domain_provider_lifecycle_states', 'SELECT'
+      ) and not has_table_privilege(
+        'authenticated', 'ss.domain_provider_lifecycle_commands', 'SELECT'
+      ) and not has_table_privilege(
+        'service_role', 'ss.domain_provider_lifecycle_states', 'DELETE'
+      ) and not has_table_privilege(
+        'service_role', 'ss.domain_provider_lifecycle_commands', 'UPDATE,DELETE'
+      ) as exact_least_privilege,
+      not exists (
+        select 1 from pg_class table_record
+         where table_record.oid in (
+           'ss.domain_provider_lifecycle_states'::regclass,
+           'ss.domain_provider_lifecycle_commands'::regclass
+         ) and not (
+           table_record.relrowsecurity and table_record.relforcerowsecurity
+         )
+      ) as exact_forced_rls,
+      not exists (
+        select 1 from ss.domain_provider_lifecycle_states
+         where state_document @? '$.**.providerEffectsAuthorized ? (@ == true)'
+            or state_document @? '$.**.paymentEffectsAuthorized ? (@ == true)'
+            or state_document @? '$.**.dnsEffectsAuthorized ? (@ == true)'
+      ) as exact_held_state,
+      not exists (
+        select 1 from ss.domain_provider_lifecycle_commands
+         where jsonb_path_exists(result_document, '$.**.providerReference')
+            or jsonb_path_exists(result_document, '$.**.providerQuoteRef')
+            or jsonb_path_exists(result_document, '$.**.operationId')
+            or result_document @? '$.**.providerEffectsAuthorized ? (@ == true)'
+            or result_document @? '$.**.paymentEffectsAuthorized ? (@ == true)'
+            or result_document @? '$.**.dnsEffectsAuthorized ? (@ == true)'
+      ) as exact_held_commands
+  `, [
+    routeProof.organizationId,
+    routeProof.projectId,
+    routeProof.domain,
+    routeProof.pin.fingerprint
+  ]);
+  assert.deepEqual(proof.rows[0], {
+    exact_contract: true,
+    exact_state: true,
+    exact_commands: true,
+    exact_least_privilege: true,
+    exact_forced_rls: true,
+    exact_held_state: true,
+    exact_held_commands: true
+  });
+  assert.deepEqual(providerCalls, { lifecycle: 4, quote: 2 });
+}
+
+
+
 export async function runMigrationVerification({
   environment = process.env,
   PoolImpl = Pool,
@@ -6448,6 +7426,9 @@ export async function runMigrationVerification({
     await verifyPlatformSchema(pool);
     await verifyAlakazamPolicyAuthority(pool);
     await verifyProfessionalServicesReversalState(pool);
+    const domainRouteProof =
+      await verifyDomainProviderRoutePersistence(pool);
+    await verifyDomainLifecyclePersistence(pool, domainRouteProof);
     const readinessAfter = await verifyProjectLegalReadiness(pool, true);
     await verifyReceiptRejectsFourthAcceptance(pool);
     await verifyV4ReceiptRejectsFourthAcceptance(pool);
@@ -6486,6 +7467,8 @@ export async function runMigrationVerification({
     writeOutput("notificationMailDispatchClaimPostgresProof true\n");
     writeOutput("alakazamPolicyAuthorityPostgresProof true\n");
     writeOutput("directCustomReversalNormalizationPostgresProof true\n");
+    writeOutput("domainProviderRoutePostgresProof true\n");
+    writeOutput("domainLifecyclePostgresProof true\n");
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,

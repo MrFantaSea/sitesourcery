@@ -13,6 +13,7 @@ export const DOMAIN_PROVIDER_PIN_SCHEMA = "sitesourcery.domain-provider-pin/v1";
 export const DOMAIN_PROVIDER_OUTCOME_SCHEMA = "sitesourcery.domain-provider-outcome/v1";
 
 const MUTATION_STATES = new Set(["not_started", "submitted", "uncertain"]);
+const PRICE_CLASSES = new Set(["standard", "premium"]);
 const PINNED_READS = new Set([
   "getDomain",
   "assessTransferOut",
@@ -480,10 +481,20 @@ function safePreview(value, registration) {
       { status: 502 }
     );
   }
+  const priceClass = value.priceClass === undefined
+    ? null
+    : requiredString(value.priceClass, "registration preview priceClass", 16);
+  invariant(
+    priceClass === null || PRICE_CLASSES.has(priceClass),
+    "unsafe_registrar_preview",
+    "provider returned an invalid registration price class",
+    { status: 502 }
+  );
   return frozen({
     status: "confirmation_required",
     ...registration,
     price: exactMoney(value.price, "registration preview"),
+    ...(priceClass === null ? {} : { priceClass }),
     quoteId: requiredString(value.quoteId, "registration preview quoteId", 256),
     observedAt: optionalString(value.observedAt, 40),
     expiresAt: optionalString(value.expiresAt, 40),
@@ -498,6 +509,9 @@ function createRoute(provider, registration, preview) {
     ...registration,
     quoteId: preview.quoteId,
     expectedPrice: preview.price,
+    ...(preview.priceClass === undefined
+      ? {}
+      : { priceClass: preview.priceClass }),
     observedAt: preview.observedAt,
     expiresAt: preview.expiresAt
   });
@@ -505,12 +519,22 @@ function createRoute(provider, registration, preview) {
 
 function validateRoute(value, byCode) {
   const provider = evidenceProvider(value, DOMAIN_PROVIDER_ROUTE_SCHEMA, byCode, "route");
+  const priceClass = value.priceClass === undefined
+    ? null
+    : requiredString(value.priceClass, "route.priceClass", 16);
+  invariant(
+    priceClass === null || PRICE_CLASSES.has(priceClass),
+    "invalid_domain_provider_route",
+    "provider route price class is invalid",
+    { status: 409 }
+  );
   const body = {
     providerCode: provider.code,
     registrarOfRecord: provider.registrarOfRecord,
     ...registrationInput(value),
     quoteId: requiredString(value.quoteId, "route.quoteId", 256),
     expectedPrice: exactMoney(value.expectedPrice, "route.expectedPrice"),
+    ...(priceClass === null ? {} : { priceClass }),
     observedAt: optionalString(value.observedAt, 40),
     expiresAt: optionalString(value.expiresAt, 40)
   };

@@ -14,6 +14,8 @@ It is under `PUBLICATION_HOLD`. The repository contains:
 - a held-by-default, mock-transport-tested Spaceship registrar adapter;
 - a fail-closed exact-price preview interface and zero-call readiness check;
 - a relational migration contract;
+- an additive forced-RLS PostgreSQL route/attempt/pin evidence store and
+  two-slot composition boundary; and
 - orchestration and adversarial tests.
 
 There are no Stripe keys, Spaceship keys, MCP/OAuth tokens, DNS calls, provider
@@ -106,9 +108,25 @@ checked-in migration.
 
 ## Production blockers
 
-The migration is a contract, not an installed database. The memory adapter is
-not production persistence. The Spaceship implementation is not live
-composition: it has no credential vault, contact vault, authenticated exact
-price bridge, written reseller consent, or owner release approval. See
+Migration `202608110119_domain_provider_route_persistence.sql` and
+`domain-provider-route-postgres.mjs` close the internal durable two-slot
+selection, pre-dispatch attempt, crash fence, and registrar-pin prerequisite.
+`domain-price-charge-boundary.mjs` additionally closes the internal
+authenticated standard/premium quote and pre-capture final-charge evidence
+contract, with digest-safe projections and no payment port. These components
+are not yet wired into the customer-facing hosted domain runtime or HTTP routes
+and authorize no provider effect. The Spaceship implementation is not live
+composition: it has no credential vault, contact vault, provider-specific
+implementation of those price/charge read contracts, written reseller consent,
+or owner release approval. See
 `SPACESHIP-PROVIDER.md`, `ADAPTER-CONTRACT.md`, and `RUNBOOK.md` before
 considering any live wiring.
+
+`provider-lifecycle.mjs` now defines the next held provider-neutral expiry,
+renewal, transfer, ambiguity, replay, and reversal state machine with
+digest-safe customer/operator projections. Migration
+`202608110123_domain_lifecycle_persistence.sql` and
+`domain-lifecycle-postgres.mjs` provide canonical forced-RLS lifecycle state,
+append-only idempotency evidence, exact provider-pin binding, and monotonic
+expiry/transition fences. Hosted/provider composition is still required before
+any renewal or transfer effect can be enabled.
