@@ -1,8 +1,13 @@
 # FIN-004J Responder root provenance
 
 Date: 2026-08-12
-State: implementation sealed; exact clean-tree cumulative proof pending
+State: proved
 Candidate branch: `integration/final-successor-20260811`
+
+Proved implementation commit:
+`63589205baf4370831e81c6a112912864a71116b`
+
+Proved tree: `f2347ff7924a81cdcb13a5a8ed54272b67964dc5`
 
 ## Authority and source
 
@@ -82,8 +87,22 @@ not sellable. Missing composition reports false.
 - Syntax checks and `git diff --check` passed.
 
 FIN-004I already supplies the fresh real PostgreSQL journey for the exact core
-and surface repositories now mounted here. The complete clean-tree `npm test`
-ladder remains required immediately after this implementation commit.
+and surface repositories now mounted here.
+
+The immediate clean-tree `npm test` rerun at the exact implementation commit
+and tree listed above completed with exit `0`:
+
+- the entire command ladder passed;
+- the hosted-service suite reported 800 passes, zero failures, and 10
+  intentional integration skips from 810 tests;
+- operations reported 205/205 passes;
+- the Pages artifact rebuilt and verified 90 explicitly reviewed files;
+- the hosted artifact rebuilt and passed HTML validation;
+- the browser audit passed 15 hosted routes at 320x720, 390x844, and
+  1440x1000.
+
+The worktree was clean before this exact run. No provider, network, public
+route, database, predecessor, or adjacent-system mutation was performed.
 
 ## Remaining blockers
 
