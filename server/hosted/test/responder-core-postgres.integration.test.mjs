@@ -10,6 +10,8 @@ import {
 } from "../responder-core.mjs";
 import { createPostgresResponderCoreRepository } from
   "../responder-core-postgres.mjs";
+import { createPostgresResponderSurfaceRepository } from
+  "../responder-surfaces-postgres.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 
 const DATABASE_URL = process.env.SITESOURCERY_PG_RESPONDER_CORE_TEST_URL;
@@ -255,13 +257,18 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       projectId: ids.project,
       providerEventIdDigest: "1".repeat(64),
       routeDigest,
-      eventKind: "message_received",
       payloadDigest: "2".repeat(64),
       occurredAt: selectedNow
     };
-    const stopped = await service.ingestProviderEvent(stopInput);
+    const stopped = await service.recordStop(customer, {
+      ...stopInput,
+      contactAuthorityId: consent.id
+    });
     assert.equal(stopped.messageIntent, "stop");
-    const stoppedReplay = await service.ingestProviderEvent(stopInput);
+    const stoppedReplay = await service.recordStop(customer, {
+      ...stopInput,
+      contactAuthorityId: consent.id
+    });
     assert.equal(stoppedReplay.id, stopped.id);
 
     selectedNow = new Date(Date.now() + 25).toISOString();
@@ -292,6 +299,27 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       new Set(queue.interactions.map((item) => item.state)),
       new Set(["handoff_required", "opted_out"])
     );
+
+    const surfaces = createPostgresResponderSurfaceRepository({ authority });
+    const customerSurface = await surfaces.readCustomer({
+      userId: ids.customer,
+      organizationId: ids.organization
+    });
+    assert.equal(customerSurface.contacts.length, 1);
+    assert.equal(customerSurface.interactions.length, 2);
+    assert.equal(customerSurface.interactions[0].events.length >= 1, true);
+    assert.equal(
+      /payload|providerEventId|phone|messageBody/iu.test(
+        JSON.stringify(customerSurface)
+      ),
+      false
+    );
+    const operatorSurface = await surfaces.readOperator({
+      userId: ids.operator,
+      organizationId: ids.organization
+    });
+    assert.equal(operatorSurface.audience, "operator");
+    assert.equal(operatorSurface.globalKillEngaged, true);
 
     await assert.rejects(
       () => service.accountProjection({
