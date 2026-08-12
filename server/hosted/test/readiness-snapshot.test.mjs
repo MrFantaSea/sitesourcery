@@ -66,11 +66,13 @@ test("readiness snapshot singleflights concurrent checks and caches within its T
 });
 
 test("readiness snapshot exposes fixed not-ready and failure codes only", async () => {
+  const at = 10_000;
   const notReady = createReadinessSnapshot({
     check: async () => ({
       ready: false,
       reason: "customer@example.test"
-    })
+    }),
+    now: () => at
   });
   assert.deepEqual(await notReady.read(), {
     ready: false,
@@ -83,7 +85,8 @@ test("readiness snapshot exposes fixed not-ready and failure codes only", async 
   const failed = createReadinessSnapshot({
     check: async () => {
       throw new Error("sk_live_must_not_escape");
-    }
+    },
+    now: () => at
   });
   const result = await failed.read();
   assert.deepEqual(result, {
