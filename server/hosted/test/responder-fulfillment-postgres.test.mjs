@@ -128,7 +128,7 @@ test("claim selects one eligible operation with SKIP LOCKED and returns digest-o
 test("provider acceptance is exact, durable, and replayable", async () => {
   const accepted = operation({
     state: "accepted",
-    provider: "phone_bridge",
+    provider: "twilio",
     provider_receipt_digest: "c".repeat(64),
     provider_accepted_at: NOW
   });
@@ -150,7 +150,7 @@ test("provider acceptance is exact, durable, and replayable", async () => {
     operationId: IDS.operation,
     workerId: WORKER_ID,
     attemptCount: 1,
-    provider: "phone_bridge",
+    provider: "twilio",
     providerReceiptDigest: "c".repeat(64),
     acceptedAt: NOW
   };

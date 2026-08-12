@@ -74,14 +74,17 @@ function fixture({
       ? "responder-fulfillment-provider"
       : "responder-fulfillment-held-provider",
     providerEffects: enabled,
-    idempotency: enabled ? "provider-enforced" : "none",
+    idempotency: enabled ? "provider-unsupported" : "none",
+    effectCertainty: enabled
+      ? "receipt-or-manual-review"
+      : "none",
     async sendMessage(input) {
       if (!enabled) throw new Error("held provider called");
       calls.sends.push({ ...input, signal: input.signal });
       if (deliveryError) throw deliveryError;
       return {
         status: "accepted",
-        provider: "phone_bridge",
+        provider: "twilio",
         idempotencyKey: input.idempotencyKey,
         providerReceiptDigest: "c".repeat(64),
         acceptedAt: NOW
@@ -138,7 +141,7 @@ test("one lease-bound claim reaches the provider with digests and stable idempot
     JSON.stringify(calls.sends[0]).includes("phone"),
     false
   );
-  assert.equal(calls.accepted[0].provider, "phone_bridge");
+  assert.equal(calls.accepted[0].provider, "twilio");
   assert.equal(calls.accepted[0].providerReceiptDigest, "c".repeat(64));
   assert.deepEqual(calls.retries, []);
   assert.deepEqual(calls.reviews, []);
@@ -148,6 +151,7 @@ test("only explicitly retryable pre-acceptance failures retry automatically", as
   const retryable = new Error("private provider detail");
   retryable.code = "RESPONDER_PROVIDER_TEMPORARY";
   retryable.deliveryDisposition = "retryable";
+  retryable.providerEffectCertainty = "none";
   const retry = fixture({ deliveryError: retryable });
   assert.deepEqual(await retry.worker.runOnce(), {
     status: "retry_scheduled",
@@ -167,6 +171,19 @@ test("only explicitly retryable pre-acceptance failures retry automatically", as
   });
   assert.deepEqual(review.calls.retries, []);
   assert.equal(review.calls.reviews.length, 1);
+
+  const uncertainRetryable = new Error("provider request outcome unknown");
+  uncertainRetryable.code = "RESPONDER_PROVIDER_UNCERTAIN";
+  uncertainRetryable.deliveryDisposition = "retryable";
+  uncertainRetryable.providerEffectCertainty = "unknown";
+  const uncertain = fixture({ deliveryError: uncertainRetryable });
+  assert.deepEqual(await uncertain.worker.runOnce(), {
+    status: "manual_review",
+    operationId: IDS.operation,
+    failureCode: "RESPONDER_PROVIDER_UNCERTAIN"
+  });
+  assert.deepEqual(uncertain.calls.retries, []);
+  assert.equal(uncertain.calls.reviews.length, 1);
 });
 
 test("post-acceptance persistence uncertainty never creates a blind retry transition", async () => {
@@ -206,7 +223,7 @@ test("the loop is single-flight, shuts down cleanly, and logs no provider detail
   assert.equal(worker.snapshot().state, "stopped");
   assert.doesNotMatch(
     JSON.stringify(logs),
-    /routeDigest|contentDigest|phone_bridge|10000000/u
+    /routeDigest|contentDigest|twilio|10000000/u
   );
 });
 

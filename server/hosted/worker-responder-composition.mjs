@@ -71,6 +71,7 @@ function heldProvider() {
     kind: "responder-fulfillment-held-provider",
     providerEffects: false,
     idempotency: "none",
+    effectCertainty: "none",
     async sendMessage() {
       throw new Error("Held Responder fulfillment cannot call a provider.");
     }
@@ -79,7 +80,7 @@ function heldProvider() {
 
 function unavailableProviderFactory() {
   const error = new Error(
-    "The reviewed phone-bridge fulfillment adapter is unavailable."
+    "The reviewed Twilio fulfillment adapter is unavailable."
   );
   error.code = "WORKER_DEPENDENCY_NOT_READY";
   throw error;
@@ -107,7 +108,8 @@ function validateProvider(provider) {
   invariant(
     provider?.kind === "responder-fulfillment-provider" &&
       provider.providerEffects === true &&
-      provider.idempotency === "provider-enforced" &&
+      provider.idempotency === "provider-unsupported" &&
+      provider.effectCertainty === "receipt-or-manual-review" &&
       typeof provider.sendMessage === "function" &&
       typeof provider.readiness === "function",
     "WORKER_DEPENDENCY_NOT_READY",

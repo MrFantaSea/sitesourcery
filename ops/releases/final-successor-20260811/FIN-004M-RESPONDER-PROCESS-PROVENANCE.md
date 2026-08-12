@@ -49,10 +49,19 @@ queue row. Its readiness is deliberately false even when the held-capable
 queue is verified.
 
 `approved_live` construction requires an injected provider port with exact
-provider-effect and provider-enforced-idempotency declarations plus verified
-readiness. The production default supplies no such adapter and fails with
+provider-effect, unsupported-create-idempotency, and receipt-or-manual-review
+effect-certainty declarations plus verified readiness. The production default
+supplies no such adapter and fails with
 `WORKER_DEPENDENCY_NOT_READY`. Therefore a process approval file or environment
 mode alone cannot activate Responder delivery.
+
+### 2026-08-12 integration correction
+
+The HQ listener on port 8789 is an authenticated, loopback-only proxy from the
+Pixel into the read-only command deck. It is a separate adjacent integration;
+it is not a telephony or SMS provider. Responder delivery is bound to Twilio,
+and ordinary Twilio message creation has no provider idempotency contract.
+Unknown create outcomes therefore require manual reconciliation.
 
 The worker's held contract now requires a distinct effect-free port shape,
 rather than an effect-capable provider object that happens not to run. The
@@ -82,8 +91,8 @@ adjacent-system mutation occurred.
 
 ## Remaining blockers
 
-- Phone-bridge fulfillment adapter/readback contract and owner-gated provider
-  release.
+- Twilio fulfillment adapter/readback contract and owner-gated provider
+  release, plus the separate HQ phone-bridge integration contract.
 - The other mandatory worker purposes and hosted Care/Responder UI shell.
 - FIN-005 through FIN-010 outside-lane, integration, catalog, database,
   staging, acceptance, and owner-approved cutover work.

@@ -35,8 +35,9 @@ Proved tree: `4752e616579fbbd69cb570794abfa67de62ad96b`
 ## Database and authority contract
 
 Migration 125 adds one held-default, forced-RLS delivery-operation queue and
-its immutable event history. Each operation has a stable provider idempotency
-key and contains only durable identities plus route/content digests. Raw
+its immutable event history. Each operation has a stable internal delivery
+and reconciliation identity and contains only durable identities plus
+route/content digests. Raw
 contact information and message content are not stored in the queue.
 
 The Responder runtime control may enter `approved_live` only through an
@@ -66,7 +67,7 @@ updates the runtime control before recording the command.
 - The migration verifier passed the complete inventory and contract checks.
 - The real PostgreSQL journey proved held reservation, immutable event
   history, evidence-bound test release, queued reservation, leased claim,
-  digest-only `phone_bridge` acceptance, replay, STOP, handoff, global kill,
+  digest-only simulated provider acceptance, replay, STOP, handoff, global kill,
   cross-tenant denial, and customer/operator projections.
 - Cumulative hosted-service ladder: 823 tests, 813 passed, zero failed, and 10
   intentional database integration skips.
@@ -88,8 +89,9 @@ adjacent-system mutation occurred.
 ## Remaining blockers
 
 - Held production Responder worker factory and process-purpose composition.
-- Phone-bridge fulfillment adapter/readback contract and owner-gated provider
-  release.
+- Twilio fulfillment adapter/readback contract and owner-gated provider
+  release. The separately mapped HQ phone bridge remains an adjacent operator
+  integration, not the SMS provider.
 - The other mandatory worker purposes and hosted Care/Responder UI shell.
 - FIN-005 through FIN-010 outside-lane, integration, catalog, database,
   staging, acceptance, and owner-approved cutover work.
