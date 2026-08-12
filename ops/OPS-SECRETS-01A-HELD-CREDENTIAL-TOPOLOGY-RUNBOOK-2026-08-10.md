@@ -39,6 +39,8 @@ The repository can prove code shape without proving that any credential exists:
 | Identity peppers | Prior-pepper production composition is code-verified in successor commit `88df3f6b8ebc8ba5f17279cae484115472b070f8`. | **Not proven.** No current or prior material presence, custody, overlap, or revocation fact was read. |
 | Backup age custody | The held backup/restore contract already accepts only non-secret custody and recovery-access digests. | **Not proven.** No age identity or ciphertext location was inspected. |
 | Registrant encryption | `createAesGcmContactVault` implements AES-256-GCM with a versioned key boundary. | **Not proven.** No production key presence or custody fact was read. |
+| Responder private material | The operation-bound vault implements AES-256-GCM with exact AAD, one current key, and at most one prior decryption key. | **Not proven.** No production key presence, custody, overlap, or revocation fact was read. |
+| Twilio Responder API/signature | The worker transport requires a restricted API key and the future callback ingress requires separate signature-verification material. | **Not proven.** No Twilio credential, provider binding, or secret value was read. |
 | Cloudflare Tunnel | The held service/configuration names one dedicated logical connector credential boundary. | **Not proven.** No credential file or Cloudflare state was read. |
 | Operator recovery | The topology requires distinct requester and approver custody plus a dual-control receipt. | **Not proven.** No operator credential, identity, or recovery path was inspected. |
 
@@ -48,7 +50,7 @@ packet.
 
 ## Exact owner checklist
 
-- [ ] Confirm the 21 logical records exported by
+- [ ] Confirm the 26 logical records exported by
   `CREDENTIAL_TOPOLOGY_CONTRACT.names` are the complete launch inventory.
 - [ ] Confirm the held Stripe runtime inventory matches
   `STRIPE_RESTRICTED_KEY_CONTRACT.allRuntimeScopes`, the maximum union for all
@@ -74,6 +76,12 @@ packet.
 - [ ] Confirm current/prior identity pepper version policy, overlap duration,
   and the evidence required before prior revocation. Code support at `88df3f6`
   does not prove material is installed.
+- [ ] Confirm the Responder material current/prior version policy, separate
+  non-secret rotation evidence, and prior-key revocation boundary. The prior
+  key may decrypt only and at most one prior version may overlap.
+- [ ] Require distinct Twilio restricted API and webhook-signature logical
+  records. Neither record may be shared with Stripe, Resend, registrant,
+  Responder-material, identity, backup, or tunnel purposes.
 - [ ] Confirm the sole recovery-capable age identity is outside every
   ciphertext store and outside Zen; approve only digest references to custody
   and recovery-access evidence.
@@ -126,15 +134,19 @@ packet.
    storage boundaries, bind a `proven` separation-control receipt, and set the
    historical shared-full-access record to `shared_revoked` only with a
    separate timestamped digest.
-9. Prove the backup identity is held in
+9. Prove the current/prior Responder material keys and their rotation control
+   with three distinct non-secret evidence digests. Prove the Twilio restricted
+   API key and webhook-signature records independently without reading either
+   value.
+10. Prove the backup identity is held in
    `independent-off-zen-recovery-custody`, ciphertext is held in
    `zen-off-machine-ciphertext-store`, and bind their separation-control
    receipt. Never inspect or move either artifact in this verification step.
-10. Bind presence/custody evidence for the registrant encryption key and the
+11. Bind presence/custody evidence for the registrant encryption key and the
    Cloudflare Tunnel connector without reading either value.
-11. Bind distinct requester and approver recovery evidence plus the dual-control
+12. Bind distinct requester and approver recovery evidence plus the dual-control
     receipt. Stop if one operator can both request and approve recovery.
-12. Run the read-only verifier using only an absolute path to the non-secret
+13. Run the read-only verifier using only an absolute path to the non-secret
     JSON input:
 
     ```text
@@ -142,7 +154,7 @@ packet.
       --input /absolute/path/to/nonsecret-credential-topology.json
     ```
 
-13. Preserve the verifier's topology digest and blockers as non-secret release
+14. Preserve the verifier's topology digest and blockers as non-secret release
     evidence. Exit status `2` means the input is valid but incomplete; `1`
     means the contract is invalid. Exit status `0` still leaves every effect
     held.

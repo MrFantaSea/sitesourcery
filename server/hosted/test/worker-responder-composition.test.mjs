@@ -199,7 +199,7 @@ test("provider or loop drift fails before Responder activation", async () => {
   assert.equal(repositories, 0);
 });
 
-test("approved Responder mode has no implicit production provider", async () => {
+test("approved Responder mode requires the complete implicit production provider configuration", async () => {
   const factories = createResponderWorkerFactories({
     authority: authority(),
     purposes: ["responder-fulfillment"],
@@ -208,6 +208,7 @@ test("approved Responder mode has no implicit production provider", async () => 
   });
   await assert.rejects(
     factories["responder-fulfillment"]({ loop: LOOP }),
-    (error) => error?.code === "WORKER_DEPENDENCY_NOT_READY"
+    (error) => error?.code ===
+      "RESPONDER_PRIVATE_MATERIAL_CONFIGURATION_REQUIRED"
   );
 });

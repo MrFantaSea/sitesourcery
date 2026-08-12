@@ -2,7 +2,7 @@
 
 ## Added boundary
 
-- `ops/credential-topology.mjs` defines the exact 21-record held inventory,
+- `ops/credential-topology.mjs` defines the exact 26-record held inventory,
   strict metadata normalizer, canonical digest, completeness verifier, and
   non-secret held template. The same authoritative module now derives current
   Stripe adapter operations and verifies the three existing Stripe records;

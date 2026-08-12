@@ -277,6 +277,18 @@ const DEFINITIONS = Object.freeze([
     completeStates: ["proven"]
   }),
   definition({
+    name: "control.responder.material.rotation",
+    kind: "rotation_control",
+    purpose: "responder_material_overlap_or_revocation",
+    scopes: [
+      "responder.material.production.current",
+      "responder.material.production.prior"
+    ],
+    storageBoundary: "immutable-nonsecret-ops-evidence-ledger",
+    allowedStates: ["proven", "unproven"],
+    completeStates: ["proven"]
+  }),
+  definition({
     name: "control.stripe.webhook.rotation",
     kind: "rotation_control",
     purpose: "stripe_webhook_overlap_or_revocation",
@@ -365,6 +377,24 @@ const DEFINITIONS = Object.freeze([
     completeStates: ["active"]
   }),
   definition({
+    name: "responder.material.production.current",
+    kind: "symmetric_encryption_key",
+    purpose: "responder_material_current_encryption",
+    scopes: ["responder-material:decrypt", "responder-material:encrypt"],
+    storageBoundary: "dell-hosted-production-secret-store",
+    allowedStates: ["active", "unproven"],
+    completeStates: ["active"]
+  }),
+  definition({
+    name: "responder.material.production.prior",
+    kind: "symmetric_encryption_key",
+    purpose: "responder_material_prior_decryption",
+    scopes: ["responder-material:decrypt-prior"],
+    storageBoundary: "dell-hosted-production-secret-store",
+    allowedStates: ["overlap", "revoked", "unproven"],
+    completeStates: ["overlap", "revoked"]
+  }),
+  definition({
     name: "stripe.provisioner.production.restricted",
     kind: "provider_api_restricted",
     purpose: "stripe_ephemeral_provisioning_status",
@@ -417,6 +447,28 @@ const DEFINITIONS = Object.freeze([
     storageBoundary: "dell-hosted-production-secret-store",
     allowedStates: ["overlap", "revoked", "unproven"],
     completeStates: ["overlap", "revoked"]
+  }),
+  definition({
+    name: "twilio.responder.production.api.restricted",
+    kind: "provider_api_restricted",
+    purpose: "twilio_responder_delivery",
+    scopes: [
+      "twilio-account:read",
+      "twilio-messaging-compliance:read",
+      "twilio-messages:send"
+    ],
+    storageBoundary: "dell-hosted-production-secret-store",
+    allowedStates: ["active", "unproven"],
+    completeStates: ["active"]
+  }),
+  definition({
+    name: "twilio.responder.production.webhook.signature",
+    kind: "provider_webhook_signing",
+    purpose: "twilio_responder_webhook_verification",
+    scopes: ["twilio-webhooks:verify"],
+    storageBoundary: "dell-hosted-production-secret-store",
+    allowedStates: ["active", "unproven"],
+    completeStates: ["active"]
   })
 ]);
 
@@ -966,6 +1018,24 @@ function rotationBlockers(topology) {
     );
   }
 
+  const responderMaterialPrior = itemByName(
+    topology,
+    "responder.material.production.prior"
+  );
+  const responderMaterialControl = itemByName(
+    topology,
+    "control.responder.material.rotation"
+  );
+  if (
+    !["overlap", "revoked"].includes(
+      responderMaterialPrior.rotationState
+    ) || responderMaterialControl.rotationState !== "proven"
+  ) {
+    blockers.push(
+      "responder_material_overlap_or_revocation_not_proven"
+    );
+  }
+
   const provisioner = itemByName(
     topology,
     "stripe.provisioner.production.restricted"
@@ -1052,6 +1122,14 @@ function independentEvidenceBlockers(topology) {
         "resend.sender.staging.restricted"
       ],
       blocker: "resend_independent_evidence_not_proven"
+    },
+    {
+      names: [
+        "control.responder.material.rotation",
+        "responder.material.production.current",
+        "responder.material.production.prior"
+      ],
+      blocker: "responder_material_independent_evidence_not_proven"
     },
     {
       names: [

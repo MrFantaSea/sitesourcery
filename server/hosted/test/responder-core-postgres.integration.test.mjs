@@ -16,7 +16,12 @@ import { createPostgresResponderFulfillmentRepository } from
   "../responder-fulfillment-postgres.mjs";
 import { createResponderFulfillmentWorker } from
   "../responder-fulfillment-worker.mjs";
+import { createPostgresResponderPrivateMaterialResolver } from
+  "../responder-private-material-postgres.mjs";
+import { createResponderPrivateMaterialVault } from
+  "../responder-private-material-vault.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
+import { digest } from "../security.mjs";
 
 const DATABASE_URL = process.env.SITESOURCERY_PG_RESPONDER_CORE_TEST_URL;
 const { Pool } = pg;
@@ -149,7 +154,17 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       userId: ids.operator,
       organizationId: ids.organization
     };
-    const routeDigest = "a".repeat(64);
+    const deliveryTo = "+18562441220";
+    const deliveryBody =
+      "Sorry we missed you - this is Site Sourcery. Reply STOP to opt out.";
+    const routeDigest = digest({
+      routeKind: "sms",
+      address: deliveryTo
+    });
+    const deliveryContentDigest = digest({
+      contentKind: "sms",
+      body: deliveryBody
+    });
     const consentInput = {
       commandId: "pg-responder-consent-001",
       organizationId: ids.organization,
@@ -283,8 +298,44 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       interactionId: queuedEvent.interactionId,
       contactAuthorityId: consent.id,
       messageKind: "missed_call_ack",
-      contentDigest: "7".repeat(64)
+      contentDigest: deliveryContentDigest
     });
+
+    const queuedOperation = await pool.query(
+      `select id, organization_id, project_id, interaction_id,
+              contact_authority_id, message_kind,
+              route_digest, content_digest
+         from ss.responder_delivery_operations
+        where command_id = $1`,
+      ["pg-responder-message-queued-001"]
+    );
+    assert.equal(queuedOperation.rowCount, 1);
+    const queued = queuedOperation.rows[0];
+    const privateMaterial =
+      createPostgresResponderPrivateMaterialResolver({
+        authority,
+        vault: createResponderPrivateMaterialVault({
+          currentKeyVersion: "responder-pg-test-2026-08",
+          currentKey: Buffer.alloc(32, 7),
+          randomBytes: () => Buffer.alloc(12, 3)
+        })
+      });
+    assert.equal((await privateMaterial.readiness()).ready, true);
+    const materialReceipt = await privateMaterial.storeSmsMaterial({
+      operationId: queued.id,
+      organizationId: queued.organization_id,
+      projectId: queued.project_id,
+      interactionId: queued.interaction_id,
+      contactAuthorityId: queued.contact_authority_id,
+      messageKind: queued.message_kind,
+      routeDigest: queued.route_digest,
+      contentDigest: queued.content_digest,
+      to: deliveryTo,
+      body: deliveryBody,
+      recordedAt: selectedNow
+    });
+    assert.equal(materialReceipt.state, "active");
+    assert.equal(materialReceipt.providerEffects, false);
 
     const fulfillmentRepository =
       createPostgresResponderFulfillmentRepository({ authority });
