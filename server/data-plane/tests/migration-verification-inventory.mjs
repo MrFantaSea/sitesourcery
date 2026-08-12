@@ -22,7 +22,14 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608100114_commerce_transition_notifications.sql",
   "202608100115_accounting_purpose_journal.sql",
   "202608100116_alakazam_policy_authority.sql",
-  "202608100117_direct_custom_reversal_normalization.sql"
+  "202608100117_direct_custom_reversal_normalization.sql",
+  "202608110118_hosted_mail_dispatch_claims.sql",
+  "202608110119_domain_provider_route_persistence.sql",
+  "202608110120_responder_core.sql",
+  "202608110121_care_core.sql",
+  "202608110122_alakazam_invoice_finalization.sql",
+  "202608110123_domain_lifecycle_persistence.sql",
+  "202608110124_care_commerce_persistence.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(
