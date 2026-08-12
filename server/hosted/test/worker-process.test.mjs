@@ -265,19 +265,20 @@ test("graceful stop fails closed at the exact configured deadline", async () => 
   assert.equal(supervisor.snapshot().state, "failed");
 });
 
-test("production entrypoints split pools and keep notification mail in the worker process", async () => {
-  const [api, worker, core, alakazam, unit, example, runbook] = await Promise.all([
+test("production entrypoints split pools and keep effect workers in the worker process", async () => {
+  const [api, worker, core, alakazam, responder, unit, example, runbook] = await Promise.all([
     readFile(path.join(root, "server/hosted/bin/server.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/bin/worker.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/worker-core-composition.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/worker-alakazam-composition.mjs"), "utf8"),
+    readFile(path.join(root, "server/hosted/worker-responder-composition.mjs"), "utf8"),
     readFile(path.join(root, "ops/sitesourcery-workers.service.held"), "utf8"),
     readFile(path.join(root, "ops/workers.env.example"), "utf8"),
     readFile(path.join(root, "ops/SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md"), "utf8")
   ]);
   assert.doesNotMatch(
     api,
-    /createExportWorker|createCancellationWorker|createAlakazamFulfillmentWorker|\.start\(\{\s*signal:\s*shutdownController/u
+    /createExportWorker|createCancellationWorker|createAlakazamFulfillmentWorker|createResponderFulfillmentWorker|createResponderWorkerFactories|\.start\(\{\s*signal:\s*shutdownController/u
   );
   assert.match(api, /pool\.apiConnections/u);
   assert.match(api, /backgroundWorkers: "external_process_required"/u);
@@ -285,14 +286,16 @@ test("production entrypoints split pools and keep notification mail in the worke
   assert.match(worker, /workload: "worker"/u);
   assert.match(worker, /createCoreWorkerFactories/u);
   assert.match(worker, /createNotificationMailWorkerFactories/u);
+  assert.match(worker, /createResponderWorkerFactories/u);
   assert.doesNotMatch(
-    `${worker}\n${core}\n${alakazam}`,
+    `${worker}\n${core}\n${alakazam}\n${responder}`,
     /identity-postgres|identity-pepper|registrationMail|recoveryMail/iu
   );
   assert.match(unit, /ConditionPathExists=\/etc\/sitesourcery\/WORKERS_APPROVED/u);
   assert.match(unit, /ConditionPathExists=!\/etc\/sitesourcery\/WORKERS_HOLD/u);
   assert.doesNotMatch(example, /IDENTITY|SITESOURCERY_RESEND_API_KEY/u);
   assert.match(example, /SITESOURCERY_NOTIFICATION_MAIL_WORKER_MODE=held/u);
+  assert.match(example, /SITESOURCERY_RESPONDER_FULFILLMENT_WORKER_MODE=held/u);
   assert.match(runbook, /WORKERS-02 resolves/u);
   assert.match(runbook, /MAIL-HOSTED-WIRING-03/u);
 });

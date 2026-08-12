@@ -12,8 +12,9 @@ Every command below remains owner-gated.
   PG-OPS `workerReservedConnections`. API plus worker process budgets equal the
   unchanged configured total.
 - The exact purpose registry is `export`, `cancellation`, `notification-mail`,
-  `alakazam-fulfillment`, and `alakazam-retained-lifecycle`. Unknown, duplicate,
-  reordered, missing, or uncomposed purposes fail before any worker starts.
+  `alakazam-fulfillment`, `alakazam-retained-lifecycle`, and
+  `responder-fulfillment`. Unknown, duplicate, reordered, missing, or
+  uncomposed purposes fail before any worker starts.
 - All selected dependency readbacks complete before the first loop starts.
   SIGTERM/SIGINT stops loops in reverse order, awaits active leased work within
   the configured deadline, and closes the worker pool last.
@@ -38,6 +39,9 @@ Export remains held unless its exact export mode is enabled,
 cancellation remains held unless the complete reviewed Stripe adapter reads
 back `approved_live`, and every selected purpose must pass PostgreSQL and
 purpose-specific readiness before any loop starts.
+Responder fulfillment additionally remains held until its durable queue and a
+separately reviewed, provider-idempotent phone-bridge adapter both read back
+ready. The held composition has no latent provider port.
 There is no standalone publication loop: publication remains the lease-fenced
 stage of Alakazam fulfillment, and synchronous customer release commands
 retain their existing authority.
