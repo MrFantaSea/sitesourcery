@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sitesourcery.com/schemas/hosted-epoch-install-dry-run-receipt-v1.json",
+  "title": "Site Sourcery held hosted epoch install dry-run receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "runId",
+    "observedAt",
+    "state",
+    "classification",
+    "identity",
+    "rollback",
+    "evidence",
+    "verification",
+    "authority",
+    "effects",
+    "result",
+    "digest"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sitesourcery.hosted-epoch-install-dry-run-receipt/v1"
+    },
+    "runId": {
+      "$ref": "#/$defs/safeIdentifier"
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "state": {
+      "const": "accepted_held"
+    },
+    "classification": {
+      "const": "local_dry_run_only"
+    },
+    "identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "rollback": {
+      "$ref": "#/$defs/rollback"
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence"
+    },
+    "verification": {
+      "const": {
+        "repository": "verified",
+        "installPlan": "constructed_not_executed",
+        "installedReadback": "expected_projection_verified_not_observed",
+        "rollbackPlan": "constructed_not_executed"
+      }
+    },
+    "authority": {
+      "$ref": "#/$defs/heldAuthority"
+    },
+    "effects": {
+      "const": {
+        "customer": "held",
+        "payment": "held",
+        "mail": "held",
+        "provider": "held",
+        "publication": "held",
+        "dns": "held",
+        "deployment": "held"
+      }
+    },
+    "result": {
+      "const": {
+        "dryRunAccepted": true,
+        "commandsExecuted": false,
+        "installed": false,
+        "installationAuthorized": false,
+        "productionReady": false
+      }
+    },
+    "digest": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "commitSha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "safeIdentifier": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]{2,127}$"
+    },
+    "migrationFile": {
+      "type": "string",
+      "pattern": "^[0-9]{12}_[a-z0-9_]+\\.sql$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceCommitSha",
+        "sourceTreeSha",
+        "artifactManifestSha256",
+        "unitManifestSha256",
+        "environmentSchemaManifestSha256",
+        "environmentClassificationSha256",
+        "workerManifestSha256",
+        "workerContractSha256",
+        "migrationCount",
+        "latestMigration",
+        "migrationManifestSha256",
+        "legalAuthorityDigest",
+        "legalManifestSha256",
+        "ingressManifestSha256"
+      ],
+      "properties": {
+        "sourceCommitSha": { "$ref": "#/$defs/commitSha" },
+        "sourceTreeSha": { "$ref": "#/$defs/commitSha" },
+        "artifactManifestSha256": { "$ref": "#/$defs/sha256" },
+        "unitManifestSha256": { "$ref": "#/$defs/sha256" },
+        "environmentSchemaManifestSha256": { "$ref": "#/$defs/sha256" },
+        "environmentClassificationSha256": { "$ref": "#/$defs/sha256" },
+        "workerManifestSha256": { "$ref": "#/$defs/sha256" },
+        "workerContractSha256": { "$ref": "#/$defs/sha256" },
+        "migrationCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "latestMigration": { "$ref": "#/$defs/migrationFile" },
+        "migrationManifestSha256": { "$ref": "#/$defs/sha256" },
+        "legalAuthorityDigest": { "$ref": "#/$defs/sha256" },
+        "legalManifestSha256": { "$ref": "#/$defs/sha256" },
+        "ingressManifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "predecessorCommitSha",
+        "predecessorTreeSha",
+        "predecessorArtifactManifestSha256"
+      ],
+      "properties": {
+        "predecessorCommitSha": { "$ref": "#/$defs/commitSha" },
+        "predecessorTreeSha": { "$ref": "#/$defs/commitSha" },
+        "predecessorArtifactManifestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseInputDigest",
+        "successorEpochBindingSha256",
+        "originSealSha256",
+        "installPlanSha256",
+        "projectedInstalledReadbackDigest",
+        "projectedReadbackReceiptSha256",
+        "rollbackPlanSha256"
+      ],
+      "properties": {
+        "releaseInputDigest": { "$ref": "#/$defs/sha256" },
+        "successorEpochBindingSha256": { "$ref": "#/$defs/sha256" },
+        "originSealSha256": { "$ref": "#/$defs/sha256" },
+        "installPlanSha256": { "$ref": "#/$defs/sha256" },
+        "projectedInstalledReadbackDigest": { "$ref": "#/$defs/sha256" },
+        "projectedReadbackReceiptSha256": { "$ref": "#/$defs/sha256" },
+        "rollbackPlanSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "heldAuthority": {
+      "const": {
+        "state": "held",
+        "allowsCapabilities": false,
+        "allowsCustomerEffects": false,
+        "allowsProviderEffects": false,
+        "allowsDnsMutation": false,
+        "allowsDeployment": false,
+        "enabledCapabilities": []
+      }
+    }
+  }
+}
