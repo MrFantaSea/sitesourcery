@@ -278,6 +278,75 @@ async function priorByCommand(client, table, commandId) {
   return selected.rows[0] ?? null;
 }
 
+async function reserveDeliveryOperation(
+  client,
+  command,
+  context,
+  { legacyReplay = false } = {}
+) {
+  const prior = await client.query(
+    `select * from ss.responder_delivery_operations
+      where command_id = $1`,
+    [command.command_id]
+  );
+  invariant(
+    prior.rowCount <= 1,
+    "RESPONDER_CORE_REPOSITORY_CONFLICT",
+    "Responder delivery reservation state is inconsistent.",
+    { status: 409 }
+  );
+  if (prior.rowCount === 1) return prior.rows[0];
+
+  const ineligible = context.authority_state !== "active" ||
+    context.state !== "open";
+  const released = !legacyReplay &&
+    context.control_state === "approved_live" &&
+    context.global_kill_engaged === false;
+  const state = ineligible
+    ? "cancelled"
+    : released
+      ? "queued"
+      : "held";
+  const idempotencyKey =
+    `responder-delivery:${command.request_digest}`;
+  const inserted = await client.query(
+    `insert into ss.responder_delivery_operations (
+       id, command_id, request_digest, organization_id, project_id,
+       interaction_id, contact_authority_id, message_kind,
+       route_digest, content_digest, idempotency_key, state,
+       provider_effects_authorized, attempt_count, maximum_attempts,
+       available_at, failure_code, created_at, updated_at
+     ) values (
+       $1, $2,
+       ss.responder_delivery_operation_digest(
+         $2, $3, $4, $5, $6, $7, $8, $9, $10
+       ),
+       $3, $4, $5, $6, $7, $8, $9, $10, $11,
+       $12, 0, 5, $13, $14, $15, $15
+     ) returning *`,
+    [
+      systemRandomUUID(), command.command_id,
+      command.organization_id, command.project_id,
+      command.interaction_id, command.contact_authority_id,
+      command.message_kind, context.authority_route_digest,
+      command.content_digest, idempotencyKey, state,
+      state === "queued",
+      state === "queued" ? command.requested_at : null,
+      state === "cancelled"
+        ? "RESPONDER_DELIVERY_NOT_ELIGIBLE"
+        : null,
+      command.requested_at
+    ]
+  );
+  invariant(
+    inserted.rowCount === 1,
+    "RESPONDER_CORE_REPOSITORY_CONFLICT",
+    "Responder delivery reservation could not be recorded.",
+    { status: 409 }
+  );
+  return inserted.rows[0];
+}
+
 export function createPostgresResponderCoreRepository({ authority } = {}) {
   const database = databaseAuthority(authority);
 
@@ -292,8 +361,13 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
                 is not null
                 and ss.hosted_responder_core_contract_v1() =
                   'canonical-responder-core-v1-provider-neutral-held'
+                and to_regprocedure(
+                  'ss.hosted_responder_fulfillment_queue_contract_v1()'
+                ) is not null
+                and ss.hosted_responder_fulfillment_queue_contract_v1() =
+                  'canonical-responder-fulfillment-queue-v1-held-default'
                 as contract_ready,
-              count(*) = 6 as tables_ready,
+              count(*) = 8 as tables_ready,
               bool_and(c.relrowsecurity and c.relforcerowsecurity) as rls_ready
             from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
@@ -305,7 +379,9 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
             "responder_interactions",
             "responder_provider_events",
             "responder_message_commands",
-            "responder_control_commands"
+            "responder_control_commands",
+            "responder_delivery_operations",
+            "responder_delivery_operation_events"
           ]])
         );
         const row = result.rows[0] ?? {};
@@ -447,17 +523,10 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
             "responder_message_commands",
             input.commandId
           );
-          if (prior) {
-            invariant(
-              prior.request_digest === input.requestDigest,
-              "RESPONDER_CORE_IDEMPOTENCY_CONFLICT",
-              "Responder message command was reused for different facts.",
-              { status: 409 }
-            );
-            return heldCommand(prior, true);
-          }
           const selected = await client.query(
             `select interaction.*, authority.state as authority_state,
+                    authority.route_digest as authority_route_digest,
+                    control.state as control_state,
                     control.global_kill_engaged
                from ss.responder_interactions interaction
                join ss.responder_contact_authorities authority
@@ -483,6 +552,21 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
             { status: 404 }
           );
           const row = selected.rows[0];
+          if (prior) {
+            invariant(
+              prior.request_digest === input.requestDigest,
+              "RESPONDER_CORE_IDEMPOTENCY_CONFLICT",
+              "Responder message command was reused for different facts.",
+              { status: 409 }
+            );
+            await reserveDeliveryOperation(
+              client,
+              prior,
+              row,
+              { legacyReplay: true }
+            );
+            return heldCommand(prior, true);
+          }
           const heldReason = row.authority_state !== "active"
             ? "opted_out"
             : row.state === "handoff_required" || row.state === "opted_out"
@@ -506,6 +590,11 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
               input.contactAuthorityId, input.messageKind,
               input.contentDigest, heldReason, input.recordedAt
             ]
+          );
+          await reserveDeliveryOperation(
+            client,
+            inserted.rows[0],
+            row
           );
           return heldCommand(inserted.rows[0]);
         }
@@ -604,6 +693,16 @@ export function createPostgresResponderCoreRepository({ authority } = {}) {
                  revision, created_at, updated_at
                ) values ($1, true, 'held', 1, $2, $2)
                on conflict (organization_id) do nothing`,
+              [input.organizationId, input.recordedAt]
+            );
+            await client.query(
+              `update ss.responder_runtime_controls
+                  set global_kill_engaged = true,
+                      revision = revision + 1,
+                      updated_at = $2
+                where organization_id = $1
+                  and state = 'approved_live'
+                  and not global_kill_engaged`,
               [input.organizationId, input.recordedAt]
             );
             await client.query(
