@@ -109,6 +109,7 @@ function delivery(overrides = {}) {
     routeDigest: ROUTE_DIGEST,
     contentDigest: CONTENT_DIGEST,
     idempotencyKey: "responder-delivery-command-0001",
+    leaseOwner: "responder-fulfillment-test-worker-0001",
     signal: null,
     ...overrides
   };

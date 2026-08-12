@@ -146,7 +146,7 @@ function normalizeConsent(input, recordedAt) {
   return requestFact(selected, recordedAt);
 }
 
-function normalizeEvent(input, verified, recordedAt) {
+export function normalizeEvent(input, verified, recordedAt) {
   exactObject(input, [
     "commandId", "eventKind", "occurredAt", "organizationId",
     "payloadDigest", "projectId", "providerEventIdDigest", "routeDigest"

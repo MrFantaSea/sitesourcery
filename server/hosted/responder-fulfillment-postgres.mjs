@@ -125,6 +125,14 @@ async function translated(work) {
   }
 }
 
+// A durable STOP revokes dispatch authority for claimed operations by
+// cancelling them mid-lease with this exact failure code. The transitions
+// below distinguish that revocation from ordinary lease loss.
+function suppressionCancelled(row) {
+  return row?.state === "cancelled" &&
+    row.failure_code === "RESPONDER_DELIVERY_OPTED_OUT";
+}
+
 function assertClaimOwner(row, input) {
   invariant(
     row &&
@@ -304,6 +312,7 @@ export function createPostgresResponderFulfillmentRepository({
               order by operation.available_at, operation.created_at,
                        operation.id
               for update of operation skip locked
+              for share of authority skip locked
               limit 1`,
             [claimedAt]
           );
@@ -384,6 +393,13 @@ export function createPostgresResponderFulfillmentRepository({
             );
             return deepFreeze({ status: "replay" });
           }
+          invariant(
+            !suppressionCancelled(row),
+            "RESPONDER_DELIVERY_SUPPRESSION_CONFLICT",
+            "The provider effect completed after a durable STOP cancelled " +
+              "this operation; the receipt requires operator reconciliation.",
+            { status: 409 }
+          );
           assertClaimOwner(row, selected);
           const updated = await client.query(
             `update ss.responder_delivery_operations
@@ -434,6 +450,9 @@ export function createPostgresResponderFulfillmentRepository({
               where id = $1 for update`,
             [selected.operationId]
           );
+          if (suppressionCancelled(locked.rows[0])) {
+            return deepFreeze({ status: "already_cancelled" });
+          }
           const row = assertClaimOwner(locked.rows[0], selected);
           if (Number(row.attempt_count) >= Number(row.maximum_attempts)) {
             const reviewed = await client.query(
@@ -508,6 +527,9 @@ export function createPostgresResponderFulfillmentRepository({
               where id = $1 for update`,
             [selected.operationId]
           );
+          if (suppressionCancelled(locked.rows[0])) {
+            return deepFreeze({ status: "already_cancelled" });
+          }
           assertClaimOwner(locked.rows[0], selected);
           const reviewed = await client.query(
             `update ss.responder_delivery_operations

@@ -134,10 +134,11 @@ test("one lease-bound claim reaches the provider with digests and stable idempot
     Object.keys(calls.sends[0]).sort(),
     [
       "commandId", "contactAuthorityId", "contentDigest", "idempotencyKey",
-      "interactionId", "messageKind", "operationId", "organizationId",
-      "projectId", "routeDigest", "schema", "signal"
+      "interactionId", "leaseOwner", "messageKind", "operationId",
+      "organizationId", "projectId", "routeDigest", "schema", "signal"
     ].sort()
   );
+  assert.equal(calls.sends[0].leaseOwner, WORKER_ID);
   assert.equal(
     JSON.stringify(calls.sends[0]).includes("phone"),
     false

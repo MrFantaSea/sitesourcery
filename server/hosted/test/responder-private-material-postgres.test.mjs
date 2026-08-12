@@ -93,6 +93,7 @@ function resolution(overrides = {}) {
     messageKind: "missed_call_ack",
     routeDigest: ROUTE_DIGEST,
     contentDigest: CONTENT_DIGEST,
+    leaseOwner: "responder-fulfillment-test-worker-0001",
     ...overrides
   };
 }
@@ -175,12 +176,18 @@ test("resolve opens material only for one claimed, released, active authority", 
   const vault = selectedVault();
   const selectedAuthority = { ...resolution() };
   delete selectedAuthority.schema;
+  delete selectedAuthority.leaseOwner;
   const envelope = await vault.sealSmsMaterial(
     selectedAuthority,
     { to: TO, body: BODY }
   );
   const authority = fakeAuthority((text) => {
     assert.match(text, /operation\.state = 'claimed'/u);
+    assert.match(text, /operation\.lease_owner = \$9/u);
+    assert.match(
+      text,
+      /operation\.lease_expires_at > clock_timestamp\(\)/u
+    );
     assert.match(text, /control\.state = 'approved_live'/u);
     assert.match(text, /not control\.global_kill_engaged/u);
     assert.match(text, /contact\.state = 'active'/u);

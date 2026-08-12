@@ -319,6 +319,7 @@ export function createResponderFulfillmentWorker({
           routeDigest: selected.routeDigest,
           contentDigest: selected.contentDigest,
           idempotencyKey: selected.idempotencyKey,
+          leaseOwner: workerId,
           signal
         }),
         selected
@@ -360,7 +361,8 @@ export function createResponderFulfillmentWorker({
         });
         invariant(
           result?.status === "retry_scheduled" ||
-            result?.status === "manual_review",
+            result?.status === "manual_review" ||
+            result?.status === "already_cancelled",
           "RESPONDER_FULFILLMENT_WORKER_INVALID",
           "Responder retry state is invalid.",
           { status: 500 }
@@ -379,13 +381,14 @@ export function createResponderFulfillmentWorker({
         failedAt
       });
       invariant(
-        result?.status === "manual_review",
+        result?.status === "manual_review" ||
+          result?.status === "already_cancelled",
         "RESPONDER_FULFILLMENT_WORKER_INVALID",
         "Responder manual-review state is invalid.",
         { status: 500 }
       );
       return Object.freeze({
-        status: "manual_review",
+        status: result.status,
         operationId: selected.operationId,
         failureCode
       });

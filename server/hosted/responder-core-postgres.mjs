@@ -152,7 +152,7 @@ async function requireOperator(client, userId) {
   );
 }
 
-async function ingestVerifiedEvent(client, input) {
+export async function ingestVerifiedEvent(client, input) {
   await client.query(
     "select pg_advisory_xact_lock(hashtextextended($1, 0))",
     [`${input.provider}:${input.providerEventIdDigest}`]
