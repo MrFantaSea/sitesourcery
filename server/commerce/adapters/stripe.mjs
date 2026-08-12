@@ -1,4 +1,12 @@
+import { createHash } from "node:crypto";
+
 import Stripe from "stripe";
+
+import {
+  CREDENTIAL_TOPOLOGY_VERIFICATION_SCHEMA,
+  normalizeCredentialTopology,
+  verifyStripeCredentialReadiness
+} from "../../../ops/credential-topology.mjs";
 
 import {
   digest,
@@ -36,8 +44,18 @@ import {
   ALAKAZAM_INCIDENT_INVOICE_FACTS_SCHEMA
 } from "../../commerce-v2/alakazam-lifecycle-state.mjs";
 import {
+  ALAKAZAM_FINALIZATION_INVOICE_FACTS_SCHEMA
+} from "../../commerce-v2/alakazam-invoice-finalization.mjs";
+import {
   PROFESSIONAL_STRIPE_REVERSAL_FACTS_SCHEMA
 } from "../../commerce-v2/professional-services-reversal.mjs";
+import {
+  STRIPE_WEBHOOK_ROTATION_READINESS_SCHEMA,
+  STRIPE_WEBHOOK_ROTATION_SCHEMA,
+  normalizeStripeWebhookRotation,
+  stripeWebhookRotationReadiness,
+  verifyStripeWebhookWithRotation
+} from "../stripe-webhook-rotation.mjs";
 import { createHeldStripeAdapter } from "./held.mjs";
 
 export const STRIPE_API_VERSION = "2026-06-24.dahlia";
@@ -88,6 +106,8 @@ export const STRIPE_REQUIRED_WEBHOOK_EVENTS = Object.freeze([
   "customer.subscription.deleted",
   "customer.subscription.updated",
   "invoice.paid",
+  "invoice.finalization_failed",
+  "invoice.finalized",
   "invoice.payment_action_required",
   "invoice.payment_failed",
   "invoice.payment_succeeded",
@@ -130,7 +150,7 @@ const STRIPE_ACCOUNT_ID = /^acct_[A-Za-z0-9_]+$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
-const OFFICIAL_CLIENTS = new WeakSet();
+const OFFICIAL_CLIENTS = new WeakMap();
 const DOWNLOAD_CHECKOUT_PURPOSE_SCHEMA =
   "sitesourcery.abracadabra-checkout-purpose.v2";
 const DOWNLOAD_CHECKOUT_METADATA_SCHEMA =
@@ -374,6 +394,22 @@ function professionalReversalMetadataEvidence(value, payment) {
   });
 }
 
+export function stripeRuntimeKeyFingerprint(secretKey) {
+  invariant(
+    typeof secretKey === "string" &&
+      secretKey.length <= 500 &&
+      (secretKey.startsWith("rk_live_") ||
+        secretKey.startsWith("rk_test_")),
+    "stripe_runtime_restricted_key_required",
+    "Approved Stripe runtime requires a restricted key",
+    { status: 500 }
+  );
+  return createHash("sha256")
+    .update("sitesourcery:stripe-runtime-key:v1\0", "utf8")
+    .update(secretKey, "utf8")
+    .digest("hex");
+}
+
 export function createOfficialStripeClient({
   secretKey,
   livemode,
@@ -389,10 +425,8 @@ export function createOfficialStripeClient({
       apiVersion === STRIPE_API_VERSION &&
       (
         livemode
-          ? selectedKey.startsWith("sk_live_") ||
-            selectedKey.startsWith("rk_live_")
-          : selectedKey.startsWith("sk_test_") ||
-            selectedKey.startsWith("rk_test_")
+          ? selectedKey.startsWith("rk_live_")
+          : selectedKey.startsWith("rk_test_")
       ),
     "stripe_configuration_required",
     "Stripe credentials must match the exact mode and pinned API version",
@@ -407,7 +441,14 @@ export function createOfficialStripeClient({
       version: "0.0.0"
     }
   });
-  OFFICIAL_CLIENTS.add(client);
+  OFFICIAL_CLIENTS.set(
+    client,
+    Object.freeze({
+      livemode,
+      keyClass: "restricted",
+      fingerprint: stripeRuntimeKeyFingerprint(selectedKey)
+    })
+  );
   return client;
 }
 
@@ -1320,10 +1361,26 @@ function validateConfig(value, mode, taxClock) {
     "Every Stripe return URL must use an exact approved origin",
     { status: 500 }
   );
-  const webhookSecret = requiredText(
-    config.webhookSecret,
-    "webhookSecret",
-    500
+  const webhookRotationExplicit =
+    config.webhookRotation !== undefined;
+  const webhookRotation = normalizeStripeWebhookRotation(
+    webhookRotationExplicit
+      ? config.webhookRotation
+      : {
+          schema: STRIPE_WEBHOOK_ROTATION_SCHEMA,
+          current: {
+            version: "contract-test-v1",
+            secret: requiredText(
+              config.webhookSecret,
+              "webhookSecret",
+              500
+            ),
+            activatedAt: "1970-01-01T00:00:00.000Z",
+            retiresAt: null
+          },
+          next: null,
+          overlapSeconds: 0
+        }
   );
   const webhookEndpointId = providerId(
     config.webhookEndpointId,
@@ -1334,11 +1391,19 @@ function validateConfig(value, mode, taxClock) {
     config.webhookEndpointUrl,
     "webhookEndpointUrl"
   );
+  const credentialTopologyExplicit =
+    config.credentialTopology !== undefined;
+  const credentialTopology = credentialTopologyExplicit
+    ? normalizeCredentialTopology(
+        config.credentialTopology
+      )
+    : null;
   if (mode === "approved_live") {
     invariant(
-      webhookSecret.startsWith("whsec_"),
+      webhookRotationExplicit &&
+        (!config.livemode || credentialTopologyExplicit),
       "stripe_configuration_required",
-      "Stripe webhook signing secret is invalid",
+      "Approved Stripe composition requires explicit webhook rotation and authoritative production credential topology",
       { status: 500 }
     );
   }
@@ -1447,9 +1512,12 @@ function validateConfig(value, mode, taxClock) {
     taxCodes,
     taxAttestation,
     taxClock,
-    webhookSecret,
+    webhookRotation,
+    webhookRotationExplicit,
     webhookEndpointId,
     webhookEndpointUrl,
+    credentialTopology,
+    credentialTopologyExplicit,
     checkoutTtlSeconds: integer(
       config.checkoutTtlSeconds ?? 1800,
       "checkoutTtlSeconds",
@@ -6148,7 +6216,30 @@ export function createStripeProviderAdapter(options = {}) {
         return Object.freeze({
           ...(await held.readiness()),
           provider: "stripe",
-          mode: "held"
+          mode: "held",
+          webhookRotation: Object.freeze({
+            schema:
+              STRIPE_WEBHOOK_ROTATION_READINESS_SCHEMA,
+            ready: false,
+            state: "held",
+            activeKeyCount: 0,
+            currentVersion: null,
+            currentFingerprint: null,
+            nextConfigured: false,
+            nextVersion: null,
+            nextFingerprint: null,
+            overlapSeconds: 0
+          }),
+          credentialTopology: Object.freeze({
+            schema: CREDENTIAL_TOPOLOGY_VERIFICATION_SCHEMA,
+            mode: "held",
+            selection: "stripe",
+            ready: false,
+            state: "held",
+            enabledPurposes: Object.freeze([]),
+            domainsHeld: true,
+            effectsAllowed: false
+          })
         });
       },
       createCheckout: reject,
@@ -6172,6 +6263,7 @@ export function createStripeProviderAdapter(options = {}) {
       retrieveAlakazamPayment: reject,
       retrieveAlakazamRenewalInvoice: reject,
       retrieveAlakazamIncidentInvoice: reject,
+      retrieveAlakazamFinalizationInvoice: reject,
       retrieveAlakazamCancellation: reject,
       retrieveAlakazamReversal: reject,
       retrieveProfessionalReversal: reject,
@@ -6214,9 +6306,11 @@ export function createStripeProviderAdapter(options = {}) {
       : null;
   if (approval) {
     invariant(
-      approval.livemode === config.livemode,
+      approval.livemode === config.livemode &&
+        (!config.livemode ||
+          approval.environment === "production"),
       "stripe_live_approval_missing",
-      "Stripe approval and configured livemode do not match",
+      "Stripe approval, restricted-key topology, and configured environment do not match",
       { status: 500 }
     );
   }
@@ -6265,10 +6359,22 @@ export function createStripeProviderAdapter(options = {}) {
         })
       : options.client;
   if (mode === "approved_live") {
+    const official = OFFICIAL_CLIENTS.get(selectedClient);
+    const runtimeCredential =
+      config.credentialTopology?.items.find(
+        (item) =>
+          item.name ===
+          "stripe.runtime.production.restricted"
+      );
     invariant(
-      OFFICIAL_CLIENTS.has(selectedClient),
+      official?.keyClass === "restricted" &&
+        official.livemode === config.livemode &&
+        (!config.livemode ||
+          official.fingerprint ===
+            runtimeCredential?.providerBinding
+              ?.keyFingerprint),
       "stripe_client_invalid",
-      "Approved Stripe effects require the pinned official client",
+      "Approved Stripe effects require the exact restricted official client",
       { status: 500 }
     );
   }
@@ -6745,6 +6851,129 @@ export function createStripeProviderAdapter(options = {}) {
       paymentIntentStatus: paymentIntent.status,
       subscriptionStatus: subscription.providerStatus,
       providerObservedAt: readback.observedAt
+    };
+    return Object.freeze({
+      ...facts,
+      providerFactsDigest: digest(facts)
+    });
+  }
+
+  async function retrieveAlakazamFinalizationInvoiceInternal({
+    stripeInvoiceId,
+    stripeSubscriptionId,
+    stripeCustomerId
+  }) {
+    requireCapability("invoices:read");
+    requireCapability("subscriptions:read");
+    const invoiceId = providerId(stripeInvoiceId, "in", "stripeInvoiceId");
+    const subscriptionId = providerId(
+      stripeSubscriptionId, "sub", "stripeSubscriptionId"
+    );
+    const customerId = providerId(stripeCustomerId, "cus", "stripeCustomerId");
+    const providerObservedAt = canonicalIso(clock.now(), "providerObservedAt");
+    let invoice;
+    try {
+      invoice = await client.invoices.retrieve(invoiceId, {
+        expand: ["lines.data.pricing.price_details.price"]
+      });
+    } catch {
+      throw noEffect(
+        "stripe_alakazam_finalization_invoice_unavailable",
+        "Stripe Alakazam Invoice could not be read for finalization reconciliation",
+        { stripeInvoiceId: invoiceId }
+      );
+    }
+    const subscription = await retrieveAlakazamSubscriptionInternal({
+      stripeSubscriptionId: subscriptionId,
+      stripeCustomerId: customerId,
+      observedAt: providerObservedAt
+    });
+    invariant(
+      invoice?.id === invoiceId && invoice.object === "invoice" &&
+        invoice.livemode === config.livemode && invoice.currency === "usd" &&
+        providerReferenceId(invoice.customer, "cus",
+          "Stripe Alakazam Invoice Customer ID") === customerId &&
+        invoice.parent?.type === "subscription_details" &&
+        providerReferenceId(
+          invoice.parent.subscription_details?.subscription,
+          "sub", "Stripe Alakazam Invoice Subscription ID"
+        ) === subscriptionId &&
+        invoice.billing_reason === "subscription_cycle" &&
+        invoice.collection_method === "charge_automatically" &&
+        Array.isArray(invoice.lines?.data) && invoice.lines.data.length === 1 &&
+        invoice.lines.has_more === false &&
+        Number.isSafeInteger(invoice.amount_due) && invoice.amount_due > 0 &&
+        Number.isSafeInteger(invoice.total) && invoice.total >= subscription.amountMinor,
+      "stripe_alakazam_finalization_mismatch",
+      "Stripe Alakazam Invoice identity or preparation facts changed",
+      { status: 502 }
+    );
+    const line = invoice.lines.data[0];
+    invariant(
+      line.livemode === config.livemode && line.currency === "usd" &&
+        line.parent?.type === "subscription_item_details" &&
+        line.parent.subscription_item_details?.proration === false &&
+        providerReferenceId(
+          line.parent.subscription_item_details?.subscription,
+          "sub", "Stripe Alakazam Invoice line Subscription ID"
+        ) === subscriptionId &&
+        providerReferenceId(
+          line.parent.subscription_item_details?.subscription_item,
+          "si", "Stripe Alakazam Invoice Subscription Item ID"
+        ) === subscription.stripeSubscriptionItemId &&
+        line.pricing?.type === "price_details" &&
+        providerReferenceId(
+          line.pricing.price_details?.price,
+          "price", "Stripe Alakazam Invoice Price ID"
+        ) === subscription.stripePriceId &&
+        line.quantity === 1 && line.amount === subscription.amountMinor &&
+        line.subtotal === subscription.amountMinor,
+      "stripe_alakazam_finalization_mismatch",
+      "Stripe Alakazam Invoice line changed",
+      { status: 502 }
+    );
+    const failed = invoice.status === "draft" &&
+      invoice.last_finalization_error &&
+      typeof invoice.last_finalization_error === "object";
+    const recovered = ["open", "paid", "uncollectible", "void"].includes(
+      invoice.status
+    );
+    invariant(
+      Boolean(failed) !== recovered,
+      "stripe_alakazam_finalization_mismatch",
+      "Stripe did not confirm a failed or recovered Invoice preparation state",
+      { status: 502 }
+    );
+    let reasonCode = null;
+    if (failed) {
+      const error = invoice.last_finalization_error;
+      const code = String(error.code ?? "").toLowerCase();
+      const parameter = String(error.param ?? "").toLowerCase();
+      reasonCode = invoice.automatic_tax?.status === "failed" ||
+        code.includes("tax") || parameter.includes("automatic_tax")
+        ? "automatic_tax"
+        : code.includes("setting") || parameter.includes("invoice_settings")
+          ? "invoice_settings"
+          : code.length > 0
+            ? "provider_rejected"
+            : "unknown_review";
+    }
+    const facts = {
+      schema: ALAKAZAM_FINALIZATION_INVOICE_FACTS_SCHEMA,
+      provider: "stripe",
+      stripeInvoiceId: invoiceId,
+      stripeSubscriptionId: subscriptionId,
+      stripeCustomerId: customerId,
+      tierId: subscription.tierId,
+      status: invoice.status,
+      finalizationState: failed ? "failed" : "recovered",
+      reasonCode,
+      billingReason: invoice.billing_reason,
+      collectionMethod: invoice.collection_method,
+      amountDueMinor: invoice.amount_due,
+      currency: "USD",
+      providerObservedAt,
+      subscription
     };
     return Object.freeze({
       ...facts,
@@ -7275,6 +7504,34 @@ export function createStripeProviderAdapter(options = {}) {
         taxModeFor(config, taxPurpose);
       }
     }
+    const webhookRotation =
+      stripeWebhookRotationReadiness(
+        config.webhookRotation,
+        clock.now()
+      );
+    const credentialTopology =
+      config.credentialTopologyExplicit
+        ? verifyStripeCredentialReadiness(
+            config.credentialTopology,
+            {
+              now: clock.now(),
+              purpose,
+              environment:
+                approval?.environment ?? "production",
+              livemode: config.livemode,
+              runtimeFingerprint:
+                OFFICIAL_CLIENTS.get(selectedClient)
+                  ?.fingerprint
+            }
+          )
+        : null;
+    invariant(
+      purpose === "domainRegistration" ||
+        webhookRotation.ready,
+      "stripe_webhook_rotation_not_ready",
+      "Stripe webhook key rotation is not ready",
+      { status: 503 }
+    );
     return {
       ready: true,
       provider: "stripe",
@@ -7296,6 +7553,12 @@ export function createStripeProviderAdapter(options = {}) {
         purpose === "domainRegistration" ? false : true,
       webhookEndpoint:
         purpose === "domainRegistration" ? false : true,
+      ...(config.webhookRotationExplicit
+        ? { webhookRotation }
+        : {}),
+      ...(credentialTopology === null
+        ? {}
+        : { credentialTopology }),
       taxModes: config.taxAuthority.purposes,
       taxPurposeAuthority: true,
       automaticTaxActivation:
@@ -7316,6 +7579,21 @@ export function createStripeProviderAdapter(options = {}) {
         "Stripe readiness requires one exact payment purpose",
         { status: 500 }
       );
+      if (config.credentialTopologyExplicit) {
+        verifyStripeCredentialReadiness(
+          config.credentialTopology,
+          {
+            now: clock.now(),
+            purpose,
+            environment:
+              approval?.environment ?? "production",
+            livemode: config.livemode,
+            runtimeFingerprint:
+              OFFICIAL_CLIENTS.get(selectedClient)
+                ?.fingerprint
+          }
+        );
+      }
       if (purpose === "domainRegistration") {
         invariant(
           domainCapabilities.length > 0 &&
@@ -7350,6 +7628,15 @@ export function createStripeProviderAdapter(options = {}) {
           STRIPE_READINESS_PURPOSES.includes(purpose)
             ? purpose
             : null,
+        ...(config.webhookRotationExplicit
+          ? {
+              webhookRotation:
+                stripeWebhookRotationReadiness(
+                  config.webhookRotation,
+                  clock.now()
+                )
+            }
+          : {}),
         code: error?.code ?? "stripe_not_ready"
       };
     }
@@ -7359,6 +7646,20 @@ export function createStripeProviderAdapter(options = {}) {
     readinessForPurpose,
     async readiness() {
       try {
+        if (config.credentialTopologyExplicit) {
+          verifyStripeCredentialReadiness(
+            config.credentialTopology,
+            {
+              now: clock.now(),
+              environment:
+                approval?.environment ?? "production",
+              livemode: config.livemode,
+              runtimeFingerprint:
+                OFFICIAL_CLIENTS.get(selectedClient)
+                  ?.fingerprint
+            }
+          );
+        }
         await verifyWebhookEndpoint();
         if (config.alakazam) {
           await verifyAlakazamConfiguration();
@@ -7377,6 +7678,15 @@ export function createStripeProviderAdapter(options = {}) {
           environment:
             approval?.environment ?? "contract_test",
           livemode: config.livemode,
+          ...(config.webhookRotationExplicit
+            ? {
+                webhookRotation:
+                  stripeWebhookRotationReadiness(
+                    config.webhookRotation,
+                    clock.now()
+                  )
+              }
+            : {}),
           code: error?.code ?? "stripe_not_ready"
         };
       }
@@ -7711,6 +8021,21 @@ export function createStripeProviderAdapter(options = {}) {
         { status: 500 }
       );
       return retrieveAlakazamIncidentInvoiceInternal(request);
+    },
+
+    async retrieveAlakazamFinalizationInvoice(request = {}) {
+      invariant(
+        config.alakazam &&
+          exactObjectKeys(request, [
+            "stripeCustomerId",
+            "stripeInvoiceId",
+            "stripeSubscriptionId"
+          ]),
+        "stripe_alakazam_finalization_read_invalid",
+        "Alakazam finalization readback requires exact Invoice, Subscription, and Customer identity",
+        { status: 500 }
+      );
+      return retrieveAlakazamFinalizationInvoiceInternal(request);
     },
 
     async retrieveAlakazamCancellation(request = {}) {
@@ -10135,37 +10460,17 @@ export function createStripeProviderAdapter(options = {}) {
 
     async verifyWebhook({ rawBody, signature } = {}) {
       requireCapability("webhooks:verify");
-      invariant(
-        Buffer.isBuffer(rawBody) ||
-          typeof rawBody === "string",
-        "stripe_webhook_body_required",
-        "Stripe webhook verification requires the exact raw body",
-        { status: 400 }
-      );
-      invariant(
-        typeof signature === "string" &&
-          signature.length > 0 &&
-          signature.length <= 4000,
-        "stripe_webhook_signature_required",
-        "Stripe-Signature is required",
-        { status: 400 }
-      );
-      const selectedSignature = signature;
-      let event;
-      try {
-        event = client.webhooks.constructEvent(
-          rawBody,
-          selectedSignature,
-          config.webhookSecret
-        );
-      } catch {
-        invariant(
-          false,
-          "stripe_webhook_signature_invalid",
-          "Stripe webhook signature is invalid",
-          { status: 400 }
-        );
-      }
+      const verification = verifyStripeWebhookWithRotation({
+        rotation: config.webhookRotation,
+        now: clock.now(),
+        constructEvent:
+          client.webhooks.constructEvent.bind(
+            client.webhooks
+          ),
+        rawBody,
+        signature
+      });
+      const event = verification.event;
       invariant(
         event &&
           typeof event.id === "string" &&
@@ -10184,7 +10489,10 @@ export function createStripeProviderAdapter(options = {}) {
         { status: 400 }
       );
       try {
-        return structuredClone(event);
+        return Object.freeze({
+          ...verification,
+          event: structuredClone(event)
+        });
       } catch {
         invariant(
           false,

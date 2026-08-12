@@ -157,6 +157,8 @@ checkout.session.completed
 customer.subscription.created
 customer.subscription.deleted
 customer.subscription.updated
+invoice.finalization_failed
+invoice.finalized
 invoice.paid
 invoice.payment_action_required
 invoice.payment_failed
@@ -166,13 +168,11 @@ refund.failed
 refund.updated
 ```
 
-`invoice.finalization_failed` is intentionally not subscribed yet. The source
-inventory requires owner alert and reconciliation only, but no durable
-finalization-failure service, owner-alert projection, or L4 router branch exists.
-Adding the event now would make startup attest delivery without a consumer. The
-follow-on must add a no-entitlement-mutation evidence service, durable owner
-alert, shared-router branch, production construction, and replay/readback tests;
-only then add the event to this exact set.
+`invoice.finalization_failed` opens only a provider-readback-bound Alakazam
+renewal/fulfillment hold and an owner-review projection; it never mutates paid
+entitlement. `invoice.finalized` supplies the exact later preparation wake-up.
+Paid event aliases also reconcile the same hold before their existing renewal
+path. Recovery requires a later authoritative Invoice read, not an event claim.
 
 The `whsec_` value is separate from the endpoint ID. Signature verification is
 local and needs no Stripe API permission.
@@ -234,9 +234,12 @@ Domain remains excluded. A later, separately approved domain key expansion
 would require Payment Intents `Write` for read/capture/cancel and Refunds
 `Write` for owner-commanded refunds. Do not grant those permissions now.
 
-The adapter accepts mode-matched `rk_test_` and `rk_live_` keys. Matching
-`sk_test_` and `sk_live_` keys remain supported for one-time bootstrap or an
-emergency rotation, but are not the steady-state recommendation.
+Approved runtime composition accepts only a mode-matched `rk_test_` or
+`rk_live_` restricted key whose fingerprint matches the non-secret topology
+contract. Standard `sk_`, full-access, and shared credentials cannot authorize
+startup, bootstrap, rotation, or an emergency path. The exact runtime grant is
+the union for enabled Download, assessment, Custom, and Alakazam purposes; all
+other permissions remain `None`. Domain is a separate held key expansion.
 
 ### One-time provisioning restricted key
 
@@ -281,8 +284,13 @@ drift. Never create a replacement merely because readback differs.
 7. After the final public ingress is deployed, create/read the Webhook Endpoint
    using `ss:stripe:live:webhook:v1:20260809`; capture its `we_` ID and signing
    secret once through the secret manager.
-8. Create the runtime restricted key with the exact matrix above, apply an IP
-   restriction if available, and revoke the provisioning key.
+8. Create the runtime restricted key with only the exact enabled-purpose union,
+   apply an IP restriction if available, and revoke the provisioning key.
+   Seal separate scope readbacks plus the runtime/provisioner/compromised-key
+   account, mode, non-secret fingerprints, custody, and activation/revocation
+   chronology in the existing authoritative
+   `SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON` manifest; do not create a parallel
+   Stripe topology or receipt.
 9. Bind exact live IDs, tax codes/attestation, final return/legal/webhook URLs,
    `whsec_`, and the `rk_live_` key in the deployment secret manager. Seal the
    environment-bound approval JSON with the exact capability list.

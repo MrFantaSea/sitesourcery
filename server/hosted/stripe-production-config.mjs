@@ -5,6 +5,16 @@ import {
   createStripeProviderAdapter
 } from "../commerce/adapters/stripe.mjs";
 import {
+  CREDENTIAL_TOPOLOGY_SCHEMA,
+  CREDENTIAL_TOPOLOGY_VERIFICATION_SCHEMA,
+  normalizeCredentialTopology
+} from "../../ops/credential-topology.mjs";
+import {
+  STRIPE_WEBHOOK_ROTATION_METADATA_SCHEMA,
+  STRIPE_WEBHOOK_ROTATION_READINESS_SCHEMA,
+  composeStripeWebhookRotation
+} from "../commerce/stripe-webhook-rotation.mjs";
+import {
   ALAKAZAM_TIER_DEFINITIONS,
   ALAKAZAM_TIER_IDS
 } from "../commerce-v2/alakazam.mjs";
@@ -288,13 +298,11 @@ function exactApproval(environment, deployment, livemode) {
       capabilities.has(capability)
     );
   if (
-    approvedDomainCapabilities.length !== 0 &&
-    approvedDomainCapabilities.length !==
-      DOMAIN_CAPABILITIES.length
+    approvedDomainCapabilities.length !== 0
   ) {
     fail(
-      "STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE",
-      "Stripe domain approval must include the complete manual-authorization capability set."
+      "STRIPE_PRODUCTION_DOMAIN_KEY_HELD",
+      "Stripe Domain authority requires a separate future credential record and approval."
     );
   }
   const approvedAlakazamCapabilities =
@@ -318,8 +326,7 @@ function exactApproval(environment, deployment, livemode) {
   return {
     approval,
     domainApproved:
-      approvedDomainCapabilities.length ===
-        DOMAIN_CAPABILITIES.length,
+      false,
     alakazamApproved:
       approvedAlakazamCapabilities.length ===
       ALAKAZAM_CAPABILITIES.length
@@ -504,24 +511,22 @@ function keyForMode(environment, livemode) {
   if (
     !(
       livemode
-        ? secretKey.startsWith("sk_live_") ||
-          secretKey.startsWith("rk_live_")
-        : secretKey.startsWith("sk_test_") ||
-          secretKey.startsWith("rk_test_")
+        ? secretKey.startsWith("rk_live_")
+        : secretKey.startsWith("rk_test_")
     )
   ) {
     fail(
       "STRIPE_PRODUCTION_KEY_MODE_MISMATCH",
-      "Stripe secret key does not match the approved livemode."
+      "Stripe runtime key must be restricted and match the approved livemode."
     );
   }
   return secretKey;
 }
 
-function webhookSecret(environment) {
+function webhookSecret(environment, name) {
   const selected = text(
     environment,
-    "SITESOURCERY_STRIPE_WEBHOOK_SECRET",
+    name,
     500
   );
   if (!selected.startsWith("whsec_")) {
@@ -531,6 +536,26 @@ function webhookSecret(environment) {
     );
   }
   return selected;
+}
+
+function webhookRotation(environment) {
+  const metadata = json(
+    environment,
+    "SITESOURCERY_STRIPE_WEBHOOK_ROTATION_JSON"
+  );
+  const nextSecret = optionalText(
+    environment,
+    "SITESOURCERY_STRIPE_WEBHOOK_NEXT_SECRET",
+    500
+  );
+  return composeStripeWebhookRotation({
+    metadata,
+    currentSecret: webhookSecret(
+      environment,
+      "SITESOURCERY_STRIPE_WEBHOOK_SECRET"
+    ),
+    nextSecret
+  });
 }
 
 export function createConfiguredStripeProvider({
@@ -634,6 +659,34 @@ export function createConfiguredStripeProvider({
     priceExpectations,
     livemode
   );
+  const suppliedCredentialTopology = optionalJson(
+    environment,
+    "SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON"
+  );
+  if (
+    deployment === "production" &&
+    suppliedCredentialTopology === null
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED",
+      "SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON is required for approved production Stripe composition."
+    );
+  }
+  if (
+    deployment === "staging" &&
+    suppliedCredentialTopology !== null
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_KEY_TOPOLOGY_MISMATCH",
+      "Production credential topology cannot authorize Stripe staging."
+    );
+  }
+  const credentialTopology =
+    suppliedCredentialTopology === null
+      ? null
+      : normalizeCredentialTopology(
+          suppliedCredentialTopology
+        );
   const config = {
     apiVersion,
     livemode,
@@ -670,7 +723,10 @@ export function createConfiguredStripeProvider({
       environment,
       "SITESOURCERY_STRIPE_TAX_ATTESTATION_JSON"
     ),
-    webhookSecret: webhookSecret(environment),
+    webhookRotation: webhookRotation(environment),
+    ...(credentialTopology === null
+      ? {}
+      : { credentialTopology }),
     webhookEndpointId: text(
       environment,
       "SITESOURCERY_STRIPE_WEBHOOK_ENDPOINT_ID",
@@ -711,6 +767,128 @@ function safeToken(value, fallback) {
     !SENSITIVE_LOG_TOKEN.test(value)
     ? value
     : fallback;
+}
+
+function redactWebhookRotation(value) {
+  const state = new Set([
+    "held",
+    "inactive",
+    "current_only",
+    "overlap",
+    "promotion_required"
+  ]).has(value?.state)
+    ? value.state
+    : "inactive";
+  const fingerprint = (selected) =>
+    typeof selected === "string" &&
+    /^[a-f0-9]{64}$/u.test(selected)
+      ? selected
+      : null;
+  return Object.freeze({
+    schema: STRIPE_WEBHOOK_ROTATION_READINESS_SCHEMA,
+    ready: value?.ready === true,
+    state,
+    activeKeyCount:
+      Number.isSafeInteger(value?.activeKeyCount) &&
+      value.activeKeyCount >= 0 &&
+      value.activeKeyCount <= 2
+        ? value.activeKeyCount
+        : 0,
+    currentVersion: safeToken(
+      value?.currentVersion,
+      null
+    ),
+    currentFingerprint: fingerprint(
+      value?.currentFingerprint
+    ),
+    nextConfigured: value?.nextConfigured === true,
+    nextVersion: safeToken(value?.nextVersion, null),
+    nextFingerprint: fingerprint(
+      value?.nextFingerprint
+    ),
+    overlapSeconds:
+      Number.isSafeInteger(value?.overlapSeconds) &&
+      value.overlapSeconds >= 0 &&
+      value.overlapSeconds <= 86_400
+        ? value.overlapSeconds
+        : 0
+  });
+}
+
+function redactCredentialTopology(value) {
+  const purposes = Array.isArray(value?.enabledPurposes)
+    ? value.enabledPurposes.filter((purpose) =>
+        [
+          "alakazam",
+          "customBuildChange",
+          "customBuildFinal",
+          "customBuildStart",
+          "download",
+          "serviceAssessment"
+        ].includes(purpose)
+      )
+    : [];
+  const selectedDigest = (candidate) =>
+    typeof candidate === "string" &&
+    /^[a-f0-9]{64}$/u.test(candidate)
+      ? candidate
+      : null;
+  return Object.freeze({
+    schema: CREDENTIAL_TOPOLOGY_VERIFICATION_SCHEMA,
+    mode: "held",
+    selection: "stripe",
+    ready: value?.ready === true,
+    environment:
+      value?.environment === "production"
+        ? value.environment
+        : null,
+    livemode:
+      typeof value?.livemode === "boolean"
+        ? value.livemode
+        : null,
+    accountId:
+      typeof value?.accountId === "string" &&
+      /^acct_[A-Za-z0-9_]{1,250}$/u.test(
+        value.accountId
+      )
+        ? value.accountId
+        : null,
+    enabledPurposes: Object.freeze([...new Set(purposes)].sort()),
+    runtimeVersion: safeToken(
+      value?.runtimeVersion,
+      null
+    ),
+    runtimeFingerprint: selectedDigest(
+      value?.runtimeFingerprint
+    ),
+    topologyDigest: selectedDigest(
+      value?.topologyDigest
+    ),
+    runtimeScopeCount:
+      Number.isSafeInteger(value?.runtimeScopeCount) &&
+      value.runtimeScopeCount >= 0 &&
+      value.runtimeScopeCount <= 20
+        ? value.runtimeScopeCount
+        : 0,
+    runtimeScopeDigest: selectedDigest(
+      value?.runtimeScopeDigest
+    ),
+    runtimeOperationCount:
+      Number.isSafeInteger(value?.runtimeOperationCount) &&
+      value.runtimeOperationCount >= 0 &&
+      value.runtimeOperationCount <= 30
+        ? value.runtimeOperationCount
+        : 0,
+    runtimeOperationDigest: selectedDigest(
+      value?.runtimeOperationDigest
+    ),
+    provisionerRevoked:
+      value?.provisionerRevoked === true,
+    compromisedStandardRevoked:
+      value?.compromisedStandardRevoked === true,
+    domainsHeld: value?.domainsHeld !== false,
+    effectsAllowed: false
+  });
 }
 
 export function redactStripeReadiness(
@@ -760,6 +938,12 @@ export function redactStripeReadiness(
       value.webhookVerification === true,
     webhookEndpoint:
       value.webhookEndpoint === true,
+    webhookRotation: redactWebhookRotation(
+      value.webhookRotation
+    ),
+    credentialTopology: redactCredentialTopology(
+      value.credentialTopology
+    ),
     taxModes: Object.freeze(
       Object.fromEntries(
         [
@@ -816,6 +1000,10 @@ export function assertApprovedStripeReady(
 export const STRIPE_PRODUCTION_CONTRACT =
   Object.freeze({
     apiVersion: STRIPE_API_VERSION,
+    webhookRotationMetadataSchema:
+      STRIPE_WEBHOOK_ROTATION_METADATA_SCHEMA,
+    credentialTopologySchema:
+      CREDENTIAL_TOPOLOGY_SCHEMA,
     modes: Object.freeze([...PRODUCTION_MODES]),
     hostedCapabilities: HOSTED_CAPABILITIES,
     domainCapabilities: DOMAIN_CAPABILITIES,

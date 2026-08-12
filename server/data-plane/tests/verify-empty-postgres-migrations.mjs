@@ -1117,6 +1117,18 @@ async function verifyOperatorWorkQueue(pool) {
     [operatorId, authorizerId]
   );
   await pool.query(
+    `insert into ss.organizations (
+       id, created_by_user_id, name, state
+     ) values ($1, $2, 'Queue migration verifier', 'active')`,
+    [operatorOrganizationId, authorizerId]
+  );
+  await pool.query(
+    `insert into ss.organization_memberships (
+       organization_id, user_id, role, state, accepted_at
+     ) values ($1, $2, 'owner', 'active', clock_timestamp())`,
+    [operatorOrganizationId, operatorId]
+  );
+  await pool.query(
     `insert into ss.operator_profiles (
        user_id, display_label, state, authorized_by_user_id, authorized_at
      ) values ($1, 'Queue Operator', 'held', $2, clock_timestamp())`,

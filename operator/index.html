@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Operations desk | Site Sourcery</title>
+  <meta name="description" content="Private, authenticated work queue and auditable support and privacy case tools for Site Sourcery operators.">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <meta name="theme-color" content="#100b19">
+  <link rel="canonical" href="https://sitesourcery.com/operator/">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,0 61,39 100,50 61,61 50,100 39,61 0,50 39,39' fill='%23f2ce83'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/vnext.css">
+  <link rel="stylesheet" href="/operator/operator.css">
+  <script src="/abracadabra/app/abracadabra-api.js" defer></script>
+  <script src="/operator/operator.js" defer></script>
+</head>
+<body class="vnext-page operator-page">
+  <a class="skip-link" href="#main">Skip to operations</a>
+
+  <header class="operator-header">
+    <div class="site-shell operator-header-inner">
+      <a class="site-brand" href="/">Site Sourcery</a>
+      <nav aria-label="Operator links">
+        <a href="/abracadabra/app/#control-room">Assessment and Custom tools</a>
+        <a href="/operator/" aria-current="page">Operations desk</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="site-shell operator-main" tabindex="-1">
+    <section class="operator-hero" aria-labelledby="operator-title">
+      <p class="operator-kicker">Private operations</p>
+      <h1 id="operator-title">Work queue, support, and privacy cases</h1>
+      <p>Every change is authorized by the signed-in operator and written to the canonical audit ledger. This desk records evidence and decisions; it does not send customer mail or execute deletion or export requests.</p>
+    </section>
+
+    <noscript>
+      <div class="operator-notice operator-notice-error">JavaScript is required to open the authenticated operations desk.</div>
+    </noscript>
+
+    <section class="operator-session" aria-labelledby="session-title">
+      <div>
+        <p class="operator-eyebrow" id="session-title">Session</p>
+        <p id="operator-session-status" role="status" aria-live="polite">Checking your secure session…</p>
+      </div>
+      <label class="operator-field operator-org-field">
+        <span>Operator organization</span>
+        <select id="operator-organization" disabled>
+          <option value="">Loading…</option>
+        </select>
+      </label>
+      <button class="operator-button operator-button-primary" id="operator-refresh" type="button" disabled>Refresh source records</button>
+    </section>
+
+    <div id="operator-error" class="operator-notice operator-notice-error" role="alert" tabindex="-1" hidden></div>
+    <div id="operator-notice" class="operator-notice" role="status" aria-live="polite" hidden></div>
+
+    <div class="operator-board" aria-busy="true" id="operator-board">
+      <section class="operator-panel" aria-labelledby="queue-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Source-authoritative</p>
+            <h2 id="queue-title">Work queue</h2>
+          </div>
+          <span class="operator-count" id="queue-count">0</span>
+        </div>
+        <p class="operator-panel-copy">Open work is rebuilt from canonical billing, service, and lifecycle records.</p>
+        <div id="operator-queue" class="operator-list"></div>
+      </section>
+
+      <section class="operator-panel" aria-labelledby="cases-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Auditable lifecycle</p>
+            <h2 id="cases-title">Support and privacy cases</h2>
+          </div>
+          <span class="operator-count" id="case-count">0</span>
+        </div>
+        <p class="operator-panel-copy">Select a case to review its current state, digests, deadlines, and immutable event trail.</p>
+        <div id="operator-cases" class="operator-list"></div>
+      </section>
+    </div>
+
+    <section class="operator-panel operator-detail" id="operator-case-detail" aria-labelledby="case-detail-title" hidden>
+      <div class="operator-panel-heading">
+        <div>
+          <p class="operator-eyebrow">Selected case</p>
+          <h2 id="case-detail-title">Case detail</h2>
+        </div>
+        <button class="operator-button" id="case-detail-close" type="button">Close detail</button>
+      </div>
+      <div id="case-facts" class="operator-facts"></div>
+      <h3>Audit trail</h3>
+      <ol id="case-audit" class="operator-audit"></ol>
+
+      <div class="operator-actions" id="case-actions">
+        <section class="operator-action-card">
+          <h3>Assignment and review</h3>
+          <p>Claim the case for the signed-in operator or begin formal review.</p>
+          <div class="operator-button-row">
+            <button class="operator-button" type="button" data-case-action="assign">Assign to me</button>
+            <button class="operator-button" type="button" data-case-action="review">Start review</button>
+          </div>
+        </section>
+
+        <form class="operator-action-card" data-case-form="identity">
+          <h3>Identity evidence</h3>
+          <label class="operator-field"><span>Verification state</span>
+            <select name="identityState" required>
+              <option value="verified">Verified</option>
+              <option value="not_required">Not required</option>
+              <option value="unable_to_verify">Unable to verify</option>
+              <option value="verification_pending">Verification pending</option>
+            </select>
+          </label>
+          <label class="operator-field"><span>Evidence SHA-256</span><input name="evidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+          <button class="operator-button" type="submit">Record identity state</button>
+        </form>
+
+        <form class="operator-action-card" data-case-form="deadline">
+          <h3>Response deadline</h3>
+          <label class="operator-field"><span>Deadline</span><input name="responseDueAt" type="datetime-local" required></label>
+          <label class="operator-field"><span>Basis SHA-256</span><input name="basisDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+          <button class="operator-button" type="submit">Record deadline</button>
+        </form>
+
+        <form class="operator-action-card" data-case-form="evidence">
+          <h3>Add case evidence</h3>
+          <label class="operator-field"><span>Evidence kind</span>
+            <select name="evidenceKind" required>
+              <option value="request_scope">Request scope</option>
+              <option value="identity_verification">Identity verification</option>
+              <option value="correspondence">Correspondence</option>
+              <option value="deadline_basis">Deadline basis</option>
+              <option value="response">Response</option>
+              <option value="denial">Denial</option>
+              <option value="appeal">Appeal</option>
+              <option value="closure">Closure</option>
+            </select>
+          </label>
+          <label class="operator-field"><span>Evidence SHA-256</span><input name="evidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+          <button class="operator-button" type="submit">Add evidence digest</button>
+        </form>
+
+        <form class="operator-action-card" data-case-form="response">
+          <h3>Record response</h3>
+          <p>This records an approved response digest. It does not send mail.</p>
+          <label class="operator-field"><span>Response SHA-256</span><input name="responseDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+          <button class="operator-button" type="submit">Record response</button>
+        </form>
+
+        <form class="operator-action-card" data-case-form="denial">
+          <h3>Record denial</h3>
+          <label class="operator-field"><span>Reason</span>
+            <select name="denialReasonCode" required>
+              <option value="identity_not_verified">Identity not verified</option>
+              <option value="request_not_supported">Request not supported</option>
+              <option value="legal_exception">Legal exception</option>
+              <option value="records_not_found">Records not found</option>
+              <option value="duplicate_request">Duplicate request</option>
+              <option value="other_reviewed">Other reviewed reason</option>
+            </select>
+          </label>
+          <label class="operator-field"><span>Explanation SHA-256</span><input name="denialExplanationDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+          <label class="operator-check"><input name="appealAvailable" type="checkbox"> <span>Appeal is available</span></label>
+          <div data-appeal-fields hidden>
+            <label class="operator-field"><span>Appeal deadline</span><input name="appealDueAt" type="datetime-local"></label>
+            <label class="operator-field"><span>Appeal basis SHA-256</span><input name="appealBasisDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" autocomplete="off"></label>
+          </div>
+          <button class="operator-button" type="submit">Record denial</button>
+        </form>
+
+        <form class="operator-action-card" data-case-form="closure">
+          <h3>Close case</h3>
+          <label class="operator-field"><span>Closure reason</span>
+            <select name="closureReasonCode" required>
+              <option value="completed">Completed</option>
+              <option value="appeal_window_elapsed">Appeal window elapsed</option>
+              <option value="withdrawn">Withdrawn</option>
+              <option value="duplicate">Duplicate</option>
+              <option value="superseded">Superseded</option>
+              <option value="no_further_action">No further action</option>
+            </select>
+          </label>
+          <label class="operator-field"><span>Closure evidence SHA-256</span><input name="closureEvidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+          <button class="operator-button operator-button-danger" type="submit">Record closure</button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <template id="operator-repair-template">
+    <details class="operator-repair">
+      <summary class="operator-button">Open bounded reversal repair</summary>
+      <form class="operator-repair-form">
+        <label class="operator-field"><span>Resolution</span>
+          <select name="resolution" required>
+            <option value="confirmed">Confirmed provider outcome</option>
+            <option value="not_effective">Not effective</option>
+          </select>
+        </label>
+        <label class="operator-field"><span>Confirmed outcome</span>
+          <select name="confirmedOutcome">
+            <option value="refund_full">Refund full</option>
+            <option value="refund_partial">Refund partial</option>
+            <option value="refund_failed">Refund failed</option>
+            <option value="dispute_open">Dispute open</option>
+            <option value="dispute_won">Dispute won</option>
+            <option value="dispute_lost">Dispute lost</option>
+            <option value="dispute_funds_reinstated">Funds reinstated</option>
+            <option value="dispute_funds_withdrawn">Funds withdrawn</option>
+          </select>
+        </label>
+        <label class="operator-field"><span>Observed at</span><input name="verifiedObservedAt" type="datetime-local" required></label>
+        <label class="operator-field"><span>Verified facts JSON</span><textarea name="verifiedFacts" rows="4" maxlength="32768" required>{}</textarea></label>
+        <label class="operator-field"><span>Verified facts SHA-256</span><input name="verifiedFactsDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+        <button class="operator-button" type="submit">Apply bounded repair</button>
+      </form>
+    </details>
+  </template>
+</body>
+</html>

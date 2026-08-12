@@ -20,6 +20,7 @@ test("operator queue persists digest-only finalization evidence and refreshes id
     const operatorId = randomUUID();
     const authorizerId = randomUUID();
     const operatorOrganizationId = randomUUID();
+    const otherOperatorOrganizationId = randomUUID();
     await pool.query(
       `insert into auth.users (id, email) values ($1, $2), ($3, $4)`,
       [
@@ -32,6 +33,20 @@ test("operator queue persists digest-only finalization evidence and refreshes id
        values ($1, 'Queue Operator', 'active'),
               ($2, 'Queue Authorizer', 'active')`,
       [operatorId, authorizerId]
+    );
+    await pool.query(
+      `insert into ss.organizations (
+         id, created_by_user_id, name, state
+       ) values
+         ($1, $3, 'Queue integration operator', 'active'),
+         ($2, $3, 'Queue integration cross-scope', 'active')`,
+      [operatorOrganizationId, otherOperatorOrganizationId, authorizerId]
+    );
+    await pool.query(
+      `insert into ss.organization_memberships (
+         organization_id, user_id, role, state, accepted_at
+       ) values ($1, $2, 'owner', 'active', clock_timestamp())`,
+      [operatorOrganizationId, operatorId]
     );
     await pool.query(
       `insert into ss.operator_profiles (
@@ -95,6 +110,20 @@ test("operator queue persists digest-only finalization evidence and refreshes id
     assert.equal(replay.id, evidence.id);
 
     const scope = { actorId: operatorId, operatorOrganizationId };
+    const crossScope = {
+      actorId: operatorId,
+      operatorOrganizationId: otherOperatorOrganizationId
+    };
+    await assert.rejects(
+      service.list(crossScope),
+      (error) => error.code === "OPERATOR_QUEUE_UNAVAILABLE" &&
+        error.status === 404
+    );
+    await assert.rejects(
+      service.refresh(crossScope),
+      (error) => error.code === "OPERATOR_QUEUE_UNAVAILABLE" &&
+        error.status === 404
+    );
     const first = await service.refresh(scope);
     assert.equal(first.items.length, 1);
     assert.deepEqual(first.items[0].source, {

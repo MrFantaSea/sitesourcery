@@ -13,7 +13,8 @@ import {
   CREDENTIAL_TOPOLOGY_SCHEMA,
   createHeldCredentialTopologyTemplate,
   normalizeCredentialTopology,
-  verifyCredentialTopology
+  verifyCredentialTopology,
+  STRIPE_RESTRICTED_KEY_CONTRACT
 } from "../credential-topology.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +66,62 @@ function completeTopology() {
     item.lastProvenAt = NOW;
     item.evidenceDigest = evidence(item.name);
   }
+  const accountId = "acct_credential_topology";
+  const runtime = item(
+    input,
+    "stripe.runtime.production.restricted"
+  );
+  runtime.scopes = [
+    "checkout_sessions:write",
+    "prices:read",
+    "webhook_endpoints:read"
+  ];
+  runtime.providerBinding = {
+    provider: "stripe",
+    environment: "production",
+    livemode: true,
+    accountId,
+    keyClass: "restricted",
+    keyVersion: "runtime-production-v1",
+    keyFingerprint: evidence("stripe-runtime-fingerprint"),
+    activatedAt: "2026-08-10T14:30:00.000Z",
+    enabledPurposes: ["download"]
+  };
+  const provisioner = item(
+    input,
+    "stripe.provisioner.production.restricted"
+  );
+  provisioner.providerBinding = {
+    provider: "stripe",
+    environment: "production",
+    livemode: true,
+    accountId,
+    keyClass: "restricted",
+    keyVersion: "provisioner-production-v1",
+    keyFingerprint: evidence(
+      "stripe-provisioner-fingerprint"
+    ),
+    activatedAt: "2026-08-10T14:00:00.000Z",
+    revokedAt: "2026-08-10T14:40:00.000Z",
+    scopeProvenAt: "2026-08-10T14:01:00.000Z",
+    scopeEvidenceDigest: evidence(
+      "stripe-provisioner-scope"
+    )
+  };
+  const standard = item(
+    input,
+    "stripe.standard.production.compromised"
+  );
+  standard.providerBinding = {
+    provider: "stripe",
+    environment: "production",
+    livemode: true,
+    accountId,
+    keyClass: "standard_status_only",
+    keyVersion: "standard-compromised-v1",
+    keyFingerprint: evidence("stripe-standard-fingerprint"),
+    revokedAt: "2026-08-10T14:35:00.000Z"
+  };
   return input;
 }
 
@@ -98,6 +155,20 @@ test("credential topology contract is exact, held, and sorted", () => {
       (entry) => entry.materialPresent === false
     ),
     true
+  );
+  assert.deepEqual(
+    item(
+      template,
+      "stripe.runtime.production.restricted"
+    ).scopes,
+    STRIPE_RESTRICTED_KEY_CONTRACT.allRuntimeScopes
+  );
+  assert.deepEqual(
+    item(
+      template,
+      "stripe.provisioner.production.restricted"
+    ).scopes,
+    STRIPE_RESTRICTED_KEY_CONTRACT.provisionerScopes
   );
 });
 
@@ -332,6 +403,9 @@ test("JSON schema exposes only the reviewed metadata vocabulary", async () => {
     schema.$defs.item.properties.name.enum,
     CREDENTIAL_TOPOLOGY_CONTRACT.names
   );
+  assert.ok(
+    schema.$defs.item.required.includes("providerBinding")
+  );
   const bytes = JSON.stringify(schema);
   assert.doesNotMatch(
     bytes,
@@ -346,6 +420,7 @@ test("OPS-SECRETS packet bytes contain no credential-shaped value", async () => 
     "credential-topology.mjs",
     "credential-topology.schema.json",
     "test/credential-topology.test.mjs",
+    "test/stripe-restricted-key-topology.test.mjs",
     "verify-credential-topology.mjs"
   ];
   const source = (

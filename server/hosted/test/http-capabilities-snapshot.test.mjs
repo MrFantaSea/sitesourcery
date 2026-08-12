@@ -11,7 +11,8 @@ const NAMES = Object.freeze([
   "alakazam35",
   "alakazam50",
   "retained",
-  "publication"
+  "publication",
+  "mailEvents"
 ]);
 const EXPECTED = Object.freeze({
   accountRegistration: true,
@@ -25,6 +26,7 @@ const EXPECTED = Object.freeze({
   alakazam50: true,
   alakazamRetainedPremium: true,
   alakazamPublication: true,
+  mailProviderEvents: true,
   domainPurchase: true,
   publishing: true
 });
@@ -121,7 +123,19 @@ function apiFixture({
         authorization: true,
         providerEffects: false
       })
-    )
+    ),
+    resendMailEvents: {
+      kind: "resend-mail-event-http-adapter",
+      mode: "raw-body",
+      providerEffects: false,
+      readiness: counted("mailEvents", {
+        ready: true,
+        verified: true
+      }),
+      async handle() {
+        throw new Error("not reached");
+      }
+    }
   });
   return { api, calls };
 }

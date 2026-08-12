@@ -21,6 +21,7 @@ import {
   createAlakazamDowngradeService,
   createAlakazamDowngradeActivationService,
   createAlakazamAccountService,
+  createAlakazamInvoiceFinalizationService,
   createAlakazamPaymentIncidentService,
   createAlakazamPaymentRecoveryService,
   createAlakazamPaymentService,
@@ -43,6 +44,9 @@ import {
 import {
   createPostgresAlakazamRepository
 } from "../alakazam-postgres.mjs";
+import {
+  createPostgresAlakazamInvoiceFinalizationRepository
+} from "../alakazam-invoice-finalization-postgres.mjs";
 import {
   createAlakazam35Composition
 } from "../alakazam-35-composition.mjs";
@@ -168,6 +172,10 @@ import {
   createProfessionalLifecycleProductionComposition
 } from "../professional-lifecycle-production-composition.mjs";
 import {
+  createPostgresSupportCaseRepository
+} from "../support-cases-postgres.mjs";
+import { createSupportCaseService } from "../support-cases.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -185,6 +193,9 @@ import { createMailLifecycle } from "../mail-lifecycle.mjs";
 import {
   createPostgresMailLifecycleRepository
 } from "../mail-lifecycle-postgres.mjs";
+import {
+  createConfiguredResendMailEventHttp
+} from "../resend-mail-events-config.mjs";
 import { createNodeHandler as createApiNodeHandler } from "../node-handler.mjs";
 import {
   postgresBudgetConfigurationFromEnvironment
@@ -612,6 +623,14 @@ async function start() {
     policy: alakazamLifecyclePolicy.policy
   };
   const alakazamLifecycle = Object.freeze({
+    finalization:
+      createAlakazamInvoiceFinalizationService({
+        ...alakazamLifecyclePorts,
+        repository:
+          createPostgresAlakazamInvoiceFinalizationRepository({
+            authority
+          })
+      }),
     renewal:
       createAlakazamRenewalService(
         alakazamLifecyclePorts
@@ -683,6 +702,23 @@ async function start() {
     }),
     clock: commerceV2.clock
   });
+  const resendMailEvents = createConfiguredResendMailEventHttp({
+    environment: process.env,
+    lifecycle: mailLifecycle,
+    clock: commerceV2.clock
+  });
+  const resendMailEventReadiness = await resendMailEvents.readiness();
+  if (
+    resendMailEvents.mode === "raw-body" &&
+    (
+      resendMailEventReadiness.ready !== true ||
+      resendMailEventReadiness.verified !== true
+    )
+  ) {
+    throw new Error(
+      "Verified Resend webhook ingress was requested but is not ready."
+    );
+  }
   const configuredRegistrationMailPort =
     await createConfiguredRegistrationMailPort();
   const registrationMailPort =
@@ -780,6 +816,17 @@ async function start() {
     });
   const professionalLifecycleReadiness =
     await professionalLifecycle.readiness();
+  const supportCases = createSupportCaseService({
+    repository: createPostgresSupportCaseRepository({ authority }),
+    mailLifecycle,
+    clock: commerceV2.clock
+  });
+  const supportCaseReadiness = await supportCases.readiness();
+  if (supportCaseReadiness.ready !== true) {
+    throw new Error(
+      "Canonical auditable support and privacy case storage is not ready."
+    );
+  }
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -889,6 +936,9 @@ async function start() {
         customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,
+        operatorWorkQueue: professionalLifecycle.operatorQueue,
+        supportCases,
+        resendMailEvents,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,
@@ -936,6 +986,11 @@ async function start() {
       recoveryMode: readiness.recovery.mode,
       recoveryProvider:
         readiness.recovery.provider ?? null,
+      mailProviderEvents: {
+        mode: resendMailEvents.mode,
+        ready: resendMailEventReadiness.ready === true,
+        code: resendMailEventReadiness.code ?? null
+      },
       database: readiness.persistence.database,
       postgresBudget: authority.budgetReadiness(),
       identityPepper:

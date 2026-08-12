@@ -68,12 +68,23 @@ function actor(input, readOnly = false) {
   };
 }
 
-async function requireCapability(client, actorId) {
+async function requireCapability(client, input) {
   const result = await client.query(
-    `select ss.service_operator_has_capability(
-       $1, 'service_management_manage', clock_timestamp()
-     ) as allowed`,
-    [actorId]
+    `select
+       ss.service_operator_has_capability(
+         $1, 'service_management_manage', clock_timestamp()
+       )
+       and exists (
+         select 1
+           from ss.organizations organization
+           join ss.organization_memberships membership
+             on membership.organization_id = organization.id
+            and membership.user_id = $1
+          where organization.id = $2
+            and organization.state = 'active'
+            and membership.state = 'active'
+       ) as allowed`,
+    [input.actorId, input.operatorOrganizationId]
   );
   invariant(
     result.rows[0]?.allowed === true,
@@ -112,12 +123,26 @@ function item(row) {
 
 async function readActive(client) {
   const selected = await client.query(
-    `select id, source_table, source_id, source_revision, source_digest,
-            source_state, organization_id, project_id, item_kind,
-            severity, status, deadline_at, repair_kind, opened_at,
-            revision, item_digest, updated_at
-       from ss.operator_work_queue_items
-      where status <> 'resolved'
+    `select * from (
+       select id, source_table, source_id, source_revision, source_digest,
+              source_state, organization_id, project_id, item_kind,
+              severity, status, deadline_at, repair_kind, opened_at,
+              revision, item_digest, updated_at
+         from ss.operator_work_queue_items
+        where status <> 'resolved'
+       union all
+       select projection.id,
+              'ss.alakazam_invoice_finalization_projection'::text,
+              projection.id::text, projection.revision,
+              projection.evidence_digest, projection.state,
+              projection.organization_id, projection.project_id,
+              'invoice_finalization_failure'::text, 'high'::text,
+              'open'::text, null::timestamptz, null::text,
+              projection.first_observed_at, projection.revision,
+              projection.evidence_digest, projection.updated_at
+         from ss.alakazam_invoice_finalization_projection projection
+        where projection.state = 'failed'
+     ) active
       order by
         case severity
           when 'critical' then 1
@@ -170,7 +195,7 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
                 and ss.hosted_operator_work_queue_contract_v1() =
                   'canonical-operator-work-queue-v1-source-authoritative-held'
                 as contract_ready,
-              count(*) = 2 as tables_ready,
+              count(*) = 4 as tables_ready,
               bool_and(c.relrowsecurity and c.relforcerowsecurity) as rls_ready
             from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
@@ -178,7 +203,9 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
               and c.relname = any($1::text[])
           `, [[
             "operator_work_queue_items",
-            "stripe_invoice_finalization_failures"
+            "stripe_invoice_finalization_failures",
+            "alakazam_invoice_finalization_observations",
+            "alakazam_invoice_finalization_projection"
           ]])
         );
         const row = result.rows[0] ?? {};
@@ -212,7 +239,7 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
       return translated(() => database.service(
         actor(input, true),
         async (client) => {
-          await requireCapability(client, input.actorId);
+          await requireCapability(client, input);
           return readActive(client);
         }
       ));
@@ -222,6 +249,7 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
       return translated(() => database.service(
         actor(input),
         async (client) => {
+          await requireCapability(client, input);
           await client.query(
             "select * from ss.reconcile_operator_work_queue_v1($1)",
             [input.observedAt]
@@ -281,7 +309,7 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
       return translated(() => database.service(
         actor(input, true),
         async (client) => {
-          await requireCapability(client, input.actorId);
+          await requireCapability(client, input);
           const selected = await client.query(
             `select lifecycle.organization_id,
                     lifecycle.id as lifecycle_id,

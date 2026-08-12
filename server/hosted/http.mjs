@@ -74,6 +74,19 @@ import {
 import {
   createHeldCustomServicesCustomBuildHandoff
 } from "./custom-services-custom-build-handoff-postgres.mjs";
+import {
+  createHeldOperatorWorkQueueHttp,
+  createOperatorWorkQueueHttpBoundary
+} from "./operator-work-queue-http.mjs";
+import {
+  createHeldSupportCaseHttpBoundary,
+  createSupportCaseHttpBoundary
+} from "./support-cases-http.mjs";
+import {
+  createHeldResendMailEventHttpAdapter,
+  RESEND_MAIL_EVENT_MAXIMUM_BYTES,
+  RESEND_MAIL_EVENT_PATH
+} from "./resend-mail-events-http.mjs";
 import { digestUserAgent } from "./project-legal-authority.mjs";
 
 const JSON_HEADERS = Object.freeze({
@@ -454,6 +467,82 @@ async function readRawWebhook(request, maximumBytes) {
   return bytes;
 }
 
+async function readRawResendWebhook(request, maximumBytes) {
+  invariant(
+    /^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(
+      String(request.headers.get("content-type") ?? "").trim()
+    ),
+    "UNSUPPORTED_MEDIA_TYPE",
+    "Resend webhook JSON is required.",
+    { status: 415 }
+  );
+  const declared = declaredBodyLength(request, maximumBytes);
+  const bytes = await readBoundedBytes(request, maximumBytes);
+  invariant(
+    bytes.byteLength > 0 &&
+      bytes.byteLength <= maximumBytes &&
+      (declared === null || declared === bytes.byteLength),
+    bytes.byteLength === 0
+      ? "RESEND_WEBHOOK_BODY_REQUIRED"
+      : declared !== null && declared !== bytes.byteLength
+        ? "INVALID_CONTENT_LENGTH"
+        : "REQUEST_TOO_LARGE",
+    bytes.byteLength === 0
+      ? "Resend webhook body is required."
+      : declared !== null && declared !== bytes.byteLength
+        ? "Content-Length does not match the request body."
+        : "Request body is too large.",
+    {
+      status: bytes.byteLength === 0 ||
+        (declared !== null && declared !== bytes.byteLength)
+        ? 400
+        : 413
+    }
+  );
+  return bytes;
+}
+
+function exactResendWebhookAcknowledgement(response) {
+  invariant(
+    response !== null &&
+      typeof response === "object" &&
+      !Array.isArray(response) &&
+      Object.getPrototypeOf(response) === Object.prototype &&
+      response.status === 200 &&
+      response.body !== null &&
+      typeof response.body === "object" &&
+      !Array.isArray(response.body) &&
+      Object.getPrototypeOf(response.body) === Object.prototype &&
+      JSON.stringify(Object.keys(response.body).sort()) === JSON.stringify([
+        "currentState",
+        "eventKind",
+        "eventState",
+        "received"
+      ]) &&
+      response.body.received === true &&
+      ["applied", "pending", "conflict"].includes(
+        response.body.eventState
+      ) &&
+      ["delivered", "bounced", "complained", "suppressed"].includes(
+        response.body.eventKind
+      ) &&
+      (
+        response.body.currentState === null ||
+        [
+          "accepted",
+          "delivered",
+          "bounced",
+          "complained",
+          "suppressed"
+        ].includes(response.body.currentState)
+      ),
+    "RESEND_WEBHOOK_HTTP_DURABILITY_REQUIRED",
+    "HTTP success requires an exact durable Resend event acknowledgement.",
+    { status: 503, details: { providerEffects: false } }
+  );
+  return response.body;
+}
+
 function match(pathname, pattern) {
   const result = pattern.exec(pathname);
   if (!result) return null;
@@ -571,6 +660,9 @@ export function createHostedApi(
     customServicesCustomBuildWork = null,
     customServicesOwner = null,
     engagementBootstrap = null,
+    operatorWorkQueue = null,
+    supportCases = null,
+    resendMailEvents = null,
     stripeWebhook = null,
     capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
@@ -623,6 +715,26 @@ export function createHostedApi(
       typeof engagementBootstrapBoundary.claimInvitation === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted customer engagement bootstrap boundary is invalid.",
+    { status: 500 }
+  );
+  const operatorWorkQueueHttpBoundary = operatorWorkQueue === null
+    ? createHeldOperatorWorkQueueHttp({
+        authenticate: async ({ actor }) => actor
+      })
+    : createOperatorWorkQueueHttpBoundary({ operatorQueue: operatorWorkQueue });
+  const supportCaseHttpBoundary = supportCases === null
+    ? createHeldSupportCaseHttpBoundary()
+    : createSupportCaseHttpBoundary({ supportCases });
+  const resendMailEventHttpBoundary = resendMailEvents ??
+    createHeldResendMailEventHttpAdapter();
+  invariant(
+    resendMailEventHttpBoundary?.kind ===
+        "resend-mail-event-http-adapter" &&
+      resendMailEventHttpBoundary.providerEffects === false &&
+      typeof resendMailEventHttpBoundary.readiness === "function" &&
+      typeof resendMailEventHttpBoundary.handle === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Resend mail-event ingress is invalid.",
     { status: 500 }
   );
   const customServicesAssessmentWorkBoundary =
@@ -931,7 +1043,8 @@ export function createHostedApi(
           alakazam35Readiness,
           alakazam50Readiness,
           alakazamRetainedPremiumReadiness,
-          alakazamPublicationReadiness
+          alakazamPublicationReadiness,
+          resendMailEventReadiness
         ] = await Promise.all([
           service.readiness(),
           typeof downloadBoundary.readiness === "function"
@@ -944,7 +1057,8 @@ export function createHostedApi(
           alakazam35Boundary.readiness(),
           alakazam50Boundary.readiness(),
           alakazamRetainedPremiumBoundary.readiness(),
-          alakazamPublicationBoundary.readiness()
+          alakazamPublicationBoundary.readiness(),
+          resendMailEventHttpBoundary.readiness()
         ]);
         const registration =
           readiness?.registration ?? {};
@@ -978,6 +1092,9 @@ export function createHostedApi(
           alakazamPublication:
             alakazamPublicationReadiness.authorization === true &&
             alakazamPublicationReadiness.providerEffects === false,
+          mailProviderEvents:
+            resendMailEventReadiness?.ready === true &&
+            resendMailEventReadiness?.verified === true,
           domainPurchase:
             domains.ready === true &&
             domains.registrar === "ready",
@@ -1145,6 +1262,30 @@ export function createHostedApi(
           });
         }
 
+        if (pathname === RESEND_MAIL_EVENT_PATH) {
+          invariant(
+            method === "POST",
+            "METHOD_NOT_ALLOWED",
+            "The Resend webhook requires POST.",
+            { status: 405 }
+          );
+          const response = await resendMailEventHttpBoundary.handle({
+            method,
+            pathname,
+            headers: request.headers,
+            rawBody: await readRawResendWebhook(
+              request,
+              Math.min(
+                ingress.body.webhookBytes,
+                RESEND_MAIL_EVENT_MAXIMUM_BYTES
+              )
+            )
+          });
+          return json(exactResendWebhookAcknowledgement(response), 200, {
+            "X-Request-Id": requestId
+          });
+        }
+
         if (WRITE_METHODS.has(method)) {
           requireCsrf(request, cookies);
           invariant(
@@ -1171,8 +1312,33 @@ export function createHostedApi(
         let result;
         let status = 200;
         let headers = { "X-Request-Id": requestId };
+        const operatorWorkQueueResponse =
+          await operatorWorkQueueHttpBoundary.dispatch({
+            method,
+            pathname,
+            actor,
+            query: url.searchParams,
+            body,
+            commandId: write.commandId
+          });
+        const supportCaseResponse = operatorWorkQueueResponse === null
+          ? await supportCaseHttpBoundary.dispatch({
+              method,
+              pathname,
+              actor,
+              query: url.searchParams,
+              body,
+              commandId: write.commandId
+            })
+          : null;
 
-        if (method === "POST" && pathname === "/api/v1/auth/register") {
+        if (operatorWorkQueueResponse !== null) {
+          result = operatorWorkQueueResponse.result;
+          status = operatorWorkQueueResponse.status;
+        } else if (supportCaseResponse !== null) {
+          result = supportCaseResponse.result;
+          status = supportCaseResponse.status;
+        } else if (method === "POST" && pathname === "/api/v1/auth/register") {
           const staged = await service.register(
             write,
             identityContext

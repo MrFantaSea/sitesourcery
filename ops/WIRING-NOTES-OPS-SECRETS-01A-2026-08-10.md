@@ -4,7 +4,9 @@
 
 - `ops/credential-topology.mjs` defines the exact 21-record held inventory,
   strict metadata normalizer, canonical digest, completeness verifier, and
-  non-secret held template.
+  non-secret held template. The same authoritative module now derives current
+  Stripe adapter operations and verifies the three existing Stripe records;
+  no parallel Stripe topology or evidence receipt is introduced.
 - `ops/credential-topology.schema.json` permits only the reviewed metadata
   vocabulary and no arbitrary strings or properties.
 - `ops/verify-credential-topology.mjs` reads one explicitly supplied absolute
