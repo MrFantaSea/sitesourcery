@@ -54,6 +54,10 @@ import {
   DOMAIN_PROVIDER_RENEWAL_QUOTE_SCHEMA,
   createHeldDomainProviderLifecycle
 } from "../../domain/provider-lifecycle.mjs";
+import { verifyCareCorePostgres } from
+  "./care-core-postgres-proof.mjs";
+import { verifyCareCommercePostgres } from
+  "./care-commerce-postgres-proof.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -7438,6 +7442,8 @@ export async function runMigrationVerification({
     await verifyCommerceTransitionNotifications(pool, queueProof);
     await verifyNotificationMailDispatchClaims(pool);
     await verifyAccountingPurposeJournal(pool);
+    const careCoreProof = await verifyCareCorePostgres(pool);
+    const careCommerceProof = await verifyCareCommercePostgres(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -7469,6 +7475,19 @@ export async function runMigrationVerification({
     writeOutput("directCustomReversalNormalizationPostgresProof true\n");
     writeOutput("domainProviderRoutePostgresProof true\n");
     writeOutput("domainLifecyclePostgresProof true\n");
+    writeOutput(
+      `careCorePostgresProof ${careCoreProof.assertions}/${careCoreProof.assertions} ` +
+      `contracts ${careCoreProof.contracts} periods ${careCoreProof.periods} ` +
+      `tickets ${careCoreProof.tickets} capacityEntries ${careCoreProof.capacityEntries} ` +
+      "providerEffects false paymentEffects false mailEffects false customerEffects false\n"
+    );
+    writeOutput(
+      `careCommercePostgresProof ${careCommerceProof.assertions}/${careCommerceProof.assertions} ` +
+      `quotes ${careCommerceProof.quotes} reservations ${careCommerceProof.reservations} ` +
+      `reservationEvents ${careCommerceProof.reservationEvents} ` +
+      `careCommands ${careCommerceProof.careCommands} ` +
+      "providerEffects false paymentEffects false customerEffects false\n"
+    );
     proof = Object.freeze({
       ownership: plan.ownership,
       databaseName: plan.databaseName,
