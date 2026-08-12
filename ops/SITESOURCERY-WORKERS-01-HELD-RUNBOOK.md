@@ -11,7 +11,7 @@ Every command below remains owner-gated.
 - `bin/worker.mjs` owns the separate worker event loop and a pool capped to the
   PG-OPS `workerReservedConnections`. API plus worker process budgets equal the
   unchanged configured total.
-- The exact purpose registry is `export`, `cancellation`,
+- The exact purpose registry is `export`, `cancellation`, `notification-mail`,
   `alakazam-fulfillment`, and `alakazam-retained-lifecycle`. Unknown, duplicate,
   reordered, missing, or uncomposed purposes fail before any worker starts.
 - All selected dependency readbacks complete before the first loop starts.
@@ -25,10 +25,19 @@ Every command below remains owner-gated.
 WORKERS-02 resolves the former export/cancellation constructor residual after
 MAIL-COMPOSE-FINAL-03. The external process now receives only exact readiness
 and processing ports for those purposes and imports no identity or mail
-composition. This is not activation authority. Export remains held unless its
-exact export mode is enabled, cancellation remains held unless the complete
-reviewed Stripe adapter reads back `approved_live`, and every selected purpose
-must pass PostgreSQL and purpose-specific readiness before any loop starts.
+composition. MAIL-HOSTED-WIRING-03 adds only the bounded notification mail
+purpose to that process; the API still owns no worker loop. MAIL-PRIVATE-
+RENDERER-04 supplies the standalone reviewed renderer source, 29-version
+support/commerce/Care template registry, and private PostgreSQL recipient
+resolver. The mail purpose remains held unless its exact module and registry
+digests, private operator recipient, canonical recipient authority, and verified
+Resend configuration all read back ready. Care delivery remains reservation-
+only until its separately reviewed claim source exists. This is not activation
+authority.
+Export remains held unless its exact export mode is enabled,
+cancellation remains held unless the complete reviewed Stripe adapter reads
+back `approved_live`, and every selected purpose must pass PostgreSQL and
+purpose-specific readiness before any loop starts.
 There is no standalone publication loop: publication remains the lease-fenced
 stage of Alakazam fulfillment, and synchronous customer release commands
 retain their existing authority.
@@ -41,8 +50,9 @@ After a separately sealed union commit and owner approval:
    seal, and PG-OPS config through the release-epoch procedure.
 2. Install `ops/sitesourcery-workers.service.held` as the reviewed unit and
    `ops/workers.env.example` as a root-owned `0600` starting template. Do not
-   reuse `hosted.env`; worker composition intentionally has no identity or mail
-   variables.
+   reuse `hosted.env`; worker composition receives only the dedicated held mail
+   and private-renderer modes until the reviewed renderer is installed as one
+   root-owned regular file and its exact module/registry digests are configured.
 3. Keep `activation` equal to `held`, keep `WORKERS_HOLD` present, and keep
    `WORKERS_APPROVED` absent while validating unit paths and permissions.
 4. Select only purposes whose exact provider, commercial, storage, and policy

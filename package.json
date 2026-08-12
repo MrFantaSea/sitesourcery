@@ -37,6 +37,8 @@
     "test:pg:alakazam": "node --test --test-concurrency=1 server/data-plane/tests/alakazam-postgres-contract.integration.test.mjs",
     "test:pg:alakazam-lifecycle": "node --test --test-concurrency=1 server/data-plane/tests/alakazam-lifecycle-postgres.integration.test.mjs",
     "test:pg:custom-services": "node --test --test-concurrency=1 server/data-plane/tests/custom-services-foundation-postgres.integration.test.mjs server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs",
+    "test:mail-delivery-e2e": "node --test scripts/test/mail-delivery-e2e.test.mjs",
+    "prove:mail-delivery-e2e": "node scripts/mail-delivery-e2e.mjs",
     "release:core": "node scripts/core-release.mjs",
     "check:hosted-service": "npm run runtime:hosted-service && node --check server/hosted/*.mjs server/hosted/bin/*.mjs && npm run test:hosted-service",
     "test:ops": "node --test ops/test/*.test.mjs",

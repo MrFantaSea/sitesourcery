@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-003 proved; FIN-004 is next
+Status: FIN-004 in progress; FIN-004A mail/worker leaf proved
 
 ## Governing inputs
 
@@ -22,7 +22,7 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-001 | proved | Exact base `b03cccbd…` | Clean worktree, environment, dependency install, untouched baseline | Node 24.18.0 baseline passed; base dependency audit defects classified |
 | FIN-002 | proved | `a81d1438…` runtime/release paths | Phase 2.1 runtime and release controls | Zero-vulnerability audit, focused proofs, and complete `npm test` passed |
 | FIN-003 | proved | `a81d1438…` migrations 118–124 | Schema foundation and static contracts | Empty PostgreSQL 16 migration, direct contract, cleanup, and cumulative proofs |
-| FIN-004 | pending | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations | Per-cohort commits and proofs |
+| FIN-004 | in-progress | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations | FIN-004A mail/worker leaf proved; remaining per-cohort commits and proofs open |
 | FIN-005 | pending | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition | No unclassified preserved lane |
 | FIN-006 | pending | Integrated source | Root composition and cross-system contracts | Capability/readiness/negative-auth matrix |
 | FIN-007 | pending | Canonical commercial source | Catalog/public/legal/artifact closure | One new version/digest and deterministic artifacts |
@@ -39,3 +39,6 @@ schema, donor-defect, database, and cleanup record is
 `FIN-003-PROVENANCE.md`. Product composition, provider effects, workers,
 adjacent integrations, staging, and public cutover remain assigned to FIN-004
 through FIN-010.
+
+FIN-004A's exact mail/worker import, donor-verifier repair, PostgreSQL journey,
+backup/restore, and cleanup evidence is `FIN-004A-MAIL-PROVENANCE.md`.

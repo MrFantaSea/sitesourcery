@@ -265,7 +265,7 @@ test("graceful stop fails closed at the exact configured deadline", async () => 
   assert.equal(supervisor.snapshot().state, "failed");
 });
 
-test("production entrypoints split pools and contain no worker identity or mail composition", async () => {
+test("production entrypoints split pools and keep notification mail in the worker process", async () => {
   const [api, worker, core, alakazam, unit, example, runbook] = await Promise.all([
     readFile(path.join(root, "server/hosted/bin/server.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/bin/worker.mjs"), "utf8"),
@@ -284,13 +284,15 @@ test("production entrypoints split pools and contain no worker identity or mail 
   assert.match(worker, /pool\.workerReservedConnections/u);
   assert.match(worker, /workload: "worker"/u);
   assert.match(worker, /createCoreWorkerFactories/u);
+  assert.match(worker, /createNotificationMailWorkerFactories/u);
   assert.doesNotMatch(
     `${worker}\n${core}\n${alakazam}`,
-    /identity-postgres|identity-pepper|registrationMail|recoveryMail|resend-mail/iu
+    /identity-postgres|identity-pepper|registrationMail|recoveryMail/iu
   );
   assert.match(unit, /ConditionPathExists=\/etc\/sitesourcery\/WORKERS_APPROVED/u);
   assert.match(unit, /ConditionPathExists=!\/etc\/sitesourcery\/WORKERS_HOLD/u);
-  assert.doesNotMatch(example, /IDENTITY|RESEND|MAIL_/u);
+  assert.doesNotMatch(example, /IDENTITY|SITESOURCERY_RESEND_API_KEY/u);
+  assert.match(example, /SITESOURCERY_NOTIFICATION_MAIL_WORKER_MODE=held/u);
   assert.match(runbook, /WORKERS-02 resolves/u);
-  assert.match(runbook, /MAIL-COMPOSE-FINAL-03/u);
+  assert.match(runbook, /MAIL-HOSTED-WIRING-03/u);
 });
