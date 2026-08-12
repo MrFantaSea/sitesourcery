@@ -1,0 +1,34 @@
+{
+  "schema": "sitesourcery.retired-public-truth-v2-capsule/v1",
+  "retirementDate": "2026-08-11",
+  "originCommit": "b03cccbdc5252db3bd5f90084dbfa27beca33f52",
+  "retirementReason": "superseded_by_v3_and_invalid_duplicate_pages_permissions",
+  "activeWorkflowPath": ".github/workflows/public-truth-reconciliation-v2.yml",
+  "successorWorkflowPath": ".github/workflows/public-truth-reconciliation-v3.yml",
+  "files": [
+    {
+      "role": "workflow",
+      "originalPath": ".github/workflows/public-truth-reconciliation-v2.yml",
+      "archivePath": "ops/releases/public-truth-v2-retired-2026-08-11/workflow/public-truth-reconciliation-v2.yml",
+      "gitBlobSha1": "10eb1a5e912fd9633cee3c9476d934b6be2964f0",
+      "sha256": "6acde54e74230507cf6fea0f25e07a0a9c063c764cf1272bd297ba901c678932",
+      "byteCount": 11524
+    },
+    {
+      "role": "verifier",
+      "originalPath": "scripts/verify-public-truth-release-v2.mjs",
+      "archivePath": "ops/releases/public-truth-v2-retired-2026-08-11/scripts/verify-public-truth-release-v2.mjs",
+      "gitBlobSha1": "62e57317f2321b9d17e4d80893626a9c8f18f4c4",
+      "sha256": "2029e568672d9601b1b9a7fd1ccc6448dbfce5c0e1660acf2810713738ae6042",
+      "byteCount": 33009
+    },
+    {
+      "role": "test",
+      "originalPath": "scripts/test/public-truth-release-v2.test.mjs",
+      "archivePath": "ops/releases/public-truth-v2-retired-2026-08-11/scripts/test/public-truth-release-v2.test.mjs",
+      "gitBlobSha1": "182c0ebe546b7fea791536ad503583da01839940",
+      "sha256": "1865a6eb588c8e7385368d57a84b54a4208df4054d7d7ff3238fb083dd080135",
+      "byteCount": 8360
+    }
+  ]
+}

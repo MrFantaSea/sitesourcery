@@ -13,6 +13,9 @@ import {
   createBrowserAuditArtifactPlan,
   prepareBrowserAuditArtifact,
 } from "./browser-audit-artifact.mjs";
+import {
+  reviewedLinuxCiSandboxArguments,
+} from "../server/hosted/test/reviewed-browser-support.mjs";
 import { getBrowserSafeAlakazamCatalog } from
   "../server/commerce-v2/alakazam.mjs";
 
@@ -4209,38 +4212,94 @@ console.log(
 );
 const browser = await browserPath();
 const server = await startServer();
-const profile = await mkdtemp(
-  path.join(os.tmpdir(), "sitesourcery-current-browser-"),
-);
-const port = await freePort();
 const processState = { exited: false, stderr: "" };
-const child = spawn(browser, [
-  "--headless",
-  "--disable-background-networking",
-  "--disable-component-update",
-  "--disable-default-apps",
-  "--disable-extensions",
-  "--disable-sync",
-  "--metrics-recording-only",
-  "--no-default-browser-check",
-  "--no-first-run",
-  `--remote-debugging-port=${port}`,
-  `--user-data-dir=${profile}`,
-  "about:blank",
-], { stdio: ["ignore", "ignore", "pipe"] });
-child.stderr.setEncoding("utf8");
-child.stderr.on("data", (chunk) => {
-  processState.stderr += chunk;
-});
-child.once("exit", () => {
-  processState.exited = true;
-});
-
+let profile = null;
+let child = null;
 let cdp;
+let primaryFailure = null;
 const failures = [];
 const browserErrors = [];
 const checkoutNavigations = [];
+
+function waitForChildExit(milliseconds) {
+  if (!child || processState.exited) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (exited) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.removeListener("exit", onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    const timer = setTimeout(() => finish(false), milliseconds);
+    child.once("exit", onExit);
+  });
+}
+
+async function stopBrowserProcess() {
+  if (!child || processState.exited) return;
+  const gracefulExit = waitForChildExit(2000);
+  child.kill("SIGTERM");
+  const exitedGracefully = await gracefulExit;
+  if (!exitedGracefully && !processState.exited) {
+    const forcedExit = waitForChildExit(2000);
+    child.kill("SIGKILL");
+    const exitedForcibly = await forcedExit;
+    if (!exitedForcibly && !processState.exited) {
+      const error = new Error(
+        "Reviewed browser remained alive after SIGKILL."
+      );
+      error.code = "REVIEWED_BROWSER_EXIT_TIMEOUT";
+      throw error;
+    }
+  }
+}
+
 try {
+  profile = await mkdtemp(
+    path.join(os.tmpdir(), "sitesourcery-current-browser-"),
+  );
+  const port = await freePort();
+  const browserArguments = [
+    "--headless",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-default-apps",
+    "--disable-extensions",
+    "--disable-sync",
+    "--metrics-recording-only",
+    "--no-default-browser-check",
+    "--no-first-run",
+  ];
+  browserArguments.push(...reviewedLinuxCiSandboxArguments({
+    origin: server.origin,
+  }));
+  browserArguments.push(
+    `--remote-debugging-port=${port}`,
+    `--user-data-dir=${profile}`,
+    "about:blank",
+  );
+  child = spawn(browser, browserArguments, {
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => {
+    processState.stderr = (
+      processState.stderr + chunk
+    ).slice(-32768);
+  });
+  child.once("error", (error) => {
+    processState.exited = true;
+    processState.stderr = (
+      processState.stderr
+      + `\nBrowser process error: ${error?.code ?? "SPAWN_FAILED"}`
+    ).slice(-32768);
+  });
+  child.once("exit", () => {
+    processState.exited = true;
+  });
   cdp = new Cdp(await pageSocket(port, processState));
   cdp.on("Runtime.exceptionThrown", ({ exceptionDetails }) => {
     browserErrors.push({
@@ -5166,14 +5225,35 @@ try {
     `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} viewports, `
       + "exact-width layout, four-stage account room, mobile menu, complete maker preview, held Alakazam publish/rollback/unpublish authorization, issued-change plus ready-completion fixtures, H1N Purpose-1 customer/owner change-payment journeys, and Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity, retained document and final-state errors, a delayed-authority zero-write race, keyboard activation, and 44px controls at 320×720, 390×844, and 1440×1000.",
   );
+} catch (error) {
+  primaryFailure = error;
 } finally {
-  if (cdp) cdp.close();
-  await server.close();
-  if (!processState.exited) child.kill("SIGTERM");
-  await Promise.race([
-    new Promise((resolve) => child.once("exit", resolve)),
-    delay(2000),
-  ]);
-  if (!processState.exited) child.kill("SIGKILL");
-  await rm(profile, { recursive: true, force: true });
+  let cleanupFailure = null;
+  try {
+    try {
+      if (cdp) cdp.close();
+    } finally {
+      try {
+        await server.close();
+      } finally {
+        try {
+          await stopBrowserProcess();
+        } finally {
+          if (profile) {
+            await rm(profile, { recursive: true, force: true });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    cleanupFailure = error;
+  }
+  if (primaryFailure && cleanupFailure) {
+    throw new AggregateError(
+      [primaryFailure, cleanupFailure],
+      "Current browser audit and cleanup failed."
+    );
+  }
+  if (primaryFailure) throw primaryFailure;
+  if (cleanupFailure) throw cleanupFailure;
 }

@@ -4,7 +4,9 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
-  openReviewedBrowser
+  createReviewedBrowserCleanup,
+  openReviewedBrowser,
+  reviewedBrowserLaunchArguments
 } from "../../server/hosted/test/reviewed-browser-support.mjs";
 
 const PROJECT_ID = "30000000-0000-4000-8000-000000000001";
@@ -283,6 +285,84 @@ const PAGE = `<!doctype html>
 </body>
 </html>`;
 
+test("the reviewed GitHub Linux browser launch stays bounded to the local fixture", () => {
+  const argumentsList = reviewedBrowserLaunchArguments({
+    origin: "http://127.0.0.1:4173",
+    port: 9222,
+    profile: "/tmp/sitesourcery-reviewed-browser-test",
+    platform: "linux",
+    githubActions: true
+  });
+  assert.ok(argumentsList.includes("--no-sandbox"));
+  assert.ok(argumentsList.includes("--disable-background-networking"));
+  assert.ok(argumentsList.includes("--remote-debugging-port=9222"));
+  assert.ok(argumentsList.includes(
+    "--unsafely-treat-insecure-origin-as-secure=http://127.0.0.1:4173"
+  ));
+  assert.equal(argumentsList.at(-1), "about:blank");
+  assert.equal(
+    reviewedBrowserLaunchArguments({
+      origin: "http://127.0.0.1:4173",
+      port: 9222,
+      profile: "/tmp/sitesourcery-reviewed-browser-test",
+      platform: "darwin",
+      githubActions: true
+    }).includes("--no-sandbox"),
+    false
+  );
+  assert.equal(
+    reviewedBrowserLaunchArguments({
+      origin: "https://example.invalid",
+      port: 9222,
+      profile: "/tmp/sitesourcery-reviewed-browser-test",
+      platform: "linux",
+      githubActions: true
+    }).includes("--no-sandbox"),
+    false
+  );
+});
+
+test("forced browser-exit timeout fails closed, cleans the profile, and remains retryable", async () => {
+  const waits = [false, false, true];
+  const signals = [];
+  let exited = false;
+  let connectionCloses = 0;
+  let profileRemovals = 0;
+  const cleanup = createReviewedBrowserCleanup({
+    browserExited: () => exited,
+    signalBrowser(signal) {
+      signals.push(signal);
+    },
+    async waitForExit(milliseconds) {
+      assert.equal(milliseconds, 2000);
+      const result = waits.shift();
+      if (result) exited = true;
+      return result;
+    },
+    closeConnection() {
+      connectionCloses += 1;
+    },
+    async removeProfile() {
+      profileRemovals += 1;
+    }
+  });
+
+  await assert.rejects(
+    cleanup.close(),
+    (error) => error?.code === "REVIEWED_BROWSER_EXIT_TIMEOUT"
+  );
+  assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
+  assert.equal(connectionCloses, 1);
+  assert.equal(profileRemovals, 1);
+
+  await cleanup.close();
+  await cleanup.close();
+  assert.deepEqual(signals, ["SIGTERM", "SIGKILL", "SIGTERM"]);
+  assert.equal(connectionCloses, 2);
+  assert.equal(profileRemovals, 2);
+  assert.deepEqual(waits, []);
+});
+
 async function serve() {
   const module = await readFile(
     new URL(
@@ -333,11 +413,12 @@ for (const viewport of VIEWPORTS) {
     `the Alakazam billing views stay readable and free of horizontal overflow at ${viewport.width}x${viewport.height}`,
     async () => {
       const site = await serve();
-      const browser = await openReviewedBrowser({
-        origin: site.origin,
-        viewport
-      });
+      let browser = null;
       try {
+        browser = await openReviewedBrowser({
+          origin: site.origin,
+          viewport
+        });
         await browser.navigate(`${site.origin}/`);
         await browser.waitFor(
           'document.documentElement.dataset.ready === "true"'
@@ -470,8 +551,11 @@ for (const viewport of VIEWPORTS) {
         }
         assert.deepEqual(browser.browserErrors, []);
       } finally {
-        await browser.close();
-        await site.close();
+        try {
+          if (browser) await browser.close();
+        } finally {
+          await site.close();
+        }
       }
     }
   );

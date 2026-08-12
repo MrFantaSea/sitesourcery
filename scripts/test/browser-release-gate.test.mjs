@@ -59,7 +59,26 @@ const WORKFLOWS = Object.freeze([
   ".github/workflows/containment.yml",
   ".github/workflows/pages.yml",
   ".github/workflows/public-truth-reconciliation.yml",
+  ".github/workflows/public-truth-reconciliation-v3.yml",
   ".github/workflows/site-quality.yml",
+]);
+
+function workflowJobTimeout(source, job, nextJob) {
+  const start = source.indexOf(`  ${job}:`);
+  const end = nextJob ? source.indexOf(`\n  ${nextJob}:`, start) : source.length;
+  assert.ok(start >= 0 && end > start, `${job} job is missing`);
+  const matches = [...source.slice(start, end).matchAll(
+    /^    timeout-minutes: ([1-9][0-9]*)$/gmu,
+  )];
+  assert.equal(matches.length, 1, `${job} must have one exact timeout`);
+  return Number(matches[0][1]);
+}
+
+const PAGES_ARTIFACT_WORKFLOWS = Object.freeze([
+  ".github/workflows/containment.yml",
+  ".github/workflows/pages.yml",
+  ".github/workflows/public-truth-reconciliation.yml",
+  ".github/workflows/public-truth-reconciliation-v3.yml",
 ]);
 
 const [
@@ -1135,7 +1154,7 @@ test("test commands are executable by the exact pinned Node runtime", () => {
   for (const scriptName of [
     "test:node",
     "test:public-truth:legacy",
-    "test:public-truth:v2",
+    "test:public-truth:v2-retirement",
   ]) {
     const command = packageJson.scripts[scriptName];
     assert.match(
@@ -1190,6 +1209,36 @@ test("every release or quality workflow installs the exact browser before npm te
   }
 });
 
+test("every current Pages artifact workflow uses the direct pinned uploader", async () => {
+  for (const file of PAGES_ARTIFACT_WORKFLOWS) {
+    const source = await readFile(path.join(SITE_ROOT, file), "utf8");
+    assert.doesNotMatch(
+      source,
+      /actions\/upload-pages-artifact@/u,
+      `${file} must not use a composite uploader with mutable nested actions`,
+    );
+    assert.match(
+      source,
+      /actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0/u,
+      `${file} must use the exact reviewed direct uploader`,
+    );
+    assert.match(source, /--file "\$RUNNER_TEMP\/artifact\.tar"/u);
+    assert.match(source, /name: github-pages/u);
+    assert.match(source, /path: \$\{\{ runner\.temp \}\}\/artifact\.tar/u);
+    assert.match(source, /artifact_name: github-pages/u);
+  }
+});
+
+test("quality and Pages jobs retain exact bounded timing contracts", async () => {
+  const [siteQuality, pages] = await Promise.all([
+    readFile(path.join(SITE_ROOT, ".github/workflows/site-quality.yml"), "utf8"),
+    readFile(path.join(SITE_ROOT, ".github/workflows/pages.yml"), "utf8"),
+  ]);
+  assert.equal(workflowJobTimeout(siteQuality, "static-quality"), 15);
+  assert.equal(workflowJobTimeout(pages, "validate", "deploy"), 15);
+  assert.equal(workflowJobTimeout(pages, "deploy"), 8);
+});
+
 test("cross-revision workflows use current control tooling for historical artifacts", async () => {
   const [containment, reconciliation] = await Promise.all([
     readFile(path.join(SITE_ROOT, ".github/workflows/containment.yml"), "utf8"),
@@ -1239,7 +1288,8 @@ test("cross-revision workflows use current control tooling for historical artifa
   assert.ok(prepareAt < buildAt && buildAt < auditAt && auditAt < packageAt);
   assert.doesNotMatch(containment.slice(prepareAt, buildAt), /run: npm test/u);
   assert.match(containment, /target\/_site "\/\$REMOVE_PATH"/u);
-  assert.match(containment, /path: target\/_site/u);
+  assert.match(containment, /--directory target\/_site/u);
+  assert.match(containment, /path: \$\{\{ runner\.temp \}\}\/artifact\.tar/u);
 });
 
 test("the actual production predecessor executes one exact root-file containment", async () => {
