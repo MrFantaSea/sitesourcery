@@ -52,6 +52,19 @@ with Twilio's maintained validator, stores only digests, and reconciles
 out-of-order status evidence against the worker's digest-only provider mapping.
 The worker never receives the webhook Account Auth Token, and the API never
 receives the worker's restricted message-send API secret through this config.
+The hosted API also owns the held-by-default Twilio inbound SMS and Voice
+ingress. Inbound tenant resolution uses keyed, versioned lookup digests over
+operator-provisioned number bindings; raw callers and bodies exist only as
+AES-256-GCM inbound material sealed in the API process, and unknown, retired,
+or mismatched numbers land as digest-only unbound evidence with no tenant. A
+durable inbound STOP opts the contact out, cancels queued, waiting, and even
+claimed deliveries for that contact, and the worker's material resolver
+re-validates the claim, its own unexpired lease, and active consent
+immediately before any provider call; Twilio's Advanced Opt-Out blocklist
+(error 21610) is the provider-side backstop behind that local fence. The
+Voice arrival route answers `<Reject reason="busy"/>` only and is not an
+operational missed-call path; DialCallStatus evidence arrives solely through
+the signed dial-result route once FIN-004T/U composes the private dial plan.
 There is no standalone publication loop: publication remains the lease-fenced
 stage of Alakazam fulfillment, and synchronous customer release commands
 retain their existing authority.

@@ -8,12 +8,16 @@ const MESSAGE_KINDS = new Set([
   "missed_call_ack",
   "human_handoff_ack"
 ]);
-const RESOLUTION_FIELDS = Object.freeze([
+const LEASE_OWNER = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/u;
+const AUTHORITY_FIELDS = Object.freeze([
   "schema", "operationId", "organizationId", "projectId", "interactionId",
   "contactAuthorityId", "messageKind", "routeDigest", "contentDigest"
 ]);
+const RESOLUTION_FIELDS = Object.freeze([
+  ...AUTHORITY_FIELDS, "leaseOwner"
+]);
 const STORE_FIELDS = Object.freeze([
-  ...RESOLUTION_FIELDS.filter((field) => field !== "schema"),
+  ...AUTHORITY_FIELDS.filter((field) => field !== "schema"),
   "to", "body", "recordedAt"
 ]);
 
@@ -70,14 +74,17 @@ function resolution(value) {
   );
   invariant(
     selected.schema ===
-      "sitesourcery.responder-private-sms-resolution/v1",
+      "sitesourcery.responder-private-sms-resolution/v1" &&
+      typeof selected.leaseOwner === "string" &&
+      LEASE_OWNER.test(selected.leaseOwner),
     "RESPONDER_PRIVATE_MATERIAL_INVALID",
     "Responder private material resolution schema is invalid.",
     { status: 500 }
   );
   const authority = { ...selected };
   delete authority.schema;
-  return authority;
+  delete authority.leaseOwner;
+  return { authority, leaseOwner: selected.leaseOwner };
 }
 
 function storeRequest(value) {
@@ -88,7 +95,7 @@ function storeRequest(value) {
   );
   return {
     authority: Object.fromEntries(
-      RESOLUTION_FIELDS
+      AUTHORITY_FIELDS
         .filter((field) => field !== "schema")
         .map((field) => [field, selected[field]])
     ),
@@ -320,7 +327,7 @@ export function createPostgresResponderPrivateMaterialResolver({
   }
 
   async function resolveSmsMaterial(input) {
-    const selected = resolution(input);
+    const { authority: selected, leaseOwner } = resolution(input);
     return translated(() => authority.service(
       {
         actorKind: "system",
@@ -328,6 +335,11 @@ export function createPostgresResponderPrivateMaterialResolver({
         readOnly: true
       },
       async (client) => {
+        // This is the last gate before a provider call. It revalidates the
+        // exact claim, the caller's own unexpired lease, active consent,
+        // the open interaction, and the disengaged kill switch in one
+        // consistent read; a durable STOP or lease loss anywhere before
+        // this point makes resolution fail closed.
         const result = await client.query(
           `select material.key_version, material.nonce,
                   material.authentication_tag, material.ciphertext,
@@ -363,11 +375,13 @@ export function createPostgresResponderPrivateMaterialResolver({
               and material.state = 'active'
               and operation.state = 'claimed'
               and operation.provider_effects_authorized
+              and operation.lease_owner = $9
+              and operation.lease_expires_at > clock_timestamp()
               and control.state = 'approved_live'
               and not control.global_kill_engaged
               and contact.state = 'active'
               and interaction.state = 'open'`,
-          values(selected)
+          [...values(selected), leaseOwner]
         );
         invariant(
           result.rowCount === 1 &&

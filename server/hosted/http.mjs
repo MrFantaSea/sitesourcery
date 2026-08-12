@@ -93,6 +93,19 @@ import {
   TWILIO_RESPONDER_EVENT_PATH
 } from "./twilio-responder-events-http.mjs";
 import {
+  createHeldTwilioResponderInboundHttpAdapter,
+  TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML,
+  TWILIO_RESPONDER_INBOUND_DIAL_RESULT_PATH,
+  TWILIO_RESPONDER_INBOUND_MAXIMUM_BYTES,
+  TWILIO_RESPONDER_INBOUND_MESSAGE_PATH,
+  TWILIO_RESPONDER_INBOUND_MESSAGE_TWIML,
+  TWILIO_RESPONDER_INBOUND_VOICE_PATH,
+  TWILIO_RESPONDER_INBOUND_VOICE_TWIML
+} from "./twilio-responder-inbound-http.mjs";
+import {
+  createResponderNumberBindingsHttpBoundary
+} from "./responder-number-bindings-http.mjs";
+import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
 import {
@@ -560,6 +573,66 @@ async function readRawTwilioResponderEvent(request, maximumBytes) {
   return bytes;
 }
 
+async function readRawTwilioResponderInbound(request, maximumBytes) {
+  invariant(
+    /^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
+      String(request.headers.get("content-type") ?? "").trim()
+    ),
+    "UNSUPPORTED_MEDIA_TYPE",
+    "The Twilio inbound event requires form-encoded request bytes.",
+    { status: 415 }
+  );
+  const declared = declaredBodyLength(request, maximumBytes);
+  const bytes = await readBoundedBytes(request, maximumBytes);
+  invariant(
+    bytes.byteLength > 0 && bytes.byteLength <= maximumBytes &&
+      (declared === null || declared === bytes.byteLength),
+    bytes.byteLength === 0
+      ? "TWILIO_RESPONDER_INBOUND_BODY_REQUIRED"
+      : declared !== null && declared !== bytes.byteLength
+        ? "INVALID_CONTENT_LENGTH"
+        : "REQUEST_TOO_LARGE",
+    bytes.byteLength === 0
+      ? "The Twilio inbound event body is required."
+      : declared !== null && declared !== bytes.byteLength
+        ? "Content-Length does not match the request body."
+        : "Request body is too large.",
+    {
+      status: bytes.byteLength === 0 ||
+        (declared !== null && declared !== bytes.byteLength)
+        ? 400
+        : 413
+    }
+  );
+  return bytes;
+}
+
+const TWILIO_RESPONDER_INBOUND_TWIML = Object.freeze({
+  [TWILIO_RESPONDER_INBOUND_MESSAGE_PATH]:
+    TWILIO_RESPONDER_INBOUND_MESSAGE_TWIML,
+  [TWILIO_RESPONDER_INBOUND_VOICE_PATH]:
+    TWILIO_RESPONDER_INBOUND_VOICE_TWIML,
+  [TWILIO_RESPONDER_INBOUND_DIAL_RESULT_PATH]:
+    TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML
+});
+
+function exactTwilioResponderInboundAcknowledgement(response, pathname) {
+  invariant(
+    response && typeof response === "object" && !Array.isArray(response) &&
+      Object.getPrototypeOf(response) === Object.prototype &&
+      response.status === 200 &&
+      response.headers &&
+      typeof response.headers === "object" &&
+      response.headers["content-type"] === "text/xml; charset=utf-8" &&
+      response.headers["cache-control"] === "no-store" &&
+      response.body === TWILIO_RESPONDER_INBOUND_TWIML[pathname],
+    "TWILIO_RESPONDER_INBOUND_HTTP_DURABILITY_REQUIRED",
+    "HTTP success requires an exact durable Twilio inbound acknowledgement.",
+    { status: 503, details: { providerEffects: false } }
+  );
+  return response;
+}
+
 function exactResendWebhookAcknowledgement(response) {
   invariant(
     response !== null &&
@@ -806,6 +879,8 @@ export function createHostedApi(
     supportCases = null,
     resendMailEvents = null,
     twilioResponderEvents = null,
+    twilioResponderInbound = null,
+    responderNumberBindings = null,
     stripeWebhook = null,
     capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
@@ -927,6 +1002,43 @@ export function createHostedApi(
           return true;
         }
       });
+  invariant(
+    responderNumberBindings === null ||
+      (
+        responderNumberBindings?.repository?.kind ===
+          "responder-number-bindings-postgres" &&
+        responderNumberBindings.repository.providerEffects === false &&
+        responderNumberBindings?.lookupDigests?.kind ===
+          "responder-lookup-digests"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Responder number bindings must use the keyed lookup composition.",
+    { status: 500 }
+  );
+  const responderNumberBindingsHttpBoundary =
+    responderNumberBindings === null
+      ? null
+      : createResponderNumberBindingsHttpBoundary({
+          repository: responderNumberBindings.repository,
+          lookupDigests: responderNumberBindings.lookupDigests,
+          ...(responderNumberBindings.clock
+            ? { clock: responderNumberBindings.clock }
+            : {}),
+          authenticate: (request, route) => authenticatedOrganizationActor({
+            service,
+            request,
+            route,
+            product: "Responder",
+            selectionCode: "RESPONDER_ORGANIZATION_SELECTION_REQUIRED"
+          }),
+          async requireWriteGuard(request) {
+            requireCsrf(
+              request,
+              parseCookies(request.headers.get("cookie"))
+            );
+            return true;
+          }
+        });
   const operatorWorkQueueHttpBoundary = operatorWorkQueue === null
     ? createHeldOperatorWorkQueueHttp({
         authenticate: async ({ actor }) => actor
@@ -949,6 +1061,18 @@ export function createHostedApi(
   );
   const twilioResponderEventHttpBoundary = twilioResponderEvents ??
     createHeldTwilioResponderEventsHttpAdapter();
+  const twilioResponderInboundHttpBoundary = twilioResponderInbound ??
+    createHeldTwilioResponderInboundHttpAdapter();
+  invariant(
+    twilioResponderInboundHttpBoundary?.kind ===
+        "twilio-responder-inbound-http-adapter" &&
+      twilioResponderInboundHttpBoundary.providerEffects === false &&
+      typeof twilioResponderInboundHttpBoundary.readiness === "function" &&
+      typeof twilioResponderInboundHttpBoundary.handle === "function",
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Twilio Responder inbound ingress is invalid.",
+    { status: 500 }
+  );
   invariant(
     twilioResponderEventHttpBoundary?.kind ===
         "twilio-responder-events-http-adapter" &&
@@ -1268,6 +1392,7 @@ export function createHostedApi(
           alakazamPublicationReadiness,
           resendMailEventReadiness,
           twilioResponderEventReadiness,
+          twilioResponderInboundReadiness,
           careReadiness,
           responderReadiness
         ] = await Promise.all([
@@ -1285,6 +1410,7 @@ export function createHostedApi(
           alakazamPublicationBoundary.readiness(),
           resendMailEventHttpBoundary.readiness(),
           twilioResponderEventHttpBoundary.readiness(),
+          twilioResponderInboundHttpBoundary.readiness(),
           careSurfaces === null
             ? {
                 ready: false,
@@ -1344,6 +1470,10 @@ export function createHostedApi(
             twilioResponderEventReadiness?.ready === true &&
             twilioResponderEventReadiness?.verified === true &&
             twilioResponderEventReadiness?.providerEffects === false,
+          responderInboundEvents:
+            twilioResponderInboundReadiness?.ready === true &&
+            twilioResponderInboundReadiness?.verified === true &&
+            twilioResponderInboundReadiness?.providerEffects === false,
           care:
             careReadiness?.ready === true &&
             careReadiness?.verified === true &&
@@ -1574,6 +1704,42 @@ export function createHostedApi(
           );
         }
 
+        if (
+          Object.hasOwn(TWILIO_RESPONDER_INBOUND_TWIML, pathname)
+        ) {
+          invariant(
+            method === "POST",
+            "METHOD_NOT_ALLOWED",
+            "The Twilio inbound event requires POST.",
+            { status: 405 }
+          );
+          const response = exactTwilioResponderInboundAcknowledgement(
+            await twilioResponderInboundHttpBoundary.handle({
+              method,
+              pathname,
+              headers: request.headers,
+              rawBody: await readRawTwilioResponderInbound(
+                request,
+                Math.min(
+                  ingress.body.webhookBytes,
+                  TWILIO_RESPONDER_INBOUND_MAXIMUM_BYTES
+                )
+              )
+            }),
+            pathname
+          );
+          return new Response(response.body, {
+            status: 200,
+            headers: {
+              ...response.headers,
+              "Referrer-Policy": "no-referrer",
+              "X-Content-Type-Options": "nosniff",
+              "X-Frame-Options": "DENY",
+              "X-Request-Id": requestId
+            }
+          });
+        }
+
         if (careSurfacesHttpBoundary !== null) {
           const careResponse =
             await careSurfacesHttpBoundary.dispatch(request);
@@ -1587,6 +1753,14 @@ export function createHostedApi(
             await responderSurfacesHttpBoundary.dispatch(request);
           if (responderResponse !== null) {
             return rootedResponse(responderResponse, requestId);
+          }
+        }
+
+        if (responderNumberBindingsHttpBoundary !== null) {
+          const bindingResponse =
+            await responderNumberBindingsHttpBoundary.dispatch(request);
+          if (bindingResponse !== null) {
+            return rootedResponse(bindingResponse, requestId);
           }
         }
 

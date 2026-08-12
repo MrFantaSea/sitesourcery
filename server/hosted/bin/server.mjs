@@ -205,6 +205,15 @@ import {
   createPostgresTwilioResponderEventsRepository
 } from "../twilio-responder-events-postgres.mjs";
 import {
+  createConfiguredTwilioResponderInboundHttp
+} from "../twilio-responder-inbound-config.mjs";
+import {
+  createResponderLookupDigests
+} from "../responder-lookup-digests.mjs";
+import {
+  createPostgresResponderNumberBindingsRepository
+} from "../responder-number-bindings-postgres.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -930,6 +939,37 @@ async function start() {
       "Verified Twilio Responder callback ingress was requested but is not ready."
     );
   }
+  const twilioResponderInbound =
+    createConfiguredTwilioResponderInboundHttp({
+      environment: process.env,
+      authority,
+      clock: commerceV2.clock
+    });
+  const twilioResponderInboundReadiness =
+    await twilioResponderInbound.readiness();
+  if (
+    twilioResponderInbound.mode === "raw-form" &&
+    (
+      twilioResponderInboundReadiness.ready !== true ||
+      twilioResponderInboundReadiness.verified !== true ||
+      twilioResponderInboundReadiness.providerEffects !== false
+    )
+  ) {
+    throw new Error(
+      "Verified Twilio Responder inbound ingress was requested but is not ready."
+    );
+  }
+  const responderLookupDigests = identityPepperConfiguration.compose(
+    createResponderLookupDigests
+  );
+  const responderNumberBindings = {
+    repository: createPostgresResponderNumberBindingsRepository({
+      authority,
+      verifierKeyVersions: [...responderLookupDigests.verifierVersions]
+    }),
+    lookupDigests: responderLookupDigests,
+    clock: commerceV2.clock
+  };
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -1045,6 +1085,8 @@ async function start() {
         supportCases,
         resendMailEvents,
         twilioResponderEvents,
+        twilioResponderInbound,
+        responderNumberBindings,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,
@@ -1101,6 +1143,14 @@ async function start() {
         mode: twilioResponderEvents.mode,
         ready: twilioResponderEventReadiness.ready === true,
         code: twilioResponderEventReadiness.code ?? null
+      },
+      responderInboundEvents: {
+        mode: twilioResponderInbound.mode,
+        ready: twilioResponderInboundReadiness.ready === true,
+        code: twilioResponderInboundReadiness.code ?? null,
+        voiceDialPlan:
+          twilioResponderInboundReadiness.voiceDialPlan ??
+            "blocked-fin-004t"
       },
       database: readiness.persistence.database,
       postgresBudget: authority.budgetReadiness(),

@@ -120,7 +120,7 @@ function request(input) {
   exactObject(input, [
     "schema", "operationId", "commandId", "organizationId", "projectId",
     "interactionId", "contactAuthorityId", "messageKind", "routeDigest",
-    "contentDigest", "idempotencyKey", "signal"
+    "contentDigest", "idempotencyKey", "leaseOwner", "signal"
   ], "TWILIO_RESPONDER_DELIVERY_INVALID",
   "Twilio Responder delivery authority is invalid.");
   invariant(
@@ -135,6 +135,7 @@ function request(input) {
       SHA256.test(input.routeDigest) &&
       SHA256.test(input.contentDigest) &&
       SAFE_ID.test(input.idempotencyKey) &&
+      SAFE_ID.test(input.leaseOwner) &&
       (
         input.signal === null ||
         (
@@ -476,7 +477,8 @@ export function createTwilioResponderTransport({
         contactAuthorityId: selectedRequest.contactAuthorityId,
         messageKind: selectedRequest.messageKind,
         routeDigest: selectedRequest.routeDigest,
-        contentDigest: selectedRequest.contentDigest
+        contentDigest: selectedRequest.contentDigest,
+        leaseOwner: selectedRequest.leaseOwner
       }),
       selectedRequest
     );
