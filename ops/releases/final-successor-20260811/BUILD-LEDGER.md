@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-004 in progress; leaf cohorts and central hosted/operator/Stripe composition proved
+Status: FIN-004 in progress; FIN-004A through FIN-004F proved, FIN-004G operations imported
 
 ## Governing inputs
 
@@ -22,7 +22,7 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-001 | proved | Exact base `b03cccbd…` | Clean worktree, environment, dependency install, untouched baseline | Node 24.18.0 baseline passed; base dependency audit defects classified |
 | FIN-002 | proved | `a81d1438…` runtime/release paths | Phase 2.1 runtime and release controls | Zero-vulnerability audit, focused proofs, and complete `npm test` passed |
 | FIN-003 | proved | `a81d1438…` migrations 118–124 | Schema foundation and static contracts | Empty PostgreSQL 16 migration, direct contract, cleanup, and cumulative proofs |
-| FIN-004 | in-progress | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations | FIN-004A mail through FIN-004F central composition proved; Care/Responder root surfaces, operations, workers, and adjacent integration contracts open |
+| FIN-004 | in-progress | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations | FIN-004A through FIN-004F proved; FIN-004G held operations imported with clean-candidate identity proof pending; Care/Responder root surfaces, workers, and adjacent integration contracts open |
 | FIN-005 | pending | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition | No unclassified preserved lane |
 | FIN-006 | pending | Integrated source | Root composition and cross-system contracts | Capability/readiness/negative-auth matrix |
 | FIN-007 | pending | Canonical commercial source | Catalog/public/legal/artifact closure | One new version/digest and deterministic artifacts |
@@ -53,3 +53,6 @@ FIN-004E's Alakazam invoice-finalization and PostgreSQL evidence is
 FIN-004F's central hosted/operator UI, support/work-queue routes, Stripe trust
 boundary, credential topology, and complete PostgreSQL service evidence is
 `FIN-004F-CENTRAL-PROVENANCE.md`.
+FIN-004G's held backup/restore, install, load, monitoring, edge, rollback,
+core-revenue wrapper, and Responder/Hive convergence record is
+`FIN-004G-OPS-PROVENANCE.md`.

@@ -8,12 +8,14 @@ const PROJECT_ROOT = path.resolve(
   path.dirname(new URL(import.meta.url).pathname),
   "../.."
 );
-const SOURCE_PATH = path.join(PROJECT_ROOT, "hive/hive-planner.js");
+const SOURCE_PATH = path.join(PROJECT_ROOT, "responder/hive-planner.js");
 const SOURCE = await readFile(SOURCE_PATH, "utf8");
-const HTML_PATH = path.join(PROJECT_ROOT, "hive/index.html");
+const HTML_PATH = path.join(PROJECT_ROOT, "responder/index.html");
 const HTML = await readFile(HTML_PATH, "utf8");
-const CSS_PATH = path.join(PROJECT_ROOT, "vnext.css");
-const CSS = await readFile(CSS_PATH, "utf8");
+const LEGACY_HTML = await readFile(
+  path.join(PROJECT_ROOT, "hive/index.html"),
+  "utf8"
+);
 
 const EXPECTED_CELL_IDS = [
   "missed-call",
@@ -755,7 +757,7 @@ test("enhancement is idempotent", () => {
   assert.equal(controls[0].listeners.get("click").length, listenerCount);
 });
 
-test("customer-facing Hive copy is short, direct, and free of internal build terms", () => {
+test("dormant planner copy stays customer-readable while the public page stays held", () => {
   const planner = loadPlanner();
   const customerCopy = planner.cells
     .flatMap((cell) => Object.values(cell.customer))
@@ -770,7 +772,6 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
   ];
 
   for (const pattern of internalTerms) {
-    assert.doesNotMatch(HTML, pattern);
     assert.doesNotMatch(customerCopy, pattern);
   }
   assert.equal(
@@ -779,45 +780,27 @@ test("customer-facing Hive copy is short, direct, and free of internal build ter
     true
   );
   for (const phrase of [
-    "Pick the closest moment",
-    "Describe a better outcome",
-    "A useful outcome",
-    "Name the moment and the person",
-    "When it comes up",
-    "When a person steps in",
-    "Set the boundaries",
-    "What stays off-limits",
-    "How should it stop?",
-    "Review your conversation notes",
-    "Any proposed work gets a written scope and price before you decide.",
-    "Download conversation notes",
+    "The Responder · held",
+    "No setup or monthly plan is for sale.",
+    "No live telephony",
+    "Human handoff required",
+    "This is a design description, not a running workflow.",
   ]) {
     assert.ok(HTML.includes(phrase), phrase);
   }
-  assert.equal((HTML.match(/data-hive-stage="[1-5]"/gu) || []).length, 5);
-  assert.equal((HTML.match(/data-hive-next="[3-5]"/gu) || []).length, 3);
-  assert.match(HTML, /data-hive-mode="conversation-only"/u);
-  assert.match(
-    HTML,
-    /data-hive-stage="5"[^>]*aria-hidden="true"[^>]*hidden inert/iu
-  );
-  assert.match(CSS, /\.hive-stage-start\[hidden\][^{]*\{[^}]*display:\s*none/isu);
-  assert.match(HTML, /role="radiogroup"[^>]*aria-labelledby="hive-choose-title"/u);
-  assert.equal((HTML.match(/role="radio"/gu) || []).length, 6);
-  assert.equal((HTML.match(/data-hive-back/gu) || []).length, 1);
-  assert.match(CSS, /\.hive-cell\[aria-checked="true"\]/u);
+  assert.doesNotMatch(HTML, /hive-planner\.js|data-hive-planner/iu);
 });
 
-test("the main experience is a scoped conversation with only local, phone, or email actions", () => {
+test("the public Responder experience is inquiry-only and cannot start work", () => {
   const main = HTML.match(/<main\b[\s\S]*?<\/main>/u)?.[0];
   assert.ok(main);
 
   for (const phrase of [
-    "A scoped sales conversation",
-    "Hive is a short, in-person or phone conversation with Zack.",
-    "This page cannot place an order, reserve time, or start anything.",
-    "No self-service start",
-    "Conversation only · nothing starts here",
+    "The Responder is not currently connected to a phone number",
+    "No setup or monthly plan is for sale.",
+    "A call or email can record your question; it cannot activate The Responder",
+    "I will not quote, invoice, accept payment for, or start a Responder installation",
+    "The Responder remains held.",
   ]) {
     assert.ok(main.includes(phrase), phrase);
   }
@@ -828,9 +811,7 @@ test("the main experience is a scoped conversation with only local, phone, or em
     .replace(/<[^>]+>/gu, " ")
     .replace(/\s+/gu, " ");
   for (const pattern of [
-    /\bactivate(?:d|s|ion)?\b/iu,
     /\bbuy now\b/iu,
-    /\bcheckout\b/iu,
     /\bsubscribe\b/iu,
     /\badd to cart\b/iu,
     /\bcreate an account\b/iu,
@@ -840,59 +821,24 @@ test("the main experience is a scoped conversation with only local, phone, or em
   }
 
   assert.doesNotMatch(main, /<form\b/iu);
-  assert.doesNotMatch(main, /href="\/(?:contact|solutions|start)\//u);
   const hrefs = Array.from(
     main.matchAll(/<a\b[^>]*\bhref="([^"]+)"/gu),
     (match) => match[1]
   );
-  assert.ok(hrefs.includes("#planner"));
   assert.ok(hrefs.includes("tel:+18562441220"));
   assert.ok(hrefs.includes("mailto:sitesourcery@proton.me"));
-  assert.equal(
-    hrefs.every((href) =>
-      href.startsWith("#")
-      || href === "tel:+18562441220"
-      || href === "mailto:sitesourcery@proton.me"),
-    true
-  );
-
-  const buttons = Array.from(main.matchAll(/<button\b([^>]*)>/gu));
-  assert.ok(buttons.length > 0);
-  for (const [, attributes] of buttons) {
-    assert.match(attributes, /\btype="button"/u);
-    assert.match(
-      attributes,
-      /\bdata-hive-(?:back|cell|download|next|pause)(?:=|\s|$)/u
-    );
-  }
+  assert.doesNotMatch(main, /<button\b|data-hive-(?:back|cell|download|next|pause)/iu);
 });
 
-test("JavaScript-off and static copy exactly match all six customer examples", () => {
-  const planner = loadPlanner();
-  const escapeRegExp = (value) =>
-    value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-  assert.equal((HTML.match(/data-hive-noscript-cell=/gu) || []).length, 6);
-  assert.equal((HTML.match(/data-hive-static-cell=/gu) || []).length, 6);
-
-  for (const cell of planner.cells) {
-    const label = escapeRegExp(cell.label);
-    const result = escapeRegExp(cell.customer.result);
-    assert.match(
-      HTML,
-      new RegExp(
-        `data-hive-noscript-cell="${cell.id}"[^>]*>\\s*<strong>${label}</strong>\\s*<span data-hive-noscript-result>${result}</span>`,
-        "u"
-      )
-    );
-    assert.match(
-      HTML,
-      new RegExp(
-        `data-hive-static-cell="${cell.id}"[\\s\\S]*?<h3>${label}</h3>\\s*<p data-hive-static-result>${result}</p>`,
-        "u"
-      )
-    );
-  }
+test("the retired Hive route redirects canonically to the held Responder page", () => {
+  assert.match(LEGACY_HTML, /http-equiv="refresh" content="0;url=\/responder\/"/u);
+  assert.match(
+    LEGACY_HTML,
+    /rel="canonical" href="https:\/\/sitesourcery\.com\/responder\/"/u
+  );
+  assert.match(LEGACY_HTML, /href="\/responder\/">Continue to The Responder/u);
+  assert.equal((HTML.match(/data-hive-static-cell=/gu) || []).length, 5);
+  assert.doesNotMatch(HTML, /data-hive-noscript-cell|data-hive-stage=/u);
 });
 
 test("contains no network, persistence, markup-injection, or payment API", () => {
