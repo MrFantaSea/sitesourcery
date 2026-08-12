@@ -192,7 +192,14 @@ function acceptedReceipt(value, selectedClaim) {
   });
 }
 
-function validatePorts(repository, fulfillmentPort, clock) {
+function validatePorts(repository, fulfillmentPort, clock, enabled) {
+  const providerReady = enabled
+    ? fulfillmentPort?.kind === "responder-fulfillment-provider" &&
+      fulfillmentPort.providerEffects === true &&
+      fulfillmentPort.idempotency === "provider-enforced"
+    : fulfillmentPort?.kind === "responder-fulfillment-held-provider" &&
+      fulfillmentPort.providerEffects === false &&
+      fulfillmentPort.idempotency === "none";
   invariant(
     repository &&
       [
@@ -201,9 +208,7 @@ function validatePorts(repository, fulfillmentPort, clock) {
         "recordDeliveryManualReview",
         "recordDeliveryRetry"
       ].every((name) => typeof repository[name] === "function") &&
-      fulfillmentPort?.kind === "responder-fulfillment-provider" &&
-      fulfillmentPort.providerEffects === true &&
-      fulfillmentPort.idempotency === "provider-enforced" &&
+      providerReady &&
       typeof fulfillmentPort.sendMessage === "function" &&
       typeof clock?.now === "function",
     "RESPONDER_FULFILLMENT_WORKER_INVALID",
@@ -226,7 +231,12 @@ export function createResponderFulfillmentWorker({
   wait = defaultWait,
   log = () => {}
 } = {}) {
-  const ports = validatePorts(repository, fulfillmentPort, clock);
+  const ports = validatePorts(
+    repository,
+    fulfillmentPort,
+    clock,
+    enabled
+  );
   invariant(
     typeof enabled === "boolean" &&
       typeof workerId === "string" &&

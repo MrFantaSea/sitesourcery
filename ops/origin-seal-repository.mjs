@@ -469,7 +469,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
   if (
     !apiSource.includes("postgresBudgetConfiguration.policy.pool.apiConnections") ||
     !apiSource.includes('backgroundWorkers: "external_process_required"') ||
-    /createWorkerSupervisor|createAlakazamWorkerFactories|workerConfigurationFromEnvironment|supervisor\.start\s*\(/u.test(
+    /createWorkerSupervisor|createAlakazamWorkerFactories|createResponderWorkerFactories|createResponderFulfillmentWorker|workerConfigurationFromEnvironment|supervisor\.start\s*\(/u.test(
       apiSource
     )
   ) {
@@ -479,6 +479,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
     !workerSource.includes("postgres.policy.pool.workerReservedConnections") ||
     !workerSource.includes('workload: "worker"') ||
     !workerSource.includes("createWorkerSupervisor") ||
+    !workerSource.includes("createResponderWorkerFactories") ||
     !workerSource.includes("selected.configuration.activation === \"held\"") ||
     /createServer\s*\(|\.listen\s*\(/u.test(workerSource)
   ) {
@@ -487,7 +488,8 @@ export async function collectOriginWorkerRuntime(projectRoot) {
   for (const line of [
     "SITESOURCERY_DATABASE_SSL=require",
     "SITESOURCERY_ALAKAZAM_MODE=held",
-    "SITESOURCERY_ALAKAZAM_LIFECYCLE_MODE=held"
+    "SITESOURCERY_ALAKAZAM_LIFECYCLE_MODE=held",
+    "SITESOURCERY_RESPONDER_FULFILLMENT_WORKER_MODE=held"
   ]) {
     if (!workerEnvironment.includes(line)) {
       fail("Origin worker environment schema lost a held provider fence.");

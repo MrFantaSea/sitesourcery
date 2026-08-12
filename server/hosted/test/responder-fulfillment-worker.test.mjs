@@ -70,10 +70,13 @@ function fixture({
     }
   };
   const fulfillmentPort = {
-    kind: "responder-fulfillment-provider",
-    providerEffects: true,
-    idempotency: "provider-enforced",
+    kind: enabled
+      ? "responder-fulfillment-provider"
+      : "responder-fulfillment-held-provider",
+    providerEffects: enabled,
+    idempotency: enabled ? "provider-enforced" : "none",
     async sendMessage(input) {
+      if (!enabled) throw new Error("held provider called");
       calls.sends.push({ ...input, signal: input.signal });
       if (deliveryError) throw deliveryError;
       return {

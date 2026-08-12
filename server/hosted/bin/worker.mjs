@@ -20,6 +20,9 @@ import {
   createNotificationMailWorkerFactories
 } from "../notification-mail-worker-composition.mjs";
 import {
+  createResponderWorkerFactories
+} from "../worker-responder-composition.mjs";
+import {
   workerConfigurationFromEnvironment
 } from "../worker-config.mjs";
 import { createWorkerSupervisor } from "../worker-supervisor.mjs";
@@ -97,6 +100,12 @@ if (selected.configuration.activation === "held") {
       }),
       ...createAlakazamWorkerFactories({
         authority,
+        environment: process.env,
+        log: write
+      }),
+      ...createResponderWorkerFactories({
+        authority,
+        purposes: selected.configuration.purposes,
         environment: process.env,
         log: write
       })
