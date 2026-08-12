@@ -29,7 +29,8 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608110121_care_core.sql",
   "202608110122_alakazam_invoice_finalization.sql",
   "202608110123_domain_lifecycle_persistence.sql",
-  "202608110124_care_commerce_persistence.sql"
+  "202608110124_care_commerce_persistence.sql",
+  "202608120125_responder_fulfillment_queue.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(

@@ -12,6 +12,10 @@ import { createPostgresResponderCoreRepository } from
   "../responder-core-postgres.mjs";
 import { createPostgresResponderSurfaceRepository } from
   "../responder-surfaces-postgres.mjs";
+import { createPostgresResponderFulfillmentRepository } from
+  "../responder-fulfillment-postgres.mjs";
+import { createResponderFulfillmentWorker } from
+  "../responder-fulfillment-worker.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 
 const DATABASE_URL = process.env.SITESOURCERY_PG_RESPONDER_CORE_TEST_URL;
@@ -227,6 +231,112 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
     assert.equal(heldReplay.id, held.id);
     assert.equal(heldReplay.replayed, true);
 
+    const heldOperation = await pool.query(
+      `select operation.state, operation.provider_effects_authorized,
+              operation.attempt_count, count(event.id)::integer as events
+         from ss.responder_delivery_operations operation
+         join ss.responder_delivery_operation_events event
+           on event.operation_id = operation.id
+        where operation.command_id = $1
+        group by operation.id`,
+      ["pg-responder-message-001"]
+    );
+    assert.deepEqual(heldOperation.rows[0], {
+      state: "held",
+      provider_effects_authorized: false,
+      attempt_count: 0,
+      events: 1
+    });
+
+    selectedNow = new Date(Date.now() + 12).toISOString();
+    await authority.service({
+      actorKind: "operator",
+      userId: ids.operator,
+      organizationId: ids.organization,
+      isolation: "serializable"
+    }, (client) => client.query(
+      `update ss.responder_runtime_controls
+          set state = 'approved_live', global_kill_engaged = false,
+              release_evidence_digest = $2, released_at = $3,
+              released_by_operator_user_id = $4,
+              revision = revision + 1, updated_at = $3
+        where organization_id = $1`,
+      [ids.organization, "4".repeat(64), selectedNow, ids.operator]
+    ));
+
+    selectedNow = new Date(Date.now() + 13).toISOString();
+    const queuedEvent = await service.ingestProviderEvent({
+      commandId: "pg-responder-event-queued-001",
+      organizationId: ids.organization,
+      projectId: ids.project,
+      providerEventIdDigest: "5".repeat(64),
+      routeDigest,
+      eventKind: "missed_call",
+      payloadDigest: "6".repeat(64),
+      occurredAt: selectedNow
+    });
+    selectedNow = new Date(Date.now() + 14).toISOString();
+    await service.reserveHeldMessage(customer, {
+      commandId: "pg-responder-message-queued-001",
+      organizationId: ids.organization,
+      projectId: ids.project,
+      interactionId: queuedEvent.interactionId,
+      contactAuthorityId: consent.id,
+      messageKind: "missed_call_ack",
+      contentDigest: "7".repeat(64)
+    });
+
+    const fulfillmentRepository =
+      createPostgresResponderFulfillmentRepository({ authority });
+    assert.equal((await fulfillmentRepository.readiness()).ready, true);
+    const providerCalls = [];
+    const worker = createResponderFulfillmentWorker({
+      repository: fulfillmentRepository,
+      fulfillmentPort: {
+        kind: "responder-fulfillment-provider",
+        providerEffects: true,
+        idempotency: "provider-enforced",
+        async sendMessage(input) {
+          providerCalls.push(input);
+          return {
+            status: "accepted",
+            provider: "phone_bridge",
+            idempotencyKey: input.idempotencyKey,
+            providerReceiptDigest: "8".repeat(64),
+            acceptedAt: new Date(
+              Date.parse(selectedNow) + 1
+            ).toISOString()
+          };
+        }
+      },
+      clock: { now: () => selectedNow },
+      enabled: true,
+      workerId: "responder-fulfillment-pg-test-0001"
+    });
+    const fulfilled = await worker.runOnce();
+    assert.equal(fulfilled.status, "accepted");
+    assert.equal(providerCalls.length, 1);
+    assert.equal(Object.hasOwn(providerCalls[0], "phoneNumber"), false);
+    assert.equal(Object.hasOwn(providerCalls[0], "messageBody"), false);
+    const acceptedOperation = await pool.query(
+      `select operation.state, operation.attempt_count,
+              operation.provider, operation.provider_receipt_digest,
+              count(event.id)::integer as events
+         from ss.responder_delivery_operations operation
+         join ss.responder_delivery_operation_events event
+           on event.operation_id = operation.id
+        where operation.command_id = $1
+        group by operation.id`,
+      ["pg-responder-message-queued-001"]
+    );
+    assert.deepEqual(acceptedOperation.rows[0], {
+      state: "accepted",
+      attempt_count: 1,
+      provider: "phone_bridge",
+      provider_receipt_digest: "8".repeat(64),
+      events: 3
+    });
+
     selectedNow = new Date(Date.now() + 15).toISOString();
     const handoff = await service.requestHandoff(customer, {
       commandId: "pg-responder-handoff-001",
@@ -286,7 +396,7 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
     assert.equal(killedReplay.replayed, true);
 
     const account = await service.accountProjection(customer);
-    assert.equal(account.interactions.length, 2);
+    assert.equal(account.interactions.length, 3);
     assert.equal(
       account.interactions.every(
         (item) => item.organizationId === ids.organization
@@ -306,7 +416,7 @@ test("Responder persists consent, replay, STOP, kill, handoff, and scoped projec
       organizationId: ids.organization
     });
     assert.equal(customerSurface.contacts.length, 1);
-    assert.equal(customerSurface.interactions.length, 2);
+    assert.equal(customerSurface.interactions.length, 3);
     assert.equal(customerSurface.interactions[0].events.length >= 1, true);
     assert.equal(
       /payload|providerEventId|phone|messageBody/iu.test(
