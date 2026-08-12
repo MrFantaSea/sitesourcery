@@ -88,6 +88,7 @@ async function accountSnapshot(stored) {
           site: bareSite(),
           subscription: null,
           pendingChange: null,
+          invoiceFinalization: null,
           ...stored
         };
       }

@@ -4826,6 +4826,32 @@ function accountSubscription(row) {
   });
 }
 
+function accountInvoiceFinalization(row) {
+  if (!row || row.finalization_state === null ||
+      row.finalization_state === undefined) return null;
+  const state = requiredText(
+    row.finalization_state,
+    "account.invoiceFinalization.state",
+    20
+  );
+  invariant(
+    ["failed", "recovered"].includes(state),
+    "repository_conflict",
+    "the customer invoice preparation state changed",
+    { status: 500 }
+  );
+  const failed = state === "failed";
+  return Object.freeze({
+    state,
+    attentionRequired: failed,
+    renewalHeld: failed,
+    fulfillmentHeld: failed,
+    messageCode: failed
+      ? "alakazam_invoice_preparation_attention"
+      : "alakazam_invoice_preparation_current"
+  });
+}
+
 function accountReceipt(row) {
   return Object.freeze({
     receiptId: exactUuid(row.id, "receipt.receiptId"),
@@ -5846,7 +5872,18 @@ export function createPostgresAlakazamRepository({
                  subscription.first_failed_at,
                  subscription.grace_ends_at,
                  subscription.revision,
-                 subscription.updated_at
+                 subscription.updated_at,
+                 (
+                   select projection.state
+                     from ss.alakazam_invoice_finalization_projection projection
+                    where projection.organization_id =
+                          subscription.organization_id
+                      and projection.subscription_id = subscription.id
+                    order by (projection.state = 'failed') desc,
+                             projection.provider_observed_at desc,
+                             projection.id desc
+                    limit 1
+                 ) as finalization_state
                from ss.alakazam_subscriptions subscription
               where subscription.organization_id = $1
                 and subscription.project_id = $2
@@ -6028,6 +6065,8 @@ export function createPostgresAlakazamRepository({
                   .download_credit_available === true,
               subscription:
                 accountSubscription(subscriptionRow),
+              invoiceFinalization:
+                accountInvoiceFinalization(subscriptionRow),
               pendingChange: pendingChange
                 ? Object.freeze(pendingChange)
                 : null,
@@ -10388,14 +10427,21 @@ export function createPostgresAlakazamRepository({
       return translated(() =>
         database.service({}, async (client) => {
           const candidate = await client.query(
-            `select id
-               from ss.alakazam_fulfillment_operations
-              where state in ('queued', 'dark', 'failed')
+            `select operation.id
+               from ss.alakazam_fulfillment_operations operation
+              where (operation.state in ('queued', 'dark', 'failed')
                  or (
-                   state = 'processing'
-                   and lease_expires_at <= $1
-                 )
-              order by queued_at, id
+                   operation.state = 'processing'
+                   and operation.lease_expires_at <= $1
+                 ))
+                and not exists (
+                  select 1
+                    from ss.alakazam_invoice_finalization_projection hold
+                   where hold.organization_id = operation.organization_id
+                     and hold.subscription_id = operation.subscription_id
+                     and hold.state = 'failed'
+                )
+              order by operation.queued_at, operation.id
               for update skip locked
               limit 1`,
             [input.claimedAt]

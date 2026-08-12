@@ -231,6 +231,7 @@ test("PostgreSQL account read projects one customer subscription, pending change
     {
       projectId: PROJECT_ID,
       downloadCreditAvailable: false,
+      invoiceFinalization: null,
       subscription: {
         tierId: "alakazam_35",
         status: "active",
@@ -302,6 +303,7 @@ test("PostgreSQL account read exposes an unused Download credit without inventin
     {
       projectId: PROJECT_ID,
       downloadCreditAvailable: true,
+      invoiceFinalization: null,
       subscription: null,
       pendingChange: null,
       site: {
