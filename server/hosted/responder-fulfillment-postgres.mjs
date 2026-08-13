@@ -197,11 +197,12 @@ export function createPostgresResponderFulfillmentRepository({
       acceptedAt: selected.acceptedAt,
       failureCode: row.failure_code
     });
-    await client.query(
+    const recorded = await client.query(
       `insert into ss.provider_reconciliation_cases (
          id, provider, case_kind,
          case_digest, subject_operation_id, organization_id,
-         project_id, evidence_digest, detected_by_worker_id,
+         project_id, subject_provider_message_id_digest,
+         evidence_digest, detected_by_worker_id,
          readback_state, state, revision, opened_at, created_at,
          updated_at
        ) values (
@@ -209,15 +210,35 @@ export function createPostgresResponderFulfillmentRepository({
          ss.provider_reconciliation_case_digest(
            'twilio', 'suppression_conflict', $2
          ),
-         $3, $4, $5, $6, $7, 'none', 'open', 1, $8, $8, $8
+         $3, $4, $5, $6, $7, $8, 'none', 'open', 1, $9, $9, $9
        )
-       on conflict (case_digest) do nothing`,
+       on conflict (case_digest) do nothing
+       returning evidence_digest, subject_provider_message_id_digest`,
       [
         randomUUID(), subject, row.id, row.organization_id,
-        row.project_id, evidenceDigest, selected.workerId,
-        selected.acceptedAt
+        row.project_id, selected.providerMessageIdDigest, evidenceDigest,
+        selected.workerId, selected.acceptedAt
       ]
     );
+    if (recorded.rowCount === 0) {
+      const existing = await client.query(
+        `select evidence_digest, subject_provider_message_id_digest
+           from ss.provider_reconciliation_cases
+          where case_digest = ss.provider_reconciliation_case_digest(
+            'twilio', 'suppression_conflict', $1
+          )`,
+        [subject]
+      );
+      invariant(
+        existing.rowCount === 1 &&
+          existing.rows[0].evidence_digest === evidenceDigest &&
+          existing.rows[0].subject_provider_message_id_digest ===
+            selected.providerMessageIdDigest,
+        "RESPONDER_FULFILLMENT_REPOSITORY_CONFLICT",
+        "Suppression conflict provider evidence conflicts.",
+        { status: 409 }
+      );
+    }
   }
 
   return Object.freeze({

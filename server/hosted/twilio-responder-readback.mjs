@@ -5,9 +5,11 @@ import { digest } from "./security.mjs";
 const PROVIDER = "twilio";
 const API_ORIGIN = "https://api.twilio.com";
 const ACCOUNT_SID = /^AC[0-9a-fA-F]{32}$/u;
+const MESSAGING_SERVICE_SID = /^MG[0-9a-fA-F]{32}$/u;
 const MESSAGE_SID = /^(?:SM|MM)[0-9a-fA-F]{32}$/u;
 const API_KEY_SID = /^SK[0-9a-fA-F]{32}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
+const E164_US = /^\+1[2-9][0-9]{9}$/u;
 const MESSAGE_STATUSES = new Set([
   "accepted", "scheduled", "canceled", "queued", "sending", "sent",
   "receiving", "received", "delivered", "undelivered", "failed", "read"
@@ -66,14 +68,49 @@ function timeout(value) {
   return value;
 }
 
-async function boundedJson(response) {
+async function boundedText(response) {
+  const contentLength = response?.headers?.get?.("content-length");
+  if (contentLength !== null && contentLength !== undefined &&
+      /^[0-9]+$/u.test(contentLength) &&
+      Number(contentLength) > MAXIMUM_LIST_RESPONSE_BYTES) {
+    throw unavailable("The Twilio readback response is unreasonably large.");
+  }
+  if (typeof response?.body?.getReader === "function") {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let bytes = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > MAXIMUM_LIST_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw unavailable(
+          "The Twilio readback response is unreasonably large."
+        );
+      }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks, bytes).toString("utf8");
+  }
+  invariant(
+    typeof response?.text === "function",
+    "TWILIO_RESPONDER_READBACK_UNAVAILABLE",
+    "The Twilio readback response shape is invalid.",
+    { status: 503 }
+  );
   const text = await response.text();
   invariant(
-    text.length <= MAXIMUM_LIST_RESPONSE_BYTES,
+    Buffer.byteLength(text, "utf8") <= MAXIMUM_LIST_RESPONSE_BYTES,
     "TWILIO_RESPONDER_READBACK_UNAVAILABLE",
     "The Twilio readback response is unreasonably large.",
     { status: 503 }
   );
+  return text;
+}
+
+async function boundedJson(response) {
+  const text = await boundedText(response);
   try {
     return JSON.parse(text);
   } catch {
@@ -81,8 +118,67 @@ async function boundedJson(response) {
   }
 }
 
-function dateOnly(iso) {
-  return iso.slice(0, 10);
+function exactKeys(value, fields) {
+  return value && typeof value === "object" && !Array.isArray(value) &&
+    JSON.stringify(Object.keys(value).sort()) ===
+      JSON.stringify([...fields].sort());
+}
+
+function target(value) {
+  if (exactKeys(value, ["kind", "providerMessageIdDigest"]) &&
+      value.kind === "provider_message_id" &&
+      SHA256.test(value.providerMessageIdDigest)) {
+    return deepFreeze({
+      kind: value.kind,
+      providerMessageIdDigest: value.providerMessageIdDigest
+    });
+  }
+  if (exactKeys(value, ["kind", "routeDigest", "contentDigest"]) &&
+      value.kind === "responder_message_shape" &&
+      SHA256.test(value.routeDigest) && SHA256.test(value.contentDigest)) {
+    return deepFreeze({
+      kind: value.kind,
+      routeDigest: value.routeDigest,
+      contentDigest: value.contentDigest
+    });
+  }
+  throw invalid("The Twilio readback target is invalid.");
+}
+
+function targetDigest(value) {
+  return digest({
+    schema: "sitesourcery.twilio-readback-target/v1",
+    ...value
+  });
+}
+
+function paginationUrl(value, accountSid) {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "string" || value.length > 4096 ||
+      !value.startsWith("/")) {
+    throw unavailable("The Twilio readback pagination target is invalid.");
+  }
+  let selected;
+  try {
+    selected = new URL(value, API_ORIGIN);
+  } catch {
+    throw unavailable("The Twilio readback pagination target is invalid.");
+  }
+  if (selected.origin !== API_ORIGIN || selected.username ||
+      selected.password || selected.hash ||
+      selected.pathname !==
+        `/2010-04-01/Accounts/${accountSid}/Messages.json`) {
+    throw unavailable("The Twilio readback pagination target is invalid.");
+  }
+  return selected.href;
+}
+
+function responderRouteDigest(to) {
+  return digest({ routeKind: "sms", address: to });
+}
+
+function responderContentDigest(body) {
+  return digest({ contentKind: "sms", body });
 }
 
 export function createHeldTwilioResponderReadback() {
@@ -118,10 +214,18 @@ export function createTwilioResponderReadback({
   timeoutMs = 5_000
 } = {}) {
   const accountSid = environment?.SITESOURCERY_TWILIO_ACCOUNT_SID;
+  const messagingServiceSid =
+    environment?.SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID;
   const apiKeySid = environment?.SITESOURCERY_TWILIO_API_KEY_SID;
   const apiKeySecret = environment?.SITESOURCERY_TWILIO_API_KEY_SECRET;
   if (typeof accountSid !== "string" || !ACCOUNT_SID.test(accountSid)) {
     throw configuration("The Twilio readback account binding is invalid.");
+  }
+  if (typeof messagingServiceSid !== "string" ||
+      !MESSAGING_SERVICE_SID.test(messagingServiceSid)) {
+    throw configuration(
+      "The Twilio readback Messaging Service binding is invalid."
+    );
   }
   if (
     typeof apiKeySid !== "string" || !API_KEY_SID.test(apiKeySid) ||
@@ -143,9 +247,21 @@ export function createTwilioResponderReadback({
   ).toString("base64")}`;
 
   async function listPage(url, signal) {
+    let selectedUrl;
+    try {
+      selectedUrl = new URL(url);
+    } catch {
+      throw unavailable("The Twilio readback request target is invalid.");
+    }
+    if (selectedUrl.origin !== API_ORIGIN || selectedUrl.username ||
+        selectedUrl.password || selectedUrl.hash ||
+        selectedUrl.pathname !==
+          `/2010-04-01/Accounts/${accountSid}/Messages.json`) {
+      throw unavailable("The Twilio readback request target is invalid.");
+    }
     let response;
     try {
-      response = await fetchImpl(url, {
+      response = await fetchImpl(selectedUrl.href, {
         method: "GET",
         headers: {
           Accept: "application/json",
@@ -173,23 +289,42 @@ export function createTwilioResponderReadback({
     providerEffects: false,
     readOnly: true,
     async readiness() {
-      return deepFreeze({
-        ready: true,
-        verified: true,
-        kind: "twilio-responder-readback",
-        mode: "verified-read-only",
-        providerEffects: false,
-        code: null
-      });
+      try {
+      const query = new URLSearchParams({ PageSize: "1" });
+        const page = await listPage(
+          `${API_ORIGIN}/2010-04-01/Accounts/${accountSid}` +
+            `/Messages.json?${query.toString()}`,
+          null
+        );
+        const ready = Array.isArray(page?.messages) &&
+          page.messages.length <= 1;
+        return deepFreeze({
+          ready,
+          verified: ready,
+          kind: "twilio-responder-readback",
+          mode: "verified-read-only",
+          providerEffects: false,
+          code: ready ? null : "TWILIO_RESPONDER_READBACK_NOT_VERIFIED"
+        });
+      } catch {
+        return deepFreeze({
+          ready: false,
+          verified: false,
+          kind: "twilio-responder-readback",
+          mode: "verified-read-only",
+          providerEffects: false,
+          code: "TWILIO_RESPONDER_READBACK_NOT_VERIFIED"
+        });
+      }
     },
 
-    // Point readback by SID is impossible: only SID digests persist. The
-    // account's Messages are therefore enumerated over a bounded DateSent
-    // window and each listed SID is digest-matched in memory. Raw
-    // recipients and bodies from the list are discarded immediately and
-    // are never returned, stored, or logged.
+    // Point readback by SID is impossible because only SID digests persist.
+    // The account's Messages are enumerated over a bounded window. A known
+    // SID is digest-matched; an ambiguous create is matched by the already
+    // authorized route/content digests. Raw recipients, bodies, and SIDs
+    // never leave this module.
     async findMessages({
-      targetDigests,
+      targets,
       windowFromIso,
       windowToIso,
       pageSize = MAXIMUM_PAGE_SIZE,
@@ -197,14 +332,18 @@ export function createTwilioResponderReadback({
       signal = null
     } = {}) {
       invariant(
-        Array.isArray(targetDigests) &&
-          targetDigests.length >= 1 &&
-          targetDigests.length <= MAXIMUM_TARGETS &&
-          targetDigests.every(
-            (target) => typeof target === "string" && SHA256.test(target)
-          ),
+        Array.isArray(targets) && targets.length >= 1 &&
+          targets.length <= MAXIMUM_TARGETS,
         "TWILIO_RESPONDER_READBACK_INVALID",
-        "Twilio readback targets must be bounded SHA-256 digests.",
+        "Twilio readback targets must be bounded.",
+        { status: 400 }
+      );
+      const selectedTargets = targets.map(target);
+      const selectedTargetDigests = selectedTargets.map(targetDigest);
+      invariant(
+        new Set(selectedTargetDigests).size === selectedTargetDigests.length,
+        "TWILIO_RESPONDER_READBACK_INVALID",
+        "Twilio readback targets must be unique.",
         { status: 400 }
       );
       const fromIso = instant(windowFromIso, "The readback window start");
@@ -226,16 +365,13 @@ export function createTwilioResponderReadback({
         { status: 400 }
       );
 
-      const remaining = new Set(targetDigests);
-      const matches = [];
+      const matches = new Map(selectedTargetDigests.map(
+        (selected) => [selected, new Map()]
+      ));
       let scanned = 0;
       let pagesFetched = 0;
       const query = new URLSearchParams({
-        PageSize: String(pageSize),
-        "DateSent>": dateOnly(fromIso),
-        "DateSent<": dateOnly(
-          new Date(Date.parse(toIso) + 24 * 60 * 60 * 1000).toISOString()
-        )
+        PageSize: String(pageSize)
       });
       let nextUrl =
         `${API_ORIGIN}/2010-04-01/Accounts/${accountSid}` +
@@ -245,23 +381,34 @@ export function createTwilioResponderReadback({
         const page = await listPage(nextUrl, signal);
         pagesFetched += 1;
         const rows = Array.isArray(page?.messages) ? page.messages : null;
-        if (rows === null) {
+        if (rows === null || rows.length > pageSize) {
           throw unavailable("The Twilio readback page shape is invalid.");
         }
         for (const row of rows) {
           const sid = row?.sid;
           const status = row?.status;
+          const to = row?.to;
+          const body = row?.body;
+          const createdAt = row?.date_created;
           if (
             typeof sid !== "string" || !MESSAGE_SID.test(sid) ||
-            typeof status !== "string" || !MESSAGE_STATUSES.has(status)
+            typeof status !== "string" || !MESSAGE_STATUSES.has(status) ||
+            row?.account_sid !== accountSid ||
+            row?.messaging_service_sid !== messagingServiceSid ||
+            typeof to !== "string" || !E164_US.test(to) ||
+            typeof body !== "string" || body.length < 1 ||
+            body.length > 320 ||
+            typeof createdAt !== "string" ||
+            !Number.isFinite(Date.parse(createdAt))
           ) {
             throw unavailable("The Twilio readback row shape is invalid.");
           }
           scanned += 1;
+          const createdTime = Date.parse(createdAt);
+          if (createdTime < Date.parse(fromIso) ||
+              createdTime > Date.parse(toIso)) continue;
           const sidDigest = digest(sid);
-          if (!remaining.has(sidDigest)) continue;
-          remaining.delete(sidDigest);
-          matches.push(deepFreeze({
+          const projected = deepFreeze({
             providerMessageIdDigest: sidDigest,
             status,
             errorCodeDigest: row.error_code === null ||
@@ -270,31 +417,75 @@ export function createTwilioResponderReadback({
               : digest({
                   provider: PROVIDER,
                   errorCode: String(row.error_code)
-                }),
-            readbackEvidenceDigest: digest({
-              schema: "sitesourcery.twilio-readback-evidence/v1",
-              provider: PROVIDER,
-              providerMessageIdDigest: sidDigest,
-              status,
-              observedAt: clock.now()
-            })
-          }));
+                })
+          });
+          const routeDigest = responderRouteDigest(to);
+          const contentDigest = responderContentDigest(body);
+          for (let index = 0; index < selectedTargets.length; index += 1) {
+            const selectedTarget = selectedTargets[index];
+            const targetMatches = selectedTarget.kind ===
+              "provider_message_id"
+              ? selectedTarget.providerMessageIdDigest === sidDigest
+              : selectedTarget.routeDigest === routeDigest &&
+                selectedTarget.contentDigest === contentDigest;
+            if (targetMatches) {
+              matches.get(selectedTargetDigests[index]).set(
+                sidDigest,
+                projected
+              );
+            }
+          }
         }
-        nextUrl = typeof page.next_page_uri === "string" &&
-          page.next_page_uri.length > 0
-          ? `${API_ORIGIN}${page.next_page_uri}`
-          : null;
-        if (remaining.size === 0) break;
+        nextUrl = paginationUrl(page.next_page_uri, accountSid);
       }
 
+      const exhausted = nextUrl === null;
+      const observedAt = instant(clock.now(), "The readback observation time");
+      const results = selectedTargets.map((selectedTarget, index) => {
+        const selectedTargetDigest = selectedTargetDigests[index];
+        const found = [...matches.get(selectedTargetDigest).values()];
+        const matchCount = found.length;
+        const state = matchCount === 1
+          ? selectedTarget.kind === "provider_message_id"
+            ? "matched"
+            : "single_candidate"
+          : matchCount > 1
+            ? "multiple_matches"
+            : exhausted
+              ? "not_found"
+              : "incomplete";
+        const only = matchCount === 1 ? found[0] : null;
+        return deepFreeze({
+          targetDigest: selectedTargetDigest,
+          state,
+          matchCount,
+          providerMessageIdDigest:
+            only?.providerMessageIdDigest ?? null,
+          status: only?.status ?? null,
+          errorCodeDigest: only?.errorCodeDigest ?? null,
+          readbackEvidenceDigest: digest({
+            schema: "sitesourcery.twilio-readback-evidence/v1",
+            provider: PROVIDER,
+            target: selectedTarget,
+            state,
+            matches: found,
+            windowFromIso: fromIso,
+            windowToIso: toIso,
+            pagesFetched,
+            scanned,
+            exhausted,
+            observedAt
+          })
+        });
+      });
       return deepFreeze({
         schema: "sitesourcery.twilio-readback-result/v1",
         providerEffects: false,
-        matches,
-        unmatchedDigests: deepFreeze([...remaining]),
+        results,
         scanned,
         pagesFetched,
-        exhausted: nextUrl === null
+        exhausted,
+        observedAt
       });
     }
   });

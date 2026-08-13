@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { digest } from "../security.mjs";
 import {
   createPostgresProviderReconciliationRepository
 } from "../provider-reconciliation-postgres.mjs";
@@ -55,6 +56,9 @@ function emptyDetection(text) {
   if (text.includes("inbound.state = 'unbound'")) {
     return { rowCount: 0, rows: [] };
   }
+  if (text.includes("operation.state = 'manual_review'")) {
+    return { rowCount: 0, rows: [] };
+  }
   throw new Error(`unhandled detection query: ${text.slice(0, 50)}`);
 }
 
@@ -67,6 +71,7 @@ test("detection opens digest-idempotent cases for every case kind", async () => 
         rows: [{
           id: OPERATION, organization_id: ORG, project_id: PROJECT,
           last_worker_id: "responder-fulfillment-dead0001",
+          lease_owner: "responder-fulfillment-dead0001",
           lease_expires_at: "2026-08-12T17:00:00.000Z", attempt_count: 1
         }]
       };
@@ -82,6 +87,9 @@ test("detection opens digest-idempotent cases for every case kind", async () => 
     }
     if (text.includes("inbound.state = 'unbound'")) {
       return { rowCount: 1, rows: [{ id: INBOUND }] };
+    }
+    if (text.includes("operation.state = 'manual_review'")) {
+      return { rowCount: 0, rows: [] };
     }
     if (text.includes("insert into ss.provider_reconciliation_cases")) {
       inserts.push(values);
@@ -102,6 +110,42 @@ test("detection opens digest-idempotent cases for every case kind", async () => 
   assert.deepEqual(kinds.sort(), [
     "abandoned_claim", "unbound_inbound_event", "unmatched_provider_event"
   ]);
+  const abandonedInsert = inserts.find((values) =>
+    values[1] === "abandoned_claim"
+  );
+  assert.equal(abandonedInsert[7], 1);
+  assert.equal(
+    abandonedInsert[8],
+    digest("responder-fulfillment-dead0001")
+  );
+});
+
+test("an uncertain provider create opens a shape-readback case", async () => {
+  const inserts = [];
+  const { repo } = repository((text, values) => {
+    if (text.includes("operation.state = 'manual_review'")) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: OPERATION,
+          organization_id: ORG,
+          project_id: PROJECT,
+          attempt_count: 2,
+          failure_code: "TWILIO_RESPONDER_DELIVERY_UNCERTAIN"
+        }]
+      };
+    }
+    if (text.includes("insert into ss.provider_reconciliation_cases")) {
+      inserts.push(values);
+      return { rowCount: 1, rows: [{ id: CASE }] };
+    }
+    return emptyDetection(text);
+  });
+  const result = await repo.runDetection({ workerId: WORKER, observedAt: NOW });
+  assert.equal(result.counters.ambiguousMessageCreate, 1);
+  assert.equal(result.openedCases, 1);
+  assert.equal(inserts[0][1], "ambiguous_message_create");
+  assert.equal(inserts[0][7], 2);
 });
 
 test("a stale non-terminal status self-heals through the idempotent reconciler before opening a case", async () => {
@@ -178,7 +222,11 @@ test("escalation preserves the dead worker's lease identity and is idempotent", 
           id: CASE, state: "open", subject_operation_id: OPERATION,
           operation_state: "claimed",
           lease_owner: "responder-fulfillment-dead0001",
-          last_worker_id: "responder-fulfillment-dead0001", attempt_count: 1
+          last_worker_id: "responder-fulfillment-dead0001", attempt_count: 1,
+          subject_operation_attempt: 1,
+          subject_lease_owner_digest:
+            digest("responder-fulfillment-dead0001"),
+          lease_expires_at: "2026-08-12T17:00:00.000Z"
         }]
       };
     }
@@ -195,7 +243,7 @@ test("escalation preserves the dead worker's lease identity and is idempotent", 
   assert.equal(result.status, "escalated");
   assert.match(update.text, /state = 'manual_review'/u);
   assert.match(update.text, /last_worker_id = \$2/u);
-  assert.match(update.text, /where id = \$1 and state = 'claimed' and lease_owner = \$2/u);
+  assert.match(update.text, /and attempt_count = \$4 and lease_expires_at < \$5/u);
   assert.equal(update.values[1], "responder-fulfillment-dead0001");
 
   const already = repository((text) => {
@@ -206,7 +254,10 @@ test("escalation preserves the dead worker's lease identity and is idempotent", 
           id: CASE, state: "open", subject_operation_id: OPERATION,
           operation_state: "manual_review",
           lease_owner: null, last_worker_id: "responder-fulfillment-dead0001",
-          attempt_count: 1
+          attempt_count: 1, subject_operation_attempt: 1,
+          subject_lease_owner_digest:
+            digest("responder-fulfillment-dead0001"),
+          lease_expires_at: null
         }]
       };
     }
@@ -222,6 +273,17 @@ test("escalation preserves the dead worker's lease identity and is idempotent", 
 
 test("readback records exactly once and self-heal closes without operator authority", async () => {
   const readbackRepo = repository((text) => {
+    if (text.includes("where id = $1 for update")) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: CASE, provider: "twilio", case_kind: "unmatched_provider_event",
+          case_digest: "f".repeat(64), state: "open",
+          readback_state: "none", resolution_kind: null,
+          readback_match_count: null
+        }]
+      };
+    }
     if (text.includes("update ss.provider_reconciliation_cases")) {
       assert.match(text, /state = 'open' and readback_state = 'none'/u);
       return {
@@ -229,7 +291,9 @@ test("readback records exactly once and self-heal closes without operator author
         rows: [{
           id: CASE, provider: "twilio", case_kind: "unmatched_provider_event",
           case_digest: "f".repeat(64), state: "open",
-          readback_state: "matched", resolution_kind: null
+          readback_state: "matched", resolution_kind: null,
+          readback_matched_provider_message_id_digest: "d".repeat(64),
+          readback_match_count: 1
         }]
       };
     }
@@ -239,6 +303,8 @@ test("readback records exactly once and self-heal closes without operator author
     caseId: CASE,
     readbackState: "matched",
     readbackEvidenceDigest: "a".repeat(64),
+    matchedProviderMessageIdDigest: "d".repeat(64),
+    matchCount: 1,
     observedAt: NOW
   });
   assert.equal(receipt.readbackState, "matched");
@@ -282,6 +348,37 @@ test("detection and listing run under system authority without tenant context", 
   const list = await listRepo.repo.listOpenCases();
   assert.deepEqual(list.cases, []);
   assert.equal(listRepo.fake.calls[0].context.readOnly, true);
+});
+
+test("readback candidates expose only digest targets and bounded attempt windows", async () => {
+  const routeDigest = "1".repeat(64);
+  const contentDigest = "2".repeat(64);
+  const { fake, repo } = repository((text) => {
+    if (text.includes("from ss.provider_reconciliation_cases reconciliation")) {
+      return {
+        rowCount: 1,
+        rows: [{
+          id: CASE,
+          case_kind: "ambiguous_message_create",
+          subject_provider_message_id_digest: null,
+          route_digest: routeDigest,
+          content_digest: contentDigest,
+          attempt_at: "2026-08-12T17:59:00.000Z",
+          opened_at: NOW
+        }]
+      };
+    }
+    throw new Error(`unhandled: ${text.slice(0, 50)}`);
+  });
+  const result = await repo.listReadbackCandidates({ limit: 4 });
+  assert.equal(result.candidates.length, 1);
+  assert.deepEqual(result.candidates[0].target, {
+    kind: "responder_message_shape",
+    routeDigest,
+    contentDigest
+  });
+  assert.match(result.candidates[0].targetDigest, /^[0-9a-f]{64}$/u);
+  assert.equal(fake.calls[0].context.readOnly, true);
 });
 
 test("configuration bounds are enforced", () => {

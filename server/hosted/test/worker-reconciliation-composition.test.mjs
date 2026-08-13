@@ -31,6 +31,7 @@ function repositoryFactory() {
     runDetection() {},
     escalateAbandonedClaim() {},
     recordReadback() {},
+    listReadbackCandidates() {},
     listOpenCases() {}
   };
 }
@@ -42,7 +43,7 @@ function readbackFactory({ mode = "held" } = {}) {
     providerEffects: false,
     readOnly: true,
     async readiness() {
-      return { ready: mode !== "held" };
+      return { ready: mode !== "held", verified: mode !== "held" };
     },
     findMessages() {}
   };

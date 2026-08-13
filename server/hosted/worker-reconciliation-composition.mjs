@@ -143,6 +143,7 @@ export function createReconciliationWorkerFactories({
             clock,
             enabled,
             ...selectedLoop,
+            maximumReadbacksPerCycle: options.maximumReadbacksPerCycle,
             log
           }),
           async readiness() {

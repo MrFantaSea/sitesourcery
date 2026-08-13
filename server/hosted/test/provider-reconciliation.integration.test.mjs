@@ -297,7 +297,27 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     });
     assert.equal(claimA.status, "claimed");
 
-    // (3) Unbound inbound event awaiting late provisioning (system insert).
+    // (3) Ambiguous Message create: the provider response was uncertain, so
+    // the operation is terminally held for shape-based readback and is never
+    // blindly retried.
+    const ambiguous = await queuedOperation("m", "+18565550102");
+    tick();
+    const claimM = await fulfillment.claimNextDelivery({
+      workerId: "responder-fulfillment-mworker0001",
+      claimedAt: selectedNow,
+      leaseExpiresAt: new Date(Date.parse(selectedNow) + 120_000).toISOString()
+    });
+    assert.equal(claimM.status, "claimed");
+    tick();
+    assert.equal((await fulfillment.recordDeliveryManualReview({
+      operationId: ambiguous.id,
+      workerId: "responder-fulfillment-mworker0001",
+      attemptCount: 1,
+      failureCode: "TWILIO_RESPONDER_DELIVERY_UNCERTAIN",
+      failedAt: selectedNow
+    })).status, "manual_review");
+
+    // (4) Unbound inbound event awaiting late provisioning (system insert).
     const unboundId = randomUUID();
     await authority.service({
       actorKind: "system", isolation: "serializable"
@@ -320,7 +340,7 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
       ]
     ));
 
-    // (4) Unmatched provider event: a pending delivery-status callback whose
+    // (5) Unmatched provider event: a pending delivery-status callback whose
     // message SID digest maps to no accepted operation.
     await authority.service({
       actorKind: "system", isolation: "serializable"
@@ -355,20 +375,26 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     // At least this run's abandoned claim, unbound event, and orphan event
     // are opened (the shared migration database may retain prior cases).
     assert.ok(detection.counters.abandonedClaim >= 1);
+    assert.ok(detection.counters.ambiguousMessageCreate >= 1);
     assert.ok(detection.counters.unboundInboundEvent >= 1);
     assert.ok(detection.counters.unmatchedProviderEvent >= 1);
-    assert.ok(detection.openedCases >= 3);
+    assert.ok(detection.openedCases >= 4);
     const openedForThisRun = await pool.query(
       `select case_kind from ss.provider_reconciliation_cases
         where (case_kind='abandoned_claim' and subject_operation_id=$1)
            or (case_kind='unbound_inbound_event' and subject_inbound_event_id=$2)
            or (case_kind='unmatched_provider_event'
-               and subject_provider_message_id_digest=$3)`,
-      [abandoned.id, unboundId, digest("orphan-sid-" + run)]
+               and subject_provider_message_id_digest=$3)
+           or (case_kind='ambiguous_message_create'
+               and subject_operation_id=$4)`,
+      [
+        abandoned.id, unboundId, digest("orphan-sid-" + run),
+        ambiguous.id
+      ]
     );
     assert.equal(
       openedForThisRun.rowCount,
-      3,
+      4,
       "every case kind opened exactly one case for this run's subjects"
     );
 
@@ -381,11 +407,14 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     const reopenedForThisRun = await pool.query(
       `select count(*)::integer as count
          from ss.provider_reconciliation_cases
-        where subject_operation_id=$1 or subject_inbound_event_id=$2
+        where subject_operation_id in ($1,$4) or subject_inbound_event_id=$2
            or subject_provider_message_id_digest=$3`,
-      [abandoned.id, unboundId, digest("orphan-sid-" + run)]
+      [
+        abandoned.id, unboundId, digest("orphan-sid-" + run),
+        ambiguous.id
+      ]
     );
-    assert.equal(reopenedForThisRun.rows[0].count, 3);
+    assert.equal(reopenedForThisRun.rows[0].count, 4);
     assert.ok(second.openedCases >= 0);
 
     const abandonedCase = await pool.query(
@@ -438,7 +467,7 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     const items = refreshed.items.filter(
       (item) => item.kind === "provider_reconciliation_case"
     );
-    assert.ok(items.length >= 3);
+    assert.ok(items.length >= 4);
     for (const item of items) {
       assert.equal(item.repair, null);
       assert.equal(item.status, "open");
@@ -447,10 +476,49 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     const critical = items.find((item) => item.severity === "critical");
     assert.ok(critical, "the suppression conflict projects as critical");
 
-    // (6) The whole loop runs read-only end to end with readback held.
+    // (6) The whole loop performs real worker-to-readback-to-repository
+    // composition against a fake read-only provider. Every result is digest
+    // only and no provider create/retry path exists.
+    const fakeReadback = {
+      kind: "twilio-responder-readback",
+      mode: "verified-read-only",
+      providerEffects: false,
+      readOnly: true,
+      async readiness() { return { ready: true, verified: true }; },
+      async findMessages({ targets }) {
+        const target = targets[0];
+        const targetDigest = digest({
+          schema: "sitesourcery.twilio-readback-target/v1",
+          ...target
+        });
+        const providerMessageIdDigest = target.kind ===
+          "provider_message_id"
+          ? target.providerMessageIdDigest
+          : digest({ targetDigest, provider: "fake-twilio" });
+        return {
+          results: [{
+            targetDigest,
+            state: target.kind === "provider_message_id"
+              ? "matched"
+              : "single_candidate",
+            matchCount: 1,
+            providerMessageIdDigest,
+            status: "delivered",
+            errorCodeDigest: null,
+            readbackEvidenceDigest: digest({
+              targetDigest,
+              providerMessageIdDigest,
+              state: target.kind === "provider_message_id"
+                ? "matched"
+                : "single_candidate"
+            })
+          }]
+        };
+      }
+    };
     const worker = createProviderReconciliationWorker({
       repository: reconciliation,
-      readback: null,
+      readback: fakeReadback,
       clock: { now: () => observedFuture },
       enabled: true,
       workerId: WORKER_ID,
@@ -459,6 +527,25 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     const swept = await worker.runOnce();
     assert.equal(swept.status, "swept");
     assert.equal(swept.openedCases, 0, "steady state opens nothing new");
+    assert.equal(swept.readbackReady, true);
+    assert.ok(swept.readbacksRecorded >= 4);
+    const ambiguousReadback = await pool.query(
+      `select readback_state, readback_match_count,
+              readback_matched_provider_message_id_digest
+         from ss.provider_reconciliation_cases
+        where case_kind='ambiguous_message_create'
+          and subject_operation_id=$1`,
+      [ambiguous.id]
+    );
+    assert.deepEqual(
+      {
+        state: ambiguousReadback.rows[0].readback_state,
+        count: ambiguousReadback.rows[0].readback_match_count,
+        matched: ambiguousReadback.rows[0]
+          .readback_matched_provider_message_id_digest !== null
+      },
+      { state: "single_candidate", count: 1, matched: true }
+    );
 
     // No durable operational row leaked a raw number or body anywhere.
     const scan = await pool.query(
