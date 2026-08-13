@@ -312,7 +312,23 @@ export function createProductionMonitoringProbes({
             where state = 'building'
               and lease_expires_at <=
                 clock_timestamp()
-          ) as oldest_export_lease_expired_at
+          ) as oldest_export_lease_expired_at,
+          (
+            select count(*)::text
+            from ss.provider_reconciliation_cases
+            where state = 'open'
+          ) as reconciliation_open,
+          (
+            select count(*)::text
+            from ss.provider_reconciliation_cases
+            where state = 'open'
+              and case_kind = 'suppression_conflict'
+          ) as reconciliation_suppression_conflict,
+          (
+            select min(opened_at)
+            from ss.provider_reconciliation_cases
+            where state = 'open'
+          ) as oldest_reconciliation_open_at
         from ss.transactional_outbox outbox
       `);
       const row = result.rows[0];
@@ -357,6 +373,20 @@ export function createProductionMonitoringProbes({
           row.oldest_export_lease_expired_at
             ? new Date(
                 row.oldest_export_lease_expired_at
+              ).toISOString()
+            : null,
+        reconciliationOpenCases: number(
+          row.reconciliation_open,
+          "reconciliation open cases"
+        ),
+        reconciliationSuppressionConflicts: number(
+          row.reconciliation_suppression_conflict,
+          "reconciliation suppression conflicts"
+        ),
+        oldestReconciliationOpenAt:
+          row.oldest_reconciliation_open_at
+            ? new Date(
+                row.oldest_reconciliation_open_at
               ).toISOString()
             : null
       });

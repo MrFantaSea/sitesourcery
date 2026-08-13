@@ -12,7 +12,8 @@ export const WORKER_PURPOSES = Object.freeze([
   "notification-mail",
   "alakazam-fulfillment",
   "alakazam-retained-lifecycle",
-  "responder-fulfillment"
+  "responder-fulfillment",
+  "provider-reconciliation"
 ]);
 
 const MAXIMUM_CONFIG_BYTES = 2_048;

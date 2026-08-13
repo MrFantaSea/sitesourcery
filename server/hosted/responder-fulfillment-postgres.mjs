@@ -1,5 +1,8 @@
+import { randomUUID as systemRandomUUID } from "node:crypto";
+
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
+import { digest } from "./security.mjs";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -165,16 +168,57 @@ function claim(row, workerId) {
 }
 
 export function createPostgresResponderFulfillmentRepository({
-  authority
+  authority,
+  randomUUID = systemRandomUUID
 } = {}) {
   invariant(
     authority?.kind === "canonical-postgres" &&
       typeof authority.service === "function" &&
-      typeof authority.readiness === "function",
+      typeof authority.readiness === "function" &&
+      typeof randomUUID === "function",
     "RESPONDER_FULFILLMENT_REPOSITORY_CONFIGURATION_REQUIRED",
     "Canonical PostgreSQL authority is required for Responder fulfillment.",
     { status: 500 }
   );
+
+  // A provider effect that completes after a durable STOP cancelled the
+  // operation leaves the row cancelled with no provider mapping and no
+  // status projection. This records the exact fact durably as an open
+  // reconciliation case, inside the caller's acceptance transaction so the
+  // row and the case commit atomically. The case digest is unique per
+  // operation, so repeated acceptance attempts fold into one open case.
+  async function recordSuppressionConflictCase(client, row, selected) {
+    const subject = String(row.id);
+    const evidenceDigest = digest({
+      schema: "sitesourcery.responder-suppression-conflict-evidence/v1",
+      operationId: subject,
+      providerMessageIdDigest: selected.providerMessageIdDigest,
+      providerReceiptDigest: selected.providerReceiptDigest,
+      acceptedAt: selected.acceptedAt,
+      failureCode: row.failure_code
+    });
+    await client.query(
+      `insert into ss.provider_reconciliation_cases (
+         id, provider, case_kind,
+         case_digest, subject_operation_id, organization_id,
+         project_id, evidence_digest, detected_by_worker_id,
+         readback_state, state, revision, opened_at, created_at,
+         updated_at
+       ) values (
+         $1, 'twilio', 'suppression_conflict',
+         ss.provider_reconciliation_case_digest(
+           'twilio', 'suppression_conflict', $2
+         ),
+         $3, $4, $5, $6, $7, 'none', 'open', 1, $8, $8, $8
+       )
+       on conflict (case_digest) do nothing`,
+      [
+        randomUUID(), subject, row.id, row.organization_id,
+        row.project_id, evidenceDigest, selected.workerId,
+        selected.acceptedAt
+      ]
+    );
+  }
 
   return Object.freeze({
     kind: "responder-fulfillment-postgres",
@@ -393,13 +437,15 @@ export function createPostgresResponderFulfillmentRepository({
             );
             return deepFreeze({ status: "replay" });
           }
-          invariant(
-            !suppressionCancelled(row),
-            "RESPONDER_DELIVERY_SUPPRESSION_CONFLICT",
-            "The provider effect completed after a durable STOP cancelled " +
-              "this operation; the receipt requires operator reconciliation.",
-            { status: 409 }
-          );
+          // The effect completed after a durable STOP cancelled this
+          // operation. Record the conflict as a durable open reconciliation
+          // case in this same transaction — the only moment the evidence
+          // exists — and report it rather than throwing, so the row and the
+          // case commit atomically.
+          if (suppressionCancelled(row)) {
+            await recordSuppressionConflictCase(client, row, selected);
+            return deepFreeze({ status: "suppression_conflict" });
+          }
           assertClaimOwner(row, selected);
           const updated = await client.query(
             `update ss.responder_delivery_operations

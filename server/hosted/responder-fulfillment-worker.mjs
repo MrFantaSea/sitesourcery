@@ -335,11 +335,15 @@ export function createResponderFulfillmentWorker({
         acceptedAt: receipt.acceptedAt
       });
       invariant(
-        result?.status === "accepted" || result?.status === "replay",
+        result?.status === "accepted" || result?.status === "replay" ||
+          result?.status === "suppression_conflict",
         "RESPONDER_FULFILLMENT_WORKER_INVALID",
         "The accepted Responder delivery was not durably recorded.",
         { status: 500 }
       );
+      // A provider effect that landed after a durable STOP is durably
+      // recorded as an open reconciliation case by the repository; the
+      // worker reports it without treating it as a delivery success.
       return Object.freeze({
         status: result.status,
         operationId: selected.operationId

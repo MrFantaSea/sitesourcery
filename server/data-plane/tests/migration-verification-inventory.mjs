@@ -33,7 +33,8 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608120125_responder_fulfillment_queue.sql",
   "202608120126_responder_private_delivery_material.sql",
   "202608120127_responder_twilio_delivery_events.sql",
-  "202608120128_responder_twilio_inbound.sql"
+  "202608120128_responder_twilio_inbound.sql",
+  "202608120129_provider_reconciliation.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(

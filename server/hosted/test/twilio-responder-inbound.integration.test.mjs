@@ -683,19 +683,27 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
       "the pre-dispatch revalidation refuses a suppressed operation"
     );
     tick();
-    await assert.rejects(
-      fulfillment.recordDeliveryAccepted({
-        operationId: second.operation.id,
-        workerId: claimInput(2).workerId,
-        attemptCount: 1,
-        provider: "twilio",
-        providerMessageIdDigest: digest("race-message-sid"),
-        providerReceiptDigest: digest("race-receipt"),
-        acceptedAt: selectedNow
-      }),
-      (error) => error?.code === "RESPONDER_DELIVERY_SUPPRESSION_CONFLICT",
-      "an effect completing after suppression latches operator conflict"
+    // An effect completing after suppression is durably recorded as an open
+    // reconciliation case (FIN-004R) rather than thrown away; the worker is
+    // told to reconcile through the returned status.
+    const raceConflict = await fulfillment.recordDeliveryAccepted({
+      operationId: second.operation.id,
+      workerId: claimInput(2).workerId,
+      attemptCount: 1,
+      provider: "twilio",
+      providerMessageIdDigest: digest("race-message-sid"),
+      providerReceiptDigest: digest("race-receipt"),
+      acceptedAt: selectedNow
+    });
+    assert.equal(raceConflict.status, "suppression_conflict");
+    const raceCase = await pool.query(
+      `select state from ss.provider_reconciliation_cases
+        where case_kind = 'suppression_conflict'
+          and subject_operation_id = $1`,
+      [second.operation.id]
     );
+    assert.equal(raceCase.rowCount, 1);
+    assert.equal(raceCase.rows[0].state, "open");
     assert.deepEqual(
       await fulfillment.recordDeliveryManualReview({
         operationId: second.operation.id,

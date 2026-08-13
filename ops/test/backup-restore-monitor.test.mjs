@@ -1605,7 +1605,10 @@ function healthyProbes(
         exportLeaseExpired: 0,
         exportManualReview: 0,
         oldestExportQueuedAt: null,
-        oldestExportLeaseExpiredAt: null
+        oldestExportLeaseExpiredAt: null,
+        reconciliationOpenCases: 0,
+        reconciliationSuppressionConflicts: 0,
+        oldestReconciliationOpenAt: null
       };
     }
   };
@@ -1808,7 +1811,11 @@ test("monitor emits bounded operator alerts for DB, backup age, disk, certificat
     oldestExportQueuedAt:
       "2026-07-29T10:00:00.000Z",
     oldestExportLeaseExpiredAt:
-      "2026-07-29T11:00:00.000Z"
+      "2026-07-29T11:00:00.000Z",
+    reconciliationOpenCases: 4,
+    reconciliationSuppressionConflicts: 1,
+    oldestReconciliationOpenAt:
+      "2026-07-28T11:00:00.000Z"
   });
   const result = await runOperationsMonitor({
     ...HELD_MONITOR_CONTRACT,
@@ -1830,7 +1837,9 @@ test("monitor emits bounded operator alerts for DB, backup age, disk, certificat
       "DISK_CAPACITY_LOW",
       "EXPORT_LEASE_BACKLOG_HIGH",
       "EXPORT_QUEUE_BACKLOG_HIGH",
-      "EXPORT_RECONCILIATION_REQUIRED"
+      "EXPORT_RECONCILIATION_REQUIRED",
+      "PROVIDER_RECONCILIATION_BACKLOG_HIGH",
+      "PROVIDER_RECONCILIATION_SUPPRESSION_CONFLICT"
     ]
   );
   assert.equal(result.delivery.mode, "held");
