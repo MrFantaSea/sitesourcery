@@ -18,6 +18,11 @@ test("PROVIDER-RECONCILIATION-01 is digest-only, forced-RLS, and authority-bound
     /create table ss\.provider_reconciliation_cases/u,
     /case_kind in \(\s*'abandoned_claim', 'stale_delivery_status',/u,
     /case_digest ss\.sha256_hex not null unique/u,
+    /'ambiguous_message_create'/u,
+    /subject_operation_attempt integer/u,
+    /subject_lease_owner_digest ss\.sha256_hex/u,
+    /readback_matched_provider_message_id_digest ss\.sha256_hex/u,
+    /readback_match_count integer/u,
     /create table ss\.responder_inbound_resolutions/u,
     /create index responder_delivery_operations_abandoned_claims/u,
     /create index responder_delivery_provider_statuses_nonterminal/u,
@@ -35,6 +40,7 @@ test("PROVIDER-RECONCILIATION-01 is digest-only, forced-RLS, and authority-bound
     // Reconciliation must not fabricate provider dispatch authority.
     /provider_effects_authorized\s*=\s*true/iu
   ]) assert.doesNotMatch(source, forbidden);
+  assert.doesNotMatch(source, /readback_state in \([^)]*'unavailable'/u);
 });
 
 test("self-healed closure is the only closure without operator authority", async () => {

@@ -2,6 +2,13 @@ import { randomUUID } from "node:crypto";
 
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{0,127}$/u;
 const WORKER_ID = /^provider-reconciliation-[A-Za-z0-9.-]{8,160}$/u;
+const SHA256 = /^[0-9a-f]{64}$/u;
+const READBACK_RESULT_STATES = new Set([
+  "matched", "single_candidate", "not_found", "multiple_matches",
+  "incomplete"
+]);
+const MAXIMUM_READBACK_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const SHAPE_WINDOW_BUFFER_MS = 5 * 60 * 1000;
 
 function configurationError(message) {
   const error = new Error(message);
@@ -60,6 +67,7 @@ function validatePorts(repository, readback, clock, enabled) {
     typeof repository.runDetection !== "function" ||
     typeof repository.escalateAbandonedClaim !== "function" ||
     typeof repository.recordReadback !== "function" ||
+    typeof repository.listReadbackCandidates !== "function" ||
     typeof repository.listOpenCases !== "function"
   ) {
     throw configurationError("The reconciliation repository is invalid.");
@@ -71,7 +79,8 @@ function validatePorts(repository, readback, clock, enabled) {
     readback !== null &&
     (readback.providerEffects !== false ||
       readback.readOnly !== true ||
-      typeof readback.readiness !== "function")
+      typeof readback.readiness !== "function" ||
+      typeof readback.findMessages !== "function")
   ) {
     throw configurationError("The reconciliation readback port is invalid.");
   }
@@ -93,6 +102,7 @@ export function createProviderReconciliationWorker({
   intervalMs = 60_000,
   errorBackoffMs = 5_000,
   maximumBackoffMs = 300_000,
+  maximumReadbacksPerCycle = 8,
   wait = defaultWait,
   log = () => {}
 } = {}) {
@@ -106,6 +116,12 @@ export function createProviderReconciliationWorker({
   integer(intervalMs, "Loop interval", 1_000, 3_600_000);
   integer(errorBackoffMs, "Error backoff", 100, 300_000);
   integer(maximumBackoffMs, "Maximum backoff", errorBackoffMs, 3_600_000);
+  integer(
+    maximumReadbacksPerCycle,
+    "Maximum readbacks per cycle",
+    1,
+    64
+  );
 
   let controller = null;
   let loopPromise = null;
@@ -138,6 +154,29 @@ export function createProviderReconciliationWorker({
     }
   }
 
+  function readbackWindow(candidate, observedAt) {
+    const observedTime = Date.parse(observedAt);
+    const attemptTime = Date.parse(candidate.attemptAt);
+    const openedTime = Date.parse(candidate.openedAt);
+    if (!Number.isFinite(attemptTime) || !Number.isFinite(openedTime) ||
+        openedTime > observedTime || attemptTime > openedTime) {
+      throw configurationError("A reconciliation readback window is invalid.");
+    }
+    const oldest = observedTime - MAXIMUM_READBACK_WINDOW_MS;
+    if (attemptTime < oldest) return null;
+    const shapeTarget = candidate.target?.kind === "responder_message_shape";
+    const from = shapeTarget
+      ? attemptTime - SHAPE_WINDOW_BUFFER_MS
+      : Math.max(oldest, attemptTime - SHAPE_WINDOW_BUFFER_MS);
+    const to = shapeTarget
+      ? Math.min(observedTime, openedTime + SHAPE_WINDOW_BUFFER_MS)
+      : observedTime;
+    return Object.freeze({
+      windowFromIso: new Date(from).toISOString(),
+      windowToIso: new Date(to).toISOString()
+    });
+  }
+
   async function runOnce({ signal = null } = {}) {
     if (signal?.aborted) return Object.freeze({ status: "aborted" });
     if (!ports.enabled) return Object.freeze({ status: "held" });
@@ -163,15 +202,85 @@ export function createProviderReconciliationWorker({
       if (result.status === "escalated") escalated += 1;
     }
 
+    let readbackReady = false;
+    let readbacksRecorded = 0;
+    let readbacksIncomplete = 0;
+    let readbackMatches = 0;
+    if (ports.readback !== null) {
+      const readiness = await ports.readback.readiness();
+      readbackReady = readiness?.ready === true &&
+        readiness?.verified === true;
+      if (readbackReady) {
+        const listed = await ports.repository.listReadbackCandidates({
+          limit: maximumReadbacksPerCycle
+        });
+        for (const candidate of listed.candidates) {
+          if (signal?.aborted) break;
+          const window = readbackWindow(candidate, observedAt);
+          if (window === null) {
+            readbacksIncomplete += 1;
+            continue;
+          }
+          const result = await ports.readback.findMessages({
+            targets: [candidate.target],
+            ...window,
+            signal
+          });
+          const evidence = result?.results?.[0];
+          if (!evidence || result.results.length !== 1 ||
+              !SHA256.test(candidate.targetDigest ?? "") ||
+              evidence.targetDigest !== candidate.targetDigest ||
+              !READBACK_RESULT_STATES.has(evidence.state) ||
+              !Number.isSafeInteger(evidence.matchCount) ||
+              evidence.matchCount < 0 || evidence.matchCount > 500 ||
+              typeof evidence.readbackEvidenceDigest !== "string" ||
+              !SHA256.test(evidence.readbackEvidenceDigest) ||
+              (["matched", "single_candidate"].includes(evidence.state) &&
+                (evidence.matchCount !== 1 ||
+                  !SHA256.test(evidence.providerMessageIdDigest ?? ""))) ||
+              (evidence.state === "not_found" &&
+                evidence.matchCount !== 0) ||
+              (evidence.state === "multiple_matches" &&
+                evidence.matchCount < 2) ||
+              (candidate.target.kind === "provider_message_id" &&
+                ["single_candidate", "multiple_matches"].includes(
+                  evidence.state
+                )) ||
+              (candidate.target.kind === "responder_message_shape" &&
+                evidence.state === "matched")) {
+            throw configurationError(
+              "The reconciliation readback result is invalid."
+            );
+          }
+          if (evidence.state === "incomplete") {
+            readbacksIncomplete += 1;
+            continue;
+          }
+          await ports.repository.recordReadback({
+            caseId: candidate.caseId,
+            readbackState: evidence.state,
+            readbackEvidenceDigest: evidence.readbackEvidenceDigest,
+            matchedProviderMessageIdDigest:
+              evidence.providerMessageIdDigest ?? null,
+            matchCount: evidence.matchCount,
+            observedAt: now()
+          });
+          readbacksRecorded += 1;
+          readbackMatches += evidence.matchCount;
+        }
+      }
+    }
+
     return Object.freeze({
       status: "swept",
       observedAt,
       openedCases: detection.openedCases,
       selfHealedProjections: detection.counters.selfHealedProjections,
       escalatedClaims: escalated,
-      readbackReady: ports.readback === null
-        ? false
-        : (await ports.readback.readiness()).ready === true
+      readbackReady,
+      readbacksRecorded,
+      readbacksIncomplete,
+      readbackMatches
     });
   }
 
@@ -192,7 +301,9 @@ export function createProviderReconciliationWorker({
             cycle: cycles,
             resultStatus: lastStatus,
             openedCases: result.openedCases ?? 0,
-            escalatedClaims: result.escalatedClaims ?? 0
+            escalatedClaims: result.escalatedClaims ?? 0,
+            readbacksRecorded: result.readbacksRecorded ?? 0,
+            readbacksIncomplete: result.readbacksIncomplete ?? 0
           });
         } catch (error) {
           cycles += 1;
@@ -255,6 +366,7 @@ export function createProviderReconciliationWorker({
         intervalMs,
         errorBackoffMs,
         maximumBackoffMs,
+        maximumReadbacksPerCycle,
         cycles,
         consecutiveErrors,
         lastStatus,
@@ -283,6 +395,11 @@ export function providerReconciliationWorkerOptionsFromEnvironment(
       environment,
       "SITESOURCERY_PROVIDER_RECONCILIATION_WORKER_MAXIMUM_BACKOFF_MS",
       300_000, 100, 3_600_000
+    ),
+    maximumReadbacksPerCycle: environmentInteger(
+      environment,
+      "SITESOURCERY_PROVIDER_RECONCILIATION_MAXIMUM_READBACKS_PER_CYCLE",
+      8, 1, 64
     )
   };
 }

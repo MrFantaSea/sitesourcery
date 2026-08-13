@@ -20,11 +20,15 @@ function fixture({
     counters: { selfHealedProjections: 0 }
   },
   openCases = [],
+  readbackCandidates = [],
   escalateResult = { status: "escalated" },
   readback = null,
   detectionError = null
 } = {}) {
-  const calls = { detection: [], escalations: [], lists: 0 };
+  const calls = {
+    detection: [], escalations: [], lists: 0,
+    candidateLists: 0, readbackRecords: []
+  };
   const repository = {
     kind: "provider-reconciliation-postgres",
     providerEffects: false,
@@ -41,8 +45,13 @@ function fixture({
       calls.escalations.push(input);
       return escalateResult;
     },
-    async recordReadback() {
-      throw new Error("not used");
+    async listReadbackCandidates() {
+      calls.candidateLists += 1;
+      return { candidates: readbackCandidates };
+    },
+    async recordReadback(input) {
+      calls.readbackRecords.push(input);
+      return { status: "recorded" };
     }
   };
   const worker = createProviderReconciliationWorker({
@@ -88,6 +97,58 @@ test("the worker runs detection with readback held and reports it as not ready",
   assert.equal(calls.detection.length, 1);
 });
 
+test("verified readback is executed and its exact evidence is recorded", async () => {
+  const targetDigest = "d".repeat(64);
+  const providerMessageIdDigest = "e".repeat(64);
+  const evidenceDigest = "f".repeat(64);
+  const readbackCalls = [];
+  const readback = {
+    providerEffects: false,
+    readOnly: true,
+    async readiness() { return { ready: true, verified: true }; },
+    async findMessages(input) {
+      readbackCalls.push(input);
+      return {
+        results: [{
+          targetDigest,
+          state: "single_candidate",
+          matchCount: 1,
+          providerMessageIdDigest,
+          readbackEvidenceDigest: evidenceDigest
+        }]
+      };
+    }
+  };
+  const { calls, worker } = fixture({
+    readback,
+    readbackCandidates: [{
+      caseId: CASE,
+      caseKind: "ambiguous_message_create",
+      target: {
+        kind: "responder_message_shape",
+        routeDigest: "a".repeat(64),
+        contentDigest: "b".repeat(64)
+      },
+      targetDigest,
+      attemptAt: "2026-08-12T17:59:00.000Z",
+      openedAt: NOW
+    }]
+  });
+  const result = await worker.runOnce();
+  assert.equal(result.readbackReady, true);
+  assert.equal(result.readbacksRecorded, 1);
+  assert.equal(result.readbackMatches, 1);
+  assert.equal(readbackCalls.length, 1);
+  assert.deepEqual(calls.readbackRecords, [{
+    caseId: CASE,
+    readbackState: "single_candidate",
+    readbackEvidenceDigest: evidenceDigest,
+    matchedProviderMessageIdDigest: providerMessageIdDigest,
+    matchCount: 1,
+    observedAt: NOW
+  }]);
+});
+
 test("a held worker performs no work", async () => {
   const { calls, worker } = fixture({ enabled: false });
   assert.deepEqual(await worker.runOnce(), { status: "held" });
@@ -106,6 +167,7 @@ test("detection failure surfaces an allowlisted code and never leaks detail", as
       async runDetection() { throw error; },
       async listOpenCases() { return { cases: [] }; },
       async escalateAbandonedClaim() { return { status: "escalated" }; },
+      async listReadbackCandidates() { return { candidates: [] }; },
       async recordReadback() { throw new Error("unused"); }
     };
     return {
@@ -134,7 +196,12 @@ test("detection failure surfaces an allowlisted code and never leaks detail", as
 test("environment options are bounded and default sensibly", () => {
   assert.deepEqual(
     providerReconciliationWorkerOptionsFromEnvironment({}),
-    { intervalMs: 60_000, errorBackoffMs: 5_000, maximumBackoffMs: 300_000 }
+    {
+      intervalMs: 60_000,
+      errorBackoffMs: 5_000,
+      maximumBackoffMs: 300_000,
+      maximumReadbacksPerCycle: 8
+    }
   );
   assert.throws(
     () => providerReconciliationWorkerOptionsFromEnvironment({
@@ -147,7 +214,8 @@ test("environment options are bounded and default sensibly", () => {
     () => createProviderReconciliationWorker({
       repository: {
         kind: "wrong", providerEffects: false, runDetection() {},
-        escalateAbandonedClaim() {}, recordReadback() {}, listOpenCases() {}
+        escalateAbandonedClaim() {}, recordReadback() {},
+        listReadbackCandidates() {}, listOpenCases() {}
       },
       clock: { now: () => NOW }
     }),

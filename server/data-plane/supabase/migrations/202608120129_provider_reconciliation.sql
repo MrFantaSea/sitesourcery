@@ -38,7 +38,8 @@ create table ss.provider_reconciliation_cases (
     case_kind in (
       'abandoned_claim', 'stale_delivery_status',
       'unmatched_provider_event', 'suppression_conflict',
-      'unbound_inbound_event', 'ambiguous_number_binding'
+      'unbound_inbound_event', 'ambiguous_number_binding',
+      'ambiguous_message_create'
     )
   ),
   case_digest ss.sha256_hex not null unique,
@@ -48,6 +49,11 @@ create table ss.provider_reconciliation_cases (
     references ss.responder_twilio_inbound_events(id),
   subject_provider_message_id_digest ss.sha256_hex,
   subject_phone_number_sid_digest ss.sha256_hex,
+  subject_operation_attempt integer check (
+    subject_operation_attempt is null
+      or subject_operation_attempt between 1 and 5
+  ),
+  subject_lease_owner_digest ss.sha256_hex,
   organization_id uuid references ss.organizations(id),
   project_id uuid,
   evidence_digest ss.sha256_hex not null,
@@ -58,9 +64,16 @@ create table ss.provider_reconciliation_cases (
     )
   ),
   readback_state text not null default 'none' check (
-    readback_state in ('none', 'matched', 'not_found', 'unavailable')
+    readback_state in (
+      'none', 'matched', 'single_candidate', 'not_found', 'multiple_matches'
+    )
   ),
   readback_evidence_digest ss.sha256_hex,
+  readback_matched_provider_message_id_digest ss.sha256_hex,
+  readback_match_count integer check (
+    readback_match_count is null
+      or readback_match_count between 0 and 500
+  ),
   readback_at timestamptz,
   state text not null check (state in ('open', 'resolved')),
   resolution_kind text check (
@@ -84,9 +97,23 @@ create table ss.provider_reconciliation_cases (
   check (
     (readback_state = 'none'
       and readback_evidence_digest is null
+      and readback_matched_provider_message_id_digest is null
+      and readback_match_count is null
       and readback_at is null)
-    or (readback_state <> 'none'
+    or (readback_state in ('matched', 'single_candidate')
       and readback_evidence_digest is not null
+      and readback_matched_provider_message_id_digest is not null
+      and readback_match_count = 1
+      and readback_at is not null)
+    or (readback_state = 'not_found'
+      and readback_evidence_digest is not null
+      and readback_matched_provider_message_id_digest is null
+      and readback_match_count = 0
+      and readback_at is not null)
+    or (readback_state = 'multiple_matches'
+      and readback_evidence_digest is not null
+      and readback_matched_provider_message_id_digest is null
+      and readback_match_count between 2 and 500
       and readback_at is not null)
   ),
   check (
@@ -109,13 +136,33 @@ create table ss.provider_reconciliation_cases (
       and resolved_by_operator_user_id is not null)
   ),
   check (
-    (case_kind in (
-      'abandoned_claim', 'stale_delivery_status', 'suppression_conflict'
-    )
+    (case_kind = 'abandoned_claim'
       and subject_operation_id is not null
       and subject_inbound_event_id is null
       and subject_provider_message_id_digest is null
       and subject_phone_number_sid_digest is null
+      and subject_operation_attempt is not null
+      and subject_lease_owner_digest is not null
+      and organization_id is not null
+      and project_id is not null)
+    or (case_kind in (
+      'stale_delivery_status', 'suppression_conflict'
+    )
+      and subject_operation_id is not null
+      and subject_inbound_event_id is null
+      and subject_provider_message_id_digest is not null
+      and subject_phone_number_sid_digest is null
+      and subject_operation_attempt is null
+      and subject_lease_owner_digest is null
+      and organization_id is not null
+      and project_id is not null)
+    or (case_kind = 'ambiguous_message_create'
+      and subject_operation_id is not null
+      and subject_inbound_event_id is null
+      and subject_provider_message_id_digest is null
+      and subject_phone_number_sid_digest is null
+      and subject_operation_attempt is not null
+      and subject_lease_owner_digest is null
       and organization_id is not null
       and project_id is not null)
     or (case_kind = 'unmatched_provider_event'
@@ -123,6 +170,8 @@ create table ss.provider_reconciliation_cases (
       and subject_inbound_event_id is null
       and subject_provider_message_id_digest is not null
       and subject_phone_number_sid_digest is null
+      and subject_operation_attempt is null
+      and subject_lease_owner_digest is null
       and organization_id is null
       and project_id is null)
     or (case_kind = 'unbound_inbound_event'
@@ -130,6 +179,8 @@ create table ss.provider_reconciliation_cases (
       and subject_inbound_event_id is not null
       and subject_provider_message_id_digest is null
       and subject_phone_number_sid_digest is null
+      and subject_operation_attempt is null
+      and subject_lease_owner_digest is null
       and organization_id is null
       and project_id is null)
     or (case_kind = 'ambiguous_number_binding'
@@ -137,6 +188,8 @@ create table ss.provider_reconciliation_cases (
       and subject_inbound_event_id is null
       and subject_provider_message_id_digest is null
       and subject_phone_number_sid_digest is not null
+      and subject_operation_attempt is null
+      and subject_lease_owner_digest is null
       and organization_id is null
       and project_id is null)
   )
@@ -186,6 +239,11 @@ parallel safe
 set search_path = pg_catalog, ss
 as $$
   select coalesce(
+    case when selected_case.case_kind = 'abandoned_claim' then concat(
+      selected_case.subject_operation_id::text, ':',
+      selected_case.subject_operation_attempt::text, ':',
+      selected_case.subject_lease_owner_digest
+    ) else null end,
     selected_case.subject_operation_id::text,
     selected_case.subject_inbound_event_id::text,
     selected_case.subject_provider_message_id_digest,
@@ -227,14 +285,16 @@ begin
     new.id, new.provider, new.case_kind, new.case_digest,
     new.subject_operation_id, new.subject_inbound_event_id,
     new.subject_provider_message_id_digest,
-    new.subject_phone_number_sid_digest, new.organization_id,
+    new.subject_phone_number_sid_digest, new.subject_operation_attempt,
+    new.subject_lease_owner_digest, new.organization_id,
     new.project_id, new.evidence_digest, new.detected_by_worker_id,
     new.opened_at, new.created_at
   ) is distinct from row(
     old.id, old.provider, old.case_kind, old.case_digest,
     old.subject_operation_id, old.subject_inbound_event_id,
     old.subject_provider_message_id_digest,
-    old.subject_phone_number_sid_digest, old.organization_id,
+    old.subject_phone_number_sid_digest, old.subject_operation_attempt,
+    old.subject_lease_owner_digest, old.organization_id,
     old.project_id, old.evidence_digest, old.detected_by_worker_id,
     old.opened_at, old.created_at
   )
@@ -268,9 +328,17 @@ begin
       'Provider reconciliation closure requires named operator authority'
       using errcode = '42501';
   end if;
-  if row(new.readback_state, new.readback_evidence_digest, new.readback_at)
+  if row(
+    new.readback_state, new.readback_evidence_digest,
+    new.readback_matched_provider_message_id_digest,
+    new.readback_match_count, new.readback_at
+  )
     is distinct from
-    row(old.readback_state, old.readback_evidence_digest, old.readback_at)
+    row(
+      old.readback_state, old.readback_evidence_digest,
+      old.readback_matched_provider_message_id_digest,
+      old.readback_match_count, old.readback_at
+    )
   then
     raise exception 'Resolution cannot rewrite readback evidence'
       using errcode = '55000';
@@ -624,6 +692,7 @@ begin
       when 'suppression_conflict' then 'critical'
       when 'abandoned_claim' then 'high'
       when 'ambiguous_number_binding' then 'high'
+      when 'ambiguous_message_create' then 'high'
       else 'normal'
     end,
     'open', null, null, null, reconciliation.opened_at
