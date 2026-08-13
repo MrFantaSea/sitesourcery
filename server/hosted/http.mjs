@@ -103,6 +103,9 @@ import {
   TWILIO_RESPONDER_INBOUND_VOICE_TWIML
 } from "./twilio-responder-inbound-http.mjs";
 import {
+  isExactTwilioResponderVoiceTwiML
+} from "./twilio-responder-voice-dial-plan.mjs";
+import {
   createResponderNumberBindingsHttpBoundary
 } from "./responder-number-bindings-http.mjs";
 import {
@@ -617,6 +620,9 @@ const TWILIO_RESPONDER_INBOUND_TWIML = Object.freeze({
 });
 
 function exactTwilioResponderInboundAcknowledgement(response, pathname) {
+  const exactBody = pathname === TWILIO_RESPONDER_INBOUND_VOICE_PATH
+    ? isExactTwilioResponderVoiceTwiML(response?.body)
+    : response?.body === TWILIO_RESPONDER_INBOUND_TWIML[pathname];
   invariant(
     response && typeof response === "object" && !Array.isArray(response) &&
       Object.getPrototypeOf(response) === Object.prototype &&
@@ -625,7 +631,7 @@ function exactTwilioResponderInboundAcknowledgement(response, pathname) {
       typeof response.headers === "object" &&
       response.headers["content-type"] === "text/xml; charset=utf-8" &&
       response.headers["cache-control"] === "no-store" &&
-      response.body === TWILIO_RESPONDER_INBOUND_TWIML[pathname],
+      exactBody,
     "TWILIO_RESPONDER_INBOUND_HTTP_DURABILITY_REQUIRED",
     "HTTP success requires an exact durable Twilio inbound acknowledgement.",
     { status: 503, details: { providerEffects: false } }
@@ -1066,7 +1072,8 @@ export function createHostedApi(
   invariant(
     twilioResponderInboundHttpBoundary?.kind ===
         "twilio-responder-inbound-http-adapter" &&
-      twilioResponderInboundHttpBoundary.providerEffects === false &&
+      typeof twilioResponderInboundHttpBoundary.providerEffects ===
+        "boolean" &&
       typeof twilioResponderInboundHttpBoundary.readiness === "function" &&
       typeof twilioResponderInboundHttpBoundary.handle === "function",
     "RUNTIME_CONFIGURATION_ERROR",
@@ -1473,7 +1480,8 @@ export function createHostedApi(
           responderInboundEvents:
             twilioResponderInboundReadiness?.ready === true &&
             twilioResponderInboundReadiness?.verified === true &&
-            twilioResponderInboundReadiness?.providerEffects === false,
+            (twilioResponderInboundReadiness?.ingressProviderEffects ??
+              twilioResponderInboundReadiness?.providerEffects) === false,
           care:
             careReadiness?.ready === true &&
             careReadiness?.verified === true &&

@@ -403,12 +403,10 @@ export function createTwilioResponderInbound({
         mode: "verified-inbound",
         providerEffects: false,
         lookupWriterVersion: lookups?.writerVersion ?? null,
-        // The arrival route answers <Reject reason="busy"/> only. The private
-        // <Dial action> plan that produces DialCallStatus evidence is not
-        // composed yet, so Voice missed-call handling is not operationally
-        // reachable until FIN-004T/U supplies it.
+        // Ingress owns only verified evidence. The HTTP boundary independently
+        // composes either the held Reject response or the private Dial plan.
         voiceOperational: false,
-        voiceDialPlan: "blocked-fin-004t",
+        voiceDialPlan: "http-boundary-required",
         code: ready
           ? null
           : storage?.ready !== true

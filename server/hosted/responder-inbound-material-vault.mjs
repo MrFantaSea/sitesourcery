@@ -88,7 +88,7 @@ function authority(value) {
 // the configured keyring can still produce, so a pepper rotation never
 // strands previously sealed evidence.
 function candidateMatch(fromRouteDigestCandidates, from, expectedDigest) {
-  const candidates = fromRouteDigestCandidates(from);
+  const candidates = fromRouteDigestCandidates(from, expectedDigest);
   return Array.isArray(candidates) &&
     candidates.length >= 1 &&
     candidates.length <= 8 &&

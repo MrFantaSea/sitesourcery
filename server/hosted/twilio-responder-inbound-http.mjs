@@ -5,6 +5,10 @@ import {
   createHeldTwilioResponderInbound,
   TWILIO_RESPONDER_INBOUND_MAXIMUM_BYTES
 } from "./twilio-responder-inbound.mjs";
+import {
+  createHeldTwilioResponderVoiceDialPlan,
+  TWILIO_RESPONDER_HELD_VOICE_TWIML
+} from "./twilio-responder-voice-dial-plan.mjs";
 
 export const TWILIO_RESPONDER_INBOUND_MESSAGE_PATH =
   "/api/v1/provider-events/twilio/inbound-messages";
@@ -15,19 +19,16 @@ export const TWILIO_RESPONDER_INBOUND_DIAL_RESULT_PATH =
 export { TWILIO_RESPONDER_INBOUND_MAXIMUM_BYTES };
 
 // Twilio requires a TwiML answer to incoming message and call webhooks.
-// These fixed responses carry no data and command no provider effect:
+// These held responses carry no data and command no provider effect:
 // the empty <Response/> receives an inbound message without replying
 // (Twilio's Advanced Opt-Out answers STOP/HELP itself; replying here would
-// double-send), and <Reject reason="busy"/> is the only TwiML that declines
-// a call without answering it. The private <Dial action> plan that produces
-// real DialCallStatus evidence is deliberately not composed in this cohort;
-// until FIN-004T/U supplies it, the Voice arrival route is an evidence
-// recorder, not an operational missed-call path.
+// double-send), and <Reject reason="busy"/> declines a call without answering
+// it. Verified Voice independently replaces only that response with the exact
+// per-binding private <Dial action> plan after durable arrival evidence.
 export const TWILIO_RESPONDER_INBOUND_MESSAGE_TWIML =
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response/>";
 export const TWILIO_RESPONDER_INBOUND_VOICE_TWIML =
-  "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
-  "<Response><Reject reason=\"busy\"/></Response>";
+  TWILIO_RESPONDER_HELD_VOICE_TWIML;
 export const TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML =
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Hangup/></Response>";
 
@@ -37,8 +38,7 @@ const OPERATIONS = deepFreeze({
     twiml: TWILIO_RESPONDER_INBOUND_MESSAGE_TWIML
   },
   [TWILIO_RESPONDER_INBOUND_VOICE_PATH]: {
-    method: "ingestVoiceCall",
-    twiml: TWILIO_RESPONDER_INBOUND_VOICE_TWIML
+    method: "ingestVoiceCall"
   },
   [TWILIO_RESPONDER_INBOUND_DIAL_RESULT_PATH]: {
     method: "ingestDialResult",
@@ -63,7 +63,8 @@ function exactObject(value, keys, field) {
 }
 
 export function createTwilioResponderInboundHttpAdapter({
-  inbound = createHeldTwilioResponderInbound()
+  inbound = createHeldTwilioResponderInbound(),
+  voiceDialPlan = createHeldTwilioResponderVoiceDialPlan()
 } = {}) {
   invariant(
     inbound?.kind === "twilio-responder-inbound" &&
@@ -76,11 +77,41 @@ export function createTwilioResponderInboundHttpAdapter({
     "The Twilio inbound HTTP adapter requires verified ingress.",
     { status: 500 }
   );
+  invariant(
+    voiceDialPlan?.kind === "twilio-responder-voice-dial-plan" &&
+      typeof voiceDialPlan.providerEffects === "boolean" &&
+      typeof voiceDialPlan.readiness === "function" &&
+      typeof voiceDialPlan.twiml === "function",
+    "TWILIO_RESPONDER_INBOUND_HTTP_CONFIGURATION_REQUIRED",
+    "The Twilio inbound HTTP adapter requires an exact Voice dial plan.",
+    { status: 500 }
+  );
   return Object.freeze({
     kind: "twilio-responder-inbound-http-adapter",
     mode: inbound.mode === "held" ? "held" : "raw-form",
-    providerEffects: false,
-    readiness: () => inbound.readiness(),
+    providerEffects: voiceDialPlan.providerEffects,
+    async readiness() {
+      const [ingress, voice] = await Promise.all([
+        inbound.readiness(),
+        voiceDialPlan.readiness()
+      ]);
+      const voiceRequired = voiceDialPlan.mode !== "held";
+      const ready = ingress?.ready === true && ingress?.verified === true &&
+        (!voiceRequired || (voice?.ready === true && voice?.verified === true));
+      return deepFreeze({
+        ...ingress,
+        ready,
+        verified: ready,
+        providerEffects: voice?.ready === true &&
+          voiceDialPlan.providerEffects === true,
+        ingressProviderEffects: false,
+        voiceOperational: voice?.voiceOperational === true,
+        voiceDialPlan: voice?.voiceDialPlan ?? "held",
+        voiceCode: voice?.code ?? null,
+        code: ready ? null : ingress?.code ?? voice?.code ??
+          "TWILIO_RESPONDER_INBOUND_NOT_READY"
+      });
+    },
     async handle(input = {}) {
       exactObject(
         input,
@@ -110,13 +141,16 @@ export function createTwilioResponderInboundHttpAdapter({
         "HTTP success requires a durable Twilio inbound receipt.",
         { status: 503, details: { providerEffects: false } }
       );
+      const twiml = input.pathname === TWILIO_RESPONDER_INBOUND_VOICE_PATH
+        ? await voiceDialPlan.twiml(receipt)
+        : operation.twiml;
       return deepFreeze({
         status: 200,
         headers: {
           "cache-control": "no-store",
           "content-type": "text/xml; charset=utf-8"
         },
-        body: operation.twiml
+        body: twiml
       });
     }
   });

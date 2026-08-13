@@ -13,6 +13,16 @@ import {
   responderPrivateMaterialVaultFromEnvironment
 } from "./responder-private-material-vault.mjs";
 import {
+  createPostgresResponderInboundFollowupRepository,
+  createResponderInboundFollowupExecutor
+} from "./responder-inbound-followup-worker-postgres.mjs";
+import {
+  responderInboundMaterialVaultFromEnvironment
+} from "./responder-inbound-material-vault.mjs";
+import {
+  createLeasedLifecycleWorker
+} from "./leased-lifecycle-worker.mjs";
+import {
   createTwilioResponderTransport
 } from "./twilio-responder-transport.mjs";
 import { WORKER_PURPOSES } from "./worker-config.mjs";
@@ -100,6 +110,23 @@ function configuredProviderFactory({ authority, environment, clock }) {
   });
 }
 
+function configuredFollowupExecutorFactory({ environment }) {
+  return createResponderInboundFollowupExecutor({
+    inboundVault: responderInboundMaterialVaultFromEnvironment(
+      environment,
+      {
+        // The API already bound this exact digest into the AES-GCM AAD after
+        // keyed caller validation. The follow-up executor independently
+        // compares the opened caller with the active consent route before it
+        // can seal outbound material, so the worker needs no lookup keyring.
+        fromRouteDigestCandidates: (_address, authenticatedDigest) =>
+          [authenticatedDigest]
+      }
+    ),
+    deliveryVault: responderPrivateMaterialVaultFromEnvironment(environment)
+  });
+}
+
 function validateRepository(repository) {
   invariant(
     repository?.kind === "responder-fulfillment-postgres" &&
@@ -133,12 +160,81 @@ function validateProvider(provider) {
   return provider;
 }
 
+function validateFollowupRepository(repository) {
+  invariant(
+    repository?.kind === "responder-inbound-followup-postgres" &&
+      ["readiness", "claimNext", "completeClaim", "releaseClaim"]
+        .every((name) => typeof repository[name] === "function"),
+    "WORKER_DEPENDENCY_NOT_READY",
+    "The durable Responder inbound follow-up queue is unavailable.",
+    { status: 503 }
+  );
+  return repository;
+}
+
+function heldFollowupExecutor() {
+  return Object.freeze({
+    kind: "responder-inbound-followup-executor",
+    async readiness() {
+      return Object.freeze({ ready: false, verified: false, mode: "held" });
+    },
+    async execute() {
+      throw new Error("Held Responder inbound follow-up cannot open material.");
+    }
+  });
+}
+
+function compositeWorker(deliveryWorker, followupWorker, enabled) {
+  return Object.freeze({
+    kind: "responder-fulfillment-composite-worker",
+    async runOnce({ signal = null } = {}) {
+      if (!enabled) return Object.freeze({ status: "held" });
+      const followup = await followupWorker.runOnce({ signal });
+      const delivery = await deliveryWorker.runOnce({ signal });
+      return Object.freeze({ status: "processed", followup, delivery });
+    },
+    start({ signal = null } = {}) {
+      if (!enabled) return false;
+      const followupStarted = followupWorker.start({ signal });
+      const deliveryStarted = deliveryWorker.start({ signal });
+      if (followupStarted !== true || deliveryStarted !== true) {
+        void followupWorker.stop();
+        void deliveryWorker.stop();
+        return false;
+      }
+      return true;
+    },
+    async stop() {
+      const results = await Promise.allSettled([
+        deliveryWorker.stop(),
+        followupWorker.stop()
+      ]);
+      const failed = results.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
+      return results.some(
+        (result) => result.status === "fulfilled" && result.value === true
+      );
+    },
+    snapshot() {
+      return Object.freeze({
+        kind: "responder-fulfillment-composite-worker-state/v1",
+        enabled,
+        delivery: deliveryWorker.snapshot(),
+        inboundFollowup: followupWorker.snapshot()
+      });
+    }
+  });
+}
+
 export function createResponderWorkerFactories({
   authority,
   purposes,
   environment = process.env,
   log = () => {},
   repositoryFactory = createPostgresResponderFulfillmentRepository,
+  followupRepositoryFactory =
+    createPostgresResponderInboundFollowupRepository,
+  followupExecutorFactory = configuredFollowupExecutorFactory,
   providerFactory = configuredProviderFactory,
   clock = { now: () => new Date().toISOString() }
 } = {}) {
@@ -148,6 +244,8 @@ export function createResponderWorkerFactories({
       typeof authority.readiness === "function" &&
       typeof log === "function" &&
       typeof repositoryFactory === "function" &&
+      typeof followupRepositoryFactory === "function" &&
+      typeof followupExecutorFactory === "function" &&
       typeof providerFactory === "function" &&
       typeof clock?.now === "function",
     "WORKER_CONFIGURATION_INVALID",
@@ -170,6 +268,9 @@ export function createResponderWorkerFactories({
         const repository = validateRepository(
           repositoryFactory({ authority })
         );
+        const followupRepository = validateFollowupRepository(
+          followupRepositoryFactory({ authority })
+        );
         const provider = options.enabled
           ? validateProvider(await providerFactory({
               authority,
@@ -177,8 +278,15 @@ export function createResponderWorkerFactories({
               clock
             }))
           : heldProvider();
-        return Object.freeze({
-          worker: createResponderFulfillmentWorker({
+        let followupExecutor = heldFollowupExecutor();
+        if (options.enabled) {
+          followupExecutor = await followupExecutorFactory({
+            authority,
+            environment,
+            clock
+          });
+        }
+        const deliveryWorker = createResponderFulfillmentWorker({
             repository,
             fulfillmentPort: provider,
             clock,
@@ -186,9 +294,33 @@ export function createResponderWorkerFactories({
             leaseMs: options.leaseMs,
             ...selectedLoop,
             log
-          }),
+          });
+        const followupWorker = createLeasedLifecycleWorker({
+          purpose: "responder-inbound-followup",
+          repository: followupRepository,
+          executor: followupExecutor,
+          clock,
+          enabled: options.enabled,
+          intervalMs: Math.max(selectedLoop.intervalMs, 1_000),
+          errorBackoffMs: selectedLoop.errorBackoffMs,
+          maximumBackoffMs: selectedLoop.maximumBackoffMs,
+          batchLimit: 10,
+          leaseSeconds: Math.min(Math.floor(options.leaseMs / 1_000), 300),
+          log
+        });
+        return Object.freeze({
+          worker: compositeWorker(
+            deliveryWorker,
+            followupWorker,
+            options.enabled
+          ),
           async readiness() {
-            const queue = await repository.readiness();
+            const [queue, followupQueue, followupDependency] =
+              await Promise.all([
+                repository.readiness(),
+                followupRepository.readiness(),
+                followupExecutor.readiness()
+              ]);
             if (!options.enabled) {
               return Object.freeze({
                 schema:
@@ -200,6 +332,10 @@ export function createResponderWorkerFactories({
                 code: "RESPONDER_FULFILLMENT_WORKER_HELD",
                 queueReady:
                   queue?.ready === true && queue?.verified === true,
+                followupQueueReady:
+                  followupQueue?.ready === true &&
+                  followupQueue?.verified === true,
+                followupReady: false,
                 provider: "uncomposed",
                 providerEffects: false
               });
@@ -208,6 +344,10 @@ export function createResponderWorkerFactories({
             const ready =
               queue?.ready === true &&
               queue?.verified === true &&
+              followupQueue?.ready === true &&
+              followupQueue?.verified === true &&
+              followupDependency?.ready === true &&
+              followupDependency?.verified === true &&
               providerStatus?.ready === true &&
               providerStatus?.verified === true;
             return Object.freeze({
@@ -222,6 +362,12 @@ export function createResponderWorkerFactories({
                 : "RESPONDER_FULFILLMENT_WORKER_NOT_READY",
               queueReady:
                 queue?.ready === true && queue?.verified === true,
+              followupQueueReady:
+                followupQueue?.ready === true &&
+                followupQueue?.verified === true,
+              followupReady:
+                followupDependency?.ready === true &&
+                followupDependency?.verified === true,
               provider: providerStatus?.provider ?? "unverified",
               providerEffects: ready
             });

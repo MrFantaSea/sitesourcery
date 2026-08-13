@@ -29,6 +29,9 @@ import {
   createResponderRetentionWorkerFactories
 } from "../worker-responder-retention-composition.mjs";
 import {
+  createLifecycleWorkerFactories
+} from "../worker-lifecycle-composition.mjs";
+import {
   workerConfigurationFromEnvironment
 } from "../worker-config.mjs";
 import { createWorkerSupervisor } from "../worker-supervisor.mjs";
@@ -122,6 +125,12 @@ if (selected.configuration.activation === "held") {
         log: write
       }),
       ...createResponderRetentionWorkerFactories({
+        authority,
+        purposes: selected.configuration.purposes,
+        environment: process.env,
+        log: write
+      }),
+      ...createLifecycleWorkerFactories({
         authority,
         purposes: selected.configuration.purposes,
         environment: process.env,

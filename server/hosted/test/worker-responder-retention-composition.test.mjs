@@ -41,7 +41,7 @@ function repository({ ready = true } = {}) {
 }
 
 test("the retention purpose is canonical and unselected composition creates nothing", () => {
-  assert.equal(WORKER_PURPOSES.at(-1), PURPOSE);
+  assert.equal(WORKER_PURPOSES.includes(PURPOSE), true);
   assert.deepEqual(createResponderRetentionWorkerFactories({
     authority,
     purposes: ["export"],

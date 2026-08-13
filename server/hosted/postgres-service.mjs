@@ -8686,31 +8686,10 @@ function createCanonicalPostgresRuntime({
             new Set(["owner"])
           );
           const selected = await client.query(
-            `select
-               project.lifecycle,
-               address.serving_hostname,
-               coalesce(
-                 jsonb_agg(
-                   distinct jsonb_build_object(
-                     'key', export.object_key,
-                     'sha256', export.manifest_digest,
-                     'byteLength', export.byte_count
-                   )
-                 ) filter (where export.object_key is not null),
-                 '[]'::jsonb
-               ) as exports
+            `select project.lifecycle
              from ss.projects project
-             left join ss.project_address_projection projection
-               on projection.project_id = project.id
-             left join ss.project_addresses address
-               on address.organization_id = project.organization_id
-              and address.id = projection.current_address_id
-             left join ss.export_requests export
-               on export.organization_id = project.organization_id
-              and export.project_id = project.id
             where project.organization_id = $1
-              and project.id = $2
-            group by project.id, address.serving_hostname`,
+              and project.id = $2`,
             [scope.organizationId, scope.projectId]
           );
           invariant(
@@ -8728,15 +8707,6 @@ function createCanonicalPostgresRuntime({
           projectId: scope.projectId,
           state: "completed"
         };
-      }
-      if (projectFacts.serving_hostname) {
-        await publicationPort.unpublish({
-          projectId: scope.projectId,
-          hostname: projectFacts.serving_hostname
-        });
-      }
-      for (const object of projectFacts.exports) {
-        await exportStore.delete({ key: object.key });
       }
       try {
         return await authority.service(
@@ -8764,40 +8734,6 @@ function createCanonicalPostgresRuntime({
                    ) as id`,
                   [scope.projectId, actor.userId]
                 );
-                const knownKeys = new Set(
-                  projectFacts.exports.map((entry) => entry.key)
-                );
-                await client.query(
-                  `update ss.lifecycle_jobs
-                      set state = 'succeeded',
-                          completed_at = $2,
-                          locked_at = null,
-                          locked_by = null
-                    where project_id = $1
-                      and job_type = 'delete_blob'
-                      and payload ->> 'objectKey' = any($3::text[])`,
-                  [
-                    scope.projectId,
-                    now(clock),
-                    [...knownKeys]
-                  ]
-                );
-                const pending = await client.query(
-                  `select count(*)::integer as count
-                     from ss.lifecycle_jobs
-                    where project_id = $1
-                      and job_type = 'delete_blob'
-                      and state <> 'succeeded'`,
-                  [scope.projectId]
-                );
-                let state = "purging";
-                if (Number(pending.rows[0].count) === 0) {
-                  await client.query(
-                    "select ss.finalize_terminal_project_purge($1)",
-                    [scope.projectId]
-                  );
-                  state = "completed";
-                }
                 await audit(client, {
                   organizationId: scope.organizationId,
                   projectId: scope.projectId,
@@ -8806,13 +8742,16 @@ function createCanonicalPostgresRuntime({
                   targetType: "deletion_request",
                   targetId: deletion.rows[0].id,
                   requestId,
-                  metadata: { state }
+                  metadata: {
+                    state: "purging",
+                    workerPurpose: "project-lifecycle"
+                  }
                 });
                 return {
-                  deleted: state === "completed",
+                  deleted: false,
                   projectId: scope.projectId,
                   deletionRequestId: deletion.rows[0].id,
-                  state,
+                  state: "purging",
                   retainedCustomerDomains: true
                 };
               }

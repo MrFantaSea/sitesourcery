@@ -11,10 +11,12 @@ Every command below remains owner-gated.
 - `bin/worker.mjs` owns the separate worker event loop and a pool capped to the
   PG-OPS `workerReservedConnections`. API plus worker process budgets equal the
   unchanged configured total.
-- The exact purpose registry is `export`, `cancellation`, `notification-mail`,
-  `alakazam-fulfillment`, `alakazam-retained-lifecycle`, and
-  `responder-fulfillment`. Unknown, duplicate, reordered, missing, or
-  uncomposed purposes fail before any worker starts.
+- The exact process-purpose registry is `export`, `cancellation`,
+  `notification-mail`, `alakazam-fulfillment`,
+  `alakazam-retained-lifecycle`, `responder-fulfillment`,
+  `provider-reconciliation`, `responder-retention`, `project-lifecycle`,
+  `domain-lifecycle`, and `care-lifecycle`. Unknown, duplicate, reordered,
+  missing, or uncomposed purposes fail before any worker starts.
 - All selected dependency readbacks complete before the first loop starts.
   SIGTERM/SIGINT stops loops in reverse order, awaits active leased work within
   the configured deadline, and closes the worker pool last.
@@ -62,12 +64,27 @@ claimed deliveries for that contact, and the worker's material resolver
 re-validates the claim, its own unexpired lease, and active consent
 immediately before any provider call; Twilio's Advanced Opt-Out blocklist
 (error 21610) is the provider-side backstop behind that local fence. The
-Voice arrival route answers `<Reject reason="busy"/>` only and is not an
-operational missed-call path; DialCallStatus evidence arrives solely through
-the signed dial-result route once FIN-004T/U composes the private dial plan.
-There is no standalone publication loop: publication remains the lease-fenced
-stage of Alakazam fulfillment, and synchronous customer release commands
-retain their existing authority.
+Voice dialing is separately held. Verified mode resolves an encrypted target
+bound to the exact active provider-number record and emits the fixed private
+`<Dial action>` only after signed, durable arrival evidence. The signed result
+is the sole authority for answered versus missed. A missed result creates one
+lease-fenced follow-up job: active consent produces encrypted delivery material
+inside the existing Responder fulfillment purpose, while missing or revoked
+consent stops at manual review without opening caller material.
+Ordinary publication remains the lease-fenced stage of Alakazam fulfillment,
+and synchronous customer release commands retain their existing authority.
+Terminal project deletion now uses the separate `project-lifecycle` purpose:
+retention expiry stops for explicit deletion approval, then a sealed purge
+orders unpublication, private-object deletion, and database finalization.
+`domain-lifecycle` is readback/reconciliation-only behind a digest-reviewed
+adapter. `care-lifecycle` closes and opens exact monthly periods, carrying only
+unused included units from the immediately prior period. All three purposes
+remain independently held here.
+
+Independent monitoring and dead-man timers intentionally remain outside this
+worker process so a worker-process failure cannot disable its own detector.
+Their held units, timers, readiness, alert delivery, and recovery proof are the
+W10 implementation; they must never be collapsed into this failure domain.
 
 ## Held installation plan
 

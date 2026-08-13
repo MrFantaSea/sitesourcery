@@ -74,6 +74,38 @@ function provider({ ready = true, sends = [] } = {}) {
   });
 }
 
+function followupRepository({ ready = true, claims = [] } = {}) {
+  return Object.freeze({
+    kind: "responder-inbound-followup-postgres",
+    async readiness() {
+      return { ready, verified: ready, providerEffects: false };
+    },
+    async claimNext(input) {
+      claims.push(input);
+      return null;
+    },
+    async completeClaim() {
+      throw new Error("unexpected follow-up completion");
+    },
+    async releaseClaim() {
+      throw new Error("unexpected follow-up release");
+    }
+  });
+}
+
+function followupExecutor({ ready = true } = {}) {
+  return Object.freeze({
+    kind: "responder-inbound-followup-executor",
+    providerEffects: false,
+    async readiness() {
+      return { ready, verified: ready, providerEffects: false };
+    },
+    async execute() {
+      throw new Error("unexpected follow-up execution");
+    }
+  });
+}
+
 test("unselected Responder purpose creates no factory", () => {
   assert.deepEqual(createResponderWorkerFactories({
     authority: authority(),
@@ -95,6 +127,7 @@ test("held Responder composition proves its queue without constructing a provide
       repositories += 1;
       return repository();
     },
+    followupRepositoryFactory: () => followupRepository(),
     providerFactory() {
       providers += 1;
       throw new Error("held composition opened provider");
@@ -116,6 +149,8 @@ test("held Responder composition proves its queue without constructing a provide
     mode: "held",
     code: "RESPONDER_FULFILLMENT_WORKER_HELD",
     queueReady: true,
+    followupQueueReady: true,
+    followupReady: false,
     provider: "uncomposed",
     providerEffects: false
   });
@@ -135,6 +170,8 @@ test("approved Responder composition binds exact queue and provider readiness", 
     repositoryFactory() {
       return repository({ claims });
     },
+    followupRepositoryFactory: () => followupRepository(),
+    followupExecutorFactory: () => followupExecutor(),
     providerFactory() {
       return provider({ sends });
     },
@@ -151,10 +188,23 @@ test("approved Responder composition binds exact queue and provider readiness", 
     mode: "approved_live",
     code: null,
     queueReady: true,
+    followupQueueReady: true,
+    followupReady: true,
     provider: "twilio",
     providerEffects: true
   });
-  assert.deepEqual(await composition.worker.runOnce(), { status: "idle" });
+  assert.deepEqual(await composition.worker.runOnce(), {
+    status: "processed",
+    followup: {
+      status: "processed",
+      observedAt: "2026-08-12T20:00:00.000Z",
+      claimed: 0,
+      completed: 0,
+      manualReview: 0,
+      released: 0
+    },
+    delivery: { status: "idle" }
+  });
   assert.equal(claims.length, 1);
   assert.equal(
     Date.parse(claims[0].leaseExpiresAt) - Date.parse(claims[0].claimedAt),
@@ -170,6 +220,8 @@ test("provider or loop drift fails before Responder activation", async () => {
     purposes: ["responder-fulfillment"],
     environment: APPROVED_ENVIRONMENT,
     repositoryFactory: () => repository(),
+    followupRepositoryFactory: () => followupRepository(),
+    followupExecutorFactory: () => followupExecutor(),
     providerFactory() {
       providers += 1;
       return provider({ ready: false });
@@ -188,6 +240,8 @@ test("provider or loop drift fails before Responder activation", async () => {
       repositories += 1;
       return repository();
     },
+    followupRepositoryFactory: () => followupRepository(),
+    followupExecutorFactory: () => followupExecutor(),
     providerFactory: () => provider()
   });
   await assert.rejects(
@@ -204,7 +258,8 @@ test("approved Responder mode requires the complete implicit production provider
     authority: authority(),
     purposes: ["responder-fulfillment"],
     environment: APPROVED_ENVIRONMENT,
-    repositoryFactory: () => repository()
+    repositoryFactory: () => repository(),
+    followupRepositoryFactory: () => followupRepository()
   });
   await assert.rejects(
     factories["responder-fulfillment"]({ loop: LOOP }),
