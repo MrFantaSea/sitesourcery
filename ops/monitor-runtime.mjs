@@ -22,7 +22,9 @@ const DEFAULT_THRESHOLDS = Object.freeze({
   exportMaximumQueued: 10,
   exportMaximumQueueAgeMs: 30 * 60 * 1000,
   exportMaximumExpiredLeaseAgeMs:
-    5 * 60 * 1000
+    5 * 60 * 1000,
+  reconciliationMaximumOpenAgeMs:
+    6 * 60 * 60 * 1000
 });
 
 function validCount(value) {
@@ -402,12 +404,16 @@ export async function runOperationsMonitor({
         backlog?.exportQueued,
         backlog?.exportBuilding,
         backlog?.exportLeaseExpired,
-        backlog?.exportManualReview
+        backlog?.exportManualReview,
+        backlog?.reconciliationOpenCases,
+        backlog?.reconciliationSuppressionConflicts
       ].every(validCount);
     const valid =
       validCounts &&
       backlog.exportLeaseExpired <=
-        backlog.exportBuilding;
+        backlog.exportBuilding &&
+      backlog.reconciliationSuppressionConflicts <=
+        backlog.reconciliationOpenCases;
     const cancellationAge =
       backlog?.cancellationReady > 0
         ? ageFrom(
@@ -505,6 +511,36 @@ export async function runOperationsMonitor({
           )
         );
       }
+      if (backlog.reconciliationSuppressionConflicts > 0) {
+        alerts.push(
+          alert(
+            "PROVIDER_RECONCILIATION_SUPPRESSION_CONFLICT",
+            "critical",
+            "A provider effect landed after a durable STOP and requires operator reconciliation."
+          )
+        );
+      }
+      const reconciliationAge =
+        backlog.reconciliationOpenCases > 0
+          ? ageFrom(
+              observedAt,
+              backlog.oldestReconciliationOpenAt
+            )
+          : 0;
+      if (
+        backlog.reconciliationOpenCases > 0 &&
+        (reconciliationAge === null ||
+          reconciliationAge >
+            limits.reconciliationMaximumOpenAgeMs)
+      ) {
+        alerts.push(
+          alert(
+            "PROVIDER_RECONCILIATION_BACKLOG_HIGH",
+            "warning",
+            "Open provider reconciliation cases are not being cleared within the reviewed window."
+          )
+        );
+      }
     }
     const backlogAlerts = new Set([
       "BACKLOG_EVIDENCE_INVALID",
@@ -512,7 +548,9 @@ export async function runOperationsMonitor({
       "CANCELLATION_BACKLOG_HIGH",
       "EXPORT_QUEUE_BACKLOG_HIGH",
       "EXPORT_LEASE_BACKLOG_HIGH",
-      "EXPORT_RECONCILIATION_REQUIRED"
+      "EXPORT_RECONCILIATION_REQUIRED",
+      "PROVIDER_RECONCILIATION_SUPPRESSION_CONFLICT",
+      "PROVIDER_RECONCILIATION_BACKLOG_HIGH"
     ]);
     const backlogOk = !alerts.some((item) =>
       backlogAlerts.has(item.code)

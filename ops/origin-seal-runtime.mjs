@@ -71,7 +71,8 @@ export const ORIGIN_WORKER_PURPOSES = Object.freeze([
   "notification-mail",
   "alakazam-fulfillment",
   "alakazam-retained-lifecycle",
-  "responder-fulfillment"
+  "responder-fulfillment",
+  "provider-reconciliation"
 ]);
 
 const IDENTITY_FIELDS = Object.freeze([
