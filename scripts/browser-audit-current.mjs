@@ -102,7 +102,11 @@ const PAID_CHANGE_DISCLOSURE_DIGEST = "e".repeat(64);
 const PAID_CHANGE_INVOICE_DIGEST = "f".repeat(64);
 const PAID_CHANGE_ACCEPTED_AT = "2026-08-06T16:30:00.000Z";
 const PAID_CHANGE_SETTLED_AT = "2026-08-06T17:00:00.000Z";
-const PAID_CHANGE_CHECKOUT_EXPIRES_AT = "2026-08-13T16:30:00.000Z";
+// Keep the retained test checkout inside the same bounded validity window no
+// matter when this current-state browser audit is run.
+const PAID_CHANGE_CHECKOUT_EXPIRES_AT = new Date(
+  Date.now() + 24 * 60 * 60 * 1000
+).toISOString();
 const PAID_CHANGE_CHECKOUT_URL =
   "https://checkout.stripe.com/c/pay/cs_test_sitesourcery_change_0001";
 const PAID_FINAL_PACKAGE_DIGEST = "6".repeat(64);

@@ -77,6 +77,15 @@ test("verified inbound ingress composes keys, vault, and repository exactly", ()
   });
   assert.equal(verified.kind, "twilio-responder-inbound-http-adapter");
   assert.equal(verified.mode, "raw-form");
+  assert.equal(verified.providerEffects, false);
+  const voiceVerified = createConfiguredTwilioResponderInboundHttp({
+    environment: verifiedEnvironment({
+      SITESOURCERY_TWILIO_VOICE_DIAL_MODE: "verified"
+    }),
+    authority: AUTHORITY
+  });
+  assert.equal(voiceVerified.mode, "raw-form");
+  assert.equal(voiceVerified.providerEffects, true);
 });
 
 test("verified mode fails closed on any missing composition input", () => {
@@ -84,6 +93,13 @@ test("verified mode fails closed on any missing composition input", () => {
     () => createConfiguredTwilioResponderInboundHttp({
       environment: verifiedEnvironment(),
       authority: null
+    }),
+    (error) =>
+      error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED"
+  );
+  assert.throws(
+    () => createConfiguredTwilioResponderInboundHttp({
+      environment: { SITESOURCERY_TWILIO_VOICE_DIAL_MODE: "verified" }
     }),
     (error) =>
       error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED"

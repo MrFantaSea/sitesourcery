@@ -952,7 +952,8 @@ async function start() {
     (
       twilioResponderInboundReadiness.ready !== true ||
       twilioResponderInboundReadiness.verified !== true ||
-      twilioResponderInboundReadiness.providerEffects !== false
+      twilioResponderInboundReadiness.ingressProviderEffects !== false ||
+      typeof twilioResponderInboundReadiness.providerEffects !== "boolean"
     )
   ) {
     throw new Error(
@@ -1150,7 +1151,7 @@ async function start() {
         code: twilioResponderInboundReadiness.code ?? null,
         voiceDialPlan:
           twilioResponderInboundReadiness.voiceDialPlan ??
-            "blocked-fin-004t"
+            "held"
       },
       database: readiness.persistence.database,
       postgresBudget: authority.budgetReadiness(),

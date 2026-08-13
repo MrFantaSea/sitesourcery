@@ -4273,8 +4273,8 @@ test(
     const deleted = await service.deleteProject(actor, projectId, {
       commandId: "project-delete-0001"
     });
-    assert.equal(deleted.state, "completed");
-    assert.equal(deleted.deleted, true);
+    assert.equal(deleted.state, "purging");
+    assert.equal(deleted.deleted, false);
     const ownedDeleted =
       await service.deleteProject(
         actor,
@@ -4284,7 +4284,8 @@ test(
             "project-delete-owned-0001"
         }
       );
-    assert.equal(ownedDeleted.deleted, true);
+    assert.equal(ownedDeleted.state, "purging");
+    assert.equal(ownedDeleted.deleted, false);
 
     await t.test(
       "browser API crosses CSRF, secure cookies, HTTP, and PostgreSQL for one account",

@@ -358,12 +358,12 @@ test("only a non-completed DialCallStatus is missed-call evidence", async () => 
   );
 });
 
-test("readiness composes storage, vault, and keys and reports the voice hold", async () => {
+test("ingress readiness reports that Voice composition belongs to the HTTP boundary", async () => {
   const { inbound } = fixture();
   const readiness = await inbound.readiness();
   assert.equal(readiness.ready, true);
   assert.equal(readiness.voiceOperational, false);
-  assert.equal(readiness.voiceDialPlan, "blocked-fin-004t");
+  assert.equal(readiness.voiceDialPlan, "http-boundary-required");
   assert.equal(readiness.lookupWriterVersion, "v2");
   const blocked = fixture({
     repositoryReadiness: { ready: false, verified: false, code: "X" }

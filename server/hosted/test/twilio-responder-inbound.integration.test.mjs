@@ -13,6 +13,13 @@ import { createPostgresResponderCoreRepository } from
   "../responder-core-postgres.mjs";
 import { createPostgresResponderFulfillmentRepository } from
   "../responder-fulfillment-postgres.mjs";
+import {
+  createPostgresResponderInboundFollowupRepository,
+  createResponderInboundFollowupExecutor,
+  RESPONDER_MISSED_CALL_FOLLOWUP_BODY
+} from "../responder-inbound-followup-worker-postgres.mjs";
+import { createLeasedLifecycleWorker } from
+  "../leased-lifecycle-worker.mjs";
 import { createPostgresResponderPrivateMaterialResolver } from
   "../responder-private-material-postgres.mjs";
 import { createResponderPrivateMaterialVault } from
@@ -27,6 +34,12 @@ import { createTwilioResponderInbound } from
   "../twilio-responder-inbound.mjs";
 import { createPostgresResponderNumberBindingsRepository } from
   "../responder-number-bindings-postgres.mjs";
+import {
+  createPostgresResponderVoiceDialTargets
+} from "../responder-voice-dial-target-postgres.mjs";
+import {
+  createResponderVoiceDialTargetVault
+} from "../responder-voice-dial-target-vault.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 import { digest } from "../security.mjs";
 
@@ -45,6 +58,7 @@ const BUSINESS_NUMBER = "+18562441220";
 const OTHER_NUMBER = "+18562441299";
 const SERVICE_NUMBER = "+18562441288";
 const CALLER = "+18565550100";
+const FOLLOWUP_CALLER = "+18565550101";
 const DELIVERY_BODY =
   "Sorry we missed you - this is Site Sourcery. Reply STOP to opt out.";
 
@@ -163,6 +177,12 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
         lookupDigests.callerRouteCandidates(address)
           .map((entry) => entry.digest)
     });
+    const workerInboundVault = createResponderInboundMaterialVault({
+      currentKeyVersion: "inbound-pg-2026-08",
+      currentKey: Buffer.alloc(32, 13).toString("base64url"),
+      fromRouteDigestCandidates: (_address, authenticatedDigest) =>
+        [authenticatedDigest]
+    });
     const inboundRepository =
       createPostgresTwilioResponderInboundRepository({
         authority,
@@ -209,6 +229,14 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
       authority,
       vault: outboundVault
     });
+    const voiceTargetVault = createResponderVoiceDialTargetVault({
+      currentKeyVersion: "voice-pg-2026-08",
+      currentKey: Buffer.alloc(32, 17)
+    });
+    const voiceTargets = createPostgresResponderVoiceDialTargets({
+      authority,
+      vault: voiceTargetVault
+    });
 
     assert.equal((await inboundRepository.readiness()).ready, true);
     assert.equal((await bindings.readiness()).ready, true);
@@ -233,6 +261,25 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
       recordedAt: tick()
     });
     assert.equal(provisioned.state, "active");
+    const voiceTarget = await voiceTargets.provisionTarget(operator, {
+      commandId: "pg-inbound-voice-target-001",
+      requestDigest: digest("pg-inbound-voice-target-request-001"),
+      organizationId: ids.organization,
+      projectId: ids.project,
+      numberBindingId: provisioned.id,
+      target: "+18565550123",
+      provisionEvidenceDigest: digest("pg-inbound-voice-target-evidence-001"),
+      recordedAt: tick()
+    });
+    assert.equal(voiceTarget.state, "active");
+    assert.equal(await voiceTargets.resolveTarget({
+      numberBindingId: provisioned.id
+    }), "+18565550123");
+    const voiceTargetRows = await pool.query(
+      "select to_jsonb(target.*)::text as row from ss.responder_voice_dial_targets target"
+    );
+    assert.equal(voiceTargetRows.rowCount, 1);
+    assert.equal(voiceTargetRows.rows[0].row.includes("+18565550123"), false);
     await assert.rejects(
       bindings.provisionBinding(operator, {
         commandId: "pg-inbound-binding-duplicate-001",
@@ -615,6 +662,101 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
         where organization_id = $1`,
       [ids.organization, "4".repeat(64), selectedNow, ids.operator]
     ));
+
+    // The same Responder worker purpose first materializes an inbound
+    // missed-call follow-up under exact active consent. This proof stops at
+    // the provider boundary after claiming it; no real message is sent.
+    tick();
+    await core.recordConsent(customer, {
+      commandId: "pg-inbound-followup-consent-001",
+      organizationId: ids.organization,
+      projectId: ids.project,
+      customerUserId: ids.customer,
+      routeDigest: digest({
+        routeKind: "sms",
+        address: FOLLOWUP_CALLER
+      }),
+      consentBasis: "inbound_call",
+      consentEvidenceDigest: digest("followup-consent-001"),
+      consentedAt: selectedNow
+    });
+    tick();
+    const followupMissed = await inbound.ingestDialResult(signedRequest(
+      DIAL_RESULT_URL,
+      {
+        CallSid: `CA${"6".repeat(32)}`,
+        AccountSid: ACCOUNT_SID,
+        From: FOLLOWUP_CALLER,
+        To: BUSINESS_NUMBER,
+        DialCallStatus: "no-answer",
+        ForwardedFrom: BUSINESS_NUMBER
+      }
+    ));
+    assert.equal(followupMissed.eventState, "applied");
+    const followupRepository =
+      createPostgresResponderInboundFollowupRepository({ authority });
+    const followupExecutor = createResponderInboundFollowupExecutor({
+      inboundVault: workerInboundVault,
+      deliveryVault: outboundVault
+    });
+    const followupWorker = createLeasedLifecycleWorker({
+      purpose: "responder-inbound-followup",
+      repository: followupRepository,
+      executor: followupExecutor,
+      clock: { now: () => selectedNow },
+      enabled: true,
+      workerId: "responder-inbound-followup-pg-proof-0001",
+      intervalMs: 1_000,
+      errorBackoffMs: 100,
+      maximumBackoffMs: 1_000,
+      batchLimit: 10,
+      leaseSeconds: 120
+    });
+    const followupRun = await followupWorker.runOnce();
+    assert.equal(followupRun.claimed, 2);
+    assert.equal(followupRun.manualReview, 1);
+    assert.equal(followupRun.completed, 1);
+    const followupOperation = await pool.query(`
+      select operation.*, material.state as material_state
+        from ss.responder_inbound_followup_jobs job
+        join ss.responder_delivery_operations operation
+          on operation.id = job.delivery_operation_id
+        join ss.responder_private_delivery_materials material
+          on material.operation_id = operation.id
+       where job.state = 'succeeded'
+         and job.organization_id = $1
+       order by job.completed_at desc
+       limit 1
+    `, [ids.organization]);
+    assert.equal(followupOperation.rowCount, 1);
+    assert.equal(followupOperation.rows[0].state, "queued");
+    assert.equal(followupOperation.rows[0].material_state, "active");
+    assert.equal(
+      followupOperation.rows[0].content_digest,
+      digest({
+        contentKind: "sms",
+        body: RESPONDER_MISSED_CALL_FOLLOWUP_BODY
+      })
+    );
+    tick();
+    const heldAtProviderBoundary = await fulfillment.claimNextDelivery({
+      workerId: "responder-followup-proof-no-provider-0001",
+      claimedAt: selectedNow,
+      leaseExpiresAt: new Date(
+        Date.parse(selectedNow) + 120_000
+      ).toISOString()
+    });
+    assert.equal(
+      heldAtProviderBoundary.operationId,
+      followupOperation.rows[0].id
+    );
+    await fulfillment.recordDeliveryManualReview({
+      operationId: heldAtProviderBoundary.operationId,
+      workerId: heldAtProviderBoundary.workerId,
+      attemptCount: heldAtProviderBoundary.attemptCount,
+      failureCode: "RESPONDER_TEST_PROVIDER_EFFECT_HELD",
+      failedAt: selectedNow
+    });
 
     // Order 1: STOP commits first; no later claim can dispatch.
     const first = await consentedQueuedOperation(1);

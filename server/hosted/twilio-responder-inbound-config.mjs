@@ -15,6 +15,17 @@ import {
   createTwilioResponderInbound
 } from "./twilio-responder-inbound.mjs";
 import {
+  createPostgresResponderVoiceDialTargets
+} from "./responder-voice-dial-target-postgres.mjs";
+import {
+  responderVoiceDialTargetVaultFromEnvironment
+} from "./responder-voice-dial-target-vault.mjs";
+import {
+  createHeldTwilioResponderVoiceDialPlan,
+  createTwilioResponderVoiceDialPlan,
+  voiceDialModeFromEnvironment
+} from "./twilio-responder-voice-dial-plan.mjs";
+import {
   createHeldTwilioResponderInboundHttpAdapter,
   createTwilioResponderInboundHttpAdapter
 } from "./twilio-responder-inbound-http.mjs";
@@ -27,6 +38,8 @@ export const TWILIO_RESPONDER_INBOUND_VOICE_URL_ENVIRONMENT =
   "SITESOURCERY_TWILIO_INBOUND_VOICE_URL";
 export const TWILIO_RESPONDER_INBOUND_DIAL_RESULT_URL_ENVIRONMENT =
   "SITESOURCERY_TWILIO_INBOUND_DIAL_RESULT_URL";
+export const TWILIO_RESPONDER_VOICE_DIAL_MODE_ENVIRONMENT =
+  "SITESOURCERY_TWILIO_VOICE_DIAL_MODE";
 
 function value(environment, name) {
   const selected = environment?.[name];
@@ -64,7 +77,14 @@ export function createConfiguredTwilioResponderInboundHttp({
     `${TWILIO_RESPONDER_INBOUND_MODE_ENVIRONMENT} must be held or verified.`,
     { status: 500 }
   );
+  const voiceDialMode = voiceDialModeFromEnvironment(environment);
   if (mode === "held") {
+    invariant(
+      voiceDialMode === "held",
+      "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED",
+      "Voice dialing cannot be verified while Twilio inbound ingress is held.",
+      { status: 500 }
+    );
     invariant(
       value(environment, "SITESOURCERY_RESPONDER_MATERIAL_KEY_BASE64URL") ===
         null &&
@@ -94,6 +114,19 @@ export function createConfiguredTwilioResponderInboundHttp({
     authority,
     verifierKeyVersions: [...lookupDigests.verifierVersions]
   });
+  const dialResultUrl = value(
+    environment,
+    TWILIO_RESPONDER_INBOUND_DIAL_RESULT_URL_ENVIRONMENT
+  );
+  const voiceDialPlan = voiceDialMode === "held"
+    ? createHeldTwilioResponderVoiceDialPlan()
+    : createTwilioResponderVoiceDialPlan({
+        targets: createPostgresResponderVoiceDialTargets({
+          authority,
+          vault: responderVoiceDialTargetVaultFromEnvironment(environment)
+        }),
+        dialResultUrl
+      });
   return createTwilioResponderInboundHttpAdapter({
     inbound: createTwilioResponderInbound({
       accountSid: value(environment, "SITESOURCERY_TWILIO_ACCOUNT_SID"),
@@ -109,14 +142,12 @@ export function createConfiguredTwilioResponderInboundHttp({
         environment,
         TWILIO_RESPONDER_INBOUND_VOICE_URL_ENVIRONMENT
       ),
-      dialResultUrl: value(
-        environment,
-        TWILIO_RESPONDER_INBOUND_DIAL_RESULT_URL_ENVIRONMENT
-      ),
+      dialResultUrl,
       repository,
       vault,
       lookupDigests,
       clock
-    })
+    }),
+    voiceDialPlan
   });
 }

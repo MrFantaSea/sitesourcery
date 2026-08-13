@@ -109,6 +109,7 @@ function receipt(row, { replayed, suppression = null }) {
     classifiedIntent: row.classified_intent ?? null,
     coreApplied: row.core_provider_event_id !== null &&
       row.core_provider_event_id !== undefined,
+    numberBindingId: row.number_binding_id ?? null,
     suppression,
     replayed,
     providerEffects: false
@@ -336,7 +337,8 @@ export function createPostgresTwilioResponderInboundRepository({
   }
 
   async function insertLedgerRow(client, fact, {
-    id, state, reason, organizationId, projectId, coreProviderEventId
+    id, state, reason, organizationId, projectId, coreProviderEventId,
+    numberBindingId
   }) {
     const inserted = await client.query(
       `insert into ss.responder_twilio_inbound_events (
@@ -347,10 +349,10 @@ export function createPostgresTwilioResponderInboundRepository({
          dial_call_status, opt_out_type, classified_intent,
          signature_verification_digest, payload_digest,
          state, state_reason, organization_id, project_id,
-         core_provider_event_id, received_at, created_at
+         core_provider_event_id, received_at, created_at, number_binding_id
        ) values (
          $1, 'twilio', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-         $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22
+         $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22, $23
        ) returning *`,
       [
         id, fact.channel, fact.eventKind, fact.providerEventDigest,
@@ -360,7 +362,7 @@ export function createPostgresTwilioResponderInboundRepository({
         fact.fromRouteKeyVersion, fact.dialCallStatus, fact.optOutType,
         fact.classifiedIntent, fact.signatureVerificationDigest,
         fact.payloadDigest, state, reason, organizationId, projectId,
-        coreProviderEventId, fact.receivedAt
+        coreProviderEventId, fact.receivedAt, numberBindingId
       ]
     );
     invariant(
@@ -388,7 +390,8 @@ export function createPostgresTwilioResponderInboundRepository({
           reason: unboundReason,
           organizationId: null,
           projectId: null,
-          coreProviderEventId: null
+          coreProviderEventId: null,
+          numberBindingId: null
         });
         return receipt(row, { replayed: false });
       }
@@ -503,7 +506,8 @@ export function createPostgresTwilioResponderInboundRepository({
               reason: "duplicate_payload_variant",
               organizationId,
               projectId,
-              coreProviderEventId: null
+              coreProviderEventId: null,
+              numberBindingId: binding.id
             });
             return { row, replayed: false };
           }
@@ -541,7 +545,8 @@ export function createPostgresTwilioResponderInboundRepository({
             reason: null,
             organizationId,
             projectId,
-            coreProviderEventId: coreReceipt.id
+            coreProviderEventId: coreReceipt.id,
+            numberBindingId: binding.id
           });
           if (sealedEnvelope !== null) {
             const material = await client.query(
@@ -580,7 +585,8 @@ export function createPostgresTwilioResponderInboundRepository({
           reason: outcome.reason,
           organizationId,
           projectId,
-          coreProviderEventId: null
+          coreProviderEventId: null,
+          numberBindingId: binding.id
         });
         return { row, replayed: false };
       }

@@ -14,7 +14,10 @@ export const WORKER_PURPOSES = Object.freeze([
   "alakazam-retained-lifecycle",
   "responder-fulfillment",
   "provider-reconciliation",
-  "responder-retention"
+  "responder-retention",
+  "project-lifecycle",
+  "domain-lifecycle",
+  "care-lifecycle"
 ]);
 
 const MAXIMUM_CONFIG_BYTES = 2_048;

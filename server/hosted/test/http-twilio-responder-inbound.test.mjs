@@ -4,6 +4,7 @@ import test from "node:test";
 
 import { createHostedApi } from "../http.mjs";
 import {
+  createTwilioResponderInboundHttpAdapter,
   TWILIO_RESPONDER_INBOUND_DIAL_RESULT_PATH,
   TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML,
   TWILIO_RESPONDER_INBOUND_MAXIMUM_BYTES,
@@ -120,6 +121,69 @@ test("each inbound route answers its exact fixed TwiML and nothing else", async 
   );
 });
 
+test("verified Voice resolves a private Dial target only after durable bound arrival", async () => {
+  const order = [];
+  const adapter = createTwilioResponderInboundHttpAdapter({
+    inbound: {
+      kind: "twilio-responder-inbound",
+      mode: "verified-inbound",
+      providerEffects: false,
+      async readiness() {
+        return { ready: true, verified: true, providerEffects: false };
+      },
+      async ingestInboundMessage() {
+        throw new Error("wrong route");
+      },
+      async ingestDialResult() {
+        throw new Error("wrong route");
+      },
+      async ingestVoiceCall() {
+        order.push("durable");
+        return {
+          schema: "sitesourcery.responder-twilio-inbound-receipt/v1",
+          channel: "voice",
+          eventKind: "call_received",
+          eventState: "recorded",
+          numberBindingId: "10000000-0000-4000-8000-000000000001",
+          replayed: false,
+          coreApplied: false,
+          providerEffects: false
+        };
+      }
+    },
+    voiceDialPlan: {
+      kind: "twilio-responder-voice-dial-plan",
+      mode: "verified-private-forward",
+      providerEffects: true,
+      async readiness() {
+        return {
+          ready: true,
+          verified: true,
+          providerEffects: true,
+          voiceOperational: true,
+          voiceDialPlan: "verified-private-forward"
+        };
+      },
+      async twiml(receipt) {
+        order.push("target");
+        assert.equal(receipt.eventState, "recorded");
+        return "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+          "<Response><Dial action=\"https://sitesourcery.com/api/v1/provider-events/twilio/voice/dial-result\" method=\"POST\" answerOnBridge=\"true\" timeout=\"20\"><Number>+18565550123</Number></Dial></Response>";
+      }
+    }
+  });
+  assert.equal(adapter.providerEffects, true);
+  assert.equal((await adapter.readiness()).voiceOperational, true);
+  const response = await adapter.handle({
+    method: "POST",
+    pathname: TWILIO_RESPONDER_INBOUND_VOICE_PATH,
+    headers: {},
+    rawBody: RAW
+  });
+  assert.deepEqual(order, ["durable", "target"]);
+  assert.match(response.body, /<Dial action=/u);
+});
+
 test("inbound routes reject method, media, and length before ingress", async () => {
   for (const [input, status, code] of [
     [{ method: "GET", body: null, contentLength: null }, 405,
@@ -166,6 +230,10 @@ test("unconfigured inbound routes stay held and raw evidence is never logged", a
     "../twilio-responder-inbound-postgres.mjs",
     "../twilio-responder-inbound-http.mjs",
     "../twilio-responder-inbound-config.mjs",
+    "../twilio-responder-voice-dial-plan.mjs",
+    "../responder-voice-dial-target-postgres.mjs",
+    "../responder-voice-dial-target-vault.mjs",
+    "../responder-inbound-followup-worker-postgres.mjs",
     "../responder-inbound-material-vault.mjs",
     "../responder-lookup-digests.mjs",
     "../responder-number-bindings-postgres.mjs",
