@@ -26,6 +26,9 @@ import {
   createReconciliationWorkerFactories
 } from "../worker-reconciliation-composition.mjs";
 import {
+  createResponderRetentionWorkerFactories
+} from "../worker-responder-retention-composition.mjs";
+import {
   workerConfigurationFromEnvironment
 } from "../worker-config.mjs";
 import { createWorkerSupervisor } from "../worker-supervisor.mjs";
@@ -113,6 +116,12 @@ if (selected.configuration.activation === "held") {
         log: write
       }),
       ...createReconciliationWorkerFactories({
+        authority,
+        purposes: selected.configuration.purposes,
+        environment: process.env,
+        log: write
+      }),
+      ...createResponderRetentionWorkerFactories({
         authority,
         purposes: selected.configuration.purposes,
         environment: process.env,

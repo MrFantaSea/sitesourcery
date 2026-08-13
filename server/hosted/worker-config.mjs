@@ -13,7 +13,8 @@ export const WORKER_PURPOSES = Object.freeze([
   "alakazam-fulfillment",
   "alakazam-retained-lifecycle",
   "responder-fulfillment",
-  "provider-reconciliation"
+  "provider-reconciliation",
+  "responder-retention"
 ]);
 
 const MAXIMUM_CONFIG_BYTES = 2_048;
