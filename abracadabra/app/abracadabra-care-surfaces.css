@@ -11,6 +11,8 @@
 .care-surface-contract{display:grid;gap:.7rem}
 .care-surface-list{display:grid;gap:.5rem;margin:0;padding:0;list-style:none}
 .care-surface-item{min-width:0;padding:.65rem .7rem;border-radius:.65rem;background:rgba(255,255,255,.045);overflow-wrap:anywhere}
+.care-surface-controls{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.65rem}
+.care-surface-controls .care-surface-action{width:auto;flex:1 1 9rem}
 .care-surface-action{min-height:44px;width:100%;padding:.65rem .8rem;border:1px solid var(--spark-mint,#82e7c4);border-radius:.65rem;background:rgba(130,231,196,.12);color:inherit;font:inherit;font-weight:800;cursor:pointer}
 .care-surface-action:focus-visible{outline:3px solid var(--spark-gold,#f1cf89);outline-offset:3px}
 .care-surface-action:disabled{cursor:not-allowed;opacity:.65}

@@ -142,6 +142,15 @@ async function readActive(client) {
               projection.evidence_digest, projection.updated_at
          from ss.alakazam_invoice_finalization_projection projection
         where projection.state = 'failed'
+       union all
+       select manual.id, manual.source_table, manual.source_id,
+              manual.source_revision, manual.source_digest,
+              manual.source_state, manual.organization_id,
+              manual.project_id, manual.item_kind, manual.severity,
+              manual.status, manual.deadline_at, manual.repair_kind,
+              manual.opened_at, manual.revision, manual.item_digest,
+              manual.updated_at
+         from ss.operator_manual_review_queue_v1() manual
      ) active
       order by
         case severity
@@ -192,10 +201,16 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
               to_regprocedure(
                 'ss.hosted_operator_work_queue_contract_v1()'
               ) is not null
-                and ss.hosted_operator_work_queue_contract_v1() =
+              and ss.hosted_operator_work_queue_contract_v1() =
                   'canonical-operator-work-queue-v1-source-authoritative-held'
                 as contract_ready,
-              count(*) = 4 as tables_ready,
+              to_regprocedure(
+                'ss.operator_resolution_surfaces_contract_v1()'
+              ) is not null
+                and ss.operator_resolution_surfaces_contract_v1() =
+                  'canonical-fin-004u-operator-resolution-v1-digest-only-held'
+                as resolution_contract_ready,
+              count(*) = 5 as tables_ready,
               bool_and(c.relrowsecurity and c.relforcerowsecurity) as rls_ready
             from pg_class c
             join pg_namespace n on n.oid = c.relnamespace
@@ -205,11 +220,13 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
             "operator_work_queue_items",
             "stripe_invoice_finalization_failures",
             "alakazam_invoice_finalization_observations",
-            "alakazam_invoice_finalization_projection"
+            "alakazam_invoice_finalization_projection",
+            "provider_reconciliation_resolution_commands"
           ]])
         );
         const row = result.rows[0] ?? {};
         const ready = row.contract_ready === true &&
+          row.resolution_contract_ready === true &&
           row.tables_ready === true && row.rls_ready === true;
         return deepFreeze({
           ready,

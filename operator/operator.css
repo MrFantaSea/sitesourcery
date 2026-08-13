@@ -316,6 +316,36 @@ button.operator-card:focus-visible {
   margin-top: 0.8rem;
 }
 
+.operator-queue-action,
+.operator-held-note {
+  margin-top: 0.8rem;
+}
+
+.operator-held-note {
+  padding: 0.7rem;
+  border-left: 2px solid var(--operator-line);
+  color: var(--operator-muted);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.operator-resolution-form {
+  max-width: 42rem;
+}
+
+.operator-service-surface {
+  margin-top: 1rem;
+}
+
+.operator-service-surface > .care-surface,
+.operator-service-surface > .responder-surface {
+  margin: 0;
+}
+
+#operator-service-command-form {
+  max-width: 48rem;
+  margin-top: 1rem;
+}
+
 .operator-repair summary {
   display: inline-flex;
   align-items: center;

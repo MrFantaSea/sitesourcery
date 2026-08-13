@@ -559,6 +559,9 @@ test("private staging injection selects hosted mode in strict script order witho
     "/abracadabra/app/abracadabra-alakazam-35.js",
     "/abracadabra/app/abracadabra-alakazam-50.js",
     "/abracadabra/app/abracadabra-customer-control-dom.js",
+    "/abracadabra/app/abracadabra-care-surfaces.js",
+    "/abracadabra/app/abracadabra-responder-surfaces.js",
+    "/abracadabra/app/abracadabra-service-surfaces.js",
   ];
   let cursor = -1;
   for (const marker of ordered) {

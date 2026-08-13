@@ -172,6 +172,9 @@ import {
   createProfessionalLifecycleProductionComposition
 } from "../professional-lifecycle-production-composition.mjs";
 import {
+  createPostgresProviderReconciliationOperator
+} from "../provider-reconciliation-operator-postgres.mjs";
+import {
   createPostgresSupportCaseRepository
 } from "../support-cases-postgres.mjs";
 import { createSupportCaseService } from "../support-cases.mjs";
@@ -854,6 +857,23 @@ async function start() {
     });
   const professionalLifecycleReadiness =
     await professionalLifecycle.readiness();
+  const operatorProviderReconciliation =
+    createPostgresProviderReconciliationOperator({
+      authority,
+      clock: commerceV2.clock,
+      randomUUID: () => commerceV2.ids.next("operator_reconciliation")
+    });
+  const operatorProviderReconciliationReadiness =
+    await operatorProviderReconciliation.readiness();
+  if (
+    operatorProviderReconciliationReadiness.ready !== true ||
+    operatorProviderReconciliationReadiness.providerEffects !== false ||
+    operatorProviderReconciliationReadiness.genericRepair !== false
+  ) {
+    throw new Error(
+      "Canonical held operator reconciliation surfaces are not ready."
+    );
+  }
   const supportCases = createSupportCaseService({
     repository: createPostgresSupportCaseRepository({ authority }),
     mailLifecycle,
@@ -1083,6 +1103,7 @@ async function start() {
         careSurfaces,
         responderSurfaces,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
+        operatorProviderReconciliation,
         supportCases,
         resendMailEvents,
         twilioResponderEvents,

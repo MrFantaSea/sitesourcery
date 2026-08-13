@@ -191,6 +191,21 @@ test("DOM mount is semantic, text-only, and emits bounded command intents", () =
     routeDigest: "a".repeat(64)
   });
   assert.equal("innerHTML" in mounted.element, false);
+
+  const operatorCommands = [];
+  const operatorMounted = ui.mount({
+    audience: "operator",
+    snapshot: snapshot("operator"),
+    container: new FakeElement("main"),
+    documentRef: { createElement: (name) => new FakeElement(name) },
+    onCommand: (command) => operatorCommands.push(command)
+  });
+  descendants(operatorMounted.element).find(
+    (element) => element.textContent === "Record consent evidence"
+  ).click();
+  assert.deepEqual(JSON.parse(JSON.stringify(operatorCommands)), [{
+    action: "operator-consent"
+  }]);
 });
 
 test("hosted-only UI source is network-free and has responsive accessible CSS", () => {

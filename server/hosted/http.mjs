@@ -79,6 +79,10 @@ import {
   createOperatorWorkQueueHttpBoundary
 } from "./operator-work-queue-http.mjs";
 import {
+  createHeldProviderReconciliationOperatorHttp,
+  createProviderReconciliationOperatorHttpBoundary
+} from "./provider-reconciliation-operator-http.mjs";
+import {
   createHeldSupportCaseHttpBoundary,
   createSupportCaseHttpBoundary
 } from "./support-cases-http.mjs";
@@ -882,6 +886,7 @@ export function createHostedApi(
     careSurfaces = null,
     responderSurfaces = null,
     operatorWorkQueue = null,
+    operatorProviderReconciliation = null,
     supportCases = null,
     resendMailEvents = null,
     twilioResponderEvents = null,
@@ -1050,6 +1055,12 @@ export function createHostedApi(
         authenticate: async ({ actor }) => actor
       })
     : createOperatorWorkQueueHttpBoundary({ operatorQueue: operatorWorkQueue });
+  const operatorProviderReconciliationHttpBoundary =
+    operatorProviderReconciliation === null
+      ? createHeldProviderReconciliationOperatorHttp()
+      : createProviderReconciliationOperatorHttpBoundary({
+          operator: operatorProviderReconciliation
+        });
   const supportCaseHttpBoundary = supportCases === null
     ? createHeldSupportCaseHttpBoundary()
     : createSupportCaseHttpBoundary({ supportCases });
@@ -1807,7 +1818,19 @@ export function createHostedApi(
             body,
             commandId: write.commandId
           });
-        const supportCaseResponse = operatorWorkQueueResponse === null
+        const operatorProviderReconciliationResponse =
+          operatorWorkQueueResponse === null
+            ? await operatorProviderReconciliationHttpBoundary.dispatch({
+                method,
+                pathname,
+                actor,
+                query: url.searchParams,
+                body,
+                commandId: write.commandId
+              })
+            : null;
+        const supportCaseResponse = operatorWorkQueueResponse === null &&
+          operatorProviderReconciliationResponse === null
           ? await supportCaseHttpBoundary.dispatch({
               method,
               pathname,
@@ -1821,6 +1844,9 @@ export function createHostedApi(
         if (operatorWorkQueueResponse !== null) {
           result = operatorWorkQueueResponse.result;
           status = operatorWorkQueueResponse.status;
+        } else if (operatorProviderReconciliationResponse !== null) {
+          result = operatorProviderReconciliationResponse.result;
+          status = operatorProviderReconciliationResponse.status;
         } else if (supportCaseResponse !== null) {
           result = supportCaseResponse.result;
           status = supportCaseResponse.status;

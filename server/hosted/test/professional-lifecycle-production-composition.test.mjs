@@ -39,6 +39,7 @@ function authority({ notificationsReady = true } = {}) {
             if (text.includes("hosted_operator_work_queue_contract_v1")) {
               return { rows: [{
                 contract_ready: true,
+                resolution_contract_ready: true,
                 tables_ready: true,
                 rls_ready: true
               }] };

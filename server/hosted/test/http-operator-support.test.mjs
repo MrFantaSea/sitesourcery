@@ -49,6 +49,21 @@ function support(calls) {
   return service;
 }
 
+function reconciliation(calls) {
+  return {
+    providerEffects: false,
+    genericRepair: false,
+    async readCase(input) {
+      calls.push(["reconciliation-read", input]);
+      return { schema: "reconciliation-case" };
+    },
+    async resolveCase(input) {
+      calls.push(["reconciliation-resolve", input]);
+      return { schema: "reconciliation-resolution" };
+    }
+  };
+}
+
 function get(path, { signedIn = true } = {}) {
   return new Request(`${ORIGIN}${path}`, {
     headers: signedIn ? { Cookie: `ss_session=${SESSION}` } : {}
@@ -79,6 +94,7 @@ test("canonical root serves source-authoritative operator queue and support rout
   const calls = [];
   const api = createHostedApi(canonicalService(), {
     operatorWorkQueue: queue(calls),
+    operatorProviderReconciliation: reconciliation(calls),
     supportCases: support(calls)
   });
   const listed = await api.fetch(get(
@@ -86,6 +102,29 @@ test("canonical root serves source-authoritative operator queue and support rout
   ));
   assert.equal(listed.status, 200);
   assert.deepEqual(await listed.json(), { schema: "queue-list", items: [] });
+
+  const reconciliationRead = await api.fetch(get(
+    `/api/v1/operator/provider-reconciliation/cases/${CASE}` +
+      `?operatorOrganizationId=${ORG}`
+  ));
+  assert.equal(reconciliationRead.status, 200);
+  assert.deepEqual(await reconciliationRead.json(), {
+    schema: "reconciliation-case"
+  });
+
+  const reconciliationResolved = await api.fetch(post(
+    `/api/v1/operator/provider-reconciliation/cases/${CASE}/resolution`,
+    {
+      evidenceDigest: "e".repeat(64),
+      expectedRevision: 2,
+      operatorOrganizationId: ORG,
+      resolutionKind: "operator_confirmed_no_effect"
+    }
+  ));
+  assert.equal(reconciliationResolved.status, 200);
+  assert.deepEqual(await reconciliationResolved.json(), {
+    schema: "reconciliation-resolution"
+  });
 
   const responded = await api.fetch(post(
     `/api/v1/operator/support-cases/${CASE}/response`,
@@ -99,6 +138,18 @@ test("canonical root serves source-authoritative operator queue and support rout
   assert.deepEqual(await responded.json(), { schema: "respond" });
   assert.deepEqual(calls, [
     ["queue-list", { actorId: USER, operatorOrganizationId: ORG }],
+    ["reconciliation-read", {
+      actorId: USER, caseId: CASE, operatorOrganizationId: ORG
+    }],
+    ["reconciliation-resolve", {
+      actorId: USER,
+      caseId: CASE,
+      commandId: "operator-http-command-001",
+      evidenceDigest: "e".repeat(64),
+      expectedRevision: 2,
+      operatorOrganizationId: ORG,
+      resolutionKind: "operator_confirmed_no_effect"
+    }],
     ["respond", {
       actorId: USER,
       caseId: CASE,
@@ -152,4 +203,14 @@ test("uncomposed operator support routes remain held", async () => {
   ));
   assert.equal(supportResponse.status, 503);
   assert.equal((await supportResponse.json()).error.code, "SUPPORT_CASES_HELD");
+
+  const reconciliationResponse = await api.fetch(get(
+    `/api/v1/operator/provider-reconciliation/cases/${CASE}` +
+      `?operatorOrganizationId=${ORG}`
+  ));
+  assert.equal(reconciliationResponse.status, 503);
+  assert.equal(
+    (await reconciliationResponse.json()).error.code,
+    "OPERATOR_RECONCILIATION_HELD"
+  );
 });
