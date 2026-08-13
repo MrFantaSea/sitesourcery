@@ -101,9 +101,15 @@ const EXPECTED_HOSTED_STAGING_ASSETS = [
   "abracadabra/app/abracadabra-alakazam-retained-premium.js",
   "abracadabra/app/abracadabra-api.js",
   "abracadabra/app/abracadabra-billing-views.js",
+  "abracadabra/app/abracadabra-care-surfaces.css",
+  "abracadabra/app/abracadabra-care-surfaces.js",
   "abracadabra/app/abracadabra-control-mode.js",
   "abracadabra/app/abracadabra-customer-control-dom.js",
   "abracadabra/app/abracadabra-hosted-control.js",
+  "abracadabra/app/abracadabra-responder-surfaces.css",
+  "abracadabra/app/abracadabra-responder-surfaces.js",
+  "abracadabra/app/abracadabra-service-surfaces.css",
+  "abracadabra/app/abracadabra-service-surfaces.js",
 ];
 
 const PRIVACY_TOPICS = [
@@ -273,8 +279,14 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     "abracadabra/app/abracadabra-alakazam-retained-premium.js",
     "abracadabra/app/abracadabra-api.js",
     "abracadabra/app/abracadabra-billing-views.js",
+    "abracadabra/app/abracadabra-care-surfaces.css",
+    "abracadabra/app/abracadabra-care-surfaces.js",
     "abracadabra/app/abracadabra-customer-control-dom.js",
     "abracadabra/app/abracadabra-hosted-control.js",
+    "abracadabra/app/abracadabra-responder-surfaces.css",
+    "abracadabra/app/abracadabra-responder-surfaces.js",
+    "abracadabra/app/abracadabra-service-surfaces.css",
+    "abracadabra/app/abracadabra-service-surfaces.js",
   ]) {
     assert.equal(publicFileAllowlist.includes(hostedOnlyAsset), false);
     assert.equal(hostedFileAllowlist.includes(hostedOnlyAsset), true);
@@ -567,6 +579,12 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
     "/abracadabra/app/abracadabra-hosted-control.js",
     "/abracadabra/app/abracadabra-app.js",
     "/abracadabra/app/abracadabra-customer-control-dom.js",
+    "/abracadabra/app/abracadabra-care-surfaces.css",
+    "/abracadabra/app/abracadabra-care-surfaces.js",
+    "/abracadabra/app/abracadabra-responder-surfaces.css",
+    "/abracadabra/app/abracadabra-responder-surfaces.js",
+    "/abracadabra/app/abracadabra-service-surfaces.css",
+    "/abracadabra/app/abracadabra-service-surfaces.js",
   ]) {
     assert.equal(count(app, asset), 1, asset);
   }

@@ -27,10 +27,16 @@ test("readiness proves every queue source table is forced-RLS and effect-free", 
               "operator_work_queue_items",
               "stripe_invoice_finalization_failures",
               "alakazam_invoice_finalization_observations",
-              "alakazam_invoice_finalization_projection"
+              "alakazam_invoice_finalization_projection",
+              "provider_reconciliation_resolution_commands"
             ]]);
             return {
-              rows: [{ contract_ready: true, tables_ready: true, rls_ready: true }],
+              rows: [{
+                contract_ready: true,
+                resolution_contract_ready: true,
+                tables_ready: true,
+                rls_ready: true
+              }],
               rowCount: 1
             };
           }

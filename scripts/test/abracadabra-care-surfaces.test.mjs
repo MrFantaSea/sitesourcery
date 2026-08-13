@@ -217,11 +217,47 @@ test("mounted panels expose semantic headings, status, and held customer control
     snapshot: snapshot("operator"),
     onCommand(value) { actions.push(value); }
   });
-  operator.element.all().find((node) => node.name === "button").click();
+  const operatorButtons = operator.element.all().filter(
+    (node) => node.name === "button"
+  );
+  operatorButtons.find(
+    (node) => node.textContent === "Prepare new held Care record"
+  ).click();
+  operatorButtons.find(
+    (node) => node.textContent === "Close held period"
+  ).click();
+  operatorButtons.find(
+    (node) => node.textContent === "Resolve ticket"
+  ).click();
+  operatorButtons.find(
+    (node) => node.textContent === "Allocate held capacity"
+  ).click();
+  operatorButtons.find(
+    (node) => node.textContent === "Reserve held notice"
+  ).click();
   assert.deepEqual(JSON.parse(JSON.stringify(actions)), [{
     action: "prepare",
     contractId: IDS.contract,
     projectId: IDS.project
+  }, {
+    action: "close-period",
+    periodId: IDS.period,
+    projectId: IDS.project,
+    expectedRevision: 1
+  }, {
+    action: "transition-ticket",
+    ticketId: IDS.ticket,
+    projectId: IDS.project,
+    expectedRevision: 2,
+    transition: "resolve"
+  }, {
+    action: "allocate-capacity",
+    periodId: IDS.period,
+    ticketId: IDS.ticket,
+    projectId: IDS.project
+  }, {
+    action: "reserve-mail",
+    ticketId: IDS.ticket
   }]);
 });
 

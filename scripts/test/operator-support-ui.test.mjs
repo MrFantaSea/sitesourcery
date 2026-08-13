@@ -17,6 +17,57 @@ const desk = require("../../operator/operator.js");
 
 const ORG = "20000000-0000-4000-8000-000000000001";
 const CASE = "30000000-0000-4000-8000-000000000001";
+const BINDING = "60000000-0000-4000-8000-000000000001";
+
+function numberBinding() {
+  return {
+    schema: "sitesourcery.responder-number-binding-receipt/v1",
+    id: BINDING,
+    organizationId: ORG,
+    projectId: "50000000-0000-4000-8000-000000000001",
+    provider: "twilio",
+    numberLookupDigest: "6".repeat(64),
+    lookupKeyVersion: "v2",
+    phoneNumberSidDigest: "7".repeat(64),
+    providerReadbackDigest: "8".repeat(64),
+    accountSidDigest: "9".repeat(64),
+    messagingServiceSidDigest: null,
+    state: "active",
+    provisionedAt: "2026-08-13T18:00:00.000Z",
+    retiredAt: null,
+    retiredReason: null,
+    revision: 1,
+    replayed: false,
+    providerEffects: false
+  };
+}
+
+function reconciliationCase() {
+  return {
+    schema: "sitesourcery.operator-provider-reconciliation-case/v1",
+    id: CASE,
+    provider: "twilio",
+    caseKind: "ambiguous_message_create",
+    caseDigest: "1".repeat(64),
+    state: "open",
+    organizationId: ORG,
+    projectId: "50000000-0000-4000-8000-000000000001",
+    evidenceDigest: "2".repeat(64),
+    readbackState: "not_found",
+    readbackEvidenceDigest: "3".repeat(64),
+    matchedProviderMessageIdDigest: null,
+    readbackMatchCount: 0,
+    readbackAt: "2026-08-13T17:00:00.000Z",
+    resolutionKind: null,
+    resolutionEvidenceDigest: null,
+    resolvedAt: null,
+    openedAt: "2026-08-13T16:00:00.000Z",
+    revision: 2,
+    allowedResolutions: ["operator_confirmed_no_effect"],
+    providerEffects: false,
+    genericRepair: false
+  };
+}
 
 function queue() {
   return {
@@ -113,6 +164,24 @@ test("operator assets remain hosted-only and expose an effect-held responsive de
   assert.doesNotMatch(javascript, /notification-reservation|\/exports|\/deletion/u);
   assert.match(javascript, /\/operator\/work-queue/u);
   assert.match(javascript, /\/operator\/support-cases/u);
+  assert.match(javascript, /\/operator\/provider-reconciliation\/cases\//u);
+  assert.match(javascript, /\/operator\/care\/organizations\//u);
+  assert.match(javascript, /\/operator\/responder\/organizations\//u);
+  assert.match(javascript, /\/number-bindings/u);
+  assert.match(html, /id="operator-number-bindings"/u);
+  assert.match(html, /Raw number and SID values are sent once/u);
+  assert.match(html, /cannot retry a provider request, fabricate an effect/u);
+  assert.match(html, /Record resolution only/u);
+  assert.match(html, /id="operator-care-surface"/u);
+  assert.match(html, /id="operator-responder-surface"/u);
+  assert.match(html, /abracadabra-care-surfaces\.js/u);
+  assert.match(html, /abracadabra-responder-surfaces\.js/u);
+  assert.match(javascript, /Retained manual review; no generic repair/u);
+  assert.match(javascript, /control\.value = ""/u);
+  assert.doesNotMatch(
+    javascript,
+    /messageBody|providerEffects\s*=\s*true|localStorage|sessionStorage/u
+  );
 });
 
 test("operator UI validators bind canonical queue and digest-only case projections", () => {
@@ -137,6 +206,61 @@ test("operator UI validators bind canonical queue and digest-only case projectio
     () => desk.validateOperatorCase({
       ...operatorCase(),
       audit: [{ ...operatorCase().audit[0], eventDigest: "not-a-digest" }]
+    }),
+    (error) => error.code === "OPERATOR_RESPONSE_INVALID"
+  );
+  assert.equal(
+    desk.validateReconciliationCase(reconciliationCase())
+      .allowedResolutions[0],
+    "operator_confirmed_no_effect"
+  );
+  assert.throws(
+    () => desk.validateReconciliationCase({
+      ...reconciliationCase(),
+      allowedResolutions: ["retry_provider"]
+    }),
+    (error) => error.code === "OPERATOR_RESPONSE_INVALID"
+  );
+  assert.throws(
+    () => desk.validateReconciliationCase({
+      ...reconciliationCase(),
+      rawPhoneNumber: "+15555550100"
+    }),
+    (error) => error.code === "OPERATOR_RESPONSE_INVALID"
+  );
+  assert.equal(desk.validateResolutionReceipt({
+    schema: "sitesourcery.operator-provider-reconciliation-resolution/v1",
+    commandId: "operator-resolution:0001",
+    requestDigest: "4".repeat(64),
+    case: {
+      id: CASE,
+      caseKind: "ambiguous_message_create",
+      caseDigest: "1".repeat(64),
+      state: "resolved",
+      revision: 3,
+      resolutionKind: "operator_confirmed_no_effect",
+      resolutionEvidenceDigest: "5".repeat(64),
+      resolvedAt: "2026-08-13T18:00:00.000Z"
+    },
+    replayed: false,
+    providerEffects: false,
+    genericRepair: false
+  }).case.revision, 3);
+  assert.equal(desk.validateNumberBindingList({
+    schema: "sitesourcery.responder-number-binding-list/v1",
+    organizationId: ORG,
+    providerEffects: false,
+    bindings: [numberBinding()]
+  }).bindings[0].id, BINDING);
+  assert.throws(
+    () => desk.validateNumberBinding({
+      ...numberBinding(), rawPhoneNumber: "+15555550100"
+    }),
+    (error) => error.code === "OPERATOR_RESPONSE_INVALID"
+  );
+  assert.throws(
+    () => desk.validateNumberBinding({
+      ...numberBinding(), state: "active", retiredReason: "number_released"
     }),
     (error) => error.code === "OPERATOR_RESPONSE_INVALID"
   );

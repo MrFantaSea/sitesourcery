@@ -309,6 +309,15 @@
       onCommand,
       false
     ));
+    if (audience === "operator") {
+      globalControls.append(action(
+        documentRef,
+        "Record consent evidence",
+        { action: "operator-consent" },
+        onCommand,
+        false
+      ));
+    }
     panel.append(
       heading,
       summary,

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("production root composes canonical queue and effect-held support lifecycle", async () => {
+test("production root composes canonical queue, reconciliation, and support lifecycle", async () => {
   const source = await readFile(new URL("../bin/server.mjs", import.meta.url), "utf8");
   assert.match(source, /createPostgresSupportCaseRepository/u);
   assert.match(source, /createSupportCaseService/u);
@@ -14,7 +14,12 @@ test("production root composes canonical queue and effect-held support lifecycle
   assert.match(source, /if \(supportCaseReadiness[.]ready !== true\)/u);
   assert.match(
     source,
-    /operatorWorkQueue: professionalLifecycle[.]operatorQueue,\s*supportCases,/u
+    /operatorWorkQueue: professionalLifecycle[.]operatorQueue,\s*operatorProviderReconciliation,\s*supportCases,/u
+  );
+  assert.match(source, /createPostgresProviderReconciliationOperator/u);
+  assert.match(
+    source,
+    /operatorProviderReconciliationReadiness[.]providerEffects !== false/u
   );
   assert.doesNotMatch(
     source,

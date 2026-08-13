@@ -10,8 +10,12 @@
   <link rel="canonical" href="https://sitesourcery.com/operator/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,0 61,39 100,50 61,61 50,100 39,61 0,50 39,39' fill='%23f2ce83'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="/vnext.css">
+  <link rel="stylesheet" href="/abracadabra/app/abracadabra-care-surfaces.css">
+  <link rel="stylesheet" href="/abracadabra/app/abracadabra-responder-surfaces.css">
   <link rel="stylesheet" href="/operator/operator.css">
   <script src="/abracadabra/app/abracadabra-api.js" defer></script>
+  <script src="/abracadabra/app/abracadabra-care-surfaces.js" defer></script>
+  <script src="/abracadabra/app/abracadabra-responder-surfaces.js" defer></script>
   <script src="/operator/operator.js" defer></script>
 </head>
 <body class="vnext-page operator-page">
@@ -79,7 +83,52 @@
         <p class="operator-panel-copy">Select a case to review its current state, digests, deadlines, and immutable event trail.</p>
         <div id="operator-cases" class="operator-list"></div>
       </section>
+
+      <section class="operator-panel" aria-labelledby="operator-care-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Effect-held service</p>
+            <h2 id="operator-care-title">Care operations</h2>
+          </div>
+        </div>
+        <div id="operator-care-surface" class="operator-service-surface"></div>
+      </section>
+
+      <section class="operator-panel" aria-labelledby="operator-responder-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Global kill engaged</p>
+            <h2 id="operator-responder-title">Responder operations</h2>
+          </div>
+        </div>
+        <div id="operator-responder-surface" class="operator-service-surface"></div>
+      </section>
+
+      <section class="operator-panel" aria-labelledby="operator-number-bindings-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Attested provider identity</p>
+            <h2 id="operator-number-bindings-title">Responder number bindings</h2>
+          </div>
+          <span class="operator-count" id="operator-number-binding-count">0</span>
+        </div>
+        <p class="operator-panel-copy">Bindings are created only from an operator-attested Twilio readback. Raw number and SID values are sent once for server-side digesting and are never returned or retained by this page.</p>
+        <button class="operator-button" id="operator-number-binding-provision" type="button">Provision attested binding</button>
+        <div id="operator-number-bindings" class="operator-list"></div>
+      </section>
     </div>
+
+    <section class="operator-panel operator-detail" id="operator-service-command" aria-labelledby="operator-service-command-title" hidden>
+      <div class="operator-panel-heading">
+        <div>
+          <p class="operator-eyebrow">Bounded held command</p>
+          <h2 id="operator-service-command-title">Service evidence</h2>
+        </div>
+        <button class="operator-button" id="operator-service-command-close" type="button">Cancel</button>
+      </div>
+      <p class="operator-panel-copy">The selected command records canonical evidence only. Provider delivery, billing, and commercial release remain held.</p>
+      <div id="operator-service-command-form"></div>
+    </section>
 
     <section class="operator-panel operator-detail" id="operator-case-detail" aria-labelledby="case-detail-title" hidden>
       <div class="operator-panel-heading">
@@ -186,6 +235,27 @@
           <button class="operator-button operator-button-danger" type="submit">Record closure</button>
         </form>
       </div>
+    </section>
+
+    <section class="operator-panel operator-detail" id="operator-reconciliation-detail" aria-labelledby="reconciliation-detail-title" hidden>
+      <div class="operator-panel-heading">
+        <div>
+          <p class="operator-eyebrow">Digest-only provider evidence</p>
+          <h2 id="reconciliation-detail-title">Provider reconciliation</h2>
+        </div>
+        <button class="operator-button" id="reconciliation-detail-close" type="button">Close detail</button>
+      </div>
+      <p class="operator-panel-copy">This surface can record only a server-authorized evidence-bound resolution. It cannot retry a provider request, fabricate an effect, or expose raw message or phone data.</p>
+      <div id="reconciliation-facts" class="operator-facts"></div>
+      <form class="operator-action-card operator-resolution-form" id="reconciliation-resolution-form">
+        <h3>Record proved resolution</h3>
+        <label class="operator-field"><span>Resolution supported by retained evidence</span>
+          <select id="reconciliation-resolution-kind" name="resolutionKind" required></select>
+        </label>
+        <label class="operator-field"><span>Operator evidence SHA-256</span><input name="evidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+        <button class="operator-button operator-button-danger" type="submit">Record resolution only</button>
+      </form>
+      <p class="operator-held-note" id="reconciliation-no-action" hidden>No resolution is currently proved by retained evidence. Inspect the source evidence; no generic repair is available.</p>
     </section>
   </main>
 

@@ -1467,6 +1467,39 @@ async function startServer() {
           });
           return;
         }
+        if (url.pathname === "/api/v1/care") {
+          json(response, 200, {
+            schema: "sitesourcery.care-surface-dashboard/v1",
+            audience: "customer",
+            organizationId: PAID_ORGANIZATION_ID,
+            observedAt: "2026-08-13T12:00:00.000Z",
+            held: {
+              commercialRelease: true,
+              customerEffects: true,
+              mailDelivery: true,
+              paymentEffects: true,
+              providerEffects: true,
+            },
+            contracts: [],
+          });
+          return;
+        }
+        if (url.pathname === "/api/v1/responder") {
+          json(response, 200, {
+            schema: "sitesourcery.responder-surface-dashboard/v1",
+            audience: "customer",
+            organizationId: PAID_ORGANIZATION_ID,
+            observedAt: "2026-08-13T12:00:00.000Z",
+            mode: "held",
+            globalKillEngaged: true,
+            sellable: false,
+            billingEffects: false,
+            providerEffects: false,
+            contacts: [],
+            interactions: [],
+          });
+          return;
+        }
         if (
           url.pathname ===
             `/api/v1/organizations/${PAID_ORGANIZATION_ID}/projects`

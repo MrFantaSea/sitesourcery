@@ -7,7 +7,13 @@
   } else {
     root.SiteSourceryOperatorDesk = desk;
     if (root.document) {
-      desk.mount(root.document, root.SiteSourceryAbracadabraAPI);
+      desk.mount(
+        root.document,
+        root.SiteSourceryAbracadabraAPI,
+        root.SiteSourceryCareSurfaces,
+        root.SiteSourceryResponderSurfaces,
+        root.crypto
+      );
     }
   }
 }(typeof globalThis === "object" ? globalThis : this, function () {
@@ -21,8 +27,32 @@
     "payment_reconciliation", "reversal_reconciliation", "assessment_job",
     "custom_job", "support_case", "privacy_case", "publication_hold",
     "domain_failure", "care_hold", "mail_exception",
-    "invoice_finalization_failure"
+    "invoice_finalization_failure", "provider_reconciliation_case",
+    "responder_delivery_manual_review", "responder_followup_manual_review",
+    "responder_cleanup_manual_review", "project_lifecycle_manual_review",
+    "domain_lifecycle_manual_review", "care_lifecycle_manual_review"
   ]);
+  var MANUAL_REVIEW_KINDS = new Set([
+    "responder_delivery_manual_review", "responder_followup_manual_review",
+    "responder_cleanup_manual_review", "project_lifecycle_manual_review",
+    "domain_lifecycle_manual_review", "care_lifecycle_manual_review"
+  ]);
+  var RECONCILIATION_CASE_KINDS = new Set([
+    "abandoned_claim", "stale_delivery_status", "unmatched_provider_event",
+    "suppression_conflict", "unbound_inbound_event",
+    "ambiguous_number_binding", "ambiguous_message_create"
+  ]);
+  var RECONCILIATION_READBACK_STATES = new Set([
+    "none", "matched", "single_candidate", "not_found", "multiple_matches"
+  ]);
+  var RECONCILIATION_RESOLUTIONS = new Set([
+    "operator_confirmed_effect", "operator_confirmed_no_effect",
+    "operator_late_binding_applied", "operator_binding_retired",
+    "operator_closed"
+  ]);
+  var RECORDED_RECONCILIATION_RESOLUTIONS = new Set([
+    "self_healed"
+  ].concat(Array.from(RECONCILIATION_RESOLUTIONS)));
   var QUEUE_SEVERITIES = new Set(["low", "normal", "high", "critical"]);
   var QUEUE_STATES = new Set(["open", "in_progress", "blocked"]);
   var CASE_KINDS = new Set([
@@ -31,6 +61,11 @@
   var CASE_STATES = new Set([
     "open", "assigned", "in_review", "responded", "denied",
     "appeal_pending", "closed"
+  ]);
+  var NUMBER_BINDING_STATES = new Set(["active", "retired"]);
+  var NUMBER_BINDING_RETIRE_REASONS = new Set([
+    "reprovisioned", "customer_cancelled", "number_released",
+    "operator_correction"
   ]);
 
   function responseError() {
@@ -85,6 +120,10 @@
   function integer(value, minimum) {
     check(Number.isSafeInteger(value) && value >= minimum);
     return value;
+  }
+
+  function nullableInteger(value, minimum) {
+    return value === null ? null : integer(value, minimum);
   }
 
   function optionalText(value, maximum) {
@@ -314,6 +353,163 @@
     return Object.freeze({ schema: value.schema, cases: Object.freeze(cases) });
   }
 
+  function validateReconciliationCase(value) {
+    exact(value, [
+      "allowedResolutions", "caseDigest", "caseKind", "evidenceDigest",
+      "genericRepair", "id", "matchedProviderMessageIdDigest",
+      "openedAt", "organizationId", "projectId", "provider",
+      "providerEffects", "readbackAt", "readbackEvidenceDigest",
+      "readbackMatchCount", "readbackState", "resolutionEvidenceDigest",
+      "resolutionKind", "resolvedAt", "revision", "schema", "state"
+    ]);
+    check(
+      value.schema ===
+        "sitesourcery.operator-provider-reconciliation-case/v1" &&
+      RECONCILIATION_CASE_KINDS.has(value.caseKind) &&
+      RECONCILIATION_READBACK_STATES.has(value.readbackState) &&
+      ["open", "resolved"].includes(value.state) &&
+      value.providerEffects === false && value.genericRepair === false &&
+      Array.isArray(value.allowedResolutions) &&
+      value.allowedResolutions.length <= RECONCILIATION_RESOLUTIONS.size &&
+      value.allowedResolutions.every(function (kind) {
+        return RECONCILIATION_RESOLUTIONS.has(kind);
+      }) &&
+      new Set(value.allowedResolutions).size === value.allowedResolutions.length
+    );
+    return Object.freeze({
+      schema: value.schema,
+      id: uuid(value.id),
+      provider: text(value.provider, 64),
+      caseKind: value.caseKind,
+      caseDigest: digest(value.caseDigest),
+      state: value.state,
+      organizationId: uuid(value.organizationId, true),
+      projectId: uuid(value.projectId, true),
+      evidenceDigest: digest(value.evidenceDigest),
+      readbackState: value.readbackState,
+      readbackEvidenceDigest: digest(value.readbackEvidenceDigest, true),
+      matchedProviderMessageIdDigest:
+        digest(value.matchedProviderMessageIdDigest, true),
+      readbackMatchCount: nullableInteger(value.readbackMatchCount, 0),
+      readbackAt: instant(value.readbackAt, true),
+      resolutionKind: value.resolutionKind === null
+        ? null
+        : (check(RECORDED_RECONCILIATION_RESOLUTIONS.has(
+          value.resolutionKind
+        )),
+          value.resolutionKind),
+      resolutionEvidenceDigest: digest(value.resolutionEvidenceDigest, true),
+      resolvedAt: instant(value.resolvedAt, true),
+      openedAt: instant(value.openedAt),
+      revision: integer(value.revision, 1),
+      allowedResolutions: Object.freeze(value.allowedResolutions.slice()),
+      providerEffects: false,
+      genericRepair: false
+    });
+  }
+
+  function validateResolutionReceipt(value) {
+    exact(value, [
+      "case", "commandId", "genericRepair", "providerEffects",
+      "replayed", "requestDigest", "schema"
+    ]);
+    exact(value.case, [
+      "caseDigest", "caseKind", "id", "resolutionEvidenceDigest",
+      "resolutionKind", "resolvedAt", "revision", "state"
+    ]);
+    check(
+      value.schema ===
+        "sitesourcery.operator-provider-reconciliation-resolution/v1" &&
+      value.providerEffects === false && value.genericRepair === false &&
+      typeof value.replayed === "boolean" && value.case.state === "resolved" &&
+      RECONCILIATION_CASE_KINDS.has(value.case.caseKind) &&
+      RECONCILIATION_RESOLUTIONS.has(value.case.resolutionKind)
+    );
+    return Object.freeze({
+      schema: value.schema,
+      commandId: text(value.commandId, 200),
+      requestDigest: digest(value.requestDigest),
+      case: Object.freeze({
+        id: uuid(value.case.id),
+        caseKind: value.case.caseKind,
+        caseDigest: digest(value.case.caseDigest),
+        state: value.case.state,
+        revision: integer(value.case.revision, 1),
+        resolutionKind: value.case.resolutionKind,
+        resolutionEvidenceDigest: digest(value.case.resolutionEvidenceDigest),
+        resolvedAt: instant(value.case.resolvedAt)
+      }),
+      replayed: value.replayed,
+      providerEffects: false,
+      genericRepair: false
+    });
+  }
+
+  function validateNumberBinding(value) {
+    exact(value, [
+      "accountSidDigest", "id", "lookupKeyVersion",
+      "messagingServiceSidDigest", "numberLookupDigest", "organizationId",
+      "phoneNumberSidDigest", "projectId", "provider",
+      "providerEffects", "providerReadbackDigest", "provisionedAt",
+      "replayed", "retiredAt", "retiredReason", "revision", "schema",
+      "state"
+    ]);
+    check(
+      value.schema === "sitesourcery.responder-number-binding-receipt/v1" &&
+      value.provider === "twilio" && value.providerEffects === false &&
+      typeof value.replayed === "boolean" &&
+      NUMBER_BINDING_STATES.has(value.state) &&
+      ((value.state === "active" && value.retiredAt === null &&
+        value.retiredReason === null) ||
+       (value.state === "retired" && value.retiredAt !== null &&
+        NUMBER_BINDING_RETIRE_REASONS.has(value.retiredReason)))
+    );
+    return Object.freeze({
+      schema: value.schema,
+      id: uuid(value.id),
+      organizationId: uuid(value.organizationId),
+      projectId: uuid(value.projectId),
+      provider: value.provider,
+      numberLookupDigest: digest(value.numberLookupDigest),
+      lookupKeyVersion: text(value.lookupKeyVersion, 40),
+      phoneNumberSidDigest: digest(value.phoneNumberSidDigest),
+      providerReadbackDigest: digest(value.providerReadbackDigest),
+      accountSidDigest: digest(value.accountSidDigest),
+      messagingServiceSidDigest: digest(value.messagingServiceSidDigest, true),
+      state: value.state,
+      provisionedAt: instant(value.provisionedAt),
+      retiredAt: instant(value.retiredAt, true),
+      retiredReason: value.retiredReason,
+      revision: integer(value.revision, 1),
+      replayed: value.replayed,
+      providerEffects: false
+    });
+  }
+
+  function validateNumberBindingList(value) {
+    exact(value, ["bindings", "organizationId", "providerEffects", "schema"]);
+    check(
+      value.schema === "sitesourcery.responder-number-binding-list/v1" &&
+      value.providerEffects === false && Array.isArray(value.bindings) &&
+      value.bindings.length <= 200
+    );
+    var organizationId = uuid(value.organizationId);
+    var bindings = value.bindings.map(validateNumberBinding);
+    check(
+      bindings.every(function (binding) {
+        return binding.organizationId === organizationId;
+      }) &&
+      new Set(bindings.map(function (binding) { return binding.id; })).size ===
+        bindings.length
+    );
+    return Object.freeze({
+      schema: value.schema,
+      organizationId: organizationId,
+      providerEffects: false,
+      bindings: Object.freeze(bindings)
+    });
+  }
+
   function human(value) {
     var words = String(value == null ? "" : value).replaceAll("_", " ");
     return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Not recorded";
@@ -350,7 +546,13 @@
     return element;
   }
 
-  function mount(documentRef, publicApi) {
+  function mount(
+    documentRef,
+    publicApi,
+    careModule,
+    responderModule,
+    cryptoRef
+  ) {
     var board = documentRef.getElementById("operator-board");
     if (!board) return null;
     var sessionStatus = documentRef.getElementById("operator-session-status");
@@ -367,6 +569,43 @@
     var factsRoot = documentRef.getElementById("case-facts");
     var auditRoot = documentRef.getElementById("case-audit");
     var actionsRoot = documentRef.getElementById("case-actions");
+    var careRoot = documentRef.getElementById("operator-care-surface");
+    var responderRoot = documentRef.getElementById(
+      "operator-responder-surface"
+    );
+    var numberBindingsRoot = documentRef.getElementById(
+      "operator-number-bindings"
+    );
+    var numberBindingCount = documentRef.getElementById(
+      "operator-number-binding-count"
+    );
+    var numberBindingProvision = documentRef.getElementById(
+      "operator-number-binding-provision"
+    );
+    var serviceCommandRoot = documentRef.getElementById(
+      "operator-service-command"
+    );
+    var serviceCommandTitle = documentRef.getElementById(
+      "operator-service-command-title"
+    );
+    var serviceCommandFormRoot = documentRef.getElementById(
+      "operator-service-command-form"
+    );
+    var reconciliationDetailRoot = documentRef.getElementById(
+      "operator-reconciliation-detail"
+    );
+    var reconciliationTitle = documentRef.getElementById(
+      "reconciliation-detail-title"
+    );
+    var reconciliationFactsRoot = documentRef.getElementById(
+      "reconciliation-facts"
+    );
+    var reconciliationForm = documentRef.getElementById(
+      "reconciliation-resolution-form"
+    );
+    var reconciliationResolution = documentRef.getElementById(
+      "reconciliation-resolution-kind"
+    );
     var state = {
       client: null,
       actorId: null,
@@ -375,6 +614,11 @@
       queue: [],
       cases: [],
       selectedCase: null,
+      selectedReconciliation: null,
+      careSnapshot: null,
+      responderSnapshot: null,
+      numberBindings: [],
+      serviceCommand: null,
       busy: false
     };
 
@@ -404,9 +648,19 @@
       board.setAttribute("aria-busy", value ? "true" : "false");
       refreshButton.disabled = value || !state.organizationId;
       organizationSelect.disabled = value || state.organizations.length === 0;
+      numberBindingProvision.disabled = value || !state.organizationId;
+      Array.from(numberBindingsRoot.querySelectorAll("button")).forEach(
+        function (control) { control.disabled = value; }
+      );
       Array.from(actionsRoot.querySelectorAll("button, input, select")).forEach(
         function (control) { control.disabled = value; }
       );
+      Array.from(
+        reconciliationDetailRoot.querySelectorAll("button, input, select")
+      ).forEach(function (control) { control.disabled = value; });
+      Array.from(
+        serviceCommandRoot.querySelectorAll("button, input, select")
+      ).forEach(function (control) { control.disabled = value; });
     }
 
     function empty(root, message) {
@@ -429,6 +683,27 @@
       var form = details.querySelector("form");
       form.dataset.queueRepair = item.id;
       card.appendChild(details);
+    }
+
+    function renderQueueAction(item, card) {
+      if (item.kind === "provider_reconciliation_case") {
+        var button = createElement(
+          documentRef,
+          "button",
+          "operator-button operator-queue-action",
+          "Review typed reconciliation"
+        );
+        button.type = "button";
+        button.dataset.reconciliationId = item.source.id;
+        card.appendChild(button);
+      } else if (MANUAL_REVIEW_KINDS.has(item.kind)) {
+        card.appendChild(createElement(
+          documentRef,
+          "p",
+          "operator-held-note",
+          "Retained manual review; no generic repair or provider action is available."
+        ));
+      }
     }
 
     function renderQueue() {
@@ -459,9 +734,73 @@
           ])
         );
         renderRepair(item, card);
+        renderQueueAction(item, card);
         fragment.appendChild(card);
       });
       queueRoot.replaceChildren(fragment);
+    }
+
+    function renderNumberBindings() {
+      numberBindingCount.textContent = String(state.numberBindings.length);
+      if (state.numberBindings.length === 0) {
+        empty(
+          numberBindingsRoot,
+          "No canonical Twilio number bindings exist in this operator scope."
+        );
+        return;
+      }
+      var fragment = documentRef.createDocumentFragment();
+      state.numberBindings.forEach(function (binding) {
+        var card = createElement(documentRef, "article", "operator-card");
+        var top = createElement(documentRef, "div", "operator-card-top");
+        var stateBadge = createElement(
+          documentRef, "span", "operator-badge", binding.state
+        );
+        top.append(
+          createElement(
+            documentRef,
+            "span",
+            "operator-card-title",
+            "Twilio binding · " + shortDigest(binding.numberLookupDigest)
+          ),
+          stateBadge
+        );
+        card.append(
+          top,
+          meta([
+            "Project: " + binding.projectId,
+            "Key: " + binding.lookupKeyVersion,
+            "Revision " + binding.revision
+          ]),
+          meta([
+            "Readback: " + shortDigest(binding.providerReadbackDigest),
+            binding.state === "active"
+              ? "Provisioned: " + formatDate(binding.provisionedAt)
+              : "Retired: " + formatDate(binding.retiredAt) + " · " +
+                human(binding.retiredReason)
+          ])
+        );
+        if (binding.state === "active") {
+          var retire = createElement(
+            documentRef,
+            "button",
+            "operator-button operator-button-danger operator-queue-action",
+            "Retire this binding"
+          );
+          retire.type = "button";
+          retire.addEventListener("click", function () {
+            if (state.busy) return;
+            openServiceCommand(Object.freeze({
+              product: "number-binding",
+              action: "retire",
+              bindingId: binding.id
+            }));
+          });
+          card.append(retire);
+        }
+        fragment.append(card);
+      });
+      numberBindingsRoot.replaceChildren(fragment);
     }
 
     function renderCases() {
@@ -539,6 +878,593 @@
       detailRoot.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
+    function renderReconciliationDetail() {
+      var entry = state.selectedReconciliation;
+      if (!entry) {
+        reconciliationDetailRoot.hidden = true;
+        return;
+      }
+      reconciliationTitle.textContent =
+        human(entry.caseKind) + " · " + entry.id;
+      reconciliationFactsRoot.replaceChildren(
+        fact("State", human(entry.state)),
+        fact("Provider", human(entry.provider)),
+        fact("Revision", String(entry.revision)),
+        fact("Opened", formatDate(entry.openedAt)),
+        fact("Case digest", shortDigest(entry.caseDigest)),
+        fact("Evidence digest", shortDigest(entry.evidenceDigest)),
+        fact("Readback", human(entry.readbackState)),
+        fact("Readback evidence", shortDigest(entry.readbackEvidenceDigest)),
+        fact("Matched provider ID digest",
+          shortDigest(entry.matchedProviderMessageIdDigest)),
+        fact("Readback match count", entry.readbackMatchCount === null
+          ? "Not recorded" : String(entry.readbackMatchCount))
+      );
+      reconciliationResolution.replaceChildren.apply(
+        reconciliationResolution,
+        entry.allowedResolutions.map(function (resolution) {
+          var option = createElement(
+            documentRef, "option", "", human(resolution)
+          );
+          option.value = resolution;
+          return option;
+        })
+      );
+      reconciliationForm.hidden =
+        entry.state !== "open" || entry.allowedResolutions.length === 0;
+      documentRef.getElementById("reconciliation-no-action").hidden =
+        !reconciliationForm.hidden;
+      reconciliationDetailRoot.hidden = false;
+      reconciliationDetailRoot.scrollIntoView({
+        behavior: "smooth", block: "start"
+      });
+    }
+
+    async function openReconciliation(caseId) {
+      clearMessages();
+      setBusy(true);
+      try {
+        var result = await state.client.request(
+          "GET",
+          "/operator/provider-reconciliation/cases/" +
+            encodeURIComponent(uuid(caseId)) +
+            "?operatorOrganizationId=" + encodeURIComponent(state.organizationId)
+        );
+        state.selectedReconciliation = validateReconciliationCase(result);
+        renderReconciliationDetail();
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function serviceInput(name, type, options) {
+      var control = createElement(documentRef, "input");
+      control.name = name;
+      control.type = type;
+      control.required = !(options && options.optional);
+      control.autocomplete = "off";
+      if (options && options.pattern) control.pattern = options.pattern;
+      if (options && options.maxLength) control.maxLength = options.maxLength;
+      if (options && options.minimum !== undefined) control.min = options.minimum;
+      if (options && options.value !== undefined) control.value = options.value;
+      return control;
+    }
+
+    function serviceSelect(name, values) {
+      var control = createElement(documentRef, "select");
+      control.name = name;
+      control.required = true;
+      values.forEach(function (entry) {
+        var option = createElement(documentRef, "option", "", entry[1]);
+        option.value = entry[0];
+        control.append(option);
+      });
+      return control;
+    }
+
+    function serviceField(label, control) {
+      var wrapper = createElement(documentRef, "label", "operator-field");
+      wrapper.append(createElement(documentRef, "span", "", label), control);
+      return wrapper;
+    }
+
+    function serviceDigest(name) {
+      return serviceInput(name, "text", {
+        pattern: "[a-f0-9]{64}", maxLength: 64
+      });
+    }
+
+    function serviceInstant(name) {
+      return serviceInput(name, "datetime-local", {
+        value: new Date().toISOString().slice(0, 16)
+      });
+    }
+
+    function serviceFutureInstant(name, hours) {
+      return serviceInput(name, "datetime-local", {
+        value: new Date(Date.now() + (hours * 60 * 60 * 1000))
+          .toISOString().slice(0, 16)
+      });
+    }
+
+    function randomId() {
+      check(cryptoRef && typeof cryptoRef.randomUUID === "function");
+      return uuid(cryptoRef.randomUUID());
+    }
+
+    function renderCareCommand(form, action) {
+      if (action.action === "close-period") {
+        form.append(createElement(
+          documentRef,
+          "p",
+          "operator-held-note",
+          "Close the selected held period at its current revision."
+        ));
+        return;
+      }
+      if (action.action === "transition-ticket") {
+        form.append(createElement(
+          documentRef,
+          "p",
+          "operator-held-note",
+          "Record the " + human(action.transition) +
+            " transition against the selected ticket revision."
+        ));
+        return;
+      }
+      if (action.action === "allocate-capacity") {
+        form.append(
+          serviceField("Capacity source", serviceSelect("capacitySource", [
+            ["included", "Included capacity"],
+            ["carried", "Carried capacity"]
+          ])),
+          serviceField("Units", serviceInput(
+            "units", "number", { minimum: "1", value: "1" }
+          ))
+        );
+        return;
+      }
+      if (action.action === "reserve-mail") {
+        form.append(
+          serviceField("Template", serviceSelect("templateVersion", [
+            ["care-ticket-update.v1", "Care ticket update v1"]
+          ])),
+          serviceField("Recipient SHA-256", serviceDigest("recipientDigest")),
+          serviceField(
+            "Subject reference SHA-256",
+            serviceDigest("subjectReferenceDigest")
+          ),
+          serviceField("Content SHA-256", serviceDigest("contentDigest")),
+          serviceField(
+            "Reservation expires at",
+            serviceFutureInstant("expiresAt", 24)
+          )
+        );
+        return;
+      }
+      var kind = serviceSelect("careCommandKind", [
+        ["open_period", "Open a held Care period"],
+        ["open_ticket", "Open a held Care ticket"]
+      ]);
+      var period = createElement(documentRef, "fieldset", "operator-action-card");
+      period.dataset.careFields = "open_period";
+      period.append(
+        createElement(documentRef, "legend", "", "Held Care period"),
+        serviceField("Starts on", serviceInput("startsOn", "date")),
+        serviceField("Ends on", serviceInput("endsOn", "date")),
+        serviceField("Included units", serviceInput(
+          "includedUnits", "number", { minimum: "0", value: "0" }
+        )),
+        serviceField("Carried units", serviceInput(
+          "carriedUnits", "number", { minimum: "0", value: "0" }
+        )),
+        serviceField("Carried-from period ID (optional)", serviceInput(
+          "carriedFromPeriodId", "text", { optional: true, maxLength: 36 }
+        )),
+        serviceField("Provider period key", serviceInput(
+          "providerPeriodKey", "text", { maxLength: 200 }
+        )),
+        serviceField("Provider scope SHA-256", serviceDigest(
+          "providerScopeDigest"
+        ))
+      );
+      var ticket = createElement(documentRef, "fieldset", "operator-action-card");
+      ticket.dataset.careFields = "open_ticket";
+      ticket.hidden = true;
+      ticket.append(
+        createElement(documentRef, "legend", "", "Held Care ticket"),
+        serviceField("Period ID", serviceInput(
+          "periodId", "text", { maxLength: 36 }
+        )),
+        serviceField("Basis", serviceSelect("basisKind", [
+          ["assessment_finding", "Assessment finding"],
+          ["customer_request", "Customer request"],
+          ["monitoring_incident", "Monitoring incident"],
+          ["rescue_scope", "Rescue scope"]
+        ])),
+        serviceField("Basis SHA-256", serviceDigest("basisDigest")),
+        serviceField("Work scope SHA-256", serviceDigest("workScopeDigest")),
+        serviceField("Support ticket ID (optional)", serviceInput(
+          "supportTicketId", "text", { optional: true, maxLength: 36 }
+        ))
+      );
+      form.append(serviceField("Care command", kind), period, ticket);
+      kind.addEventListener("change", function () {
+        period.hidden = kind.value !== "open_period";
+        ticket.hidden = kind.value !== "open_ticket";
+        Array.from(period.querySelectorAll("input, select")).forEach(
+          function (control) { control.disabled = period.hidden; }
+        );
+        Array.from(ticket.querySelectorAll("input, select")).forEach(
+          function (control) { control.disabled = ticket.hidden; }
+        );
+      });
+      Array.from(ticket.querySelectorAll("input, select")).forEach(
+        function (control) { control.disabled = true; }
+      );
+    }
+
+    function renderResponderCommand(form, action) {
+      if (action.action === "global-kill") {
+        form.append(serviceField("Kill evidence SHA-256", serviceDigest(
+          "evidenceDigest"
+        )));
+      } else if (action.action === "operator-consent") {
+        form.append(
+          serviceField("Project ID", serviceInput(
+            "projectId", "text", { maxLength: 36 }
+          )),
+          serviceField("Customer user ID", serviceInput(
+            "customerUserId", "text", { maxLength: 36 }
+          )),
+          serviceField("Route SHA-256", serviceDigest("routeDigest")),
+          serviceField("Consent basis", serviceSelect("consentBasis", [
+            ["explicit_service_request", "Explicit service request"],
+            ["inbound_call", "Inbound call"],
+            ["inbound_message", "Inbound message"]
+          ])),
+          serviceField(
+            "Consent evidence SHA-256",
+            serviceDigest("consentEvidenceDigest")
+          ),
+          serviceField("Consented at", serviceInstant("consentedAt"))
+        );
+      } else if (action.action === "stop") {
+        form.append(
+          serviceField("Provider event ID SHA-256", serviceDigest(
+            "providerEventIdDigest"
+          )),
+          serviceField("STOP payload SHA-256", serviceDigest("payloadDigest")),
+          serviceField("Occurred at", serviceInstant("occurredAt"))
+        );
+      } else if (action.action === "handoff") {
+        form.append(
+          serviceField("Reason", serviceSelect("reason", [
+            ["customer_request", "Customer request"],
+            ["uncertain_intent", "Uncertain intent"],
+            ["urgent", "Urgent"],
+            ["operator_review", "Operator review"]
+          ])),
+          serviceField("Evidence SHA-256", serviceDigest("evidenceDigest"))
+        );
+      } else if (action.action === "held-message") {
+        form.append(
+          serviceField("Message kind", serviceSelect("messageKind", [
+            ["missed_call_ack", "Missed-call acknowledgment"],
+            ["human_handoff_ack", "Human-handoff acknowledgment"]
+          ])),
+          serviceField("Content SHA-256", serviceDigest("contentDigest"))
+        );
+      }
+    }
+
+    function renderNumberBindingCommand(form, action) {
+      if (action.action === "retire") {
+        form.append(
+          serviceField("Retirement reason", serviceSelect("reason", [
+            ["number_released", "Number released"],
+            ["reprovisioned", "Reprovisioned"],
+            ["customer_cancelled", "Customer cancelled"],
+            ["operator_correction", "Operator correction"]
+          ])),
+          serviceField("Retirement evidence SHA-256", serviceDigest(
+            "evidenceDigest"
+          ))
+        );
+        return;
+      }
+      form.append(
+        createElement(
+          documentRef,
+          "p",
+          "operator-held-note",
+          "Verify these values in Twilio immediately before recording. Raw values are submitted once and the server returns digests only."
+        ),
+        serviceField("Project ID", serviceInput(
+          "projectId", "text", { maxLength: 36 }
+        )),
+        serviceField("Business number (E.164)", serviceInput(
+          "phoneNumber", "tel", {
+            pattern: "\\+[1-9][0-9]{1,14}", maxLength: 16
+          }
+        )),
+        serviceField("Twilio Phone Number SID", serviceInput(
+          "phoneNumberSid", "password", {
+            pattern: "PN[0-9A-Fa-f]{32}", maxLength: 34
+          }
+        )),
+        serviceField("Twilio Account SID", serviceInput(
+          "accountSid", "password", {
+            pattern: "AC[0-9A-Fa-f]{32}", maxLength: 34
+          }
+        )),
+        serviceField("Messaging Service SID (optional)", serviceInput(
+          "messagingServiceSid", "password", {
+            optional: true, pattern: "MG[0-9A-Fa-f]{32}", maxLength: 34
+          }
+        )),
+        serviceField("Provider readback observed at", serviceInstant(
+          "readbackAttestedAt"
+        )),
+        serviceField("Attestation evidence SHA-256", serviceDigest(
+          "evidenceDigest"
+        ))
+      );
+    }
+
+    function openServiceCommand(action) {
+      state.serviceCommand = action;
+      serviceCommandTitle.textContent = action.product === "care"
+        ? "Record held Care evidence"
+        : action.product === "responder"
+          ? "Record held Responder evidence"
+          : action.action === "retire"
+            ? "Retire Responder number binding"
+            : "Provision Responder number binding";
+      var form = createElement(documentRef, "form", "operator-action-card");
+      form.dataset.operatorServiceCommand = "true";
+      if (action.product === "care") renderCareCommand(form, action);
+      else if (action.product === "responder") {
+        renderResponderCommand(form, action);
+      } else {
+        renderNumberBindingCommand(form, action);
+      }
+      var submit = createElement(
+        documentRef,
+        "button",
+        "operator-button operator-button-danger",
+        "Record bounded command"
+      );
+      submit.type = "submit";
+      form.append(submit);
+      serviceCommandFormRoot.replaceChildren(form);
+      serviceCommandRoot.hidden = false;
+      serviceCommandRoot.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function closeServiceCommand() {
+      state.serviceCommand = null;
+      serviceCommandFormRoot.replaceChildren();
+      serviceCommandRoot.hidden = true;
+    }
+
+    function exactOptionalUuid(form, name) {
+      var selected = formValue(form, name);
+      return selected === "" ? null : uuid(selected);
+    }
+
+    function exactFormDigest(form, name) {
+      return digest(formValue(form, name));
+    }
+
+    function careCommandRequest(form, action) {
+      var base = "/operator/care/organizations/" +
+        encodeURIComponent(state.organizationId);
+      if (action.action === "close-period") {
+        return state.client.request(
+          "POST",
+          base + "/periods/" + encodeURIComponent(action.periodId) +
+            "/closure",
+          { body: {
+            expectedRevision: action.expectedRevision,
+            projectId: action.projectId
+          } }
+        );
+      }
+      if (action.action === "transition-ticket") {
+        return state.client.request(
+          "POST",
+          base + "/tickets/" + encodeURIComponent(action.ticketId) +
+            "/transitions",
+          { body: {
+            expectedRevision: action.expectedRevision,
+            projectId: action.projectId,
+            transition: action.transition
+          } }
+        );
+      }
+      if (action.action === "allocate-capacity") {
+        return state.client.request(
+          "POST",
+          base + "/periods/" + encodeURIComponent(action.periodId) +
+            "/capacity",
+          { body: {
+            capacitySource: formValue(form, "capacitySource"),
+            entryId: randomId(),
+            projectId: action.projectId,
+            ticketId: action.ticketId,
+            units: Number(formValue(form, "units"))
+          } }
+        );
+      }
+      if (action.action === "reserve-mail") {
+        return state.client.request(
+          "POST",
+          base + "/tickets/" + encodeURIComponent(action.ticketId) +
+            "/mail-reservations",
+          { body: {
+            contentDigest: exactFormDigest(form, "contentDigest"),
+            expiresAt: localInstant(formValue(form, "expiresAt")),
+            recipientDigest: exactFormDigest(form, "recipientDigest"),
+            subjectReferenceDigest: exactFormDigest(
+              form, "subjectReferenceDigest"
+            ),
+            templateVersion: formValue(form, "templateVersion")
+          } }
+        );
+      }
+      if (formValue(form, "careCommandKind") === "open_period") {
+        return state.client.request("POST", base + "/periods", {
+          body: {
+            carriedFromPeriodId: exactOptionalUuid(form, "carriedFromPeriodId"),
+            carriedUnits: Number(formValue(form, "carriedUnits")),
+            contractId: action.contractId,
+            endsOn: formValue(form, "endsOn"),
+            includedUnits: Number(formValue(form, "includedUnits")),
+            periodId: randomId(),
+            projectId: action.projectId,
+            providerPeriodKey: formValue(form, "providerPeriodKey"),
+            providerScopeDigest: exactFormDigest(form, "providerScopeDigest"),
+            startsOn: formValue(form, "startsOn")
+          }
+        });
+      }
+      return state.client.request("POST", base + "/tickets", {
+        body: {
+          basisDigest: exactFormDigest(form, "basisDigest"),
+          basisKind: formValue(form, "basisKind"),
+          contractId: action.contractId,
+          periodId: uuid(formValue(form, "periodId")),
+          projectId: action.projectId,
+          supportTicketId: exactOptionalUuid(form, "supportTicketId"),
+          ticketId: randomId(),
+          workScopeDigest: exactFormDigest(form, "workScopeDigest")
+        }
+      });
+    }
+
+    function responderCommandRequest(form, action) {
+      var base = "/operator/responder/organizations/" +
+        encodeURIComponent(state.organizationId);
+      if (action.action === "operator-consent") {
+        return state.client.request("POST", base + "/contacts", {
+          body: {
+            consentBasis: formValue(form, "consentBasis"),
+            consentEvidenceDigest: exactFormDigest(
+              form, "consentEvidenceDigest"
+            ),
+            consentedAt: localInstant(formValue(form, "consentedAt")),
+            customerUserId: uuid(formValue(form, "customerUserId")),
+            projectId: uuid(formValue(form, "projectId")),
+            routeDigest: exactFormDigest(form, "routeDigest")
+          }
+        });
+      }
+      if (action.action === "global-kill") {
+        return state.client.request("POST", base + "/global-kill", {
+          body: { evidenceDigest: exactFormDigest(form, "evidenceDigest") }
+        });
+      }
+      if (action.action === "stop") {
+        return state.client.request(
+          "POST",
+          base + "/contacts/" + encodeURIComponent(action.contactAuthorityId) +
+            "/stop",
+          { body: {
+            occurredAt: localInstant(formValue(form, "occurredAt")),
+            payloadDigest: exactFormDigest(form, "payloadDigest"),
+            projectId: action.projectId,
+            providerEventIdDigest: exactFormDigest(
+              form, "providerEventIdDigest"
+            ),
+            routeDigest: action.routeDigest
+          } }
+        );
+      }
+      if (action.action === "handoff") {
+        return state.client.request(
+          "POST",
+          base + "/interactions/" + encodeURIComponent(action.interactionId) +
+            "/handoff",
+          { body: {
+            evidenceDigest: exactFormDigest(form, "evidenceDigest"),
+            expectedRevision: action.expectedRevision,
+            projectId: action.projectId,
+            reason: formValue(form, "reason")
+          } }
+        );
+      }
+      return state.client.request(
+        "POST",
+        base + "/interactions/" + encodeURIComponent(action.interactionId) +
+          "/held-messages",
+        { body: {
+          contactAuthorityId: action.contactAuthorityId,
+          contentDigest: exactFormDigest(form, "contentDigest"),
+          messageKind: formValue(form, "messageKind"),
+          projectId: action.projectId
+        } }
+      );
+    }
+
+    function numberBindingCommandRequest(form, action) {
+      var base = "/operator/responder/organizations/" +
+        encodeURIComponent(state.organizationId) + "/number-bindings";
+      if (action.action === "retire") {
+        return state.client.request(
+          "POST",
+          base + "/" + encodeURIComponent(action.bindingId) + "/retire",
+          { body: {
+            evidenceDigest: exactFormDigest(form, "evidenceDigest"),
+            reason: formValue(form, "reason")
+          } }
+        );
+      }
+      var messagingServiceSid = formValue(form, "messagingServiceSid");
+      return state.client.request("POST", base, {
+        body: {
+          accountSid: formValue(form, "accountSid"),
+          evidenceDigest: exactFormDigest(form, "evidenceDigest"),
+          messagingServiceSid: messagingServiceSid || null,
+          phoneNumber: formValue(form, "phoneNumber"),
+          phoneNumberSid: formValue(form, "phoneNumberSid"),
+          projectId: uuid(formValue(form, "projectId")),
+          readbackAttestedAt: localInstant(formValue(
+            form, "readbackAttestedAt"
+          ))
+        }
+      });
+    }
+
+    function renderServiceSurfaces() {
+      check(
+        careModule && typeof careModule.mount === "function" &&
+        responderModule && typeof responderModule.mount === "function"
+      );
+      careRoot.replaceChildren();
+      responderRoot.replaceChildren();
+      careModule.mount({
+        audience: "operator",
+        container: careRoot,
+        documentRef: documentRef,
+        snapshot: state.careSnapshot,
+        onCommand: function (action) {
+          openServiceCommand(Object.freeze({ product: "care", ...action }));
+        }
+      });
+      responderModule.mount({
+        audience: "operator",
+        container: responderRoot,
+        documentRef: documentRef,
+        snapshot: state.responderSnapshot,
+        onCommand: function (action) {
+          openServiceCommand(Object.freeze({ product: "responder", ...action }));
+        }
+      });
+    }
+
     async function refreshAll(options) {
       if (!state.organizationId) return;
       clearMessages();
@@ -553,18 +1479,41 @@
           state.client.request(
             "GET",
             "/operator/support-cases?operatorOrganizationId=" + organization
+          ),
+          state.client.request(
+            "GET",
+            "/operator/care/organizations/" + organization
+          ),
+          state.client.request(
+            "GET",
+            "/operator/responder/organizations/" + organization
+          ),
+          state.client.request(
+            "GET",
+            "/operator/responder/organizations/" + organization +
+              "/number-bindings"
           )
         ]);
         state.queue = validateQueue(values[0]).items;
         state.cases = validateCaseList(values[1]).cases;
+        state.careSnapshot = values[2];
+        state.responderSnapshot = values[3];
+        state.numberBindings = validateNumberBindingList(values[4]).bindings;
         if (state.selectedCase) {
           state.selectedCase = state.cases.find(function (entry) {
             return entry.id === state.selectedCase.id;
           }) || null;
         }
+        if (state.selectedReconciliation && !state.queue.some(function (item) {
+          return item.kind === "provider_reconciliation_case" &&
+            item.source.id === state.selectedReconciliation.id;
+        })) state.selectedReconciliation = null;
         renderQueue();
         renderCases();
         renderDetail();
+        renderReconciliationDetail();
+        renderServiceSurfaces();
+        renderNumberBindings();
         if (options && options.notice) showNotice(options.notice);
       } catch (error) {
         showError(error);
@@ -629,7 +1578,17 @@
       state.selectedCase = state.cases.find(function (entry) {
         return entry.id === button.dataset.caseId;
       }) || null;
+      state.selectedReconciliation = null;
       renderDetail();
+      renderReconciliationDetail();
+    });
+
+    queueRoot.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-reconciliation-id]");
+      if (!button || state.busy) return;
+      state.selectedCase = null;
+      renderDetail();
+      openReconciliation(button.dataset.reconciliationId);
     });
 
     queueRoot.addEventListener("submit", async function (event) {
@@ -744,14 +1703,107 @@
       }
     });
 
+    reconciliationForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var selected = state.selectedReconciliation;
+      if (!selected || state.busy) return;
+      try {
+        var selectedResolution = formValue(
+          reconciliationForm, "resolutionKind"
+        );
+        check(selected.allowedResolutions.includes(selectedResolution));
+        clearMessages();
+        setBusy(true);
+        var result = validateResolutionReceipt(await state.client.request(
+          "POST",
+          "/operator/provider-reconciliation/cases/" +
+            encodeURIComponent(selected.id) + "/resolution",
+          {
+            body: {
+              operatorOrganizationId: state.organizationId,
+              expectedRevision: selected.revision,
+              resolutionKind: selectedResolution,
+              evidenceDigest: digest(formValue(
+                reconciliationForm, "evidenceDigest"
+              ))
+            }
+          }
+        ));
+        state.selectedReconciliation = null;
+        renderReconciliationDetail();
+        await refreshAll({
+          notice: result.replayed
+            ? "The exact reconciliation resolution was already recorded."
+            : "Evidence-bound reconciliation resolution recorded. No provider action was executed."
+        });
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    serviceCommandFormRoot.addEventListener("submit", async function (event) {
+      var form = event.target.closest("[data-operator-service-command]");
+      if (!form || !state.serviceCommand || state.busy) return;
+      event.preventDefault();
+      try {
+        clearMessages();
+        setBusy(true);
+        var commandProduct = state.serviceCommand.product;
+        if (state.serviceCommand.product === "care") {
+          await careCommandRequest(form, state.serviceCommand);
+        } else if (state.serviceCommand.product === "responder") {
+          await responderCommandRequest(form, state.serviceCommand);
+        } else {
+          var bindingResult;
+          try {
+            bindingResult = await numberBindingCommandRequest(
+              form, state.serviceCommand
+            );
+          } finally {
+            Array.from(form.querySelectorAll("input")).forEach(
+              function (control) { control.value = ""; }
+            );
+          }
+          validateNumberBinding(bindingResult);
+        }
+        closeServiceCommand();
+        await refreshAll({
+          notice: commandProduct === "number-binding"
+            ? "Digest-only number binding evidence recorded. No provider action was executed."
+            : "Canonical held service evidence recorded. No provider or billing effect was opened."
+        });
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
     documentRef.getElementById("case-detail-close").addEventListener("click", function () {
       state.selectedCase = null;
       renderDetail();
+    });
+    documentRef.getElementById("reconciliation-detail-close")
+      .addEventListener("click", function () {
+        state.selectedReconciliation = null;
+        renderReconciliationDetail();
+      });
+    documentRef.getElementById("operator-service-command-close")
+      .addEventListener("click", closeServiceCommand);
+    numberBindingProvision.addEventListener("click", function () {
+      if (state.busy || !state.organizationId) return;
+      openServiceCommand(Object.freeze({
+        product: "number-binding", action: "provision"
+      }));
     });
     refreshButton.addEventListener("click", refreshSources);
     organizationSelect.addEventListener("change", function () {
       state.organizationId = organizationSelect.value;
       state.selectedCase = null;
+      state.selectedReconciliation = null;
+      closeServiceCommand();
       refreshAll();
     });
 
@@ -813,6 +1865,10 @@
     validateCaseList: validateCaseList,
     validateOperatorCase: validateOperatorCase,
     validateOrganizationPayload: validateOrganizationPayload,
-    validateQueue: validateQueue
+    validateNumberBinding: validateNumberBinding,
+    validateNumberBindingList: validateNumberBindingList,
+    validateQueue: validateQueue,
+    validateReconciliationCase: validateReconciliationCase,
+    validateResolutionReceipt: validateResolutionReceipt
   });
 }));

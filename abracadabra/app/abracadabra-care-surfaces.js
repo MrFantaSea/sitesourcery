@@ -220,6 +220,29 @@
     return selected;
   }
 
+  function action(documentRef, label, value, onCommand) {
+    var button = element(documentRef, "button", "care-surface-action", label);
+    button.type = "button";
+    button.addEventListener("click", function () {
+      onCommand(Object.freeze(value));
+    });
+    return button;
+  }
+
+  function ticketTransitions(state) {
+    if (state === "open") return [["start", "Start work"]];
+    if (state === "in_progress") return [
+      ["wait", "Wait for customer"],
+      ["resolve", "Resolve ticket"]
+    ];
+    if (state === "waiting_customer") return [["resume", "Resume work"]];
+    if (state === "resolved") return [
+      ["reopen", "Reopen ticket"],
+      ["close", "Close ticket"]
+    ];
+    return [];
+  }
+
   function mount(options) {
     options = options || {};
     var documentRef = options.documentRef || document;
@@ -264,41 +287,74 @@
       );
       var periodList = element(documentRef, "ul", "care-surface-list");
       contract.periods.forEach(function (period) {
-        periodList.append(element(
+        var item = element(
           documentRef,
           "li",
           "care-surface-item",
           period.startsOn + " to " + period.endsOn + ": " +
             period.capacity.remaining + " remaining (" + period.state + ")"
-        ));
+        );
+        if (audience === "operator" && period.state === "open") {
+          item.append(action(documentRef, "Close held period", {
+            action: "close-period",
+            periodId: period.id,
+            projectId: period.projectId,
+            expectedRevision: period.revision
+          }, onCommand));
+        }
+        periodList.append(item);
       });
       var ticketList = element(documentRef, "ul", "care-surface-list");
       contract.tickets.forEach(function (ticket) {
-        ticketList.append(element(
+        var item = element(
           documentRef,
           "li",
           "care-surface-item",
           title(ticket.basisKind) + " · " + ticket.state.replaceAll("_", " ") +
             " · digest " + ticket.basisReferenceDigest.slice(0, 12)
-        ));
+        );
+        if (audience === "operator") {
+          var controls = element(documentRef, "div", "care-surface-controls");
+          ticketTransitions(ticket.state).forEach(function (transition) {
+            controls.append(action(documentRef, transition[1], {
+              action: "transition-ticket",
+              ticketId: ticket.id,
+              projectId: ticket.projectId,
+              expectedRevision: ticket.revision,
+              transition: transition[0]
+            }, onCommand));
+          });
+          if (ticket.state !== "closed") {
+            controls.append(
+              action(documentRef, "Allocate held capacity", {
+                action: "allocate-capacity",
+                periodId: ticket.periodId,
+                ticketId: ticket.id,
+                projectId: ticket.projectId
+              }, onCommand),
+              action(documentRef, "Reserve held notice", {
+                action: "reserve-mail",
+                ticketId: ticket.id
+              }, onCommand)
+            );
+          }
+          item.append(controls);
+        }
+        ticketList.append(item);
       });
       card.append(titleNode, meta, periodList, ticketList);
       if (audience === "operator") {
-        var action = element(
+        var prepare = action(
           documentRef,
-          "button",
-          "care-surface-action",
-          "Prepare held Care command"
-        );
-        action.type = "button";
-        action.addEventListener("click", function () {
-          onCommand(Object.freeze({
+          "Prepare new held Care record",
+          {
             action: "prepare",
             contractId: contract.id,
             projectId: contract.projectId
-          }));
-        });
-        card.append(action);
+          },
+          onCommand
+        );
+        card.append(prepare);
       }
       contracts.append(card);
     });
