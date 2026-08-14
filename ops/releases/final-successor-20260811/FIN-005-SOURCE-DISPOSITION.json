@@ -1,11 +1,11 @@
 {
   "schema": "sitesourcery.fin005.source-disposition.v1",
   "frozenAt": "2026-08-14T11:36:51-04:00",
-  "revisedAt": "2026-08-14T11:47:02-04:00",
+  "revisedAt": "2026-08-14T12:19:10-04:00",
   "successor": {
     "branch": "integration/final-successor-20260811",
-    "head": "44e45c8b27ec37dcda2618f971657876578c9ba5",
-    "tree": "758be44836aa42d7077bd750ff16f985d5eef994",
+    "head": "59ee0dd76ee6b56eca888b23e2f52b573a80e880",
+    "tree": "7f2fed8b8729e077b321e0c87e1c31bccdc3c3fb",
     "status": "clean"
   },
   "inventory": {
@@ -53,7 +53,7 @@
     },
     {
       "worktree": "/Users/fantaseamac/sitesourcery-finish",
-      "commit": "44e45c8b27ec37dcda2618f971657876578c9ba5",
+      "commit": "59ee0dd76ee6b56eca888b23e2f52b573a80e880",
       "disposition": "active_successor"
     }
   ],
@@ -150,8 +150,15 @@
         "server/data-plane/tests/assessment-custom-e2e-browser.mjs",
         "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
       ],
-      "disposition": "genuinely_missing_candidate",
-      "nextCohort": "FIN-005B"
+      "adaptedPaths": [
+        "server/data-plane/tests/assessment-custom-artifact-contract-browser.mjs",
+        "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs",
+        "server/hosted/commerce-transition-notifications-postgres.mjs",
+        "server/hosted/test/commerce-transition-notifications-postgres.integration.test.mjs"
+      ],
+      "disposition": "imported_adapted_and_proved",
+      "implementation": "59ee0dd76ee6b56eca888b23e2f52b573a80e880",
+      "evidence": "One exact 87-migration Assessment-to-Custom PostgreSQL journey, three-artifact reviewed browser contract render at 390x844, exact held-mail/no-dispatch proof, and clean cumulative npm test. The donor's unrelated cross-tenant operator mail and self-asserted browser steps were not imported."
     },
     {
       "ref": "archive/cleanup-20260811/domains-compose",
@@ -332,16 +339,6 @@
   ],
   "missingRequiredSemantics": [
     {
-      "cohort": "FIN-005B",
-      "source": "25d1026a4abbe1a6c43e3d33f6e996cd7045ef2e",
-      "scope": "joined Assessment-to-Custom PostgreSQL and browser finish-line proof",
-      "absentOrUnevolvedPaths": [
-        "server/data-plane/tests/assessment-custom-e2e-browser.mjs",
-        "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
-      ],
-      "constraint": "Proof-only adaptation to the current 87-migration epoch; no production semantic import."
-    },
-    {
       "cohort": "FIN-009_FIN-010",
       "source": "6a9dc9231030918c0111a2958600bc211f81d8ec",
       "scope": "owner-signed one-shot exact-candidate finalizer",
@@ -362,12 +359,38 @@
       "reason": "This is a current-root composition gate, not missing donor source."
     }
   ],
+  "fin005Seal": {
+    "state": "proved",
+    "implementation": "59ee0dd76ee6b56eca888b23e2f52b573a80e880",
+    "implementationTree": "7f2fed8b8729e077b321e0c87e1c31bccdc3c3fb",
+    "migrationInventory": 87,
+    "focusedProof": {
+      "commerceNotificationUnitStatic": "8 passed, 0 failed",
+      "commerceNotificationPostgres": "1 passed, 0 failed",
+      "assessmentCustomPostgres": "1 passed, 0 failed",
+      "artifactBrowser": "3 validated artifacts at 390x844",
+      "disposableDatabaseRemoved": true,
+      "browserProcessRemoved": true
+    },
+    "cumulativeProof": {
+      "npmTest": "passed",
+      "node": "877 passed, 0 failed",
+      "hosted": "990 passed, 14 intentional PostgreSQL skips, 0 failed",
+      "ops": "205 passed, 0 failed",
+      "browserAudit": "15 hosted routes x 3 viewports passed"
+    },
+    "remainingRequirementAssignments": [
+      "FIN-006 existing Domain root composition",
+      "FIN-007 retained UX/catalog/legal donors",
+      "FIN-009/FIN-010 owner-signed exact-candidate finalizer invariants"
+    ]
+  },
   "effectState": {
     "public": "unchanged_placeholder",
     "providers": "no_change",
     "dns": "no_change",
     "hqDell": "read_only_audit_only",
-    "databases": "no_change",
+    "databases": "no_persistent_change_disposable_proof_databases_removed",
     "deletions": "none"
   }
 }
