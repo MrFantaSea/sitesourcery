@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-004 proved; FIN-004A through FIN-004V proved
+Status: FIN-005 proved; FIN-004A through FIN-004V and FIN-005A/B proved
 
 ## Governing inputs
 
@@ -23,7 +23,7 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-002 | proved | `a81d1438…` runtime/release paths | Phase 2.1 runtime and release controls | Zero-vulnerability audit, focused proofs, and complete `npm test` passed |
 | FIN-003 | proved | `a81d1438…` migrations 118–124 | Schema foundation and static contracts | Empty PostgreSQL 16 migration, direct contract, cleanup, and cumulative proofs |
 | FIN-004 | proved | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations, adjacent systems | FIN-004A through FIN-004V proved; every adjacent effect remains held |
-| FIN-005 | pending | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition | No unclassified preserved lane |
+| FIN-005 | proved | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition and bounded Assessment/Custom proof adaptation | No unclassified preserved lane; 87-migration joined proof and cumulative matrix passed |
 | FIN-006 | pending | Integrated source | Root composition and cross-system contracts | Capability/readiness/negative-auth matrix |
 | FIN-007 | pending | Canonical commercial source | Catalog/public/legal/artifact closure | One new version/digest and deterministic artifacts |
 | FIN-008 | pending | Candidate migration epoch | Empty and 201-table upgrade rehearsals | Convergent schema/data/restore invariants |
@@ -117,3 +117,8 @@ snapshots, exact tenant identity crosswalks, append-only resolutions,
 digest-only operator trace, mounted held composition, adversarial corrections,
 real-browser proof, real-PostgreSQL journey, and clean cumulative proof is
 `FIN-004V-ADJACENT-INTEGRATION-PROVENANCE.md`.
+FIN-005's complete 117-head source disposition, redundant Domain donor
+rejection, bounded Assessment/Custom joined proof, PostgreSQL notification
+timestamp correction, exact 87-migration proof, and clean cumulative matrix is
+`FIN-005-PRESERVED-SOURCE-PROVENANCE.md`; its machine-readable denominator is
+`FIN-005-SOURCE-DISPOSITION.json`.
