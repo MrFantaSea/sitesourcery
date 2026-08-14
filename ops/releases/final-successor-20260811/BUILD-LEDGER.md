@@ -3,14 +3,14 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-005 proved; FIN-006A/B subcohorts proved; FIN-006 active
+Status: FIN-005 proved; FIN-006A/B/C subcohorts proved; FIN-006 active
 
 ## Governing inputs
 
 | Input | SHA-256 |
 |---|---|
 | `/Users/fantaseamac/SITESOURCERY-FINISH-BUILD-PLAN-2026-08-11.md` | `b62255bdcea5f04882ac1b6bbb415069410c915858bb6a4b26fb3598fa28613c` |
-| `/Users/fantaseamac/SITESOURCERY-OWNER-DECISIONS-2026-08-11.md` | `1578917d244ba87503bd0f11f4d7d3c2c3b854abb274f5a588066ecb89df51d8` |
+| `/Users/fantaseamac/SITESOURCERY-OWNER-DECISIONS-2026-08-11.md` | `0373767c2c600097588d71d06a8787a28e499e76faae1fb382f9ac7c3c2cb458` |
 
 The owner resolved the complete product questionnaire. Later owner approvals are limited to evidence-bound provider changes, final staging acceptance, public cutover, and eventual retirement of retained predecessors/evidence.
 
@@ -138,3 +138,13 @@ journey, and clean cumulative proof is
 `FIN-006B-CARE-COMMERCE-ROOT-PROVENANCE.md`. Care commercial/tax/payment/mail
 delivery/provider authority remains held; FIN-006 remains pending until every
 mandatory capability row is composition-proved.
+
+FIN-006C's exact held `$300` setup plus `$250` monthly Responder commerce
+persistence, eight-route authenticated boundary, production-root mount,
+complete-Responder capability truth, JSON/evidence/cadence guards, scoped held
+reversal, concurrent replay fencing, adversarial corrections, all-88-migration
+real-PostgreSQL journey, bounded browser-protocol correction, and clean
+cumulative proof is `FIN-006C-RESPONDER-COMMERCE-ROOT-PROVENANCE.md`.
+Payment, tax, Twilio/carrier, mail, customer, and provider effects remain held;
+FIN-006 remains pending until every mandatory capability/process row is
+composition-proved.
