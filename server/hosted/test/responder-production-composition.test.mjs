@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("production root composes durable, verified, kill-engaged Responder surfaces", async () => {
+test("production root composes durable held Responder surfaces and commerce", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
@@ -12,7 +12,9 @@ test("production root composes durable, verified, kill-engaged Responder surface
     "createFakeResponderProvider",
     "createResponderCore",
     "createPostgresResponderSurfaceRepository",
-    "createResponderSurfacesService"
+    "createResponderSurfacesService",
+    "createHeldResponderCommerceService",
+    "createPostgresResponderCommerceRepository"
   ]) {
     assert.match(source, new RegExp(`\\b${constructor}\\b`, "u"));
   }
@@ -31,6 +33,6 @@ test("production root composes durable, verified, kill-engaged Responder surface
   assert.match(source, /responderReadiness[.]providerEffects !== false/u);
   assert.match(
     source,
-    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*careCommerce,\s*responderSurfaces,\s*operatorWorkQueue:/u
+    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*careCommerce,\s*responderSurfaces,\s*responderCommerce,\s*operatorWorkQueue:/u
   );
 });
