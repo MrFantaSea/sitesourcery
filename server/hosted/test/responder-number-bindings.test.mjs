@@ -26,6 +26,7 @@ function row(overrides = {}) {
     organization_id: ORGANIZATION,
     project_id: PROJECT,
     provider: "twilio",
+    voice_ingress_role: "managed_front_door",
     number_lookup_digest: "2".repeat(64),
     lookup_key_version: "v2",
     phone_number_sid_digest: "3".repeat(64),
@@ -85,6 +86,7 @@ function provisionInput(overrides = {}) {
     requestDigest: "1".repeat(64),
     organizationId: ORGANIZATION,
     projectId: PROJECT,
+    voiceIngressRole: "conditional_forward_destination",
     numberLookupDigest: "2".repeat(64),
     numberLookupCandidateDigests: ["2".repeat(64), "b".repeat(64)],
     lookupKeyVersion: "v2",
@@ -114,7 +116,10 @@ test("provisioning stores keyed digests with the PN resource and readback author
     }
     if (text.includes("insert into ss.responder_provider_number_bindings")) {
       inserted = { values, context };
-      return { rowCount: 1, rows: [row()] };
+      return {
+        rowCount: 1,
+        rows: [row({ voice_ingress_role: values[7] })]
+      };
     }
     throw new Error(`unhandled: ${text.slice(0, 50)}`);
   });
@@ -128,12 +133,14 @@ test("provisioning stores keyed digests with the PN resource and readback author
     "duplicate detection must cover every keyring version"
   );
   assert.equal(receipt.state, "active");
+  assert.equal(receipt.voiceIngressRole, "conditional_forward_destination");
   assert.equal(receipt.lookupKeyVersion, "v2");
   assert.equal(receipt.phoneNumberSidDigest, "3".repeat(64));
   assert.equal(receipt.providerReadbackDigest, "5".repeat(64));
   assert.equal(receipt.replayed, false);
   assert.equal(inserted.context.actorKind, "operator");
   assert.equal(inserted.context.organizationId, ORGANIZATION);
+  assert.equal(inserted.values[7], "conditional_forward_destination");
   assert.equal(fake.calls.length, 1);
 });
 
@@ -311,6 +318,7 @@ test("the operator surface digests raw provider identities and never echoes them
     phoneNumberSid: PHONE_SID,
     accountSid: ACCOUNT_SID,
     messagingServiceSid: null,
+    voiceIngressRole: "conditional_forward_destination",
     readbackAttestedAt: NOW,
     evidenceDigest: "6".repeat(64)
   }));
@@ -323,6 +331,7 @@ test("the operator surface digests raw provider identities and never echoes them
     userId: USER
   });
   assert.equal(command.lookupKeyVersion, "v2");
+  assert.equal(command.voiceIngressRole, "conditional_forward_destination");
   assert.match(command.numberLookupDigest, /^[0-9a-f]{64}$/u);
   assert.deepEqual(
     command.numberLookupCandidateDigests,
@@ -351,6 +360,11 @@ test("the operator surface validates raw inputs, auth, guard, and idempotency", 
     [{ projectId: PROJECT, phoneNumber: PHONE,
       phoneNumberSid: PHONE_SID, accountSid: ACCOUNT_SID,
       messagingServiceSid: null, readbackAttestedAt: NOW },
+      "RESPONDER_NUMBER_BINDING_INVALID"],
+    [{ projectId: PROJECT, phoneNumber: PHONE,
+      phoneNumberSid: PHONE_SID, accountSid: ACCOUNT_SID,
+      messagingServiceSid: null, voiceIngressRole: "generic",
+      readbackAttestedAt: NOW, evidenceDigest: "6".repeat(64) },
       "RESPONDER_NUMBER_BINDING_INVALID"]
   ]) {
     await assert.rejects(

@@ -239,6 +239,9 @@ import {
   createPostgresResponderNumberBindingsRepository
 } from "../responder-number-bindings-postgres.mjs";
 import {
+  createPostgresResponderForwardingRepository
+} from "../responder-forwarding-postgres.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -1054,6 +1057,34 @@ async function start() {
       "Verified Twilio Responder callback ingress was requested but is not ready."
     );
   }
+  const responderLookupDigests = identityPepperConfiguration.compose(
+    createResponderLookupDigests
+  );
+  const responderForwarding = {
+    repository: createPostgresResponderForwardingRepository({
+      authority,
+      verifierKeyVersions: [...responderLookupDigests.verifierVersions]
+    }),
+    lookupDigests: responderLookupDigests,
+    clock: commerceV2.clock
+  };
+  const responderForwardingReadiness =
+    await responderForwarding.repository.readiness();
+  if (
+    responderForwardingReadiness.ready !== true ||
+    responderForwardingReadiness.verified !== true ||
+    responderForwardingReadiness.retainedCarrier !== true ||
+    responderForwardingReadiness.launchMode !==
+      "conditional_no_answer_forwarding" ||
+    responderForwardingReadiness.automaticCarrierCommands !== false ||
+    responderForwardingReadiness.remoteWriteEffects !== false ||
+    responderForwardingReadiness.providerEffects !== false ||
+    responderForwardingReadiness.messageSendEffects !== false
+  ) {
+    throw new Error(
+      "Canonical carrier-preserving Responder forwarding is not ready."
+    );
+  }
   const twilioResponderInbound =
     createConfiguredTwilioResponderInboundHttp({
       environment: process.env,
@@ -1075,9 +1106,6 @@ async function start() {
       "Verified Twilio Responder inbound ingress was requested but is not ready."
     );
   }
-  const responderLookupDigests = identityPepperConfiguration.compose(
-    createResponderLookupDigests
-  );
   const responderNumberBindings = {
     repository: createPostgresResponderNumberBindingsRepository({
       authority,
@@ -1217,6 +1245,7 @@ async function start() {
         careCommerce,
         responderSurfaces,
         responderCommerce,
+        responderForwarding,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         operatorProviderReconciliation,
         adjacentIntegration,
@@ -1289,6 +1318,14 @@ async function start() {
         voiceDialPlan:
           twilioResponderInboundReadiness.voiceDialPlan ??
             "held"
+      },
+      responderForwarding: {
+        ready: responderForwardingReadiness.ready === true,
+        mode: responderForwardingReadiness.mode,
+        retainedCarrier: true,
+        launchMode: responderForwardingReadiness.launchMode,
+        initialAdapter: responderForwardingReadiness.initialAdapter,
+        providerEffects: false
       },
       database: readiness.persistence.database,
       postgresBudget: authority.budgetReadiness(),

@@ -31,6 +31,8 @@ export const TWILIO_RESPONDER_INBOUND_VOICE_TWIML =
   TWILIO_RESPONDER_HELD_VOICE_TWIML;
 export const TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML =
   "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Hangup/></Response>";
+export const TWILIO_RESPONDER_CONDITIONAL_FORWARD_TWIML =
+  TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML;
 
 const OPERATIONS = deepFreeze({
   [TWILIO_RESPONDER_INBOUND_MESSAGE_PATH]: {
@@ -141,9 +143,38 @@ export function createTwilioResponderInboundHttpAdapter({
         "HTTP success requires a durable Twilio inbound receipt.",
         { status: 503, details: { providerEffects: false } }
       );
-      const twiml = input.pathname === TWILIO_RESPONDER_INBOUND_VOICE_PATH
-        ? await voiceDialPlan.twiml(receipt)
-        : operation.twiml;
+      let twiml = operation.twiml;
+      if (input.pathname === TWILIO_RESPONDER_INBOUND_VOICE_PATH) {
+        if (
+          receipt.voiceArrivalPolicy ===
+            "conditional_no_answer_forwarding"
+        ) {
+          invariant(
+            receipt.channel === "voice" &&
+              receipt.eventKind === "call_received" &&
+              (receipt.eventState === "applied" ||
+                receipt.eventState === "recorded") &&
+              (receipt.eventState === "applied") ===
+                (receipt.coreApplied === true) &&
+              (receipt.eventState !== "applied" ||
+                typeof receipt.forwardingOnboardingId === "string") &&
+              (receipt.forwardingOnboardingId !== null ||
+                (receipt.eventState === "recorded" &&
+                  receipt.stateReason ===
+                    "forwarding_onboarding_unavailable")),
+            "TWILIO_RESPONDER_INBOUND_HTTP_DURABILITY_REQUIRED",
+            "Conditional forwarding requires exact durable evidence.",
+            { status: 503, details: { providerEffects: false } }
+          );
+          // The original carrier already decided that this call was
+          // unanswered. Dialing the retained line here would create a
+          // forwarding loop, so conditional mode can only terminate the
+          // managed leg after durable evidence is recorded.
+          twiml = TWILIO_RESPONDER_CONDITIONAL_FORWARD_TWIML;
+        } else {
+          twiml = await voiceDialPlan.twiml(receipt);
+        }
+      }
       return deepFreeze({
         status: 200,
         headers: {

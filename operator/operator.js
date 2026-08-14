@@ -523,11 +523,13 @@
       "phoneNumberSidDigest", "projectId", "provider",
       "providerEffects", "providerReadbackDigest", "provisionedAt",
       "replayed", "retiredAt", "retiredReason", "revision", "schema",
-      "state"
+      "state", "voiceIngressRole"
     ]);
     check(
       value.schema === "sitesourcery.responder-number-binding-receipt/v1" &&
       value.provider === "twilio" && value.providerEffects === false &&
+      ["managed_front_door", "conditional_forward_destination"]
+        .includes(value.voiceIngressRole) &&
       typeof value.replayed === "boolean" &&
       NUMBER_BINDING_STATES.has(value.state) &&
       ((value.state === "active" && value.retiredAt === null &&
@@ -541,6 +543,7 @@
       organizationId: uuid(value.organizationId),
       projectId: uuid(value.projectId),
       provider: value.provider,
+      voiceIngressRole: value.voiceIngressRole,
       numberLookupDigest: digest(value.numberLookupDigest),
       lookupKeyVersion: text(value.lookupKeyVersion, 40),
       phoneNumberSidDigest: digest(value.phoneNumberSidDigest),
@@ -1168,6 +1171,7 @@
           top,
           meta([
             "Project: " + binding.projectId,
+            "Voice role: " + human(binding.voiceIngressRole),
             "Key: " + binding.lookupKeyVersion,
             "Revision " + binding.revision
           ]),
@@ -1834,6 +1838,13 @@
             pattern: "\\+[1-9][0-9]{1,14}", maxLength: 16
           }
         )),
+        serviceField("Voice ingress role", serviceSelect(
+          "voiceIngressRole", [
+            ["conditional_forward_destination",
+              "Conditional-forward destination (never Dial back)"],
+            ["managed_front_door", "Managed front door"]
+          ]
+        )),
         serviceField("Twilio Phone Number SID", serviceInput(
           "phoneNumberSid", "password", {
             pattern: "PN[0-9A-Fa-f]{32}", maxLength: 34
@@ -2075,6 +2086,7 @@
           phoneNumber: formValue(form, "phoneNumber"),
           phoneNumberSid: formValue(form, "phoneNumberSid"),
           projectId: uuid(formValue(form, "projectId")),
+          voiceIngressRole: formValue(form, "voiceIngressRole"),
           readbackAttestedAt: localInstant(formValue(
             form, "readbackAttestedAt"
           ))

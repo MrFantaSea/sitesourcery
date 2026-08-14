@@ -156,6 +156,7 @@ function numberBindings() {
       organizationId: IDS.organization,
       projectId: IDS.project,
       provider: "twilio",
+      voiceIngressRole: "conditional_forward_destination",
       numberLookupDigest: "d".repeat(64),
       lookupKeyVersion: "v2",
       phoneNumberSidDigest: "e".repeat(64),

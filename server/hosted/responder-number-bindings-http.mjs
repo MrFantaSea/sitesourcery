@@ -11,6 +11,9 @@ const ACCOUNT_SID = /^AC[0-9a-fA-F]{32}$/u;
 const PHONE_NUMBER_SID = /^PN[0-9a-fA-F]{32}$/u;
 const MESSAGING_SERVICE_SID = /^MG[0-9a-fA-F]{32}$/u;
 const COMMAND_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/u;
+const VOICE_INGRESS_ROLES = new Set([
+  "managed_front_door", "conditional_forward_destination"
+]);
 const RETIRED_REASONS = new Set([
   "reprovisioned", "customer_cancelled", "number_released",
   "operator_correction"
@@ -196,7 +199,8 @@ export function createResponderNumberBindingsHttpBoundary({
   function provisionCommand(actor, route, commandId, parsed) {
     exactKeys(parsed, [
       "projectId", "phoneNumber", "phoneNumberSid", "accountSid",
-      "messagingServiceSid", "readbackAttestedAt", "evidenceDigest"
+      "messagingServiceSid", "readbackAttestedAt", "evidenceDigest",
+      "voiceIngressRole"
     ], "The Responder number binding provision body is invalid.");
     if (
       typeof parsed.projectId !== "string" || !UUID.test(parsed.projectId) ||
@@ -209,6 +213,7 @@ export function createResponderNumberBindingsHttpBoundary({
       (parsed.messagingServiceSid !== null &&
         (typeof parsed.messagingServiceSid !== "string" ||
           !MESSAGING_SERVICE_SID.test(parsed.messagingServiceSid))) ||
+      !VOICE_INGRESS_ROLES.has(parsed.voiceIngressRole) ||
       typeof parsed.evidenceDigest !== "string" ||
       !SHA256.test(parsed.evidenceDigest)
     ) {
@@ -241,6 +246,7 @@ export function createResponderNumberBindingsHttpBoundary({
       commandId,
       organizationId: route.params.organizationId,
       projectId: parsed.projectId,
+      voiceIngressRole: parsed.voiceIngressRole,
       numberLookupDigest: lookup.digest,
       numberLookupCandidateDigests: lookupCandidates,
       lookupKeyVersion: lookup.keyVersion,
@@ -258,6 +264,7 @@ export function createResponderNumberBindingsHttpBoundary({
         commandId: command.commandId,
         organizationId: command.organizationId,
         projectId: command.projectId,
+        voiceIngressRole: command.voiceIngressRole,
         numberLookupDigest: command.numberLookupDigest,
         lookupKeyVersion: command.lookupKeyVersion,
         phoneNumberSidDigest: command.phoneNumberSidDigest,

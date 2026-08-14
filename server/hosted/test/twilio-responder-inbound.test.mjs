@@ -273,9 +273,12 @@ test("voice arrival records evidence only and never fabricates a missed call", a
   const fact = facts.at(-1);
   assert.equal(fact.channel, "voice");
   assert.equal(fact.eventKind, "call_received");
-  assert.equal(fact.classifiedIntent, null);
+  assert.equal(fact.classifiedIntent, "not_applicable");
   assert.equal(fact.dialCallStatus, null);
-  assert.equal(fact.material, null, "arrival seals no caller material");
+  assert.deepEqual(fact.material, {
+    from: "+18565550100",
+    forwardedFrom: null
+  }, "caller material stays transient until repository policy applies it");
   assert.equal(sealed.length, 0);
   await assert.rejects(
     inbound.ingestVoiceCall(signedRequest(VOICE_URL, {

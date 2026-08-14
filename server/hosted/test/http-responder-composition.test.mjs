@@ -12,6 +12,9 @@ const TARGET_ORG = "20000000-0000-4000-8000-000000000099";
 const PROJECT = "30000000-0000-4000-8000-000000000001";
 const CUSTOMER = "40000000-0000-4000-8000-000000000001";
 const QUOTE = "50000000-0000-4000-8000-000000000001";
+const BINDING = "60000000-0000-4000-8000-000000000001";
+const ONBOARDING = "70000000-0000-4000-8000-000000000001";
+const INBOUND = "80000000-0000-4000-8000-000000000001";
 
 function canonicalService(organizationIds = [ORG_A]) {
   const calls = [];
@@ -100,6 +103,62 @@ function responderCommerce() {
     };
   }
   return service;
+}
+
+function responderForwarding() {
+  const calls = [];
+  return {
+    calls,
+    repository: {
+      kind: "responder-forwarding-postgres",
+      mode: "held-local",
+      automaticCarrierCommands: false,
+      remoteWriteEffects: false,
+      providerEffects: false,
+      messageSendEffects: false,
+      async readiness() {
+        return {
+          ready: true,
+          verified: true,
+          mode: "held-local",
+          retainedCarrier: true,
+          launchMode: "conditional_no_answer_forwarding",
+          initialAdapter: "twilio",
+          automaticCarrierCommands: false,
+          remoteWriteEffects: false,
+          providerEffects: false,
+          messageSendEffects: false
+        };
+      },
+      async list(...args) {
+        calls.push(["list", ...args]);
+        return { method: "list", providerEffects: false };
+      },
+      async create(...args) {
+        calls.push(["create", ...args]);
+        return { method: "create", providerEffects: false };
+      },
+      async recordObservation(...args) {
+        calls.push(["recordObservation", ...args]);
+        return { method: "recordObservation", providerEffects: false };
+      },
+      async retire(...args) {
+        calls.push(["retire", ...args]);
+        return { method: "retire", providerEffects: false };
+      }
+    },
+    lookupDigests: {
+      kind: "responder-lookup-digests",
+      numberLookupCandidates(value) {
+        assert.equal(value, "+18562441220");
+        return [
+          { digest: "a".repeat(64), keyVersion: "forward-v2" },
+          { digest: "b".repeat(64), keyVersion: "forward-v1" }
+        ];
+      }
+    },
+    clock: { now: () => "2026-08-14T20:00:00.000Z" }
+  };
 }
 
 function get(path, { organizationId = null } = {}) {
@@ -273,12 +332,82 @@ test("Responder commerce narrows production authentication metadata to exact ten
   assert.equal(JSON.stringify(commerce.calls).includes("sessionDigest"), false);
 });
 
+test("Responder forwarding is mounted through the root with narrow customer and operator authority", async () => {
+  const canonical = canonicalService();
+  canonical.authenticate = async () => ({
+    userId: USER,
+    sessionId: "90000000-0000-4000-8000-000000000001",
+    sessionDigest: "s".repeat(64),
+    expiresAt: "2026-08-15T00:00:00.000Z",
+    reauthenticatedAt: "2026-08-14T18:00:00.000Z",
+    user: { email: "forward-private@example.test" }
+  });
+  const forwarding = responderForwarding();
+  const api = createHostedApi(canonical, {
+    responderForwarding: forwarding
+  });
+  const customerRead = await api.fetch(get(
+    `/api/v1/responder/projects/${PROJECT}/forwarding`
+  ));
+  assert.equal(customerRead.status, 200);
+  const customerCreate = await api.fetch(post(
+    `/api/v1/responder/projects/${PROJECT}/forwarding`,
+    {
+      businessLine: "+18562441220",
+      consentEvidenceDigest: "c".repeat(64),
+      numberBindingId: BINDING
+    }
+  ));
+  assert.equal(customerCreate.status, 200);
+  const operatorObservation = await api.fetch(post(
+    `/api/v1/operator/responder/organizations/${TARGET_ORG}` +
+      `/projects/${PROJECT}/forwarding/${ONBOARDING}/observations`,
+    {
+      expectedRevision: 1,
+      observationKind: "unanswered_forwarding_reached",
+      inboundEventId: INBOUND,
+      evidenceDigest: "d".repeat(64),
+      observedAt: "2026-08-14T19:59:00.000Z"
+    }
+  ));
+  assert.equal(operatorObservation.status, 200);
+  assert.equal(forwarding.calls.length, 3);
+  assert.deepEqual(forwarding.calls[0], [
+    "list",
+    { kind: "customer", userId: USER, organizationId: ORG_A },
+    { organizationId: ORG_A, projectId: PROJECT }
+  ]);
+  assert.equal(forwarding.calls[1][0], "create");
+  assert.deepEqual(forwarding.calls[1][1], {
+    kind: "customer", userId: USER, organizationId: ORG_A
+  });
+  assert.equal(forwarding.calls[1][2].businessLineLookupDigest, "a".repeat(64));
+  assert.equal(forwarding.calls[2][0], "recordObservation");
+  assert.deepEqual(forwarding.calls[2][1], {
+    kind: "operator", userId: USER, organizationId: TARGET_ORG
+  });
+  assert.equal(forwarding.calls[2][2].organizationId, TARGET_ORG);
+  assert.equal(forwarding.calls[2][2].inboundEventId, INBOUND);
+  const durableCallShape = JSON.stringify(forwarding.calls);
+  assert.equal(durableCallShape.includes("+18562441220"), false);
+  assert.equal(durableCallShape.includes("forward-private@example.test"), false);
+  assert.equal(durableCallShape.includes("sessionDigest"), false);
+});
+
 test("Responder root rejects any composition claiming external effects", () => {
   const unsafe = responderSurfaces();
   unsafe.billingEffects = true;
   assert.throws(
     () => createHostedApi(canonicalService(), {
       responderSurfaces: unsafe
+    }),
+    (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
+  );
+  const unsafeForwarding = responderForwarding();
+  unsafeForwarding.repository.remoteWriteEffects = true;
+  assert.throws(
+    () => createHostedApi(canonicalService(), {
+      responderForwarding: unsafeForwarding
     }),
     (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
   );

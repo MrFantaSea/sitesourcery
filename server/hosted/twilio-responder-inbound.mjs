@@ -459,6 +459,7 @@ export function createTwilioResponderInbound({
         toNumberLookupDigest: toLookup.digest,
         toNumberKeyVersion: toLookup.keyVersion,
         toNumberLookupCandidateDigests: toLookup.candidateDigests,
+        forwardedFromLookupCandidateDigests: [],
         fromRouteDigest: route.lookupDigest,
         fromRouteKeyVersion: route.lookupKeyVersion,
         contactRouteDigest: route.contactRouteDigest,
@@ -486,10 +487,14 @@ export function createTwilioResponderInbound({
       const to = one(params, "To");
       const callStatus = one(params, "CallStatus", { optional: true });
       const direction = one(params, "Direction", { optional: true });
+      const forwardedFrom = one(
+        params, "ForwardedFrom", { optional: true }
+      );
       if (
         !CALL_SID.test(callSid) ||
         (callStatus !== null && !CALL_STATUSES.has(callStatus)) ||
         (direction !== null && direction !== "inbound") ||
+        (forwardedFrom !== null && !E164.test(forwardedFrom)) ||
         // A payload carrying DialCallStatus is a dial result. Recording it
         // as call arrival would mislabel the only evidence that decides
         // missed versus answered, so it is refused outright.
@@ -499,6 +504,10 @@ export function createTwilioResponderInbound({
       }
       const route = callerRoute(from);
       const toLookup = numberLookup(to);
+      const forwardedFromCandidates = forwardedFrom === null
+        ? []
+        : keyedLookups.numberLookupCandidates(forwardedFrom)
+          .map((entry) => entry.digest);
       return ingest({
         channel: "voice",
         eventKind: "call_received",
@@ -510,17 +519,20 @@ export function createTwilioResponderInbound({
         toNumberLookupDigest: toLookup.digest,
         toNumberKeyVersion: toLookup.keyVersion,
         toNumberLookupCandidateDigests: toLookup.candidateDigests,
+        forwardedFromLookupCandidateDigests: forwardedFromCandidates,
         fromRouteDigest: route.lookupDigest,
         fromRouteKeyVersion: route.lookupKeyVersion,
         contactRouteDigest: route.contactRouteDigest,
         fromRouteEligible: route.eligible,
-        classifiedIntent: null,
+        classifiedIntent: "not_applicable",
         dialCallStatus: null,
         optOutType: null,
         signatureVerificationDigest: verified.signatureVerificationDigest,
         evidenceDigest: evidenceDigest("voice", "call_received", verified),
         receivedAt,
-        material: null,
+        material: route.eligible
+          ? { from, forwardedFrom }
+          : null,
         sealMaterial: (materialAuthority, value) =>
           materialVault.sealInboundMaterial(materialAuthority, value)
       });
@@ -557,6 +569,7 @@ export function createTwilioResponderInbound({
         toNumberLookupDigest: toLookup.digest,
         toNumberKeyVersion: toLookup.keyVersion,
         toNumberLookupCandidateDigests: toLookup.candidateDigests,
+        forwardedFromLookupCandidateDigests: [],
         fromRouteDigest: route.lookupDigest,
         fromRouteKeyVersion: route.lookupKeyVersion,
         contactRouteDigest: route.contactRouteDigest,

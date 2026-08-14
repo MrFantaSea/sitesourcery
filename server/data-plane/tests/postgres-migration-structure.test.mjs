@@ -3893,3 +3893,71 @@ test("RESPONDER-COMMERCE-01 persists exact held setup and monthly billing author
     /provider_effects_authorized\s*=\s*true|payment_effects_authorized\s*=\s*true|customer_effects_authorized\s*=\s*true|charges[.]create|subscriptions[.]create|payment_intents[.]create|grant all privileges/iu
   );
 });
+
+test("FIN-006D persists carrier-preserving Responder forwarding without a loop or external effect", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608140136_responder_forwarding_onboarding.sql"
+  );
+  assert.ok(migration, "missing FIN-006D forwarding migration 136");
+  assert.match(migration.sql, /^-- FIN-006D[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "responder_forwarding_commands",
+    "responder_forwarding_onboardings",
+    "responder_forwarding_observations"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(
+      migration.sql,
+      new RegExp(`alter table ss\\.${table} force row level security`, "iu")
+    );
+  }
+  assert.match(
+    migration.sql,
+    /launch_mode text not null check \([\s\S]*conditional_no_answer_forwarding/iu
+  );
+  assert.match(
+    migration.sql,
+    /business_line_lookup_digest ss\.sha256_hex[\s\S]*business_line_key_version text/iu
+  );
+  assert.match(
+    migration.sql,
+    /carrier_setup_attested[\s\S]*unanswered_forwarding_reached[\s\S]*answered_call_not_forwarded[\s\S]*reply_path_confirmed[\s\S]*stop_path_confirmed[\s\S]*routing_ambiguous/iu
+  );
+  assert.match(
+    migration.sql,
+    /event_kind = 'call_received'[\s\S]*voice_arrival_policy =\s*'conditional_no_answer_forwarding'[\s\S]*event_kind = 'missed_call'/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_responder_forwarding_contract_v1\(\)[\s\S]*canonical-responder-forwarding-v1-carrier-preserving-held-no-loop/iu
+  );
+  assert.match(
+    migration.sql,
+    /automatic_carrier_commands boolean not null default false[\s\S]*remote_write_effects boolean not null default false[\s\S]*provider_effects boolean not null default false[\s\S]*message_send_effects boolean not null default false/iu
+  );
+  assert.match(
+    migration.sql,
+    /binding[.]number_lookup_digest\s*<>\s*new[.]business_line_lookup_digest/iu
+  );
+  assert.match(
+    migration.sql,
+    /add column voice_ingress_role text not null default 'managed_front_door'[\s\S]*conditional_forward_destination/iu
+  );
+  assert.match(
+    migration.sql,
+    /binding[.]voice_ingress_role =\s*'conditional_forward_destination'[\s\S]*forwarding_onboarding_unavailable/iu
+  );
+  assert.match(
+    migration.sql,
+    /primary key \(organization_id, command_id\)[\s\S]*foreign key \(organization_id, command_id\)/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /phone_number\s+(?:text|varchar)|business_line\s+(?:text|varchar)|carrier_code\s+(?:text|varchar)|automatic_carrier_commands\s*=\s*true|remote_write_effects\s*=\s*true|provider_effects\s*=\s*true|message_send_effects\s*=\s*true|<Dial/iu
+  );
+});

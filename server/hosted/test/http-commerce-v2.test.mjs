@@ -53,6 +53,18 @@ const HELD_RESPONDER_COMMERCE_CAPABILITY = Object.freeze({
   paymentEffects: false,
   providerEffects: false
 });
+const HELD_RESPONDER_FORWARDING_CAPABILITY = Object.freeze({
+  ready: false,
+  mounted: false,
+  mode: "held-local",
+  retainedCarrier: true,
+  launchMode: "conditional_no_answer_forwarding",
+  initialAdapter: "twilio",
+  automaticCarrierCommands: false,
+  remoteWriteEffects: false,
+  providerEffects: false,
+  messageSendEffects: false
+});
 
 function writeRequest(
   path,
@@ -345,6 +357,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
       providerEffects: false
     },
     responder: false,
+    responderForwarding: HELD_RESPONDER_FORWARDING_CAPABILITY,
     responderCommerce: HELD_RESPONDER_COMMERCE_CAPABILITY,
     adjacentIntegrations: {
       ready: false,
@@ -393,6 +406,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
       providerEffects: false
     },
     responder: false,
+    responderForwarding: HELD_RESPONDER_FORWARDING_CAPABILITY,
     responderCommerce: HELD_RESPONDER_COMMERCE_CAPABILITY,
     adjacentIntegrations: {
       ready: false,

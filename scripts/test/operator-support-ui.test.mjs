@@ -30,6 +30,7 @@ function numberBinding() {
     organizationId: ORG,
     projectId: "50000000-0000-4000-8000-000000000001",
     provider: "twilio",
+    voiceIngressRole: "conditional_forward_destination",
     numberLookupDigest: "6".repeat(64),
     lookupKeyVersion: "v2",
     phoneNumberSidDigest: "7".repeat(64),
@@ -287,6 +288,7 @@ test("operator assets remain hosted-only and expose an effect-held responsive de
   assert.match(javascript, /\/operator\/care\/organizations\//u);
   assert.match(javascript, /\/operator\/responder\/organizations\//u);
   assert.match(javascript, /\/number-bindings/u);
+  assert.match(javascript, /conditional_forward_destination/u);
   assert.match(html, /id="operator-number-bindings"/u);
   assert.match(html, /Raw number and SID values are sent once/u);
   assert.match(html, /cannot retry a provider request, fabricate an effect/u);

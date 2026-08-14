@@ -11,6 +11,9 @@ const RETIRED_REASONS = new Set([
   "operator_correction"
 ]);
 const KEY_VERSION = /^[a-z0-9][a-z0-9._-]{0,39}$/u;
+const VOICE_INGRESS_ROLES = new Set([
+  "managed_front_door", "conditional_forward_destination"
+]);
 const DATABASE_CONFLICTS = new Set([
   "22001", "22P02", "23502", "23503", "23505", "23514", "55000"
 ]);
@@ -78,6 +81,7 @@ function receipt(row, replayed = false) {
     organizationId: row.organization_id,
     projectId: row.project_id,
     provider: row.provider,
+    voiceIngressRole: row.voice_ingress_role ?? "managed_front_door",
     numberLookupDigest: row.number_lookup_digest,
     lookupKeyVersion: row.lookup_key_version,
     phoneNumberSidDigest: row.phone_number_sid_digest,
@@ -199,6 +203,7 @@ export function createPostgresResponderNumberBindingsRepository({
         requestDigest: sha256(input.requestDigest, "Request digest"),
         organizationId: uuid(input.organizationId, "Organization ID"),
         projectId: uuid(input.projectId, "Project ID"),
+        voiceIngressRole: input.voiceIngressRole ?? "managed_front_door",
         numberLookupDigest: sha256(
           input.numberLookupDigest, "Number lookup digest"
         ),
@@ -233,7 +238,7 @@ export function createPostgresResponderNumberBindingsRepository({
           selected.numberLookupCandidateDigests.every(
             (candidate) => typeof candidate === "string" &&
               /^[0-9a-f]{64}$/u.test(candidate)
-          ),
+          ) && VOICE_INGRESS_ROLES.has(selected.voiceIngressRole),
         "RESPONDER_NUMBER_BINDING_INVALID",
         "The binding lookup key version is invalid.",
         { status: 400 }
@@ -280,18 +285,20 @@ export function createPostgresResponderNumberBindingsRepository({
             `insert into ss.responder_provider_number_bindings (
                id, command_id, request_digest, organization_id, project_id,
                provider, number_lookup_digest, lookup_key_version,
+               voice_ingress_role,
                phone_number_sid_digest, account_sid_digest,
                messaging_service_sid_digest, provider_readback_digest,
                state, provisioned_by_user_id, provision_evidence_digest,
                provisioned_at, revision, created_at, updated_at
              ) values (
                $1, $2, $3, $4, $5, 'twilio', $6, $7, $8, $9, $10, $11,
-               'active', $12, $13, $14, 1, $14, $14
+               $12, 'active', $13, $14, $15, 1, $15, $15
              ) returning *`,
             [
               randomUUID(), selected.commandId, selected.requestDigest,
               selected.organizationId, selected.projectId,
               selected.numberLookupDigest, selected.lookupKeyVersion,
+              selected.voiceIngressRole,
               selected.phoneNumberSidDigest, selected.accountSidDigest,
               selected.messagingServiceSidDigest,
               selected.providerReadbackDigest, actor.userId,

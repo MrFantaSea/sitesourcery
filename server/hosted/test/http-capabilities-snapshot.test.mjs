@@ -18,7 +18,8 @@ const NAMES = Object.freeze([
   "care",
   "careCommerce",
   "responder",
-  "responderCommerce"
+  "responderCommerce",
+  "responderForwarding"
 ]);
 const FULL_DOMAIN_READINESS = Object.freeze({
   ready: true,
@@ -99,6 +100,30 @@ const FULL_RESPONDER_COMMERCE_CAPABILITY = Object.freeze({
   paymentEffects: false,
   providerEffects: false
 });
+const FULL_RESPONDER_FORWARDING_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  mode: "held-local",
+  retainedCarrier: true,
+  launchMode: "conditional_no_answer_forwarding",
+  initialAdapter: "twilio",
+  automaticCarrierCommands: false,
+  remoteWriteEffects: false,
+  providerEffects: false,
+  messageSendEffects: false
+});
+const FULL_RESPONDER_FORWARDING_CAPABILITY = Object.freeze({
+  ready: true,
+  mounted: true,
+  mode: "held-local",
+  retainedCarrier: true,
+  launchMode: "conditional_no_answer_forwarding",
+  initialAdapter: "twilio",
+  automaticCarrierCommands: false,
+  remoteWriteEffects: false,
+  providerEffects: false,
+  messageSendEffects: false
+});
 const EXPECTED = Object.freeze({
   accountRegistration: true,
   accountRecoveryEmail: true,
@@ -117,6 +142,7 @@ const EXPECTED = Object.freeze({
   care: true,
   careCommerce: FULL_CARE_COMMERCE_CAPABILITY,
   responder: true,
+  responderForwarding: FULL_RESPONDER_FORWARDING_CAPABILITY,
   responderCommerce: FULL_RESPONDER_COMMERCE_CAPABILITY,
   adjacentIntegrations: Object.freeze({
     ready: false,
@@ -156,6 +182,8 @@ function apiFixture({
   includeCareCommerce = true,
   responderCommerceReadiness = FULL_RESPONDER_COMMERCE_READINESS,
   includeResponderCommerce = true,
+  responderForwardingReadiness = FULL_RESPONDER_FORWARDING_READINESS,
+  includeResponderForwarding = true,
   serviceReadiness
 } = {}) {
   const calls = Object.fromEntries(NAMES.map((name) => [name, 0]));
@@ -358,6 +386,40 @@ function apiFixture({
             throw new Error("not reached");
           }]))
         }
+      : null,
+    responderForwarding: includeResponderForwarding
+      ? {
+          repository: {
+            kind: "responder-forwarding-postgres",
+            mode: "held-local",
+            automaticCarrierCommands: false,
+            remoteWriteEffects: false,
+            providerEffects: false,
+            messageSendEffects: false,
+            readiness: counted(
+              "responderForwarding",
+              responderForwardingReadiness
+            ),
+            async list() {
+              throw new Error("not reached");
+            },
+            async create() {
+              throw new Error("not reached");
+            },
+            async recordObservation() {
+              throw new Error("not reached");
+            },
+            async retire() {
+              throw new Error("not reached");
+            }
+          },
+          lookupDigests: {
+            kind: "responder-lookup-digests",
+            numberLookupCandidates() {
+              throw new Error("not reached");
+            }
+          }
+        }
       : null
   });
   return { api, calls };
@@ -504,6 +566,30 @@ test("capabilities do not claim complete Responder without durable commerce", as
   });
   assert.equal(fixture.calls.responder, 1);
   assert.equal(fixture.calls.responderCommerce, 0);
+});
+
+test("capabilities do not claim complete Responder without carrier-preserving forwarding", async () => {
+  const fixture = apiFixture({ includeResponderForwarding: false });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ...EXPECTED,
+    responder: false,
+    responderForwarding: {
+      ready: false,
+      mounted: false,
+      mode: "held-local",
+      retainedCarrier: true,
+      launchMode: "conditional_no_answer_forwarding",
+      initialAdapter: "twilio",
+      automaticCarrierCommands: false,
+      remoteWriteEffects: false,
+      providerEffects: false,
+      messageSendEffects: false
+    }
+  });
+  assert.equal(fixture.calls.responder, 1);
+  assert.equal(fixture.calls.responderForwarding, 0);
 });
 
 test("capabilities fail Responder closed when commerce catalog authority drifts", async () => {

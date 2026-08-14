@@ -116,6 +116,9 @@ import {
   createResponderNumberBindingsHttpBoundary
 } from "./responder-number-bindings-http.mjs";
 import {
+  createResponderForwardingHttpBoundary
+} from "./responder-forwarding-http.mjs";
+import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
 import {
@@ -904,6 +907,7 @@ export function createHostedApi(
     twilioResponderEvents = null,
     twilioResponderInbound = null,
     responderNumberBindings = null,
+    responderForwarding = null,
     stripeWebhook = null,
     capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
@@ -1148,6 +1152,47 @@ export function createHostedApi(
             return true;
           }
         });
+  invariant(
+    responderForwarding === null ||
+      (
+        responderForwarding?.repository?.kind ===
+          "responder-forwarding-postgres" &&
+        responderForwarding.repository.mode === "held-local" &&
+        responderForwarding.repository.automaticCarrierCommands === false &&
+        responderForwarding.repository.remoteWriteEffects === false &&
+        responderForwarding.repository.providerEffects === false &&
+        responderForwarding.repository.messageSendEffects === false &&
+        responderForwarding?.lookupDigests?.kind ===
+          "responder-lookup-digests"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Responder forwarding must use the carrier-preserving held composition.",
+    { status: 500 }
+  );
+  const responderForwardingHttpBoundary = responderForwarding === null
+    ? null
+    : createResponderForwardingHttpBoundary({
+        repository: responderForwarding.repository,
+        lookupDigests: responderForwarding.lookupDigests,
+        ...(responderForwarding.clock
+          ? { clock: responderForwarding.clock }
+          : {}),
+        authenticate: (request, route) => authenticatedOrganizationActor({
+          service,
+          request,
+          route,
+          product: "Responder forwarding",
+          selectionCode:
+            "RESPONDER_FORWARDING_ORGANIZATION_SELECTION_REQUIRED"
+        }),
+        async requireWriteGuard(request) {
+          requireCsrf(
+            request,
+            parseCookies(request.headers.get("cookie"))
+          );
+          return true;
+        }
+      });
   const operatorWorkQueueHttpBoundary = operatorWorkQueue === null
     ? createHeldOperatorWorkQueueHttp({
         authenticate: async ({ actor }) => actor
@@ -1516,6 +1561,7 @@ export function createHostedApi(
           careCommerceReadiness,
           responderReadiness,
           responderCommerceReadiness,
+          responderForwardingReadiness,
           adjacentIntegrationReadiness
         ] = await Promise.all([
           service.readiness(),
@@ -1583,6 +1629,20 @@ export function createHostedApi(
                 providerEffects: false
               }
             : responderCommerce.readiness(),
+          responderForwarding === null
+            ? {
+                ready: false,
+                verified: false,
+                mode: "held-local",
+                retainedCarrier: true,
+                launchMode: "conditional_no_answer_forwarding",
+                initialAdapter: "twilio",
+                automaticCarrierCommands: false,
+                remoteWriteEffects: false,
+                providerEffects: false,
+                messageSendEffects: false
+              }
+            : responderForwarding.repository.readiness(),
           adjacentIntegration === null
             ? {
                 ready: false,
@@ -1698,7 +1758,39 @@ export function createHostedApi(
             responderCommerceReadiness?.customerEffects === false &&
             responderCommerceReadiness?.mailDeliveryEffects === false &&
             responderCommerceReadiness?.paymentEffects === false &&
-            responderCommerceReadiness?.providerEffects === false,
+            responderCommerceReadiness?.providerEffects === false &&
+            responderForwardingReadiness?.ready === true &&
+            responderForwardingReadiness?.verified === true &&
+            responderForwardingReadiness?.retainedCarrier === true &&
+            responderForwardingReadiness?.launchMode ===
+              "conditional_no_answer_forwarding" &&
+            responderForwardingReadiness?.automaticCarrierCommands ===
+              false &&
+            responderForwardingReadiness?.remoteWriteEffects === false &&
+            responderForwardingReadiness?.providerEffects === false &&
+            responderForwardingReadiness?.messageSendEffects === false,
+          responderForwarding: Object.freeze({
+            ready:
+              responderForwardingReadiness?.ready === true &&
+              responderForwardingReadiness?.verified === true &&
+              responderForwardingReadiness?.retainedCarrier === true &&
+              responderForwardingReadiness?.launchMode ===
+                "conditional_no_answer_forwarding" &&
+              responderForwardingReadiness?.automaticCarrierCommands ===
+                false &&
+              responderForwardingReadiness?.remoteWriteEffects === false &&
+              responderForwardingReadiness?.providerEffects === false &&
+              responderForwardingReadiness?.messageSendEffects === false,
+            mounted: responderForwarding !== null,
+            mode: responderForwardingReadiness?.mode ?? "held-local",
+            retainedCarrier: true,
+            launchMode: "conditional_no_answer_forwarding",
+            initialAdapter: "twilio",
+            automaticCarrierCommands: false,
+            remoteWriteEffects: false,
+            providerEffects: false,
+            messageSendEffects: false
+          }),
           responderCommerce: Object.freeze({
             ready:
               responderCommerceReadiness?.ready === true &&
@@ -2036,6 +2128,14 @@ export function createHostedApi(
             await responderCommerceHttpBoundary.dispatch(request);
           if (commerceResponse !== null) {
             return rootedResponse(commerceResponse, requestId);
+          }
+        }
+
+        if (responderForwardingHttpBoundary !== null) {
+          const forwardingResponse =
+            await responderForwardingHttpBoundary.dispatch(request);
+          if (forwardingResponse !== null) {
+            return rootedResponse(forwardingResponse, requestId);
           }
         }
 
