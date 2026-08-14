@@ -76,6 +76,7 @@ function fact(overrides = {}) {
     toNumberLookupDigest: TO_LOOKUP_V2,
     toNumberKeyVersion: "v2",
     toNumberLookupCandidateDigests: [TO_LOOKUP_V2, TO_LOOKUP_V1],
+    forwardedFromLookupCandidateDigests: [],
     fromRouteDigest: FROM_LOOKUP,
     fromRouteKeyVersion: "v2",
     contactRouteDigest: CONTACT_ROUTE,

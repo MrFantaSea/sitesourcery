@@ -60,6 +60,8 @@ import { verifyCareCommercePostgres } from
   "./care-commerce-postgres-proof.mjs";
 import { verifyResponderCommercePostgres } from
   "./responder-commerce-postgres-proof.mjs";
+import { verifyResponderForwardingPostgres } from
+  "./responder-forwarding-postgres-proof.mjs";
 import { verifyAdjacentIntegrationPostgres } from
   "./adjacent-integration-postgres-proof.mjs";
 
@@ -7463,6 +7465,8 @@ export async function runMigrationVerification({
     const careCoreProof = await verifyCareCorePostgres(pool);
     const careCommerceProof = await verifyCareCommercePostgres(pool);
     const responderCommerceProof = await verifyResponderCommercePostgres(pool);
+    const responderForwardingProof =
+      await verifyResponderForwardingPostgres(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -7515,6 +7519,20 @@ export async function runMigrationVerification({
       `reservationEvents ${responderCommerceProof.reservationEvents} ` +
       `commands ${responderCommerceProof.commands} ` +
       "providerEffects false paymentEffects false customerEffects false\n"
+    );
+    writeOutput(
+      `responderForwardingPostgresProof ` +
+      `${responderForwardingProof.assertions}/` +
+      `${responderForwardingProof.expectedAssertions} ` +
+      `onboardings ${responderForwardingProof.onboardings} ` +
+      `observations ${responderForwardingProof.observations} ` +
+      `commands ${responderForwardingProof.commands} ` +
+      `followupJobs ${responderForwardingProof.followup_jobs} ` +
+      `automaticCarrierCommands ` +
+      `${responderForwardingProof.automaticCarrierCommands} ` +
+      `remoteWrites ${responderForwardingProof.remoteWrites} ` +
+      `providerEffects ${responderForwardingProof.providerEffects} ` +
+      `messageSendEffects ${responderForwardingProof.messageSendEffects}\n`
     );
     writeOutput(
       `adjacentIntegrationPostgresProof ` +

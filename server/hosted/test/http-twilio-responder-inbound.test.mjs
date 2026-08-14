@@ -5,6 +5,7 @@ import test from "node:test";
 import { createHostedApi } from "../http.mjs";
 import {
   createTwilioResponderInboundHttpAdapter,
+  TWILIO_RESPONDER_CONDITIONAL_FORWARD_TWIML,
   TWILIO_RESPONDER_INBOUND_DIAL_RESULT_PATH,
   TWILIO_RESPONDER_INBOUND_DIAL_RESULT_TWIML,
   TWILIO_RESPONDER_INBOUND_MAXIMUM_BYTES,
@@ -182,6 +183,93 @@ test("verified Voice resolves a private Dial target only after durable bound arr
   });
   assert.deepEqual(order, ["durable", "target"]);
   assert.match(response.body, /<Dial action=/u);
+});
+
+test("conditional no-answer arrivals and ambiguous sources never dial the retained line", async () => {
+  let dialCalls = 0;
+  let eventState = "applied";
+  let stateReason = null;
+  let forwardingOnboardingId =
+    "10000000-0000-4000-8000-000000000002";
+  const adapter = createTwilioResponderInboundHttpAdapter({
+    inbound: {
+      kind: "twilio-responder-inbound",
+      mode: "verified-inbound",
+      providerEffects: false,
+      async readiness() {
+        return { ready: true, verified: true, providerEffects: false };
+      },
+      async ingestInboundMessage() {
+        throw new Error("wrong route");
+      },
+      async ingestDialResult() {
+        throw new Error("wrong route");
+      },
+      async ingestVoiceCall() {
+        return {
+          schema: "sitesourcery.responder-twilio-inbound-receipt/v1",
+          channel: "voice",
+          eventKind: "call_received",
+          eventState,
+          stateReason,
+          numberBindingId: "10000000-0000-4000-8000-000000000001",
+          forwardingOnboardingId,
+          voiceArrivalPolicy: "conditional_no_answer_forwarding",
+          replayed: false,
+          coreApplied: eventState === "applied",
+          providerEffects: false
+        };
+      }
+    },
+    voiceDialPlan: {
+      kind: "twilio-responder-voice-dial-plan",
+      mode: "verified-private-forward",
+      providerEffects: true,
+      async readiness() {
+        return { ready: true, verified: true };
+      },
+      async twiml() {
+        dialCalls += 1;
+        throw new Error("conditional forwarding must never dial");
+      }
+    }
+  });
+  const response = await adapter.handle({
+    method: "POST",
+    pathname: TWILIO_RESPONDER_INBOUND_VOICE_PATH,
+    headers: {},
+    rawBody: RAW
+  });
+  assert.equal(response.body, TWILIO_RESPONDER_CONDITIONAL_FORWARD_TWIML);
+  eventState = "recorded";
+  stateReason = "forwarding_source_mismatch";
+  const ambiguousResponse = await adapter.handle({
+    method: "POST",
+    pathname: TWILIO_RESPONDER_INBOUND_VOICE_PATH,
+    headers: {},
+    rawBody: RAW
+  });
+  assert.equal(
+    ambiguousResponse.body,
+    TWILIO_RESPONDER_CONDITIONAL_FORWARD_TWIML
+  );
+  forwardingOnboardingId = null;
+  stateReason = "forwarding_onboarding_unavailable";
+  const lifecycleGapResponse = await adapter.handle({
+    method: "POST",
+    pathname: TWILIO_RESPONDER_INBOUND_VOICE_PATH,
+    headers: {},
+    rawBody: RAW
+  });
+  assert.equal(
+    lifecycleGapResponse.body,
+    TWILIO_RESPONDER_CONDITIONAL_FORWARD_TWIML
+  );
+  assert.equal(dialCalls, 0);
+  assert.doesNotMatch(
+    response.body + ambiguousResponse.body + lifecycleGapResponse.body,
+    /<Dial/u
+  );
 });
 
 test("inbound routes reject method, media, and length before ingress", async () => {

@@ -14,7 +14,8 @@ test("production root composes durable held Responder surfaces and commerce", as
     "createPostgresResponderSurfaceRepository",
     "createResponderSurfacesService",
     "createHeldResponderCommerceService",
-    "createPostgresResponderCommerceRepository"
+    "createPostgresResponderCommerceRepository",
+    "createPostgresResponderForwardingRepository"
   ]) {
     assert.match(source, new RegExp(`\\b${constructor}\\b`, "u"));
   }
@@ -33,6 +34,6 @@ test("production root composes durable held Responder surfaces and commerce", as
   assert.match(source, /responderReadiness[.]providerEffects !== false/u);
   assert.match(
     source,
-    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*careCommerce,\s*responderSurfaces,\s*responderCommerce,\s*operatorWorkQueue:/u
+    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*careCommerce,\s*responderSurfaces,\s*responderCommerce,\s*responderForwarding,\s*operatorWorkQueue:/u
   );
 });

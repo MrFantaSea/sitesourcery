@@ -110,6 +110,8 @@ function receipt(row, { replayed, suppression = null }) {
     coreApplied: row.core_provider_event_id !== null &&
       row.core_provider_event_id !== undefined,
     numberBindingId: row.number_binding_id ?? null,
+    forwardingOnboardingId: row.forwarding_onboarding_id ?? null,
+    voiceArrivalPolicy: row.voice_arrival_policy ?? null,
     suppression,
     replayed,
     providerEffects: false
@@ -141,6 +143,7 @@ function normalizedFact(input) {
     "toNumberLookupDigest", "toNumberKeyVersion",
     "toNumberLookupCandidateDigests", "fromRouteDigest",
     "fromRouteKeyVersion", "contactRouteDigest", "fromRouteEligible",
+    "forwardedFromLookupCandidateDigests",
     "classifiedIntent", "dialCallStatus", "optOutType",
     "signatureVerificationDigest", "evidenceDigest", "receivedAt",
     "material", "sealMaterial"
@@ -162,6 +165,8 @@ function normalizedFact(input) {
       input.toNumberLookupCandidateDigests.length <= 8 &&
       input.toNumberLookupCandidateDigests[0] ===
         input.toNumberLookupDigest &&
+      Array.isArray(input.forwardedFromLookupCandidateDigests) &&
+      input.forwardedFromLookupCandidateDigests.length <= 8 &&
       (input.classifiedIntent === null ||
         INTENTS.has(input.classifiedIntent)) &&
       (input.dialCallStatus === null ||
@@ -195,6 +200,9 @@ function normalizedFact(input) {
     ),
     toNumberLookupCandidateDigests: input.toNumberLookupCandidateDigests
       .map((candidate) => sha256(candidate, "Number lookup candidate")),
+    forwardedFromLookupCandidateDigests:
+      input.forwardedFromLookupCandidateDigests.map((candidate) =>
+        sha256(candidate, "Forwarded-from lookup candidate")),
     fromRouteDigest: sha256(
       input.fromRouteDigest, "Caller route lookup digest", { nullable: true }
     ),
@@ -216,24 +224,85 @@ function normalizedFact(input) {
   return selected;
 }
 
-function outcomeForBoundEvent(fact) {
+function outcomeForBoundEvent(fact, binding, forwarding) {
   if (fact.eventKind === "call_received") {
-    return { state: "recorded", reason: "call_arrival" };
+    if (binding.voice_ingress_role !== "conditional_forward_destination") {
+      return {
+        state: "recorded",
+        reason: "call_arrival",
+        voiceArrivalPolicy: "managed_front_door",
+        forwardingOnboardingId: null
+      };
+    }
+    if (forwarding === null) {
+      return {
+        state: "recorded",
+        reason: "forwarding_onboarding_unavailable",
+        voiceArrivalPolicy: "conditional_no_answer_forwarding",
+        forwardingOnboardingId: null
+      };
+    }
+    if (!fact.fromRouteEligible) {
+      return {
+        state: "recorded",
+        reason: "anonymous_caller",
+        voiceArrivalPolicy: "conditional_no_answer_forwarding",
+        forwardingOnboardingId: forwarding.id
+      };
+    }
+    if (forwarding.source_matches !== true) {
+      return {
+        state: "recorded",
+        reason: "forwarding_source_mismatch",
+        voiceArrivalPolicy: "conditional_no_answer_forwarding",
+        forwardingOnboardingId: forwarding.id
+      };
+    }
+    if (forwarding.state !== "ready_held") {
+      return {
+        state: "recorded",
+        reason: "forwarding_not_ready",
+        voiceArrivalPolicy: "conditional_no_answer_forwarding",
+        forwardingOnboardingId: forwarding.id
+      };
+    }
+    return {
+      state: "applied",
+      reason: null,
+      voiceArrivalPolicy: "conditional_no_answer_forwarding",
+      forwardingOnboardingId: forwarding.id
+    };
   }
   if (
     fact.eventKind === "dial_result" &&
     !MISSED_DIAL_STATUSES.has(fact.dialCallStatus)
   ) {
-    return { state: "recorded", reason: "call_answered" };
+    return {
+      state: "recorded",
+      reason: "call_answered",
+      voiceArrivalPolicy: "managed_front_door",
+      forwardingOnboardingId: null
+    };
   }
   if (!fact.fromRouteEligible) {
     return {
       state: "recorded",
       reason: fact.channel === "voice" ? "anonymous_caller"
-        : "ineligible_route"
+        : "ineligible_route",
+      voiceArrivalPolicy: fact.channel === "voice"
+        ? "managed_front_door"
+        : null,
+      forwardingOnboardingId: null
     };
   }
-  return { state: "applied", reason: null };
+  return {
+    state: "applied",
+    reason: null,
+    voiceArrivalPolicy: fact.channel === "voice"
+      ? "managed_front_door"
+      : null,
+    forwardingOnboardingId: null
+  };
 }
 
 export function createPostgresTwilioResponderInboundRepository({
@@ -331,14 +400,35 @@ export function createPostgresTwilioResponderInboundRepository({
           return { prior: null, binding: null,
             unboundReason: "service_mismatch" };
         }
-        return { prior: null, binding, unboundReason: null };
+        let forwarding = null;
+        if (fact.eventKind === "call_received") {
+          const activeForwarding = await client.query(
+            `select onboarding.*,
+                    (cardinality($2::text[]) > 0
+                      and onboarding.business_line_lookup_digest =
+                        any($2::text[])) as source_matches
+               from ss.responder_forwarding_onboardings onboarding
+              where onboarding.number_binding_id = $1
+                and onboarding.state <> 'retired'`,
+            [binding.id, fact.forwardedFromLookupCandidateDigests]
+          );
+          invariant(
+            activeForwarding.rowCount <= 1,
+            "TWILIO_RESPONDER_INBOUND_REPOSITORY_CONFLICT",
+            "Responder forwarding authority is ambiguous.",
+            { status: 409 }
+          );
+          forwarding = activeForwarding.rows[0] ?? null;
+        }
+        return { prior: null, binding, forwarding, unboundReason: null };
       }
     );
   }
 
   async function insertLedgerRow(client, fact, {
     id, state, reason, organizationId, projectId, coreProviderEventId,
-    numberBindingId
+    numberBindingId, forwardingOnboardingId = null,
+    voiceArrivalPolicy = null
   }) {
     const inserted = await client.query(
       `insert into ss.responder_twilio_inbound_events (
@@ -349,10 +439,12 @@ export function createPostgresTwilioResponderInboundRepository({
          dial_call_status, opt_out_type, classified_intent,
          signature_verification_digest, payload_digest,
          state, state_reason, organization_id, project_id,
-         core_provider_event_id, received_at, created_at, number_binding_id
+         core_provider_event_id, received_at, created_at, number_binding_id,
+         forwarding_onboarding_id, voice_arrival_policy
        ) values (
          $1, 'twilio', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-         $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22, $23
+         $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22, $23,
+         $24, $25
        ) returning *`,
       [
         id, fact.channel, fact.eventKind, fact.providerEventDigest,
@@ -362,7 +454,8 @@ export function createPostgresTwilioResponderInboundRepository({
         fact.fromRouteKeyVersion, fact.dialCallStatus, fact.optOutType,
         fact.classifiedIntent, fact.signatureVerificationDigest,
         fact.payloadDigest, state, reason, organizationId, projectId,
-        coreProviderEventId, fact.receivedAt, numberBindingId
+        coreProviderEventId, fact.receivedAt, numberBindingId,
+        forwardingOnboardingId, voiceArrivalPolicy
       ]
     );
     invariant(
@@ -432,10 +525,10 @@ export function createPostgresTwilioResponderInboundRepository({
     );
   }
 
-  async function recordBound(fact, binding) {
+  async function recordBound(fact, binding, forwarding) {
     const organizationId = binding.organization_id;
     const projectId = binding.project_id;
-    const outcome = outcomeForBoundEvent(fact);
+    const outcome = outcomeForBoundEvent(fact, binding, forwarding);
     const inboundEventId = randomUUID();
 
     let sealedEnvelope = null;
@@ -491,6 +584,21 @@ export function createPostgresTwilioResponderInboundRepository({
           "Twilio inbound storage changed; retry safely.",
           { status: 409 }
         );
+        if (outcome.forwardingOnboardingId !== null) {
+          const forwardingStillCurrent = await client.query(
+            `select 1 from ss.responder_forwarding_onboardings
+              where id = $1 and organization_id = $2 and project_id = $3
+                and number_binding_id = $4 and state = $5`,
+            [outcome.forwardingOnboardingId, organizationId, projectId,
+              binding.id, forwarding.state]
+          );
+          invariant(
+            forwardingStillCurrent.rowCount === 1,
+            "TWILIO_RESPONDER_INBOUND_RETRY_REQUIRED",
+            "Twilio inbound storage changed; retry safely.",
+            { status: 409 }
+          );
+        }
         if (outcome.state === "applied") {
           const existing = await client.query(
             `select 1 from ss.responder_twilio_inbound_events
@@ -507,7 +615,9 @@ export function createPostgresTwilioResponderInboundRepository({
               organizationId,
               projectId,
               coreProviderEventId: null,
-              numberBindingId: binding.id
+              numberBindingId: binding.id,
+              forwardingOnboardingId: outcome.forwardingOnboardingId,
+              voiceArrivalPolicy: outcome.voiceArrivalPolicy
             });
             return { row, replayed: false };
           }
@@ -546,7 +656,9 @@ export function createPostgresTwilioResponderInboundRepository({
             organizationId,
             projectId,
             coreProviderEventId: coreReceipt.id,
-            numberBindingId: binding.id
+            numberBindingId: binding.id,
+            forwardingOnboardingId: outcome.forwardingOnboardingId,
+            voiceArrivalPolicy: outcome.voiceArrivalPolicy
           });
           if (sealedEnvelope !== null) {
             const material = await client.query(
@@ -586,7 +698,9 @@ export function createPostgresTwilioResponderInboundRepository({
           organizationId,
           projectId,
           coreProviderEventId: null,
-          numberBindingId: binding.id
+          numberBindingId: binding.id,
+          forwardingOnboardingId: outcome.forwardingOnboardingId,
+          voiceArrivalPolicy: outcome.voiceArrivalPolicy
         });
         return { row, replayed: false };
       }
@@ -622,6 +736,11 @@ export function createPostgresTwilioResponderInboundRepository({
               ) is not null
               and ss.hosted_responder_twilio_inbound_contract_v1() =
                 'canonical-responder-twilio-inbound-v1-keyed-lookup-tenant-bound'
+              and to_regprocedure(
+                'ss.hosted_responder_forwarding_contract_v1()'
+              ) is not null
+              and ss.hosted_responder_forwarding_contract_v1() =
+                'canonical-responder-forwarding-v1-carrier-preserving-held-no-loop'
                 as contract_ready,
               (select count(*) = 3
                  and bool_and(relation.relrowsecurity)
@@ -693,7 +812,9 @@ export function createPostgresTwilioResponderInboundRepository({
             if (resolved.binding === null) {
               return await recordUnbound(fact, resolved.unboundReason);
             }
-            return await recordBound(fact, resolved.binding);
+            return await recordBound(
+              fact, resolved.binding, resolved.forwarding ?? null
+            );
           } catch (error) {
             const translatedFailure = translatedError(error);
             if (
