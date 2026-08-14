@@ -3829,3 +3829,67 @@ test("FIN-004V migration separates six held adjacent contracts, global snapshots
     /phone_number\s+(?:text|varchar)|email_address\s+(?:text|varchar)|message_body\s+(?:text|varchar)|provider_effects\s*=\s*true|remote_write_effects\s*=\s*true|automatic_commands\s*=\s*true/iu
   );
 });
+
+test("RESPONDER-COMMERCE-01 persists exact held setup and monthly billing authority", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608140135_responder_commerce_persistence.sql"
+  );
+  assert.ok(migration, "missing RESPONDER-COMMERCE-01 migration 135");
+  assert.match(migration.sql, /^-- RESPONDER-COMMERCE-01[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "responder_commerce_catalog",
+    "responder_commerce_commands",
+    "responder_commerce_quotes",
+    "responder_commerce_reservations",
+    "responder_commerce_reservation_events"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(migration.sql, new RegExp(`'${table}'`, "u"));
+  }
+  assert.match(
+    migration.sql,
+    /foreach table_name in array array\[[\s\S]*alter table ss\.%I enable row level security[\s\S]*alter table ss\.%I force row level security[\s\S]*revoke all on table ss\.%I from public, anon, authenticated, service_role/iu
+  );
+  assert.match(
+    migration.sql,
+    /setup_amount_minor integer not null check \(setup_amount_minor = 30000\)[\s\S]*monthly_amount_minor integer not null check \(monthly_amount_minor = 25000\)[\s\S]*initial_subtotal_minor integer not null check \(initial_subtotal_minor = 55000\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /tax_state text not null check \(tax_state = 'disabled_by_owner'\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /intended_provider text not null check \(intended_provider = 'stripe'\)/iu
+  );
+  assert.match(migration.sql, /responder_setup[\s\S]*responder_monthly/iu);
+  assert.match(
+    migration.sql,
+    /responder_quote_create[\s\S]*responder_billing_reserve[\s\S]*responder_reservation_cancel[\s\S]*responder_reservation_ambiguity_hold/iu
+  );
+  assert.match(
+    migration.sql,
+    /provider_request jsonb check \(provider_request is null\)[\s\S]*provider_effect_certainty text not null/iu
+  );
+  assert.match(
+    migration.sql,
+    /customer_effects_authorized boolean not null[\s\S]*check \(not customer_effects_authorized\)[\s\S]*mail_delivery_effects_authorized boolean not null[\s\S]*payment_effects_authorized boolean not null[\s\S]*provider_effects_authorized boolean not null/iu
+  );
+  assert.match(
+    migration.sql,
+    /project_legal_json_digest\(new\.quote_document - 'quoteDigest'\)[\s\S]*project_legal_json_digest\([\s\S]*new\.reservation_document - 'reservationDigest'/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_responder_commerce_contract_v1\(\)[\s\S]*canonical-responder-commerce-v1-held-30000-25000-no-provider-effect/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /provider_effects_authorized\s*=\s*true|payment_effects_authorized\s*=\s*true|customer_effects_authorized\s*=\s*true|charges[.]create|subscriptions[.]create|payment_intents[.]create|grant all privileges/iu
+  );
+});

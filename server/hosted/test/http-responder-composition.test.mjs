@@ -9,6 +9,9 @@ const USER = "10000000-0000-4000-8000-000000000001";
 const ORG_A = "20000000-0000-4000-8000-000000000001";
 const ORG_B = "20000000-0000-4000-8000-000000000002";
 const TARGET_ORG = "20000000-0000-4000-8000-000000000099";
+const PROJECT = "30000000-0000-4000-8000-000000000001";
+const CUSTOMER = "40000000-0000-4000-8000-000000000001";
+const QUOTE = "50000000-0000-4000-8000-000000000001";
 
 function canonicalService(organizationIds = [ORG_A]) {
   const calls = [];
@@ -50,6 +53,46 @@ function responderSurfaces() {
     "engageGlobalKill", "readCustomer", "readOperator",
     "recordCustomerConsent", "recordOperatorConsent", "requestHandoff",
     "reserveHeldMessage", "stop"
+  ]) {
+    service[method] = async (...args) => {
+      calls.push([method, ...args]);
+      return { method, providerEffects: false };
+    };
+  }
+  return service;
+}
+
+function responderCommerce() {
+  const calls = [];
+  const service = {
+    calls,
+    kind: "responder-commerce",
+    mode: "held-local",
+    commercialEffects: false,
+    customerEffects: false,
+    mailDeliveryEffects: false,
+    paymentEffects: false,
+    providerEffects: false,
+    async readiness() {
+      return {
+        ready: true,
+        verified: true,
+        durableCommercialState: true,
+        catalogAuthorityVerified: true,
+        taxPurposeReleased: false,
+        sellable: false,
+        commercialEffects: false,
+        customerEffects: false,
+        mailDeliveryEffects: false,
+        paymentEffects: false,
+        providerEffects: false
+      };
+    }
+  };
+  for (const method of [
+    "cancelHeldReservation", "createHeldQuote", "markReservationAmbiguous",
+    "readCustomerQuote", "readCustomerReservation", "readOperatorCatalog",
+    "requestReversal", "reserveHeldBilling"
   ]) {
     service[method] = async (...args) => {
       calls.push([method, ...args]);
@@ -187,6 +230,47 @@ test("Responder operator paths preserve route organization for capability checks
     canonical.calls.some(([method]) => method === "listOrganizations"),
     false
   );
+});
+
+test("Responder commerce narrows production authentication metadata to exact tenant authority", async () => {
+  const canonical = canonicalService();
+  canonical.authenticate = async () => ({
+    userId: USER,
+    sessionId: "70000000-0000-4000-8000-000000000001",
+    sessionDigest: "s".repeat(64),
+    expiresAt: "2026-08-15T00:00:00.000Z",
+    reauthenticatedAt: "2026-08-14T18:00:00.000Z",
+    user: { email: "private@example.test" }
+  });
+  const commerce = responderCommerce();
+  const api = createHostedApi(canonical, { responderCommerce: commerce });
+  const customerResponse = await api.fetch(get(
+    `/api/v1/responder/projects/${PROJECT}/commerce/quotes/${QUOTE}`
+  ));
+  assert.equal(customerResponse.status, 200);
+  const operatorResponse = await api.fetch(get(
+    `/api/v1/operator/responder/organizations/${TARGET_ORG}` +
+      `/projects/${PROJECT}/customers/${CUSTOMER}/commerce/catalog`
+  ));
+  assert.equal(operatorResponse.status, 200);
+  assert.deepEqual(commerce.calls, [
+    [
+      "readCustomerQuote",
+      { userId: USER, organizationId: ORG_A },
+      { projectId: PROJECT, quoteId: QUOTE }
+    ],
+    [
+      "readOperatorCatalog",
+      { userId: USER, organizationId: TARGET_ORG },
+      {
+        customerUserId: CUSTOMER,
+        organizationId: TARGET_ORG,
+        projectId: PROJECT
+      }
+    ]
+  ]);
+  assert.equal(JSON.stringify(commerce.calls).includes("private@example.test"), false);
+  assert.equal(JSON.stringify(commerce.calls).includes("sessionDigest"), false);
 });
 
 test("Responder root rejects any composition claiming external effects", () => {

@@ -218,6 +218,12 @@ import {
   createResponderSurfacesService
 } from "../responder-surfaces.mjs";
 import {
+  createHeldResponderCommerceService
+} from "../responder-commerce.mjs";
+import {
+  createPostgresResponderCommerceRepository
+} from "../responder-commerce-postgres.mjs";
+import {
   createConfiguredTwilioResponderEventsHttp
 } from "../twilio-responder-events-config.mjs";
 import {
@@ -987,6 +993,11 @@ async function start() {
     core: responderCore,
     repository: createPostgresResponderSurfaceRepository({ authority })
   });
+  const responderCommerce = createHeldResponderCommerceService({
+    repository: createPostgresResponderCommerceRepository({ authority }),
+    ids: commerceV2.ids,
+    clock: commerceV2.clock
+  });
   const twilioResponderEvents =
     createConfiguredTwilioResponderEventsHttp({
       environment: process.env,
@@ -995,9 +1006,14 @@ async function start() {
       }),
       clock: commerceV2.clock
     });
-  const [responderCoreReadiness, responderReadiness] = await Promise.all([
+  const [
+    responderCoreReadiness,
+    responderReadiness,
+    responderCommerceReadiness
+  ] = await Promise.all([
     responderCore.readiness(),
-    responderSurfaces.readiness()
+    responderSurfaces.readiness(),
+    responderCommerce.readiness()
   ]);
   if (
     responderCoreReadiness.ready !== true ||
@@ -1007,7 +1023,18 @@ async function start() {
     responderReadiness.verified !== true ||
     responderReadiness.providerEffects !== false ||
     responderReadiness.billingEffects !== false ||
-    responderReadiness.sellable !== false
+    responderReadiness.sellable !== false ||
+    responderCommerceReadiness.ready !== true ||
+    responderCommerceReadiness.verified !== true ||
+    responderCommerceReadiness.durableCommercialState !== true ||
+    responderCommerceReadiness.catalogAuthorityVerified !== true ||
+    responderCommerceReadiness.taxPurposeReleased !== false ||
+    responderCommerceReadiness.sellable !== false ||
+    responderCommerceReadiness.commercialEffects !== false ||
+    responderCommerceReadiness.customerEffects !== false ||
+    responderCommerceReadiness.mailDeliveryEffects !== false ||
+    responderCommerceReadiness.paymentEffects !== false ||
+    responderCommerceReadiness.providerEffects !== false
   ) {
     throw new Error(
       "Canonical effect-held Responder surfaces are not ready."
@@ -1189,6 +1216,7 @@ async function start() {
         careSurfaces,
         careCommerce,
         responderSurfaces,
+        responderCommerce,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         operatorProviderReconciliation,
         adjacentIntegration,

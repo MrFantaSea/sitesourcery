@@ -124,6 +124,9 @@ import {
 import {
   createResponderSurfacesHttpBoundary
 } from "./responder-surfaces-http.mjs";
+import {
+  createResponderCommerceHttpBoundary
+} from "./responder-commerce-http.mjs";
 import { digestUserAgent } from "./project-legal-authority.mjs";
 
 const JSON_HEADERS = Object.freeze({
@@ -892,6 +895,7 @@ export function createHostedApi(
     careSurfaces = null,
     careCommerce = null,
     responderSurfaces = null,
+    responderCommerce = null,
     operatorWorkQueue = null,
     operatorProviderReconciliation = null,
     adjacentIntegration = null,
@@ -1056,6 +1060,49 @@ export function createHostedApi(
           product: "Responder",
           selectionCode: "RESPONDER_ORGANIZATION_SELECTION_REQUIRED"
         }),
+        async requireWriteGuard(request) {
+          requireCsrf(
+            request,
+            parseCookies(request.headers.get("cookie"))
+          );
+          return true;
+        }
+      });
+  invariant(
+    responderCommerce === null ||
+      (
+        responderCommerce?.kind === "responder-commerce" &&
+        responderCommerce.mode === "held-local" &&
+        responderCommerce.commercialEffects === false &&
+        responderCommerce.customerEffects === false &&
+        responderCommerce.mailDeliveryEffects === false &&
+        responderCommerce.paymentEffects === false &&
+        responderCommerce.providerEffects === false &&
+        typeof responderCommerce.readiness === "function"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Responder commerce must use the verified effect-held composition.",
+    { status: 500 }
+  );
+  const responderCommerceHttpBoundary = responderCommerce === null
+    ? null
+    : createResponderCommerceHttpBoundary({
+        service: responderCommerce,
+        async authenticate(request, route) {
+          const selected = await authenticatedOrganizationActor({
+            service,
+            request,
+            route,
+            product: "Responder commerce",
+            selectionCode: "RESPONDER_COMMERCE_ORGANIZATION_SELECTION_REQUIRED"
+          });
+          return selected === null
+            ? null
+            : Object.freeze({
+                userId: selected.userId,
+                organizationId: selected.organizationId
+              });
+        },
         async requireWriteGuard(request) {
           requireCsrf(
             request,
@@ -1468,6 +1515,7 @@ export function createHostedApi(
           careReadiness,
           careCommerceReadiness,
           responderReadiness,
+          responderCommerceReadiness,
           adjacentIntegrationReadiness
         ] = await Promise.all([
           service.readiness(),
@@ -1519,6 +1567,22 @@ export function createHostedApi(
                 sellable: false
               }
             : responderSurfaces.readiness(),
+          responderCommerce === null
+            ? {
+                ready: false,
+                verified: false,
+                mounted: false,
+                durableCommercialState: false,
+                catalogAuthorityVerified: false,
+                taxPurposeReleased: false,
+                sellable: false,
+                commercialEffects: false,
+                customerEffects: false,
+                mailDeliveryEffects: false,
+                paymentEffects: false,
+                providerEffects: false
+              }
+            : responderCommerce.readiness(),
           adjacentIntegration === null
             ? {
                 ready: false,
@@ -1623,7 +1687,45 @@ export function createHostedApi(
             responderReadiness?.verified === true &&
             responderReadiness?.providerEffects === false &&
             responderReadiness?.billingEffects === false &&
-            responderReadiness?.sellable === false,
+            responderReadiness?.sellable === false &&
+            responderCommerceReadiness?.ready === true &&
+            responderCommerceReadiness?.verified === true &&
+            responderCommerceReadiness?.durableCommercialState === true &&
+            responderCommerceReadiness?.catalogAuthorityVerified === true &&
+            responderCommerceReadiness?.taxPurposeReleased === false &&
+            responderCommerceReadiness?.sellable === false &&
+            responderCommerceReadiness?.commercialEffects === false &&
+            responderCommerceReadiness?.customerEffects === false &&
+            responderCommerceReadiness?.mailDeliveryEffects === false &&
+            responderCommerceReadiness?.paymentEffects === false &&
+            responderCommerceReadiness?.providerEffects === false,
+          responderCommerce: Object.freeze({
+            ready:
+              responderCommerceReadiness?.ready === true &&
+              responderCommerceReadiness?.verified === true &&
+              responderCommerceReadiness?.durableCommercialState === true &&
+              responderCommerceReadiness?.catalogAuthorityVerified === true &&
+              responderCommerceReadiness?.taxPurposeReleased === false &&
+              responderCommerceReadiness?.sellable === false &&
+              responderCommerceReadiness?.commercialEffects === false &&
+              responderCommerceReadiness?.customerEffects === false &&
+              responderCommerceReadiness?.mailDeliveryEffects === false &&
+              responderCommerceReadiness?.paymentEffects === false &&
+              responderCommerceReadiness?.providerEffects === false,
+            mounted: responderCommerce !== null,
+            mode: "held-local",
+            durableCommercialState:
+              responderCommerceReadiness?.durableCommercialState === true,
+            catalogAuthorityVerified:
+              responderCommerceReadiness?.catalogAuthorityVerified === true,
+            taxPurposeReleased: false,
+            sellable: false,
+            commercialEffects: false,
+            customerEffects: false,
+            mailDeliveryEffects: false,
+            paymentEffects: false,
+            providerEffects: false
+          }),
           adjacentIntegrations: Object.freeze({
             ready:
               adjacentIntegrationReadiness?.ready === true &&
@@ -1926,6 +2028,14 @@ export function createHostedApi(
             await responderSurfacesHttpBoundary.dispatch(request);
           if (responderResponse !== null) {
             return rootedResponse(responderResponse, requestId);
+          }
+        }
+
+        if (responderCommerceHttpBoundary !== null) {
+          const commerceResponse =
+            await responderCommerceHttpBoundary.dispatch(request);
+          if (commerceResponse !== null) {
+            return rootedResponse(commerceResponse, requestId);
           }
         }
 

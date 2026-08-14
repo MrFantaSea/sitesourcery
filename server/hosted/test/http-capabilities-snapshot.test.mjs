@@ -17,7 +17,8 @@ const NAMES = Object.freeze([
   "responderInbound",
   "care",
   "careCommerce",
-  "responder"
+  "responder",
+  "responderCommerce"
 ]);
 const FULL_DOMAIN_READINESS = Object.freeze({
   ready: true,
@@ -70,6 +71,34 @@ const FULL_CARE_COMMERCE_CAPABILITY = Object.freeze({
   paymentEffects: false,
   providerEffects: false
 });
+const FULL_RESPONDER_COMMERCE_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  mounted: true,
+  durableCommercialState: true,
+  catalogAuthorityVerified: true,
+  taxPurposeReleased: false,
+  sellable: false,
+  commercialEffects: false,
+  customerEffects: false,
+  mailDeliveryEffects: false,
+  paymentEffects: false,
+  providerEffects: false
+});
+const FULL_RESPONDER_COMMERCE_CAPABILITY = Object.freeze({
+  ready: true,
+  mounted: true,
+  mode: "held-local",
+  durableCommercialState: true,
+  catalogAuthorityVerified: true,
+  taxPurposeReleased: false,
+  sellable: false,
+  commercialEffects: false,
+  customerEffects: false,
+  mailDeliveryEffects: false,
+  paymentEffects: false,
+  providerEffects: false
+});
 const EXPECTED = Object.freeze({
   accountRegistration: true,
   accountRecoveryEmail: true,
@@ -88,6 +117,7 @@ const EXPECTED = Object.freeze({
   care: true,
   careCommerce: FULL_CARE_COMMERCE_CAPABILITY,
   responder: true,
+  responderCommerce: FULL_RESPONDER_COMMERCE_CAPABILITY,
   adjacentIntegrations: Object.freeze({
     ready: false,
     mode: "held",
@@ -124,6 +154,8 @@ function apiFixture({
   at = () => Date.now(),
   careCommerceReadiness = FULL_CARE_COMMERCE_READINESS,
   includeCareCommerce = true,
+  responderCommerceReadiness = FULL_RESPONDER_COMMERCE_READINESS,
+  includeResponderCommerce = true,
   serviceReadiness
 } = {}) {
   const calls = Object.fromEntries(NAMES.map((name) => [name, 0]));
@@ -303,7 +335,30 @@ function apiFixture({
       ].map((name) => [name, async () => {
         throw new Error("not reached");
       }]))
-    }
+    },
+    responderCommerce: includeResponderCommerce
+      ? {
+          kind: "responder-commerce",
+          mode: "held-local",
+          commercialEffects: false,
+          customerEffects: false,
+          mailDeliveryEffects: false,
+          paymentEffects: false,
+          providerEffects: false,
+          readiness: counted(
+            "responderCommerce",
+            responderCommerceReadiness
+          ),
+          ...Object.fromEntries([
+            "cancelHeldReservation", "createHeldQuote",
+            "markReservationAmbiguous", "readCustomerQuote",
+            "readCustomerReservation", "readOperatorCatalog",
+            "requestReversal", "reserveHeldBilling"
+          ].map((name) => [name, async () => {
+            throw new Error("not reached");
+          }]))
+        }
+      : null
   });
   return { api, calls };
 }
@@ -422,6 +477,51 @@ test("capabilities fail Care closed when mail reservation is unverified", async 
   assert.deepEqual(body.careCommerce, {
     ...FULL_CARE_COMMERCE_CAPABILITY,
     ready: false
+  });
+});
+
+test("capabilities do not claim complete Responder without durable commerce", async () => {
+  const fixture = apiFixture({ includeResponderCommerce: false });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ...EXPECTED,
+    responder: false,
+    responderCommerce: {
+      ready: false,
+      mounted: false,
+      mode: "held-local",
+      durableCommercialState: false,
+      catalogAuthorityVerified: false,
+      taxPurposeReleased: false,
+      sellable: false,
+      commercialEffects: false,
+      customerEffects: false,
+      mailDeliveryEffects: false,
+      paymentEffects: false,
+      providerEffects: false
+    }
+  });
+  assert.equal(fixture.calls.responder, 1);
+  assert.equal(fixture.calls.responderCommerce, 0);
+});
+
+test("capabilities fail Responder closed when commerce catalog authority drifts", async () => {
+  const fixture = apiFixture({
+    responderCommerceReadiness: {
+      ...FULL_RESPONDER_COMMERCE_READINESS,
+      verified: false,
+      catalogAuthorityVerified: false
+    }
+  });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.responder, false);
+  assert.deepEqual(body.responderCommerce, {
+    ...FULL_RESPONDER_COMMERCE_CAPABILITY,
+    ready: false,
+    catalogAuthorityVerified: false
   });
 });
 
