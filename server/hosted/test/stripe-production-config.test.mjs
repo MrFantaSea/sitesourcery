@@ -1443,11 +1443,19 @@ test("the hosted server injects one configured adapter for Checkout and every ve
   );
   assert.match(
     source,
-    /const domainRuntime\s*=\s*createHeldDomainRuntime\(\)/u
+    /const domainRuntime\s*=\s*createPostgresHeldDomainRuntime\(\{\s*authority,\s*contactVault,\s*clock:\s*commerceV2[.]clock\s*\}\)/u
   );
   assert.match(
     source,
     /paymentProvider:\s*stripeComposition\.adapter,\s*domainRuntime/u
+  );
+  assert.match(
+    source,
+    /domainRuntimeReadiness[?][.]mounted\s*!==\s*true/u
+  );
+  assert.match(
+    source,
+    /domainRuntimeReadiness[?][.]providerEffects\s*!==\s*false/u
   );
   assert.equal(
     source.match(

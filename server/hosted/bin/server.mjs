@@ -163,7 +163,9 @@ import {
 import {
   createPostgresDownloadPaymentRepository
 } from "../download-payment-postgres.mjs";
-import { createHeldDomainRuntime } from "../domain-postgres-runtime.mjs";
+import {
+  createPostgresHeldDomainRuntime
+} from "../domain-postgres-runtime.mjs";
 import {
   assertProductionEngagementReady,
   createProductionEngagementBootstrap
@@ -735,8 +737,6 @@ async function start() {
           alakazamServicePorts
         )
     });
-  const domainRuntime =
-    createHeldDomainRuntime();
   const ingressPolicy = ingressPolicyFromEnvironment(process.env);
 
   const identityPepperConfiguration =
@@ -799,6 +799,11 @@ async function start() {
     keyVersion:
       process.env
         .SITESOURCERY_CONTACT_VAULT_KEY_VERSION ?? "v1"
+  });
+  const domainRuntime = createPostgresHeldDomainRuntime({
+    authority,
+    contactVault,
+    clock: commerceV2.clock
   });
   const compiler = await createSparkCompilerPort({
     expectedSourceDigest: requiredEnvironment(
@@ -1038,6 +1043,24 @@ async function start() {
   });
 
   const readiness = await service.readiness();
+  const domainRuntimeReadiness = readiness?.providers?.domains;
+  if (
+    domainRuntimeReadiness?.ready !== true ||
+    domainRuntimeReadiness?.verified !== true ||
+    domainRuntimeReadiness?.mounted !== true ||
+    domainRuntimeReadiness?.mode !== "held" ||
+    domainRuntimeReadiness?.purchaseReady !== false ||
+    domainRuntimeReadiness?.registrar !== "held" ||
+    domainRuntimeReadiness?.payments !== "held" ||
+    domainRuntimeReadiness?.dns !== "held" ||
+    domainRuntimeReadiness?.providerEffects !== false ||
+    domainRuntimeReadiness?.remoteWrites !== false ||
+    domainRuntimeReadiness?.automaticCommands !== false
+  ) {
+    throw new Error(
+      "Canonical PostgreSQL-backed held Domain runtime is not ready."
+    );
+  }
   assertApprovedStripeReady(
     stripeComposition,
     readiness.payments

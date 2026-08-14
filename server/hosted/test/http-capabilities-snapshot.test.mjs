@@ -18,6 +18,32 @@ const NAMES = Object.freeze([
   "care",
   "responder"
 ]);
+const FULL_DOMAIN_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  mounted: true,
+  mode: "approved_live",
+  purchaseReady: true,
+  registrar: "ready",
+  payments: "ready",
+  dns: "ready",
+  providerEffects: true,
+  remoteWrites: true,
+  automaticCommands: false
+});
+const MOUNTED_HELD_DOMAIN_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  mounted: true,
+  mode: "held",
+  purchaseReady: false,
+  registrar: "held",
+  payments: "held",
+  dns: "held",
+  providerEffects: false,
+  remoteWrites: false,
+  automaticCommands: false
+});
 const EXPECTED = Object.freeze({
   accountRegistration: true,
   accountRecoveryEmail: true,
@@ -43,6 +69,7 @@ const EXPECTED = Object.freeze({
     providerEffects: false,
     automaticCommands: false
   }),
+  domains: FULL_DOMAIN_READINESS,
   domainPurchase: true,
   publishing: true
 });
@@ -86,7 +113,7 @@ function apiFixture({
       registration: { ready: true, verified: true },
       recovery: { ready: true, verified: true },
       providers: {
-        domains: { ready: true, registrar: "ready" }
+        domains: FULL_DOMAIN_READINESS
       },
       publication: { ready: true, held: false },
       privateCustomer: "customer@example.test"
@@ -245,7 +272,7 @@ test("capabilities singleflight the complete public fanout, cache by TTL, and st
         registration: { ready: true, verified: true },
         recovery: { ready: true, verified: true },
         providers: {
-          domains: { ready: true, registrar: "ready" }
+          domains: FULL_DOMAIN_READINESS
         },
         publication: { ready: true, held: false },
         privateProviderDetail: "must-not-escape"
@@ -281,6 +308,27 @@ test("capabilities singleflight the complete public fanout, cache by TTL, and st
   for (const name of NAMES.filter((name) => name !== "service")) {
     assert.equal(fixture.calls[name], 2, name);
   }
+});
+
+test("capabilities distinguish a mounted held Domain runtime from purchase authority", async () => {
+  const fixture = apiFixture({
+    serviceReadiness: {
+      ready: true,
+      registration: { ready: true, verified: true },
+      recovery: { ready: true, verified: true },
+      providers: {
+        domains: MOUNTED_HELD_DOMAIN_READINESS
+      },
+      publication: { ready: true, held: false }
+    }
+  });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ...EXPECTED,
+    domains: MOUNTED_HELD_DOMAIN_READINESS,
+    domainPurchase: false
+  });
 });
 
 test("capabilities timeout once without amplifying a hung dependency", async () => {

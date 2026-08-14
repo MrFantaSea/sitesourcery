@@ -5,7 +5,10 @@ import test from "node:test";
 
 import pg from "pg";
 
-import { createPostgresDomainRuntime } from "../domain-postgres-runtime.mjs";
+import {
+  createPostgresDomainRuntime,
+  createPostgresHeldDomainRuntime
+} from "../domain-postgres-runtime.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
 
 const { Pool } = pg;
@@ -30,6 +33,7 @@ async function migrateEmptyDatabase(pool) {
 
 async function seedDomainAuthority(pool) {
   const userId = randomUUID();
+  const editorUserId = randomUUID();
   const organizationId = randomUUID();
   const projectId = randomUUID();
   const billingPolicyId = randomUUID();
@@ -37,8 +41,15 @@ async function seedDomainAuthority(pool) {
   const renewalDocumentId = randomUUID();
   await pool.query(
     `insert into auth.users (id, email)
-     values ($1, $2)`,
-    [userId, `domain-owner-${userId}@example.test`]
+     values
+       ($1, $2),
+       ($3, $4)`,
+    [
+      userId,
+      `domain-owner-${userId}@example.test`,
+      editorUserId,
+      `domain-editor-${editorUserId}@example.test`
+    ]
   );
   await pool.query(
     `insert into ss.billing_policies (
@@ -59,8 +70,10 @@ async function seedDomainAuthority(pool) {
   await pool.query(
     `insert into ss.organization_memberships (
        organization_id, user_id, role, state, accepted_at
-     ) values ($1, $2, 'owner', 'active', $3)`,
-    [organizationId, userId, NOW]
+     ) values
+       ($1, $2, 'owner', 'active', $4),
+       ($1, $3, 'editor', 'active', $4)`,
+    [organizationId, userId, editorUserId, NOW]
   );
   await pool.query(
     `insert into ss.projects (
@@ -121,6 +134,7 @@ async function seedDomainAuthority(pool) {
   );
   return {
     actor: { userId },
+    editorActor: { userId: editorUserId },
     userId,
     organizationId,
     projectId
@@ -325,6 +339,104 @@ function fakeProviders() {
 }
 
 test(
+  "approved-live Domain readiness preserves effect authority during a partial provider outage",
+  async () => {
+    const providers = fakeProviders();
+    providers.registrar.mode = "approved_live";
+    providers.payments.mode = "approved_live";
+    providers.registrar.readiness = async () => ({
+      ready: true,
+      verified: true,
+      mode: "approved_live",
+      provider: "spaceship"
+    });
+    providers.payments.readiness = async () => ({
+      ready: false,
+      verified: false,
+      mode: "approved_live",
+      provider: "stripe"
+    });
+    const authority = {
+      kind: "canonical-postgres",
+      async readiness() {
+        return { ready: true };
+      },
+      async service(_context, callback) {
+        return callback({
+          async query() {
+            return {
+              rows: [
+                {
+                  purchasing_enabled: true,
+                  live_mode: true,
+                  active_provider_code: "spaceship",
+                  agent_terms_ready: true,
+                  renewal_terms_ready: true
+                }
+              ]
+            };
+          }
+        });
+      }
+    };
+    const runtime = createPostgresDomainRuntime({
+      authority,
+      registrar: providers.registrar,
+      payments: providers.payments,
+      contactVault: providers.contactVault,
+      mode: "approved_live",
+      liveApproval: {
+        approved: true,
+        environment: "staging",
+        providerCode: "spaceship",
+        approvedAt: "2026-08-14T12:00:00.000Z",
+        expiresAt: "2099-08-14T12:00:00.000Z",
+        capabilities: [
+          "domain:search",
+          "domain:quote",
+          "domain:contacts",
+          "domain:authorize",
+          "domain:register",
+          "domain:readback",
+          "domain:capture",
+          "domain:dns"
+        ]
+      }
+    });
+
+    const readiness = await runtime.readiness();
+    assert.equal(readiness.ready, false);
+    assert.equal(readiness.verified, true);
+    assert.equal(readiness.mounted, true);
+    assert.equal(readiness.purchaseReady, false);
+    assert.equal(readiness.registrar, "ready");
+    assert.equal(readiness.payments, "held");
+    assert.equal(readiness.dns, "ready");
+    assert.equal(readiness.providerEffects, true);
+    assert.equal(readiness.remoteWrites, true);
+    assert.equal(readiness.automaticCommands, false);
+
+    const heldProviders = fakeProviders();
+    const heldRuntime = createPostgresDomainRuntime({
+      authority,
+      registrar: heldProviders.registrar,
+      payments: heldProviders.payments,
+      contactVault: heldProviders.contactVault,
+      mode: "held",
+      mountedHeld: true
+    });
+    const heldReadiness = await heldRuntime.readiness();
+    assert.equal(heldReadiness.ready, true);
+    assert.equal(heldReadiness.purchaseReady, false);
+    assert.equal(heldReadiness.registrar, "held");
+    assert.equal(heldReadiness.payments, "held");
+    assert.equal(heldReadiness.dns, "held");
+    assert.equal(heldReadiness.providerEffects, false);
+    assert.equal(heldReadiness.remoteWrites, false);
+  }
+);
+
+test(
   "normalized PostgreSQL domain purchase authorizes before registrar and captures after exact readback",
   { skip: !DATABASE_URL, timeout: 60_000 },
   async () => {
@@ -464,6 +576,22 @@ test(
         ),
         false,
         "the public order must not disclose the provider URL"
+      );
+      assert.equal(
+        (
+          await runtime.getDomainOrder(
+            seeded.actor,
+            domainOrder.id
+          )
+        ).domainOrder.id,
+        domainOrder.id
+      );
+      await assert.rejects(
+        runtime.getDomainOrder(
+          seeded.editorActor,
+          domainOrder.id
+        ),
+        (error) => error?.code === "NOT_FOUND"
       );
       assert.equal(providers.calls.includes("capture"), false);
       await assert.rejects(
@@ -748,6 +876,145 @@ test(
         state: "manual_review",
         provider_checkout_url: null
       });
+
+      const heldRuntime = createPostgresHeldDomainRuntime({
+        authority,
+        contactVault: providers.contactVault,
+        clock: { now: () => NOW }
+      });
+      const heldReadiness = await heldRuntime.readiness();
+      assert.equal(heldReadiness.ready, true);
+      assert.equal(heldReadiness.verified, true);
+      assert.equal(heldReadiness.mounted, true);
+      assert.equal(heldReadiness.mode, "held");
+      assert.equal(heldReadiness.purchaseReady, false);
+      assert.equal(heldReadiness.registrar, "held");
+      assert.equal(heldReadiness.payments, "held");
+      assert.equal(heldReadiness.dns, "held");
+      assert.equal(heldReadiness.providerEffects, false);
+      assert.equal(heldReadiness.remoteWrites, false);
+      assert.equal(heldReadiness.automaticCommands, false);
+
+      const heldOrders = await heldRuntime.listDomainOrders(
+        seeded.actor,
+        seeded.projectId
+      );
+      assert.equal(
+        heldOrders.domainOrders.some(
+          (entry) => entry.id === domainOrder.id
+        ),
+        true
+      );
+      assert.deepEqual(
+        await heldRuntime.listDnsRecords(
+          seeded.actor,
+          active.domainOrder.domainId,
+          seeded.projectId
+        ),
+        { records: [] }
+      );
+      await assert.rejects(
+        heldRuntime.listDomainOrders(
+          { userId: randomUUID() },
+          seeded.projectId
+        ),
+        (error) => error?.code === "NOT_FOUND"
+      );
+
+      const providerCallsBeforeHeldRejections =
+        providers.calls.length;
+      const heldWriteCountsBefore = (
+        await pool.query(
+          `select
+             (select count(*)::integer
+                from ss.domain_registrant_snapshots) as registrants,
+             (select count(*)::integer
+                from ss.term_acceptances) as acceptances,
+             (select count(*)::integer
+                from ss.domain_agent_consents) as consents`
+        )
+      ).rows[0];
+      await assert.rejects(
+        heldRuntime.saveRegistrantContact(
+          seeded.actor,
+          seeded.organizationId,
+          {
+            projectId: seeded.projectId,
+            name: "Held Customer Owner",
+            organization: "Held Customer Company",
+            email: "held-owner@example.test",
+            phone: "+1 212 555 0199",
+            addressLine1: "101 Main Street",
+            addressLine2: "",
+            city: "New York",
+            region: "NY",
+            postalCode: "10001",
+            countryCode: "US",
+            commandId: "domain-held-contact-contract-001"
+          }
+        ),
+        (error) => error?.code === "DOMAIN_CONTACT_HELD"
+      );
+      await assert.rejects(
+        heldRuntime.acceptDomainConsent(
+          seeded.actor,
+          quote.id,
+          {
+            projectId: seeded.projectId,
+            registrantContactId: registrantContact.id,
+            termsVersion: quote.termsVersion,
+            registrationAgreementAccepted: true,
+            registrantCertificationAccepted: true,
+            autoRenewRequested: false,
+            commandId: "domain-held-consent-contract-001"
+          }
+        ),
+        (error) => error?.code === "DOMAIN_CONSENT_HELD"
+      );
+      await assert.rejects(
+        heldRuntime.searchDomains(
+          seeded.actor,
+          "held-customer.example"
+        ),
+        (error) => error?.code === "DOMAIN_SEARCH_HELD"
+      );
+      await assert.rejects(
+        heldRuntime.createDomainQuote(seeded.actor, {
+          projectId: seeded.projectId,
+          hostname: "held-customer.example",
+          years: 1,
+          purpose: "register"
+        }),
+        (error) => error?.code === "DOMAIN_QUOTE_HELD"
+      );
+      await assert.rejects(
+        heldRuntime.getDomainPaymentRedirect(
+          seeded.actor,
+          domainOrder.id,
+          seeded.projectId
+        ),
+        (error) =>
+          error?.code === "DOMAIN_PAYMENT_READBACK_HELD"
+      );
+      assert.equal(
+        providers.calls.length,
+        providerCallsBeforeHeldRejections
+      );
+      const heldWriteCountsAfter = (
+        await pool.query(
+          `select
+             (select count(*)::integer
+                from ss.domain_registrant_snapshots) as registrants,
+             (select count(*)::integer
+                from ss.term_acceptances) as acceptances,
+             (select count(*)::integer
+                from ss.domain_agent_consents) as consents`
+        )
+      ).rows[0];
+      assert.deepEqual(
+        heldWriteCountsAfter,
+        heldWriteCountsBefore
+      );
     } finally {
       await pool.end();
     }
