@@ -197,6 +197,14 @@ import {
   createCareSurfacesService
 } from "../care-surfaces.mjs";
 import {
+  createCareCommerceMailReservationInterface,
+  createHeldCareCommerceService
+} from "../care-commerce.mjs";
+import {
+  createPostgresCareCommerceEligibility,
+  createPostgresCareCommerceRepository
+} from "../care-commerce-postgres.mjs";
+import {
   createFakeResponderProvider,
   createResponderCore
 } from "../responder-core.mjs";
@@ -942,6 +950,34 @@ async function start() {
       "Canonical effect-held Care surfaces are not ready."
     );
   }
+  const careCommerce = createHeldCareCommerceService({
+    eligibility: createPostgresCareCommerceEligibility({ authority }),
+    repository: createPostgresCareCommerceRepository({ authority }),
+    ids: commerceV2.ids,
+    clock: commerceV2.clock,
+    mailReservations: createCareCommerceMailReservationInterface({
+      lifecycle: mailLifecycle,
+      clock: commerceV2.clock
+    })
+  });
+  const careCommerceReadiness = await careCommerce.readiness();
+  if (
+    careCommerceReadiness.ready !== true ||
+    careCommerceReadiness.verified !== true ||
+    careCommerceReadiness.durableCommercialState !== true ||
+    careCommerceReadiness.mailReservationReady !== true ||
+    careCommerceReadiness.commercialReady !== false ||
+    careCommerceReadiness.taxPurposeReleased !== false ||
+    careCommerceReadiness.commercialEffects !== false ||
+    careCommerceReadiness.customerEffects !== false ||
+    careCommerceReadiness.mailDeliveryEffects !== false ||
+    careCommerceReadiness.paymentEffects !== false ||
+    careCommerceReadiness.providerEffects !== false
+  ) {
+    throw new Error(
+      "Canonical durable effect-held Care commerce is not ready."
+    );
+  }
   const responderCore = createResponderCore({
     repository: createPostgresResponderCoreRepository({ authority }),
     provider: createFakeResponderProvider(),
@@ -1151,6 +1187,7 @@ async function start() {
         customServicesCustomBuildWork,
         customServicesOwner,
         careSurfaces,
+        careCommerce,
         responderSurfaces,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         operatorProviderReconciliation,

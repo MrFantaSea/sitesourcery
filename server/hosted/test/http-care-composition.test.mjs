@@ -9,6 +9,10 @@ const USER = "10000000-0000-4000-8000-000000000001";
 const ORG_A = "20000000-0000-4000-8000-000000000001";
 const ORG_B = "20000000-0000-4000-8000-000000000002";
 const TARGET_ORG = "20000000-0000-4000-8000-000000000099";
+const PROJECT = "30000000-0000-4000-8000-000000000001";
+const CONTRACT = "40000000-0000-4000-8000-000000000001";
+const PERIOD = "50000000-0000-4000-8000-000000000001";
+const RESERVATION = "60000000-0000-4000-8000-000000000001";
 
 function canonicalService(organizationIds = [ORG_A]) {
   const calls = [];
@@ -62,6 +66,62 @@ function careSurfaces() {
     };
   }
   return service;
+}
+
+function careCommerce() {
+  const calls = [];
+  const service = {
+    calls,
+    kind: "care-commerce",
+    mode: "held-local",
+    commercialEffects: false,
+    customerEffects: false,
+    mailDeliveryEffects: false,
+    paymentEffects: false,
+    providerEffects: false,
+    async readiness() {
+      return {
+        ready: true,
+        verified: true,
+        commercialReady: false,
+        durableCommercialState: true,
+        taxPurposeReleased: false,
+        mailReservationReady: true,
+        commercialEffects: false,
+        customerEffects: false,
+        mailDeliveryEffects: false,
+        paymentEffects: false,
+        providerEffects: false
+      };
+    }
+  };
+  for (const method of [
+    "cancelHeldReservation",
+    "createHeldQuote",
+    "markReservationAmbiguous",
+    "readCustomerCatalog",
+    "readCustomerReservation",
+    "readOperatorCatalog",
+    "requestReversal",
+    "reserveHeldInvoice"
+  ]) {
+    service[method] = async (...args) => {
+      calls.push([method, ...args]);
+      return { method, providerEffects: false };
+    };
+  }
+  return service;
+}
+
+function customerCommercePath(suffix) {
+  return `/api/v1/care/projects/${PROJECT}/contracts/${CONTRACT}` +
+    `/periods/${PERIOD}/commerce/${suffix}`;
+}
+
+function operatorCommercePath(suffix) {
+  return `/api/v1/operator/care/organizations/${TARGET_ORG}` +
+    `/projects/${PROJECT}/contracts/${CONTRACT}` +
+    `/periods/${PERIOD}/commerce/${suffix}`;
 }
 
 function get(path, { organizationId = null, signedIn = true } = {}) {
@@ -205,6 +265,133 @@ test("Care root rejects any composition that can claim external effects", () => 
   unsafe.providerEffects = true;
   assert.throws(
     () => createHostedApi(canonicalService(), { careSurfaces: unsafe }),
+    (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
+  );
+});
+
+test("Care commerce root binds customer selection and operator target independently", async () => {
+  const canonical = canonicalService([ORG_A, ORG_B]);
+  const commerce = careCommerce();
+  const api = createHostedApi(canonical, { careCommerce: commerce });
+
+  const ambiguous = await api.fetch(get(customerCommercePath("catalog")));
+  assert.equal(ambiguous.status, 409);
+  assert.equal(
+    (await ambiguous.json()).error.code,
+    "CARE_COMMERCE_ORGANIZATION_SELECTION_REQUIRED"
+  );
+
+  const customer = await api.fetch(get(customerCommercePath("catalog"), {
+    organizationId: ORG_B
+  }));
+  assert.equal(customer.status, 200);
+  assert.deepEqual(commerce.calls[0], [
+    "readCustomerCatalog",
+    { userId: USER, organizationId: ORG_B },
+    { projectId: PROJECT, contractId: CONTRACT, periodId: PERIOD }
+  ]);
+
+  const forged = await api.fetch(get(customerCommercePath("catalog"), {
+    organizationId: TARGET_ORG
+  }));
+  assert.equal(forged.status, 404);
+  assert.equal(commerce.calls.length, 1);
+
+  const operator = await api.fetch(get(operatorCommercePath("catalog")));
+  assert.equal(operator.status, 200);
+  assert.deepEqual(commerce.calls[1], [
+    "readOperatorCatalog",
+    { userId: USER, organizationId: TARGET_ORG },
+    {
+      organizationId: TARGET_ORG,
+      projectId: PROJECT,
+      contractId: CONTRACT,
+      periodId: PERIOD
+    }
+  ]);
+  assert.equal(
+    canonical.calls.filter(([method]) => method === "listOrganizations").length,
+    3
+  );
+});
+
+test("Care commerce root strips production session metadata before authority dispatch", async () => {
+  const canonical = canonicalService();
+  canonical.authenticate = async (token) => {
+    canonical.calls.push(["authenticate", token]);
+    return token === SESSION
+      ? {
+          userId: USER,
+          sessionId: "70000000-0000-4000-8000-000000000001",
+          sessionDigest: "a".repeat(64),
+          expiresAt: "2026-08-14T19:00:00.000Z",
+          reauthenticatedAt: "2026-08-14T18:00:00.000Z",
+          user: { email: "customer@example.test" }
+        }
+      : null;
+  };
+  const commerce = careCommerce();
+  const api = createHostedApi(canonical, { careCommerce: commerce });
+
+  const customer = await api.fetch(get(customerCommercePath("catalog")));
+  assert.equal(customer.status, 200);
+  const operator = await api.fetch(get(operatorCommercePath("catalog")));
+  assert.equal(operator.status, 200);
+  assert.deepEqual(commerce.calls.map((call) => call[1]), [
+    { userId: USER, organizationId: ORG_A },
+    { userId: USER, organizationId: TARGET_ORG }
+  ]);
+  assert.doesNotMatch(
+    JSON.stringify(commerce.calls),
+    /sessionDigest|reauthenticatedAt|customer@example[.]test/u
+  );
+});
+
+test("Care commerce root preserves CSRF, idempotency, and path authority", async () => {
+  const canonical = canonicalService();
+  const commerce = careCommerce();
+  const api = createHostedApi(canonical, { careCommerce: commerce });
+  const quotePath = operatorCommercePath("quotes");
+
+  const missingCsrf = await api.fetch(post(
+    quotePath,
+    {
+      serviceKey: "website_rescue",
+      priceSelection: { kind: "repair_units", repairUnits: 2 }
+    },
+    { csrf: false }
+  ));
+  assert.equal(missingCsrf.status, 403);
+  assert.equal((await missingCsrf.json()).error.code, "CSRF_TOKEN_REQUIRED");
+
+  const accepted = await api.fetch(post(
+    quotePath,
+    {
+      serviceKey: "website_rescue",
+      priceSelection: { kind: "repair_units", repairUnits: 2 }
+    }
+  ));
+  assert.equal(accepted.status, 201);
+  assert.deepEqual(commerce.calls, [[
+    "createHeldQuote",
+    { userId: USER, organizationId: TARGET_ORG },
+    {
+      organizationId: TARGET_ORG,
+      projectId: PROJECT,
+      contractId: CONTRACT,
+      periodId: PERIOD,
+      commandId: "care.root.command.0001",
+      serviceKey: "website_rescue",
+      priceSelection: { kind: "repair_units", repairUnits: 2 }
+    }
+  ]]);
+});
+
+test("Care commerce root rejects external-effect authority", () => {
+  const unsafe = careCommerce();
+  unsafe.providerEffects = true;
+  assert.throws(
+    () => createHostedApi(canonicalService(), { careCommerce: unsafe }),
     (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
   );
 });

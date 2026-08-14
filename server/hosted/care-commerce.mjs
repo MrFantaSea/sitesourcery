@@ -570,11 +570,15 @@ export function createHeldCareCommerceService(inputPorts) {
       return deepFreeze({
         schema: "sitesourcery.care-commerce-readiness/v1",
         ready: eligibility?.ready === true && repository?.ready === true,
-        verified: eligibility?.verified === true && repository?.verified === true,
+        verified:
+          eligibility?.verified === true &&
+          repository?.verified === true &&
+          mail?.verified === true,
         commercialReady: false,
         durableCommercialState: repository?.durable === true,
         taxPurposeReleased: false,
-        mailReservationReady: mail?.ready === true,
+        mailReservationReady:
+          mail?.ready === true && mail?.verified === true,
         commercialEffects: false,
         customerEffects: false,
         mailDeliveryEffects: false,

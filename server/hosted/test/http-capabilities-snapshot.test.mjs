@@ -16,6 +16,7 @@ const NAMES = Object.freeze([
   "responderEvents",
   "responderInbound",
   "care",
+  "careCommerce",
   "responder"
 ]);
 const FULL_DOMAIN_READINESS = Object.freeze({
@@ -44,6 +45,31 @@ const MOUNTED_HELD_DOMAIN_READINESS = Object.freeze({
   remoteWrites: false,
   automaticCommands: false
 });
+const FULL_CARE_COMMERCE_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  commercialReady: false,
+  durableCommercialState: true,
+  taxPurposeReleased: false,
+  mailReservationReady: true,
+  commercialEffects: false,
+  customerEffects: false,
+  mailDeliveryEffects: false,
+  paymentEffects: false,
+  providerEffects: false
+});
+const FULL_CARE_COMMERCE_CAPABILITY = Object.freeze({
+  ready: true,
+  mounted: true,
+  mode: "held-local",
+  commercialReady: false,
+  taxPurposeReleased: false,
+  commercialEffects: false,
+  customerEffects: false,
+  mailDeliveryEffects: false,
+  paymentEffects: false,
+  providerEffects: false
+});
 const EXPECTED = Object.freeze({
   accountRegistration: true,
   accountRecoveryEmail: true,
@@ -60,6 +86,7 @@ const EXPECTED = Object.freeze({
   responderProviderEvents: true,
   responderInboundEvents: true,
   care: true,
+  careCommerce: FULL_CARE_COMMERCE_CAPABILITY,
   responder: true,
   adjacentIntegrations: Object.freeze({
     ready: false,
@@ -95,6 +122,8 @@ function methods(names, readiness) {
 
 function apiFixture({
   at = () => Date.now(),
+  careCommerceReadiness = FULL_CARE_COMMERCE_READINESS,
+  includeCareCommerce = true,
   serviceReadiness
 } = {}) {
   const calls = Object.fromEntries(NAMES.map((name) => [name, 0]));
@@ -231,6 +260,29 @@ function apiFixture({
         throw new Error("not reached");
       }]))
     },
+    careCommerce: includeCareCommerce
+      ? {
+          kind: "care-commerce",
+          mode: "held-local",
+          commercialEffects: false,
+          customerEffects: false,
+          mailDeliveryEffects: false,
+          paymentEffects: false,
+          providerEffects: false,
+          readiness: counted(
+            "careCommerce",
+            careCommerceReadiness
+          ),
+          ...Object.fromEntries([
+            "cancelHeldReservation", "createHeldQuote",
+            "markReservationAmbiguous", "readCustomerCatalog",
+            "readCustomerReservation", "readOperatorCatalog",
+            "requestReversal", "reserveHeldInvoice"
+          ].map((name) => [name, async () => {
+            throw new Error("not reached");
+          }]))
+        }
+      : null,
     responderSurfaces: {
       kind: "responder-surfaces",
       mode: "held",
@@ -328,6 +380,48 @@ test("capabilities distinguish a mounted held Domain runtime from purchase autho
     ...EXPECTED,
     domains: MOUNTED_HELD_DOMAIN_READINESS,
     domainPurchase: false
+  });
+});
+
+test("capabilities do not claim complete Care without its commerce mount", async () => {
+  const fixture = apiFixture({ includeCareCommerce: false });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ...EXPECTED,
+    care: false,
+    careCommerce: {
+      ready: false,
+      mounted: false,
+      mode: "held-local",
+      commercialReady: false,
+      taxPurposeReleased: false,
+      commercialEffects: false,
+      customerEffects: false,
+      mailDeliveryEffects: false,
+      paymentEffects: false,
+      providerEffects: false
+    }
+  });
+  assert.equal(fixture.calls.care, 1);
+  assert.equal(fixture.calls.careCommerce, 0);
+});
+
+test("capabilities fail Care closed when mail reservation is unverified", async () => {
+  const fixture = apiFixture({
+    careCommerceReadiness: {
+      ...FULL_CARE_COMMERCE_READINESS,
+      verified: false,
+      mailReservationReady: false
+    }
+  });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.care, false);
+  assert.deepEqual(body.careCommerce, {
+    ...FULL_CARE_COMMERCE_CAPABILITY,
+    ready: false
   });
 });
 

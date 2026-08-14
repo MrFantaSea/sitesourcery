@@ -31,6 +31,6 @@ test("production root composes durable, verified, kill-engaged Responder surface
   assert.match(source, /responderReadiness[.]providerEffects !== false/u);
   assert.match(
     source,
-    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*responderSurfaces,\s*operatorWorkQueue:/u
+    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*careCommerce,\s*responderSurfaces,\s*operatorWorkQueue:/u
   );
 });
