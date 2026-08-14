@@ -1,6 +1,7 @@
 {
   "schema": "sitesourcery.fin005.source-disposition.v1",
   "frozenAt": "2026-08-14T11:36:51-04:00",
+  "revisedAt": "2026-08-14T11:47:02-04:00",
   "successor": {
     "branch": "integration/final-successor-20260811",
     "head": "44e45c8b27ec37dcda2618f971657876578c9ba5",
@@ -150,7 +151,7 @@
         "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
       ],
       "disposition": "genuinely_missing_candidate",
-      "nextCohort": "FIN-005C"
+      "nextCohort": "FIN-005B"
     },
     {
       "ref": "archive/cleanup-20260811/domains-compose",
@@ -163,8 +164,25 @@
         },
         {
           "scope": "12 absent held customer/operator lifecycle and purchase-authority paths",
-          "disposition": "genuinely_missing_candidate",
-          "nextCohort": "FIN-005B"
+          "disposition": "superseded_by_current_product_surface_and_retained_as_donor",
+          "evidence": [
+            "abracadabra/app/abracadabra-hosted-control-dom.js",
+            "abracadabra/app/abracadabra-hosted-control.js",
+            "abracadabra/app/abracadabra-api.js",
+            "server/hosted/domain-postgres-runtime.mjs",
+            "server/hosted/domain-provider-route-postgres.mjs",
+            "server/hosted/domain-lifecycle-postgres.mjs",
+            "server/hosted/domain-price-charge-boundary.mjs",
+            "server/hosted/http.mjs",
+            "server/hosted/operator-work-queue-postgres.mjs",
+            "operator/operator.js",
+            "scripts/test/abracadabra-hosted-control.test.mjs",
+            "server/hosted/test/domain-postgres-runtime.integration.test.mjs",
+            "FIN-004B",
+            "FIN-004T",
+            "FIN-004U"
+          ],
+          "reason": "The donor creates a second unmounted UI and parallel ten-route backend over the same route/lifecycle data. Its browser proof renders fixtures and makes no API request, and its purchase-authority contract permits exclusive_calculated_at_checkout despite the later disabled_by_owner decision. Current customer, API, PostgreSQL, worker, and operator-queue semantics are more complete. The remaining held-root composition proof belongs to FIN-006; copying this donor would duplicate the product surface without closing that gate."
         }
       ]
     },
@@ -315,26 +333,6 @@
   "missingRequiredSemantics": [
     {
       "cohort": "FIN-005B",
-      "source": "bc8eed7925d1e1e4a7b33ec5c0088cdb4d280f7a",
-      "scope": "held domain customer/operator surfaces and purchase authority",
-      "absentPaths": [
-        "abracadabra/app/abracadabra-domain-held-surfaces.css",
-        "abracadabra/app/abracadabra-domain-held-surfaces.js",
-        "scripts/test/abracadabra-domain-held-surfaces-browser.test.mjs",
-        "scripts/test/abracadabra-domain-held-surfaces.test.mjs",
-        "server/hosted/domain-held-surfaces-http.mjs",
-        "server/hosted/domain-held-surfaces-postgres.mjs",
-        "server/hosted/domain-held-surfaces.mjs",
-        "server/hosted/domain-purchase-authority.mjs",
-        "server/hosted/test/domain-held-surfaces-http.test.mjs",
-        "server/hosted/test/domain-held-surfaces-postgres.test.mjs",
-        "server/hosted/test/domain-held-surfaces.test.mjs",
-        "server/hosted/test/domain-purchase-authority.test.mjs"
-      ],
-      "constraint": "Adapt to the current disabled_by_owner tax authority and existing FIN-004B/T domain lifecycle; no wholesale cherry-pick."
-    },
-    {
-      "cohort": "FIN-005C",
       "source": "25d1026a4abbe1a6c43e3d33f6e996cd7045ef2e",
       "scope": "joined Assessment-to-Custom PostgreSQL and browser finish-line proof",
       "absentOrUnevolvedPaths": [
@@ -355,6 +353,13 @@
         "scripts/test/public-truth-finalizer-v3.test.mjs"
       ],
       "constraint": "Port signature, graph-drift, no-follow, inode, fsync, atomic-write, and crash-resume invariants to the current staging/cutover authority; do not revive the V3 Pages-specific mechanism."
+    }
+  ],
+  "deferredCompositionGates": [
+    {
+      "cohort": "FIN-006",
+      "scope": "Mount the existing full Domain product runtime truthfully behind its exact provider, tax, credential, and owner holds.",
+      "reason": "This is a current-root composition gate, not missing donor source."
     }
   ],
   "effectState": {
