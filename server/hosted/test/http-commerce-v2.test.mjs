@@ -26,6 +26,19 @@ const VERSION_A =
 const VERSION_B =
   "30000000-0000-4000-8000-000000000002";
 const NOW = "2026-07-30T17:00:00.000Z";
+const HELD_DOMAIN_CAPABILITY = Object.freeze({
+  ready: false,
+  verified: false,
+  mounted: false,
+  mode: "held",
+  purchaseReady: false,
+  registrar: "held",
+  payments: "held",
+  dns: "held",
+  providerEffects: false,
+  remoteWrites: false,
+  automaticCommands: false
+});
 
 function writeRequest(
   path,
@@ -314,6 +327,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
       providerEffects: false,
       automaticCommands: false
     },
+    domains: HELD_DOMAIN_CAPABILITY,
     domainPurchase: false,
     publishing: false
   });
@@ -348,6 +362,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
       providerEffects: false,
       automaticCommands: false
     },
+    domains: HELD_DOMAIN_CAPABILITY,
     domainPurchase: false,
     publishing: false
   });

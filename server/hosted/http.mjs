@@ -1538,9 +1538,24 @@ export function createHostedApi(
             providerEffects: false,
             automaticCommands: false
           }),
+          domains: Object.freeze({
+            ready:
+              domains.ready === true &&
+              domains.verified === true &&
+              domains.mounted === true,
+            verified: domains.verified === true,
+            mounted: domains.mounted === true,
+            mode: domains.mode ?? "held",
+            purchaseReady: domains.purchaseReady === true,
+            registrar: domains.registrar ?? "held",
+            payments: domains.payments ?? "held",
+            dns: domains.dns ?? "held",
+            providerEffects: domains.providerEffects === true,
+            remoteWrites: domains.remoteWrites === true,
+            automaticCommands: false
+          }),
           domainPurchase:
-            domains.ready === true &&
-            domains.registrar === "ready",
+            domains.purchaseReady === true,
           publishing:
             readiness?.publication?.ready === true &&
             readiness?.publication?.held === false

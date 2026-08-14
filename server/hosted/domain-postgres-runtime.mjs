@@ -24,6 +24,67 @@ function held(capability) {
   );
 }
 
+function heldProviderMethod(capability) {
+  return async () => {
+    throw new ExternalEffectError(
+      "external_effect_held",
+      `${capability} is held; no live provider adapter is installed`,
+      { certainty: "not_submitted" }
+    );
+  };
+}
+
+function mountedHeldProviderPorts() {
+  const registrar = {
+    mode: "held",
+    async readiness() {
+      return {
+        ready: false,
+        verified: true,
+        mode: "held",
+        provider: "spaceship",
+        providerEffects: false
+      };
+    }
+  };
+  for (const method of [
+    "searchDomains",
+    "quoteRegistration",
+    "ensureContacts",
+    "previewRegistration",
+    "confirmRegistration",
+    "getOperation",
+    "getDomain",
+    "saveDnsRecords",
+    "deleteDnsRecords"
+  ]) {
+    registrar[method] = heldProviderMethod(`Spaceship ${method}`);
+  }
+  const payments = {
+    mode: "held",
+    async readiness() {
+      return {
+        ready: false,
+        verified: true,
+        mode: "held",
+        provider: "stripe",
+        providerEffects: false
+      };
+    }
+  };
+  for (const method of [
+    "createDomainAuthorizationCheckout",
+    "retrieveDomainAuthorization",
+    "captureDomainAuthorization"
+  ]) {
+    payments[method] = heldProviderMethod(`Stripe Domain ${method}`);
+  }
+  return Object.freeze({
+    registrar: Object.freeze(registrar),
+    payments: Object.freeze(payments)
+  });
+}
+
 function uuid(value, field) {
   const selected = String(value ?? "");
   invariant(UUID.test(selected), "INVALID_INPUT", `${field} is invalid.`, {
@@ -218,8 +279,14 @@ function validateMode({
   );
 }
 
-function validatePorts(mode, registrar, payments, contactVault) {
-  if (mode === "held") return;
+function validatePorts(
+  mode,
+  registrar,
+  payments,
+  contactVault,
+  mountedHeld = false
+) {
+  if (mode === "held" && mountedHeld !== true) return;
   for (const [name, target, methods] of [
     [
       "registrar",
@@ -479,11 +546,17 @@ export function createHeldDomainRuntime() {
     async readiness() {
       return {
         ready: false,
+        verified: false,
+        mounted: false,
         mode: "held",
         provider: "spaceship",
+        purchaseReady: false,
         payments: "held",
         registrar: "held",
-        dns: "held"
+        dns: "held",
+        providerEffects: false,
+        remoteWrites: false,
+        automaticCommands: false
       };
     }
   };
@@ -502,6 +575,7 @@ export function createPostgresDomainRuntime({
   contactVault,
   secretDelivery = null,
   mode = "held",
+  mountedHeld = false,
   testOnly = false,
   liveApproval = null,
   clock = { now: () => new Date().toISOString() },
@@ -524,8 +598,23 @@ export function createPostgresDomainRuntime({
     registrar,
     payments
   });
-  if (mode === "held") return createHeldDomainRuntime();
-  validatePorts(mode, registrar, payments, contactVault);
+  invariant(
+    typeof mountedHeld === "boolean" &&
+      (mountedHeld === false || mode === "held"),
+    "DOMAIN_RUNTIME_CONFIGURATION_REQUIRED",
+    "Mounted-held Domain runtime authority is invalid.",
+    { status: 500 }
+  );
+  if (mode === "held" && mountedHeld === false) {
+    return createHeldDomainRuntime();
+  }
+  validatePorts(
+    mode,
+    registrar,
+    payments,
+    contactVault,
+    mountedHeld
+  );
   integer(serviceFeeMinor, "Domain service fee", 0, 1_000_000);
   for (const [field, value] of [
     ["Domain payment success URL", successUrl],
@@ -631,6 +720,7 @@ export function createPostgresDomainRuntime({
          on membership.organization_id = attempt.organization_id
         and membership.user_id = $2
         and membership.state = 'active'
+        and membership.role in ('owner', 'admin', 'billing')
        join ss.domain_quotes quote
          on quote.organization_id = attempt.organization_id
         and quote.id = attempt.quote_id
@@ -745,6 +835,10 @@ export function createPostgresDomainRuntime({
     };
   }
 
+  function requireProviderRelease(capability) {
+    if (mode === "held") held(capability);
+  }
+
   const runtime = {
     mode,
 
@@ -769,6 +863,7 @@ export function createPostgresDomainRuntime({
         "The requested item was not found.",
         { status: 404 }
       );
+      requireProviderRelease("domain_search");
       try {
         const found = await registrar.searchDomains({
           query: domain
@@ -809,6 +904,7 @@ export function createPostgresDomainRuntime({
         actor,
         input.projectId
       );
+      requireProviderRelease("domain_quote");
       const domain = canonicalDomain(input.hostname);
       const years = integer(
         input.years ?? 1,
@@ -984,6 +1080,7 @@ export function createPostgresDomainRuntime({
 
     async saveRegistrantContact(actor, organizationId, input) {
       const userId = actorId(actor);
+      requireProviderRelease("domain_contact");
       const orgId = uuid(
         organizationId,
         "Organization ID"
@@ -1130,6 +1227,7 @@ export function createPostgresDomainRuntime({
 
     async acceptDomainConsent(actor, quoteId, input) {
       const userId = actorId(actor);
+      requireProviderRelease("domain_consent");
       const selectedQuoteId = uuid(
         quoteId,
         "Domain quote ID"
@@ -1397,6 +1495,7 @@ export function createPostgresDomainRuntime({
 
     async createDomainOrder(actor, projectId, input) {
       const scope = await projectScope(actor, projectId);
+      requireProviderRelease("domain_payment");
       const selectedQuoteId = uuid(
         input.quoteId,
         "Domain quote ID"
@@ -1736,6 +1835,7 @@ export function createPostgresDomainRuntime({
         orderId,
         projectId
       );
+      requireProviderRelease("domain_payment_readback");
       invariant(
         scope.row.attempt_state === "checkout_created" &&
         scope.row.stripe_checkout_session_ref &&
@@ -1780,6 +1880,7 @@ export function createPostgresDomainRuntime({
       verifiedEventId = null,
       verifiedAt = null
     } = {}) {
+      requireProviderRelease("domain_payment_readback");
       const sessionId = requiredText(
         checkoutSessionId,
         "Checkout session ID",
@@ -2076,6 +2177,7 @@ export function createPostgresDomainRuntime({
         orderId,
         input.projectId
       );
+      requireProviderRelease("domain_price_readback");
       const selectedCommandId = commandId(
         input.commandId
       );
@@ -2372,6 +2474,7 @@ export function createPostgresDomainRuntime({
         orderId,
         input.projectId
       );
+      requireProviderRelease("domain_registration");
       const priceCheckId = uuid(
         input.priceCheckId,
         "Fresh price check ID"
@@ -2768,6 +2871,7 @@ export function createPostgresDomainRuntime({
     },
 
     async reconcileDomainOrder({ orderId } = {}) {
+      requireProviderRelease("domain_registration_readback");
       const selectedOrderId = uuid(
         orderId,
         "Domain order ID"
@@ -3358,6 +3462,7 @@ export function createPostgresDomainRuntime({
         domainId,
         input.projectId
       );
+      requireProviderRelease("domain_dns_write");
       const selectedCommandId = commandId(
         input.commandId
       );
@@ -3694,6 +3799,7 @@ export function createPostgresDomainRuntime({
         domainId,
         input.projectId
       );
+      requireProviderRelease("domain_dns_delete");
       const selectedRecordId = uuid(
         recordId,
         "DNS record ID"
@@ -4011,27 +4117,52 @@ export function createPostgresDomainRuntime({
           mode !== "approved_live" ||
           control.live_mode === true
         );
+      const databaseReady = database.ready === true;
+      const registrarReady =
+        mode !== "held" &&
+        databaseReady &&
+        approved &&
+        registrarStatus.ready === true;
+      const paymentReady =
+        mode !== "held" &&
+        databaseReady &&
+        approved &&
+        paymentStatus.ready === true;
+      const providerReady = registrarReady && paymentReady;
+      const purchaseReady =
+        mode !== "held" && databaseReady && providerReady;
       return {
         ready:
-          database.ready === true &&
-          approved &&
-          registrarStatus.ready !== false &&
-          paymentStatus.ready !== false,
+          databaseReady &&
+          (mode === "held" || providerReady),
+        verified: databaseReady,
+        mounted: true,
         mode,
         provider: "spaceship",
+        purchaseReady,
         database,
         control: control ?? {
           purchasing_enabled: false,
           live_mode: false,
           active_provider_code: null
         },
-        registrar: registrarStatus,
-        payments: paymentStatus,
+        registrar:
+          registrarReady ? "ready" : "held",
+        payments:
+          paymentReady ? "ready" : "held",
+        providerReadiness: {
+          registrar: registrarStatus,
+          payments: paymentStatus
+        },
         dns:
-          approved &&
-          registrarStatus.ready !== false
+          registrarReady
             ? "ready"
             : "held",
+        providerEffects:
+          mode === "approved_live",
+        remoteWrites:
+          mode === "approved_live",
+        automaticCommands: false,
         unsupported: {
           autoRenew: "held",
           renewal: "held",
@@ -4044,4 +4175,29 @@ export function createPostgresDomainRuntime({
   };
 
   return Object.freeze(runtime);
+}
+
+export function createPostgresHeldDomainRuntime({
+  authority,
+  contactVault,
+  clock = { now: () => new Date().toISOString() },
+  randomUUID = systemRandomUUID,
+  serviceFeeMinor = 0,
+  successUrl,
+  cancelUrl
+} = {}) {
+  const ports = mountedHeldProviderPorts();
+  return createPostgresDomainRuntime({
+    authority,
+    registrar: ports.registrar,
+    payments: ports.payments,
+    contactVault,
+    mode: "held",
+    mountedHeld: true,
+    clock,
+    randomUUID,
+    serviceFeeMinor,
+    ...(successUrl === undefined ? {} : { successUrl }),
+    ...(cancelUrl === undefined ? {} : { cancelUrl })
+  });
 }
