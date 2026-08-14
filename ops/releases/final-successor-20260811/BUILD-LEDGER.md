@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-005 proved; FIN-004A through FIN-004V and FIN-005A/B proved
+Status: FIN-005 proved; FIN-006A/B subcohorts proved; FIN-006 active
 
 ## Governing inputs
 
@@ -128,4 +128,13 @@ canonical PostgreSQL-backed held runtime, truthful capability/readiness split,
 least-authority order read, zero-write held proof, adversarial corrections,
 real-PostgreSQL journey, and clean cumulative proof is
 `FIN-006A-DOMAIN-ROOT-PROVENANCE.md`. FIN-006 remains pending until every
+mandatory capability row is composition-proved.
+
+FIN-006B's production-root composition of the existing durable held Care
+commerce service, eight-route authenticated HTTP boundary, exact actor
+projection, complete-Care capability truth, verified mail-reservation gate,
+cross-tenant denial, adversarial corrections, real-PostgreSQL joined HTTP
+journey, and clean cumulative proof is
+`FIN-006B-CARE-COMMERCE-ROOT-PROVENANCE.md`. Care commercial/tax/payment/mail
+delivery/provider authority remains held; FIN-006 remains pending until every
 mandatory capability row is composition-proved.
