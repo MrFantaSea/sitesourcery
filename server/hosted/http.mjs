@@ -79,6 +79,9 @@ import {
   createOperatorWorkQueueHttpBoundary
 } from "./operator-work-queue-http.mjs";
 import {
+  createAdjacentIntegrationHttpBoundary
+} from "./adjacent-integration-http.mjs";
+import {
   createHeldProviderReconciliationOperatorHttp,
   createProviderReconciliationOperatorHttpBoundary
 } from "./provider-reconciliation-operator-http.mjs";
@@ -887,6 +890,7 @@ export function createHostedApi(
     responderSurfaces = null,
     operatorWorkQueue = null,
     operatorProviderReconciliation = null,
+    adjacentIntegration = null,
     supportCases = null,
     resendMailEvents = null,
     twilioResponderEvents = null,
@@ -1061,6 +1065,9 @@ export function createHostedApi(
       : createProviderReconciliationOperatorHttpBoundary({
           operator: operatorProviderReconciliation
         });
+  const adjacentIntegrationHttpBoundary = adjacentIntegration === null
+    ? null
+    : createAdjacentIntegrationHttpBoundary({ service: adjacentIntegration });
   const supportCaseHttpBoundary = supportCases === null
     ? createHeldSupportCaseHttpBoundary()
     : createSupportCaseHttpBoundary({ supportCases });
@@ -1412,7 +1419,8 @@ export function createHostedApi(
           twilioResponderEventReadiness,
           twilioResponderInboundReadiness,
           careReadiness,
-          responderReadiness
+          responderReadiness,
+          adjacentIntegrationReadiness
         ] = await Promise.all([
           service.readiness(),
           typeof downloadBoundary.readiness === "function"
@@ -1447,7 +1455,18 @@ export function createHostedApi(
                 billingEffects: false,
                 sellable: false
               }
-            : responderSurfaces.readiness()
+            : responderSurfaces.readiness(),
+          adjacentIntegration === null
+            ? {
+                ready: false,
+                verified: false,
+                mode: "held",
+                systems: [],
+                remoteWrites: false,
+                providerEffects: false,
+                automaticCommands: false
+              }
+            : adjacentIntegration.readiness()
         ]);
         const registration =
           readiness?.registration ?? {};
@@ -1506,6 +1525,19 @@ export function createHostedApi(
             responderReadiness?.providerEffects === false &&
             responderReadiness?.billingEffects === false &&
             responderReadiness?.sellable === false,
+          adjacentIntegrations: Object.freeze({
+            ready:
+              adjacentIntegrationReadiness?.ready === true &&
+              adjacentIntegrationReadiness?.verified === true &&
+              adjacentIntegrationReadiness?.systems?.length === 6,
+            mode: adjacentIntegrationReadiness?.mode ?? "held",
+            systems: Object.freeze([
+              ...(adjacentIntegrationReadiness?.systems ?? [])
+            ]),
+            remoteWrites: false,
+            providerEffects: false,
+            automaticCommands: false
+          }),
           domainPurchase:
             domains.ready === true &&
             domains.registrar === "ready",
@@ -1829,8 +1861,22 @@ export function createHostedApi(
                 commandId: write.commandId
               })
             : null;
+        const adjacentIntegrationResponse =
+          operatorWorkQueueResponse === null &&
+          operatorProviderReconciliationResponse === null &&
+          adjacentIntegrationHttpBoundary !== null
+            ? await adjacentIntegrationHttpBoundary.dispatch({
+                method,
+                pathname,
+                actor,
+                query: url.searchParams,
+                body,
+                commandId: write.commandId
+              })
+            : null;
         const supportCaseResponse = operatorWorkQueueResponse === null &&
-          operatorProviderReconciliationResponse === null
+          operatorProviderReconciliationResponse === null &&
+          adjacentIntegrationResponse === null
           ? await supportCaseHttpBoundary.dispatch({
               method,
               pathname,
@@ -1847,6 +1893,9 @@ export function createHostedApi(
         } else if (operatorProviderReconciliationResponse !== null) {
           result = operatorProviderReconciliationResponse.result;
           status = operatorProviderReconciliationResponse.status;
+        } else if (adjacentIntegrationResponse !== null) {
+          result = adjacentIntegrationResponse.result;
+          status = adjacentIntegrationResponse.status;
         } else if (supportCaseResponse !== null) {
           result = supportCaseResponse.result;
           status = supportCaseResponse.status;

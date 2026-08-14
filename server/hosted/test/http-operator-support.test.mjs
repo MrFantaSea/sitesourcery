@@ -64,6 +64,25 @@ function reconciliation(calls) {
   };
 }
 
+function adjacent(calls) {
+  const service = {
+    mode: "manual-read-only",
+    remoteWrites: false,
+    providerEffects: false,
+    automaticCommands: false
+  };
+  for (const method of [
+    "listContracts", "listTrace", "recordGlobalSnapshot",
+    "recordCrosswalk", "recordObservation", "resolveCrosswalk"
+  ]) {
+    service[method] = async (input) => {
+      calls.push([`adjacent-${method}`, input]);
+      return { schema: `adjacent-${method}` };
+    };
+  }
+  return service;
+}
+
 function get(path, { signedIn = true } = {}) {
   return new Request(`${ORIGIN}${path}`, {
     headers: signedIn ? { Cookie: `ss_session=${SESSION}` } : {}
@@ -188,6 +207,79 @@ test("canonical root enforces session, same-origin, CSRF, and exact bodies", asy
   assert.equal(forged.status, 400);
   assert.equal((await forged.json()).error.code, "OPERATOR_QUEUE_INVALID");
   assert.equal(calls.length, 0);
+});
+
+test("canonical root protects exact adjacent reads and local resolution writes", async () => {
+  const calls = [];
+  const api = createHostedApi(canonicalService(), {
+    adjacentIntegration: adjacent(calls)
+  });
+  const contracts = await api.fetch(get(
+    `/api/v1/operator/adjacent-integrations/contracts?operatorOrganizationId=${ORG}`
+  ));
+  assert.equal(contracts.status, 200);
+  assert.deepEqual(await contracts.json(), { schema: "adjacent-listContracts" });
+
+  const trace = await api.fetch(get(
+    `/api/v1/operator/adjacent-integrations/trace?operatorOrganizationId=${ORG}` +
+      `&crosswalkId=${CASE}`
+  ));
+  assert.equal(trace.status, 200);
+  assert.deepEqual(await trace.json(), { schema: "adjacent-listTrace" });
+
+  const body = {
+    crosswalkId: CASE,
+    expectedCrosswalkRequestDigest: "a".repeat(64),
+    expectedCrosswalkRevision: 1,
+    operatorOrganizationId: ORG,
+    priorState: "manual_review",
+    resolutionEvidenceDigest: "b".repeat(64),
+    resolutionKind: "operator_confirm_link",
+    resultingState: "linked",
+    systemKey: "client_profile_hub"
+  };
+  const resolution = await api.fetch(post(
+    "/api/v1/operator/adjacent-integrations/resolutions",
+    body,
+    { command: "adjacent-http-command-001" }
+  ));
+  assert.equal(resolution.status, 201);
+  assert.deepEqual(await resolution.json(), { schema: "adjacent-resolveCrosswalk" });
+
+  const signedOut = await api.fetch(get(
+    `/api/v1/operator/adjacent-integrations/contracts?operatorOrganizationId=${ORG}`,
+    { signedIn: false }
+  ));
+  assert.equal(signedOut.status, 401);
+  const crossOrigin = await api.fetch(post(
+    "/api/v1/operator/adjacent-integrations/resolutions",
+    body,
+    { origin: "https://attacker.test" }
+  ));
+  assert.equal(crossOrigin.status, 403);
+  const extra = await api.fetch(post(
+    "/api/v1/operator/adjacent-integrations/resolutions",
+    { ...body, retryRemote: true }
+  ));
+  assert.equal(extra.status, 400);
+  assert.equal((await extra.json()).error.code, "ADJACENT_INTEGRATION_INVALID");
+  assert.deepEqual(calls, [
+    ["adjacent-listContracts", {
+      actorId: USER, operatorOrganizationId: ORG
+    }],
+    ["adjacent-listTrace", {
+      actorId: USER,
+      crosswalkId: CASE,
+      operatorOrganizationId: ORG,
+      projectId: null,
+      systemKey: null
+    }],
+    ["adjacent-resolveCrosswalk", {
+      ...body,
+      actorId: USER,
+      commandId: "adjacent-http-command-001"
+    }]
+  ]);
 });
 
 test("uncomposed operator support routes remain held", async () => {

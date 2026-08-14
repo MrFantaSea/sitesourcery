@@ -116,6 +116,31 @@
         <button class="operator-button" id="operator-number-binding-provision" type="button">Provision attested binding</button>
         <div id="operator-number-bindings" class="operator-list"></div>
       </section>
+
+      <section class="operator-panel" aria-labelledby="operator-adjacent-contracts-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Manual read-only boundaries</p>
+            <h2 id="operator-adjacent-contracts-title">Adjacent system contracts</h2>
+          </div>
+          <span class="operator-count" id="operator-adjacent-contract-count">0</span>
+        </div>
+        <p class="operator-panel-copy">Exact ownership, authentication, reconciliation, and held-effect rules for the six connected Site Sourcery systems.</p>
+        <div id="operator-adjacent-contracts" class="operator-list"></div>
+      </section>
+
+      <section class="operator-panel" aria-labelledby="operator-adjacent-trace-title">
+        <div class="operator-panel-heading">
+          <div>
+            <p class="operator-eyebrow">Digest-only integration evidence</p>
+            <h2 id="operator-adjacent-trace-title">Adjacent identity trace</h2>
+          </div>
+          <span class="operator-count" id="operator-adjacent-trace-count">0</span>
+        </div>
+        <p class="operator-panel-copy">Global source snapshots, tenant crosswalks, and observations are read from canonical PostgreSQL. Only reviewed Hub SSC/SS codes may appear; all other remote identities remain digests.</p>
+        <button class="operator-button" id="operator-adjacent-crosswalk-open" type="button">Record reviewed crosswalk</button>
+        <div id="operator-adjacent-trace" class="operator-list"></div>
+      </section>
     </div>
 
     <section class="operator-panel operator-detail" id="operator-service-command" aria-labelledby="operator-service-command-title" hidden>
@@ -256,6 +281,62 @@
         <button class="operator-button operator-button-danger" type="submit">Record resolution only</button>
       </form>
       <p class="operator-held-note" id="reconciliation-no-action" hidden>No resolution is currently proved by retained evidence. Inspect the source evidence; no generic repair is available.</p>
+    </section>
+
+    <section class="operator-panel operator-detail" id="operator-adjacent-detail" aria-labelledby="operator-adjacent-detail-title" hidden>
+      <div class="operator-panel-heading">
+        <div>
+          <p class="operator-eyebrow">Append-only operator evidence</p>
+          <h2 id="operator-adjacent-detail-title">Adjacent identity review</h2>
+        </div>
+        <button class="operator-button" id="operator-adjacent-detail-close" type="button">Close detail</button>
+      </div>
+      <p class="operator-panel-copy">This records a local, evidence-bound identity decision only. It cannot call HQ or Dell, send a message, change a provider, or perform a remote write.</p>
+      <div id="operator-adjacent-facts" class="operator-facts"></div>
+      <form class="operator-action-card operator-resolution-form" id="operator-adjacent-resolution-form">
+        <h3>Record proved identity resolution</h3>
+        <label class="operator-field"><span>Resolution supported by retained evidence</span>
+          <select id="operator-adjacent-resolution-kind" name="resolutionKind" required></select>
+        </label>
+        <label class="operator-field"><span>Operator evidence SHA-256</span><input name="evidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+        <button class="operator-button operator-button-danger" type="submit">Record local resolution only</button>
+      </form>
+      <p class="operator-held-note">Automatic commands, remote writes, provider actions, message sends, and phone effects remain disabled.</p>
+    </section>
+
+    <section class="operator-panel operator-detail" id="operator-adjacent-crosswalk-entry" aria-labelledby="operator-adjacent-crosswalk-entry-title" hidden>
+      <div class="operator-panel-heading">
+        <div>
+          <p class="operator-eyebrow">Local evidence only</p>
+          <h2 id="operator-adjacent-crosswalk-entry-title">Record reviewed crosswalk</h2>
+        </div>
+        <button class="operator-button" id="operator-adjacent-crosswalk-close" type="button">Cancel</button>
+      </div>
+      <p class="operator-panel-copy">Choose an existing digest-bound source snapshot and record a manual-review or conflict row in hosted PostgreSQL. This does not update the adjacent source.</p>
+      <form class="operator-action-card operator-resolution-form" id="operator-adjacent-crosswalk-form">
+        <label class="operator-field"><span>Exact identity pair</span>
+          <select name="identityPair" required>
+            <option value="private_messenger|organization|encrypted_session_digest|digest_only">Private messenger · organization → encrypted session digest</option>
+            <option value="client_profile_hub|organization|client|hub_client_id">Client Profile Hub · organization → client SSC</option>
+            <option value="client_profile_hub|project|project|hub_project_id">Client Profile Hub · project → project SS</option>
+            <option value="marketing_desk|engagement|qualified_promotion|digest_only">Marketing desk · engagement → qualified promotion digest</option>
+            <option value="marketing_desk|direct_opportunity|qualified_promotion|digest_only">Marketing desk · direct opportunity → qualified promotion digest</option>
+            <option value="dell_commercial_engine|project|scope|digest_only">Dell commercial engine · project → scope digest</option>
+            <option value="dell_commercial_engine|project|quote|digest_only">Dell commercial engine · project → quote digest</option>
+            <option value="dell_commercial_engine|project|work_receipt|digest_only">Dell commercial engine · project → work receipt digest</option>
+          </select>
+        </label>
+        <label class="operator-field"><span>Source snapshot</span><select name="sourceSnapshotId" required></select></label>
+        <label class="operator-field"><span>Local entity UUID</span><input name="localEntityId" type="text" pattern="[0-9a-f-]{36}" maxlength="36" required autocomplete="off"></label>
+        <label class="operator-field"><span>Project UUID (required except organization pairs)</span><input name="projectId" type="text" pattern="[0-9a-f-]{36}" maxlength="36" autocomplete="off"></label>
+        <label class="operator-field"><span>Remote reference: exact Hub SSC/SS or sha256: digest</span><input name="remoteReference" type="text" maxlength="71" required autocomplete="off"></label>
+        <label class="operator-field"><span>Exact source revision: git: SHA or sha256: digest</span><input name="sourceRevision" type="text" maxlength="71" required autocomplete="off"></label>
+        <label class="operator-field"><span>Source evidence SHA-256</span><input name="sourceEvidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
+        <label class="operator-field"><span>Initial review state</span><select name="state" required><option value="manual_review">Manual review</option><option value="conflict">Conflict</option></select></label>
+        <label class="operator-field"><span>Superseded crosswalk UUID (optional)</span><input name="supersedesCrosswalkId" type="text" pattern="[0-9a-f-]{36}" maxlength="36" autocomplete="off"></label>
+        <button class="operator-button operator-button-danger" type="submit">Record local crosswalk evidence</button>
+      </form>
+      <p class="operator-held-note">Command deck and phone bridge intentionally have no tenant-crosswalk choices; their evidence remains global and read-only.</p>
     </section>
   </main>
 

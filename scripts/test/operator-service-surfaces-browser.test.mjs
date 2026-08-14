@@ -17,7 +17,11 @@ const IDS = Object.freeze({
   contact: "80000000-0000-4000-8000-000000000001",
   interaction: "90000000-0000-4000-8000-000000000001",
   event: "a0000000-0000-4000-8000-000000000001",
-  binding: "b0000000-0000-4000-8000-000000000001"
+  binding: "b0000000-0000-4000-8000-000000000001",
+  snapshot: "c0000000-0000-4000-8000-000000000001",
+  crosswalk: "d0000000-0000-4000-8000-000000000001",
+  observation: "e0000000-0000-4000-8000-000000000001",
+  resolution: "f0000000-0000-4000-8000-000000000001"
 });
 const NOW = "2026-08-13T18:00:00.000Z";
 const VIEWPORTS = Object.freeze([
@@ -169,6 +173,135 @@ function numberBindings() {
   };
 }
 
+function adjacentContracts() {
+  const keys = [
+    "private_messenger", "command_deck", "phone_bridge",
+    "client_profile_hub", "marketing_desk", "dell_commercial_engine"
+  ];
+  return {
+    schema: "sitesourcery.adjacent-contracts/v1",
+    systems: keys.map((systemKey) => ({
+      systemKey,
+      authorityOwner: `${systemKey}_authority`,
+      readEventDirection: "adjacent_to_hosted_manual_evidence",
+      writeEffectDirection: "none_held",
+      authenticationBoundary: `${systemKey}_private_authentication`,
+      identityScopePolicy: "tenant_crosswalk_and_global_snapshot",
+      semanticIdempotencyPolicy:
+        "same_semantic_evidence_replays_prior_receipt_new_digest_conflicts",
+      conflictOwner: systemKey,
+      retryPolicy: "no_automatic_retry_operator_refresh_required",
+      reconciliationPolicy: "append_only_operator_resolution_or_supersession",
+      auditPolicy: "append_only_operator_source_and_provenance_digests",
+      failureBehavior: "fail_closed_to_manual_review",
+      heldBehavior: "automatic_commands_remote_writes_and_provider_effects_false",
+      adapterMode: "manual_read_only",
+      automaticCommands: false,
+      remoteWrites: false,
+      providerEffects: false,
+      contractRevision: 1
+    })),
+    mode: "manual-read-only",
+    remoteWrites: false,
+    providerEffects: false,
+    automaticCommands: false
+  };
+}
+
+function adjacentTrace(resolved) {
+  return {
+    schema: "sitesourcery.adjacent-trace/v1",
+    organizationId: IDS.organization,
+    projectId: null,
+    systemKey: null,
+    crosswalks: [{
+      id: IDS.crosswalk,
+      organizationId: IDS.organization,
+      projectId: IDS.project,
+      systemKey: "client_profile_hub",
+      sourceSnapshotId: IDS.snapshot,
+      localEntityKind: "project",
+      localEntityId: IDS.project,
+      remoteEntityKind: "project",
+      safeRemoteReference: "SS-2026-001",
+      remoteReferenceDigest: "2".repeat(64),
+      sourceRevisionDigest: "3".repeat(64),
+      provenanceDigest: "4".repeat(64),
+      state: resolved ? "linked" : "manual_review",
+      supersedesCrosswalkId: null,
+      revision: resolved ? 2 : 1,
+      requestDigest: "5".repeat(64),
+      recordedAt: NOW,
+      updatedAt: NOW
+    }],
+    observations: [{
+      id: IDS.observation,
+      crosswalkId: IDS.crosswalk,
+      sourceSnapshotId: IDS.snapshot,
+      organizationId: IDS.organization,
+      projectId: IDS.project,
+      systemKey: "client_profile_hub",
+      observationKind: "identity_readback",
+      observationState: "matched",
+      payloadDigest: "6".repeat(64),
+      provenanceDigest: "7".repeat(64),
+      sourceObservedAt: NOW,
+      recordedAt: NOW
+    }],
+    sourceSnapshots: [{
+      id: IDS.snapshot,
+      systemKey: "client_profile_hub",
+      remoteEntityKind: "service",
+      remoteReferenceDigest: "8".repeat(64),
+      observationKind: "availability",
+      observationState: "available",
+      payloadDigest: "9".repeat(64),
+      provenanceDigest: "a".repeat(64),
+      sourceObservedAt: NOW,
+      recordedAt: NOW
+    }],
+    remoteWrites: false,
+    providerEffects: false,
+    automaticCommands: false
+  };
+}
+
+function adjacentQueue(resolved) {
+  return {
+    schema: "sitesourcery.operator-work-queue/v1",
+    sourceAuthoritative: true,
+    genericRepair: false,
+    items: resolved ? [] : [{
+      schema: "sitesourcery.operator-work-queue-item/v1",
+      id: IDS.crosswalk,
+      source: {
+        table: "ss.adjacent_integration_crosswalks",
+        id: IDS.crosswalk,
+        revision: 1,
+        digest: "5".repeat(64),
+        state: "manual_review"
+      },
+      organizationId: IDS.organization,
+      projectId: IDS.project,
+      kind: "adjacent_identity_review",
+      severity: "normal",
+      status: "open",
+      deadlineAt: null,
+      repair: { kind: "adjacent_crosswalk_resolution" },
+      openedAt: NOW,
+      revision: 1,
+      digest: "b".repeat(64),
+      updatedAt: NOW
+    }]
+  };
+}
+
+async function requestJson(request) {
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+}
+
 function json(response, value) {
   response.writeHead(200, {
     "cache-control": "no-store",
@@ -206,10 +339,42 @@ async function fixtureServer() {
     ]
   )));
   const requests = [];
-  const server = createServer((request, response) => {
+  let resolved = false;
+  const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
-    requests.push({ method: request.method, pathname: url.pathname });
+    const recorded = { method: request.method, pathname: url.pathname };
+    requests.push(recorded);
     if (url.pathname.startsWith("/api/v1/")) {
+      if (
+        request.method === "POST" && url.pathname ===
+          "/api/v1/operator/adjacent-integrations/resolutions"
+      ) {
+        recorded.body = await requestJson(request);
+        recorded.csrf = request.headers["x-csrf-token"] || null;
+        recorded.idempotency = request.headers["idempotency-key"] || null;
+        resolved = true;
+        json(response, {
+          schema: "sitesourcery.adjacent-resolution-receipt/v1",
+          id: IDS.resolution,
+          commandId: recorded.idempotency,
+          requestDigest: "c".repeat(64),
+          semanticEvidenceDigest: "d".repeat(64),
+          systemKey: "client_profile_hub",
+          organizationId: IDS.organization,
+          projectId: null,
+          state: "linked",
+          revision: null,
+          recordedAt: NOW,
+          replay: false,
+          remoteWrites: false,
+          providerEffects: false,
+          automaticCommands: false,
+          crosswalkState: "linked",
+          crosswalkRevision: 2,
+          crosswalkUpdatedAt: NOW
+        });
+        return;
+      }
       if (request.method !== "GET") {
         response.writeHead(405).end();
         return;
@@ -236,12 +401,7 @@ async function fixtureServer() {
         return;
       }
       if (url.pathname === "/api/v1/operator/work-queue") {
-        json(response, {
-          schema: "sitesourcery.operator-work-queue/v1",
-          sourceAuthoritative: true,
-          genericRepair: false,
-          items: []
-        });
+        json(response, adjacentQueue(resolved));
         return;
       }
       if (url.pathname === "/api/v1/operator/support-cases") {
@@ -268,6 +428,14 @@ async function fixtureServer() {
           `${base}/responder/organizations/${IDS.organization}/number-bindings`
       ) {
         json(response, numberBindings());
+        return;
+      }
+      if (url.pathname === `${base}/adjacent-integrations/contracts`) {
+        json(response, adjacentContracts());
+        return;
+      }
+      if (url.pathname === `${base}/adjacent-integrations/trace`) {
+        json(response, adjacentTrace(resolved));
         return;
       }
       response.writeHead(404).end();
@@ -315,7 +483,7 @@ for (const viewport of VIEWPORTS) {
         await browser.waitFor(
           'document.querySelector("#operator-board").getAttribute("aria-busy") === "false" && document.querySelectorAll("[data-care-surface=operator]").length === 1 && document.querySelectorAll("[data-responder-surface=operator]").length === 1'
         );
-        const result = await browser.evaluate(`(() => {
+        const result = await browser.evaluate(`(async () => {
           const button = (copy) => [...document.querySelectorAll("button")]
             .find((entry) => entry.textContent.trim() === copy);
           button("Prepare new held Care record").click();
@@ -330,6 +498,56 @@ for (const viewport of VIEWPORTS) {
           const bindingControls = [...document.querySelectorAll(
             "#operator-service-command-form input"
           )].map((entry) => ({ name: entry.name, type: entry.type }));
+          button("Review identity crosswalk").click();
+          await new Promise((resolve, reject) => {
+            const started = Date.now();
+            const check = () => {
+              if (
+                document.querySelector("#operator-board")
+                  .getAttribute("aria-busy") === "false" &&
+                !document.querySelector("#operator-adjacent-detail").hidden
+              ) return resolve();
+              if (Date.now() - started > 5000) {
+                return reject(new Error("adjacent detail did not open"));
+              }
+              setTimeout(check, 20);
+            };
+            check();
+          });
+          const resolutionForm = document.querySelector(
+            "#operator-adjacent-resolution-form"
+          );
+          const resolutionControls = [...resolutionForm.querySelectorAll(
+            "input, select"
+          )].map((entry) => entry.name);
+          resolutionForm.elements.evidenceDigest.value = "e".repeat(64);
+          resolutionForm.requestSubmit();
+          await new Promise((resolve, reject) => {
+            const started = Date.now();
+            const check = () => {
+              if (
+                document.querySelector("#operator-board")
+                  .getAttribute("aria-busy") === "false" &&
+                !button("Review identity crosswalk")
+              ) return resolve();
+              if (Date.now() - started > 5000) {
+                return reject(new Error(
+                  "adjacent resolution did not settle · busy=" +
+                  document.querySelector("#operator-board")
+                    .getAttribute("aria-busy") + " · error=" +
+                  document.querySelector("#operator-error").textContent +
+                  " · notice=" +
+                  document.querySelector("#operator-notice").textContent
+                ));
+              }
+              setTimeout(check, 20);
+            };
+            check();
+          });
+          button("Record reviewed crosswalk").click();
+          const crosswalkControls = [...document.querySelectorAll(
+            "#operator-adjacent-crosswalk-form input, #operator-adjacent-crosswalk-form select"
+          )].map((entry) => entry.name);
           const buttons = [...document.querySelectorAll("button")]
             .filter((entry) => entry.getClientRects().length > 0);
           return {
@@ -347,9 +565,17 @@ for (const viewport of VIEWPORTS) {
             bindings: document.querySelectorAll(
               "#operator-number-bindings .operator-card"
             ).length,
+            adjacentContracts: document.querySelectorAll(
+              "#operator-adjacent-contracts .operator-card"
+            ).length,
+            adjacentTrace: document.querySelectorAll(
+              "#operator-adjacent-trace .operator-card"
+            ).length,
             careForm,
             consentForm,
             bindingControls,
+            resolutionControls,
+            crosswalkControls,
             targets: buttons.every((entry) =>
               entry.getBoundingClientRect().height >= 44
             ),
@@ -360,9 +586,14 @@ for (const viewport of VIEWPORTS) {
               "No provider or billing effect was opened"
             ) || document.body.textContent.includes(
               "Provider delivery, billing, and commercial release remain held"
+            ),
+            adjacentHeldCopy: document.body.textContent.includes(
+              "No remote or provider effect was executed"
+            ) && document.body.textContent.includes(
+              "This does not update the adjacent source"
             )
           };
-        })()`);
+        })()`, true);
         assert.equal(result.width, viewport.width);
         assert.equal(result.height, viewport.height);
         assert.equal(result.overflow, 0);
@@ -370,6 +601,8 @@ for (const viewport of VIEWPORTS) {
         assert.equal(result.care, 1);
         assert.equal(result.responder, 1);
         assert.equal(result.bindings, 1);
+        assert.equal(result.adjacentContracts, 6);
+        assert.equal(result.adjacentTrace, 3);
         assert.equal(result.careForm.includes("careCommandKind"), true);
         assert.equal(result.consentForm.includes("consentEvidenceDigest"), true);
         assert.deepEqual(result.bindingControls, [
@@ -381,18 +614,42 @@ for (const viewport of VIEWPORTS) {
           { name: "readbackAttestedAt", type: "datetime-local" },
           { name: "evidenceDigest", type: "text" }
         ]);
+        assert.deepEqual(result.resolutionControls, [
+          "resolutionKind", "evidenceDigest"
+        ]);
+        assert.deepEqual(result.crosswalkControls, [
+          "identityPair", "sourceSnapshotId", "localEntityId", "projectId",
+          "remoteReference", "sourceRevision", "sourceEvidenceDigest",
+          "state", "supersedesCrosswalkId"
+        ]);
         assert.equal(result.targets, true);
         assert.equal(result.rawProviderValueVisible, false);
         assert.equal(result.heldCopy, true);
+        assert.equal(result.adjacentHeldCopy, true);
         assert.deepEqual(
           browser.browserErrors,
           [],
           `unexpected browser errors for ${JSON.stringify(site.requests)}`
         );
-        assert.deepEqual(
-          site.requests.filter((entry) => entry.method !== "GET"),
-          []
+        const writes = site.requests.filter((entry) => entry.method !== "GET");
+        assert.equal(writes.length, 1);
+        assert.equal(
+          writes[0].pathname,
+          "/api/v1/operator/adjacent-integrations/resolutions"
         );
+        assert.equal(writes[0].csrf, "fin004u-browser-csrf-token");
+        assert.match(writes[0].idempotency, /^[0-9a-f-]{36}$/u);
+        assert.deepEqual(writes[0].body, {
+          crosswalkId: IDS.crosswalk,
+          expectedCrosswalkRequestDigest: "5".repeat(64),
+          expectedCrosswalkRevision: 1,
+          operatorOrganizationId: IDS.organization,
+          priorState: "manual_review",
+          resolutionEvidenceDigest: "e".repeat(64),
+          resolutionKind: "operator_confirm_link",
+          resultingState: "linked",
+          systemKey: "client_profile_hub"
+        });
       } finally {
         await browser?.close();
         await site.close();

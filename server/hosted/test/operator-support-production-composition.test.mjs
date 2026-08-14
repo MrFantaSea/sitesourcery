@@ -14,8 +14,11 @@ test("production root composes canonical queue, reconciliation, and support life
   assert.match(source, /if \(supportCaseReadiness[.]ready !== true\)/u);
   assert.match(
     source,
-    /operatorWorkQueue: professionalLifecycle[.]operatorQueue,\s*operatorProviderReconciliation,\s*supportCases,/u
+    /operatorWorkQueue: professionalLifecycle[.]operatorQueue,\s*operatorProviderReconciliation,\s*adjacentIntegration,\s*supportCases,/u
   );
+  assert.match(source, /createPostgresAdjacentIntegrationRepository/u);
+  assert.match(source, /const adjacentIntegrationReadiness = await adjacentIntegration[.]readiness\(\)/u);
+  assert.match(source, /adjacentIntegrationReadiness[.]remoteWrites !== false/u);
   assert.match(source, /createPostgresProviderReconciliationOperator/u);
   assert.match(
     source,
