@@ -1,0 +1,368 @@
+{
+  "schema": "sitesourcery.fin005.source-disposition.v1",
+  "frozenAt": "2026-08-14T11:36:51-04:00",
+  "successor": {
+    "branch": "integration/final-successor-20260811",
+    "head": "44e45c8b27ec37dcda2618f971657876578c9ba5",
+    "tree": "758be44836aa42d7077bd750ff16f985d5eef994",
+    "status": "clean"
+  },
+  "inventory": {
+    "localHeads": 180,
+    "uniqueLocalTips": 175,
+    "mergedHeads": 63,
+    "notMergedHeads": 117,
+    "uniqueNotMergedTips": 115,
+    "registeredWorktrees": 3,
+    "localHeadInventorySha256": "1b0b2ceee2edef76f844456eb2316eaa7d5506c69be4b9d21b70dbf5400016f6",
+    "notMergedHeadInventorySha256": "df9c7b97545907dd2ddfaf6d6d03fad31a2020f3eeb9277d35aff5ff8df4a846"
+  },
+  "coverage": {
+    "patchEquivalentImported": 41,
+    "cleanupArchiveHeads": 8,
+    "namedRecentLaneMembers": 18,
+    "otherNonEquivalentRetained": 50,
+    "total": 117,
+    "rule": "Every head not merged into the frozen successor appears exactly once in one of these four sets."
+  },
+  "preservation": {
+    "root": "/Users/fantaseamac/SiteSourcery-Cleanup-Preservation-2026-08-11",
+    "allRefsBundleSha256": "1538f90bb6e2f6b4e121cb3f894e6f9c8722d0d1db89dde174e46f6c573217fc",
+    "archiveSnapshotsBundleSha256": "58f5faff81f4f6c6fa1f67c749916754e080716e245b15106498f0bb34405271",
+    "sha256Manifest": "verified-all-entries",
+    "disposition": "retained_recovery_boundary",
+    "deletionAuthorized": false
+  },
+  "nonHeadGitInventory": [
+    {
+      "ref": "refs/archive/cleanup-20260811/ss-unload-baseline",
+      "commit": "79a8c041c2c0b9e42facdb4525ae6becbd022520",
+      "disposition": "imported_and_proved_ref_retained",
+      "evidence": "Exact ancestor of the successor."
+    },
+    {
+      "worktree": "/Users/fantaseamac/site-sourcery-lead",
+      "commit": "f020a866232a35c429d965dc38fc97f1d106c690",
+      "disposition": "retained_archive_checkout"
+    },
+    {
+      "worktree": "/Users/fantaseamac/sitesourcery-build",
+      "commit": "a0f024d8b1a611a40d03e801bd44d23e9895a29e",
+      "disposition": "retained_ancestor_checkout"
+    },
+    {
+      "worktree": "/Users/fantaseamac/sitesourcery-finish",
+      "commit": "44e45c8b27ec37dcda2618f971657876578c9ba5",
+      "disposition": "active_successor"
+    }
+  ],
+  "patchEquivalentImported": {
+    "disposition": "imported_and_proved",
+    "provedImplementation": "a31bb93c50b99066d84300f8c5af820150b4894b",
+    "provenance": "44e45c8b27ec37dcda2618f971657876578c9ba5",
+    "evidence": "For every member, git cherry has zero plus commits and every donor patch ID maps to a commit reachable from the successor.",
+    "members": {
+      "agent/trust-intake-sections": "6523bdba6d9c9fd92edd0a5f8359be04a222dcae",
+      "audit/checker-authority-cleanup-20260807": "4b30ce56229a7ce5e4a10d198af35a5dca155075",
+      "docs/final-ledger-close-20260811": "594b37fce7b44a50ef352343d475e8915937d5d4",
+      "docs/final-ledger-harden-20260811": "3653b2bcf4a4ad01595c0207b8d3edd2308f80dc",
+      "feat/alakazam-worker-policy-20260810": "5096bf3daf3772c6fad03e37cc98eb4ac1c5653d",
+      "feat/capabilities-snapshot-20260810": "1ce1a93747bb58bb2b502ec14c178ddad435cd73",
+      "feat/core-release-authority-20260810": "a60cec8f50856eeb7c0c5bf6294e288cba41ec5a",
+      "feat/dns-preflight-20260810": "089c8078e9d52314598b2d5f8b250ca18b6f521d",
+      "feat/export-worker-fencing-20260729": "98e272c3501e116c6b3cd5c0fe562638209cc830",
+      "feat/final-epoch-v2-20260810": "888861cc60300522b78e384c5574fcdb388229bf",
+      "feat/hosted-backend-integration-20260729": "899572c12fb7ada51dff11be2378664b813aa697",
+      "feat/hosted-http-boundary-20260728": "3683a2c2f0d9479ad02f8de5e82a235ed4f99248",
+      "feat/hosted-payment-finish-20260729": "2d6f1cd131cfc7935e8c3d8039865110f3532786",
+      "feat/monitor-identity-20260810": "00960dc46513155be9410556b0ea88923ffcadab",
+      "feat/ops-hardening-20260729": "04cada6b73b860ad9b1c1f6813e9da48ccdc2897",
+      "feat/pro-classification-20260810": "5cd83cbd7cdc5b4440bde31cab79941ddb588e12",
+      "feat/pro-reversal-webhook-20260810": "dab5b9006998d3ceda24c1c7a9ed6a567d2db4f3",
+      "feat/spaceship-provider-adapter-20260728": "ba24219d3acad5deceb341e841cfcfe71294c415",
+      "feat/stripe-provider-20260729": "414cb770fe6be1e0e515ece0fa9508d954a79e5d",
+      "feat/tax-readback-authority-20260810": "204345e81898cab6577481d516a50fd2f7a588d6",
+      "finish/commerce-v2-pg-20260730": "894b0dca722f3f142bb0bb00eb2e1e8b13501200",
+      "finish/hive-customer-eye-20260730": "2a6e3f66c6e75c48f5de3432f744a3c0ef4bc2eb",
+      "fix/abracadabra-customer-finish-20260729": "f79d5f407c9f2d59287949dc957b179fc9fb9a8b",
+      "fix/abracadabra-unload-guard": "b8d21434cbfa2055b872cbf29d37cf394d528aaf",
+      "fix/browser-contract-reconcile-20260729": "cc5c0d68c97d71fd2921243a20099ea6d095ac99",
+      "fix/browser-gate-reliability-20260728": "98e1b2c00dcc4e4ad8c2610b0194340113d1377f",
+      "fix/ci-browser-contract-20260811": "cdb8fd52bedd31c4316c0dbee23ddbf39f98c4f5",
+      "fix/domain-browser-project-20260729": "ffc9f3ce53a97daab34d85050f02cb6724637ab1",
+      "fix/held-legal-truth-20260729": "ac9843309135fda6f681e218e3726a007ffb6763",
+      "fix/hive-section-finish-20260729": "a935169230d1cd5c2d2c00fba8a173e4a25bf61c",
+      "fix/public-truth-successor-20260811": "9015e989af8166ae7db478d1986a550894362097",
+      "fix/release-authority-harden-20260811": "321701247d8ed98ac73025b0a73f7f05491709f9",
+      "fix/release-harness-v48-20260808": "c155d2ca8fdbf070b3eddb344e96cb7de21035cf",
+      "fix/section-ledger-20260729": "29f4e526124cf205cf790522ac048469e29ff9c2",
+      "proof/hosted-backend-final-20260729": "c0219fc3c0fabaea04a77a43d02502a1d1a5dbdb",
+      "proof/hosted-backend-stack-20260729": "0250e7f6217135e7f791e4ca53794fc488dc001a",
+      "release/privacy-v3-first-dollar-integration-20260808": "6b8cbc69f007a09f8a0bc1a8584c0fab8aed763d",
+      "release/privacy-v4-cloudflare-held-20260809": "6945564e94584e5dad79131fc39ed752850e67b5",
+      "release/website-terms-v3-review-20260808": "a07b25be4f2789b267132e480d86d919a0df8ec5",
+      "wip/identity-v2-20260730": "32b7b38162124a3ce8620ca05d0bb823b87d8532",
+      "wip/site/abracadabra-progressive-20260728": "85e5e020012a313852dcc10e7b0181d16cb3435b"
+    }
+  },
+  "cleanupArchives": [
+    {
+      "ref": "archive/cleanup-20260811/release-workflow-gates-union",
+      "commit": "a81d1438fd57e62e44b917c803988301945ef2ef",
+      "dispositions": [
+        {
+          "scope": "all 193 non-deleted paths from b03cccbd..a81d1438",
+          "disposition": "imported_and_proved",
+          "evidence": "FIN-002 through FIN-004G, with later evolved paths proved again by FIN-004V"
+        },
+        {
+          "paths": ["ops/releases/ci-successor-inputs/89bedb8e1e6adbd9bc870298ab22521948ce354f.json"],
+          "disposition": "retained_outside_release",
+          "reason": "Consumed one-shot input deleted by the archive commit; bytes remain in history and retirement is recorded by FIN-002."
+        }
+      ]
+    },
+    {
+      "ref": "archive/cleanup-20260811/alakazam-ci-overflow",
+      "commit": "6a9dc9231030918c0111a2958600bc211f81d8ec",
+      "dispositions": [
+        {
+          "paths": [
+            "scripts/browser-audit-current.mjs",
+            "scripts/test/abracadabra-billing-views-browser.test.mjs",
+            "server/hosted/test/reviewed-browser-support.mjs"
+          ],
+          "disposition": "imported_and_proved",
+          "evidence": "FIN-002 browser bootstrap and exit-timeout hardening"
+        },
+        {
+          "scope": "signed one-shot P2 owner authority and finalizer",
+          "disposition": "retained_missing_requirement_for_FIN009_FIN010",
+          "reason": "Port the unique signature and atomic-finalizer invariants to the current exact-candidate release authority; do not restore obsolete V3 Pages flow wholesale."
+        }
+      ]
+    },
+    {
+      "ref": "archive/cleanup-20260811/assessment-custom-e2e",
+      "commit": "25d1026a4abbe1a6c43e3d33f6e996cd7045ef2e",
+      "paths": [
+        "server/data-plane/tests/assessment-custom-e2e-browser.mjs",
+        "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
+      ],
+      "disposition": "genuinely_missing_candidate",
+      "nextCohort": "FIN-005C"
+    },
+    {
+      "ref": "archive/cleanup-20260811/domains-compose",
+      "commit": "bc8eed7925d1e1e4a7b33ec5c0088cdb4d280f7a",
+      "dispositions": [
+        {
+          "scope": "22 present core, schema, lifecycle, and proof paths",
+          "disposition": "imported_and_proved",
+          "evidence": "b2f988b6f9b2ead46b35d39a6e2e51a4cbfb8e36 / FIN-004B"
+        },
+        {
+          "scope": "12 absent held customer/operator lifecycle and purchase-authority paths",
+          "disposition": "genuinely_missing_candidate",
+          "nextCohort": "FIN-005B"
+        }
+      ]
+    },
+    {
+      "ref": "archive/cleanup-20260811/responder-surfaces",
+      "commit": "b40334fc25e6ced632800adbba6673d039d638e4",
+      "disposition": "imported_and_proved",
+      "evidence": "FIN-004C, FIN-004I, and FIN-004J through FIN-004U"
+    },
+    {
+      "ref": "archive/cleanup-20260811/v46-isolated",
+      "commit": "96673d61b3a0482f0abfec7800d8baa95b44056a",
+      "dispositions": [
+        {
+          "paths": ["server/data-plane/supabase/migrations/202608060046_custom_build_final_payment.sql"],
+          "disposition": "imported_and_proved",
+          "evidence": "Exact blob identity at f9950ae0dada716414c1108d4f1214a7660f6a56."
+        },
+        {
+          "scope": "other 24 v46 paths",
+          "disposition": "superseded_by_exact_proof",
+          "evidence": "f9950ae, f1c265e, a812f0c, aede848, and FIN-004V cumulative proof"
+        }
+      ]
+    },
+    {
+      "ref": "archive/cleanup-20260811/purpose1-baseline",
+      "commit": "c879649c761e97037113b7ef9fba347bc5d5696b",
+      "disposition": "retained_outside_release",
+      "reason": "C1 route-by-route visual donor for FIN-007; it may not replace current composition wholesale."
+    },
+    {
+      "ref": "archive/cleanup-20260811/site-sourcery-lead",
+      "commit": "f020a866232a35c429d965dc38fc97f1d106c690",
+      "dispositions": [
+        {
+          "paths": [
+            ".github/workflows/public-truth-reconciliation.yml",
+            "abracadabra/platform/abracadabra-platform.js"
+          ],
+          "disposition": "imported_and_proved"
+        },
+        {
+          "paths": ["hive/hive-planner.js"],
+          "disposition": "superseded_by_exact_proof",
+          "evidence": "FIN-004G Responder/Hive convergence"
+        },
+        {
+          "scope": "remaining 16 UX, content, legal, and public-truth test paths",
+          "disposition": "retained_outside_release",
+          "reason": "FIN-007 route/content/legal donor only."
+        }
+      ]
+    }
+  ],
+  "namedRecentLanes": [
+    {"lane":"care","members":{"fix/care-core-20260811":"8ec098487924ca26520a5e771136e2ae1b0b0b31"},"disposition":"imported_and_proved","evidence":"FIN-004D and FIN-004H"},
+    {"lane":"stripe_rotation","members":{"fix/stripe-webhook-rotation-20260811":"e19446d8ad20f80243f057481245210cb80649ab"},"disposition":"imported_and_proved","evidence":"FIN-004F and FIN-004O"},
+    {"lane":"monitor_deadman","members":{"fix/monitor-deadman-20260811":"9b14748568a6475faf6ddf5fe240d1bc7a69b0f7"},"disposition":"imported_and_proved","evidence":"FIN-004G"},
+    {"lane":"mail_wiring","members":{"fix/mail-hosted-wiring-20260811":"d86231a7cb018784d1176d44cceab6f47d4e945f"},"disposition":"imported_and_proved","evidence":"FIN-004A and FIN-004F"},
+    {"lane":"domains","members":{"fix/domains-compose-20260811":"ca04aa7fbaa71c532e4f4c69022cfee3f53bfc60"},"disposition":"imported_and_proved","evidence":"FIN-004B"},
+    {"lane":"invoice_finalization","members":{"fix/alakazam-invoice-finalization-20260811":"7be0f1c529cef54a8aa7245963f3c3bd95ffc836"},"disposition":"imported_and_proved","evidence":"FIN-004E"},
+    {"lane":"mail_events","members":{"fix/mail-events-20260811":"61eda4d97fddc7cd66bd072e80c483ea17637a88"},"disposition":"imported_and_proved","evidence":"FIN-004A"},
+    {"lane":"responder","members":{"fix/responder-core-20260811":"dd749977d78141b68ad2e4c543993a940bb03bb1","fix/responder-surfaces-20260811":"dd749977d78141b68ad2e4c543993a940bb03bb1"},"disposition":"imported_and_proved","evidence":"FIN-004C and FIN-004I through FIN-004T"},
+    {"lane":"hosted_epoch","members":{"fix/hosted-epoch-install-20260811":"0a3627bcdda3adb6fad70c4db847478b56483bf6"},"disposition":"imported_and_proved","evidence":"FIN-004G"},
+    {"lane":"operator","members":{"fix/operator-support-20260811":"17f5f5296d2a699ae82cc5a5e434f0b5c5f70099"},"disposition":"imported_and_proved","evidence":"FIN-004F, FIN-004U, and FIN-004V"},
+    {"lane":"core_revenue","members":{"fix/core-revenue-e2e-20260811":"585d72e24333d184fb9765c4ac21ba9925e81f26"},"disposition":"imported_and_proved","evidence":"FIN-004G"},
+    {"lane":"load","members":{"fix/hosted-load-slo-20260811":"7c9fbe83930775737e2a20f0cf1116c148f4f946"},"disposition":"imported_and_proved","evidence":"FIN-004G"},
+    {"lane":"ci","members":{"fix/ci-timing-20260811":"b5096ce36e3a871feaf18c27b666af31bf5cedc9"},"disposition":"imported_and_proved","evidence":"FIN-002"},
+    {"lane":"p2_authority","members":{"fix/alakazam-ci-overflow-20260811":"88a8b19d275ed6f704c08af9b77160f187d23c03"},"disposition":"retained_missing_requirement_for_FIN009_FIN010"},
+    {"lane":"k2","members":{"test/k2-generator-e2e-20260811":"6e7e4424417f7eb82aa05df1a12c631973c05c9a"},"disposition":"retained_outside_release","reason":"Synthetic one-input CI evidence, not release authority."},
+    {"lane":"k2_stale","members":{"test/k2-generator-e2e-stale-20260811":"eb5bce25c7abd4d0750ba3974891ad956dbddb01"},"disposition":"retained_outside_release","reason":"Deliberately invalid stale negative fixture."},
+    {"lane":"v2_retirement","members":{"fix/v2-retirement-20260811":"9f9fb57242b31d643921b0bab8ac24934cfef287"},"disposition":"imported_and_proved","evidence":"FIN-002"}
+  ],
+  "otherNonEquivalentRetained": {
+    "disposition": "retained_outside_release",
+    "reason": "Non-equivalent historical source or evidence; no wholesale import and no deletion before individual owner review.",
+    "effectState": "no_public_provider_dns_runtime_effect",
+    "members": {
+      "compose/ops-final-20260729": "087f712da3f9b4fe9d7a645111e35d4019e9ae60",
+      "docs/execution-ledger-20260810": "875e25fba7ff4cbcbc357d867815723f12ff645a",
+      "feat/custom-direct-20260810": "6391192db2afe78711beca321b023e501a4ebde4",
+      "feat/domain-activation-composition-20260729": "df052ba4fac7d21c423e85724a09599e80a606fc",
+      "feat/f-06-retained-premium-20260809": "761d1f36fac11c5636d0613ae862194c1a604d59",
+      "feat/f08-publication-controls-20260809": "0ac9d7ced9635686e6aa9206ca363c49f0d2ce48",
+      "feat/hardened-domain-orchestration": "7bb1c35660f114e9caf71807dc6d2bd6d75926c3",
+      "feat/hosted-artifact-truth-20260728": "e53e554affcd68588e849fde9d4177b64c445381",
+      "feat/hosted-backend-runtime": "57d184d2332330dbfdfd1e35153058fad8bdcfdd",
+      "feat/mail-compose-20260810": "2a7130cda4a9a194b19ab832e9a94da51d9dd64f",
+      "feat/ops-live-lifecycle-20260729": "3f969e6a6ea5386a78cc461df0858f8583b2d6db",
+      "feat/ops-release-control-20260729": "7dc356a007437c2a84f8a6dd89a0005c13572d6a",
+      "feat/privacy-v3-terms-v3-go-live-20260809": "dd42248d33db6a003f9b15a9415560da4065fa79",
+      "feat/runtime-dependencies-20260729": "e4c7410e212cc4904808383a8e601cf09ea86140",
+      "feature/finance-backoffice-foundation-20260729": "912bfd902d7f1aec658626f1f6cb86280d02aa91",
+      "fix/canonical-public-email-20260730": "400534f39e8aa1f5547429d2042120188273c393",
+      "fix/canonical-public-email-v2-20260730": "400534f39e8aa1f5547429d2042120188273c393",
+      "fix/commerce-project-purchase-eligibility": "d84a2656235b059f36b58db95d078bc36c856741",
+      "fix/customer-commerce-disclosures-20260729": "1efe0c566e2a918063689d4452f5728107cafcba",
+      "fix/domain-authority-http-20260729-mac": "210cbcfbfb4117eafd885ad3491dbf9a86e5fcb6",
+      "fix/domain-reconciliation-worker": "f8fae8454d1b7c980ffa77d9c5fa25c1c79bcd03",
+      "fix/domain-runtime-composition": "b420ee558051ef4e499dd56d2d8e6173f18f9aba",
+      "fix/fleet-governance-reconcile-20260729": "67bfe52dd32dd1132884dec110230713c4d35f26",
+      "fix/hive-inquiry-download-20260729": "4baccac5f27d6423681d765af38112821beb2f17",
+      "fix/hosted-alakazam-hold-20260807-qyjc7k": "035d76a81010c0cabd1717f04e03475af3e733f9",
+      "fix/hosted-legal-v4-20260811": "33584f9fb29ffbb4832792b6dc920f4ee22bfc62",
+      "fix/owned-domain-verification": "37b84691580c3566a1a80f3e1f3993d586789980",
+      "fix/paid-route-sections-20260729": "c7b8fbcc05bca5d3df86279b453db780babea6dc",
+      "fix/public-legal-plain-language-20260729": "19ca17dfa8f555b7a12bf865190a40670fd18f29",
+      "fix/runtime-capability-truth-20260729": "7532c39e27ac9e6f300dbe8b3fc87d70cfc9703e",
+      "fix/runtime-capability-truth-v2-20260730": "87ff2873ec22ecf704110a75a2da8d4b5a83dfa7",
+      "fix/solutions-commerce-copy-20260729": "c623804a775bfb82f12e8d311b2ed26b6b1fd2b5",
+      "fix/verified-identity-support": "402f4c6d1a447503b1b902e021197f06e267437c",
+      "integrate/controls-identity": "e50e053e5d420ee868ed12c52b85bea03842d968",
+      "rc/integration-20260729": "a8d4f9da8a0ea06ef145f54af9d41b58c3404d62",
+      "rc/sitesourcery-20260729": "8d08abe52e9c2d7ff3a05980711cd1babbfe9d68",
+      "rebase/customer-controls-d4d7-20260729": "13ed8babcdbf939b14434fc674f7ea70014014b4",
+      "repair/ops-recovery-20260729": "82bff77d24a923473b91d8f60394847b85fd4b4a",
+      "repair/ops-recovery-p1-20260730": "3254a029dfdfd7d42a06bb015fcc9430fcf7b0fd",
+      "repair/ops-recovery-p2-20260730": "686966c8c62737c8e2b3571086ed96220f0c1137",
+      "repair/runtime-capability-v3-20260730": "0f0371cb0d182682babed7537e4c46b710e1edf8",
+      "review/deletion-e835a6f-20260730": "e835a6f9959ef9f81f7afa5278508699dcd069fd",
+      "review/edge-admission-27c25e2": "27c25e2221d890141539ced4b5ec3ce0029f41a0",
+      "ss_s01_stripe_hardening_20260809": "53b7f95bb329b6984b769934025550dda0053c96",
+      "test/domain-return-composition-20260729": "38fa66b8571a2fe03588646cc3c585a58eb753f5",
+      "test/postgres-migration-order-preflight-20260729": "820d0c873b9307958b6abeafb08c34f18cd1b2c7",
+      "verify/custom-direct-20260810": "d0ad4ab36dba8bbbe04ce0223e5a6fc23915c709",
+      "wip/site/customer-copy-20260728": "37c8a27f891b3fa3c6ae255762699df1993710d8",
+      "wip/site/hive-progressive-20260728": "d5933dbe38f6e9fd3da6cc8b377d93b3e807fff7",
+      "wip/site/hosted-browser-integration-20260728": "a78ce689700fbbabeb39b03ad077fb696121d657"
+    },
+    "exactTipFamilies": [
+      ["fix/canonical-public-email-20260730", "fix/canonical-public-email-v2-20260730"]
+    ]
+  },
+  "standaloneSources": [
+    {"path":"/home/simtech/web-agency","identity":"dirty main d1dde513ef5c332b093888b476df172357d5d7b7; working catalog sha256 9398d025b12f96ad1989620226cd153dabd39ee81d2ba11d1f03badf1cad2ee1","disposition":"retained_outside_release","requiredRoute":"FIN-007 consumes the approved catalog through a new version and digest; no wholesale import."},
+    {"path":"/home/simtech/web-agency/site","identity":"clean 3c4976bd0c8bd987cb3d155c302e34528393bd10","disposition":"retained_outside_release","reason":"intermediary rollback evidence"},
+    {"path":"/Users/fantaseamac/wa-baseline","identity":"clean detached d1dde513ef5c332b093888b476df172357d5d7b7","disposition":"retained_outside_release","reason":"exact clean Dell baseline"},
+    {"path":"/Users/fantaseamac/web-agency-commercial-boundary","identity":"clean b7bfd543493da9bc186604f3bafa54c7195fa4f6","disposition":"retained_outside_release","reason":"alternate D1 payment/domain authority conflicts with approved authority split"},
+    {"path":"/Users/fantaseamac/web-agency-platform","identity":"d1dde513ef5c332b093888b476df172357d5d7b7 with 270 staged deletions","disposition":"retained_outside_release","reason":"unresolved user state; do not reset or import"},
+    {"path":"/Users/fantaseamac/site-sourcery-platform-audit","identity":"non-Git composite; catalog matches 9398d025...","disposition":"retained_outside_release","reason":"evidence donor"},
+    {"path":"/Users/fantaseamac/sitesourcery-data-plane","identity":"non-Git early D1/PostgreSQL prototype","disposition":"superseded_by_exact_proof","evidence":"successor has 87 proved migrations"},
+    {"path":"/Users/fantaseamac/sitesourcery-domain-control","identity":"non-Git provider-neutral domain prototype","disposition":"superseded_by_exact_proof","evidence":"FIN-004B and FIN-004T"},
+    {"path":"/Users/fantaseamac/sitesourcery-hosted-foundation","identity":"non-Git hosted scaffold","disposition":"superseded_by_exact_proof","evidence":"current hosted root and FIN-004 composition"},
+    {"path":"/Users/fantaseamac/sitesourcery-selfhost-foundation","identity":"clean dfc76d7c4b60201da08bc5a0d5ff312ecfaf6831","disposition":"superseded_by_imported_and_proved_successor"},
+    {"path":"/Users/fantaseamac/sitesourcery-tenant-runtime","identity":"non-Git unprovisioned Workers/D1/R2/Queues alternate","disposition":"retained_outside_release","reason":"unselected deployment architecture; no live resources"}
+  ],
+  "missingRequiredSemantics": [
+    {
+      "cohort": "FIN-005B",
+      "source": "bc8eed7925d1e1e4a7b33ec5c0088cdb4d280f7a",
+      "scope": "held domain customer/operator surfaces and purchase authority",
+      "absentPaths": [
+        "abracadabra/app/abracadabra-domain-held-surfaces.css",
+        "abracadabra/app/abracadabra-domain-held-surfaces.js",
+        "scripts/test/abracadabra-domain-held-surfaces-browser.test.mjs",
+        "scripts/test/abracadabra-domain-held-surfaces.test.mjs",
+        "server/hosted/domain-held-surfaces-http.mjs",
+        "server/hosted/domain-held-surfaces-postgres.mjs",
+        "server/hosted/domain-held-surfaces.mjs",
+        "server/hosted/domain-purchase-authority.mjs",
+        "server/hosted/test/domain-held-surfaces-http.test.mjs",
+        "server/hosted/test/domain-held-surfaces-postgres.test.mjs",
+        "server/hosted/test/domain-held-surfaces.test.mjs",
+        "server/hosted/test/domain-purchase-authority.test.mjs"
+      ],
+      "constraint": "Adapt to the current disabled_by_owner tax authority and existing FIN-004B/T domain lifecycle; no wholesale cherry-pick."
+    },
+    {
+      "cohort": "FIN-005C",
+      "source": "25d1026a4abbe1a6c43e3d33f6e996cd7045ef2e",
+      "scope": "joined Assessment-to-Custom PostgreSQL and browser finish-line proof",
+      "absentOrUnevolvedPaths": [
+        "server/data-plane/tests/assessment-custom-e2e-browser.mjs",
+        "server/data-plane/tests/custom-service-quotes-postgres.integration.test.mjs"
+      ],
+      "constraint": "Proof-only adaptation to the current 87-migration epoch; no production semantic import."
+    },
+    {
+      "cohort": "FIN-009_FIN-010",
+      "source": "6a9dc9231030918c0111a2958600bc211f81d8ec",
+      "scope": "owner-signed one-shot exact-candidate finalizer",
+      "absentPaths": [
+        "ops/public-truth-v3-owner-signature.mjs",
+        "ops/public-truth-v3-p2-writer.mjs",
+        "ops/SITESOURCERY-PUBLIC-TRUTH-V3-P2-FINALIZER.md",
+        "scripts/finalize-public-truth-release-v3.mjs",
+        "scripts/test/public-truth-finalizer-v3.test.mjs"
+      ],
+      "constraint": "Port signature, graph-drift, no-follow, inode, fsync, atomic-write, and crash-resume invariants to the current staging/cutover authority; do not revive the V3 Pages-specific mechanism."
+    }
+  ],
+  "effectState": {
+    "public": "unchanged_placeholder",
+    "providers": "no_change",
+    "dns": "no_change",
+    "hqDell": "read_only_audit_only",
+    "databases": "no_change",
+    "deletions": "none"
+  }
+}
