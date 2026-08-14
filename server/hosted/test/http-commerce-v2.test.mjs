@@ -306,6 +306,14 @@ test("public capabilities enable only actions whose server boundary can succeed"
     responderInboundEvents: false,
     care: false,
     responder: false,
+    adjacentIntegrations: {
+      ready: false,
+      mode: "held",
+      systems: [],
+      remoteWrites: false,
+      providerEffects: false,
+      automaticCommands: false
+    },
     domainPurchase: false,
     publishing: false
   });
@@ -332,6 +340,14 @@ test("public capabilities enable only actions whose server boundary can succeed"
     responderInboundEvents: false,
     care: false,
     responder: false,
+    adjacentIntegrations: {
+      ready: false,
+      mode: "held",
+      systems: [],
+      remoteWrites: false,
+      providerEffects: false,
+      automaticCommands: false
+    },
     domainPurchase: false,
     publishing: false
   });

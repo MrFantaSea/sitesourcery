@@ -30,13 +30,71 @@
     "invoice_finalization_failure", "provider_reconciliation_case",
     "responder_delivery_manual_review", "responder_followup_manual_review",
     "responder_cleanup_manual_review", "project_lifecycle_manual_review",
-    "domain_lifecycle_manual_review", "care_lifecycle_manual_review"
+    "domain_lifecycle_manual_review", "care_lifecycle_manual_review",
+    "adjacent_identity_review"
   ]);
   var MANUAL_REVIEW_KINDS = new Set([
     "responder_delivery_manual_review", "responder_followup_manual_review",
     "responder_cleanup_manual_review", "project_lifecycle_manual_review",
-    "domain_lifecycle_manual_review", "care_lifecycle_manual_review"
+    "domain_lifecycle_manual_review", "care_lifecycle_manual_review",
+    "adjacent_identity_review"
   ]);
+  var ADJACENT_SYSTEM_KEYS = new Set([
+    "private_messenger", "command_deck", "phone_bridge",
+    "client_profile_hub", "marketing_desk", "dell_commercial_engine"
+  ]);
+  var ADJACENT_CROSSWALK_STATES = new Set([
+    "manual_review", "conflict", "linked", "superseded"
+  ]);
+  var ADJACENT_RESOLUTIONS = Object.freeze({
+    manual_review: Object.freeze([
+      Object.freeze(["operator_confirm_link", "linked"]),
+      Object.freeze(["operator_reject_link", "superseded"])
+    ]),
+    conflict: Object.freeze([
+      Object.freeze(["operator_confirm_link", "linked"]),
+      Object.freeze(["operator_reject_link", "superseded"]),
+      Object.freeze(["operator_supersede_link", "superseded"])
+    ])
+  });
+  var ADJACENT_IDENTITY_PAIRS = Object.freeze({
+    "private_messenger|organization|encrypted_session_digest|digest_only":
+      Object.freeze({
+        systemKey: "private_messenger", localEntityKind: "organization",
+        remoteEntityKind: "encrypted_session_digest",
+        referencePolicy: "digest_only"
+      }),
+    "client_profile_hub|organization|client|hub_client_id": Object.freeze({
+      systemKey: "client_profile_hub", localEntityKind: "organization",
+      remoteEntityKind: "client", referencePolicy: "hub_client_id"
+    }),
+    "client_profile_hub|project|project|hub_project_id": Object.freeze({
+      systemKey: "client_profile_hub", localEntityKind: "project",
+      remoteEntityKind: "project", referencePolicy: "hub_project_id"
+    }),
+    "marketing_desk|engagement|qualified_promotion|digest_only":
+      Object.freeze({
+        systemKey: "marketing_desk", localEntityKind: "engagement",
+        remoteEntityKind: "qualified_promotion", referencePolicy: "digest_only"
+      }),
+    "marketing_desk|direct_opportunity|qualified_promotion|digest_only":
+      Object.freeze({
+        systemKey: "marketing_desk", localEntityKind: "direct_opportunity",
+        remoteEntityKind: "qualified_promotion", referencePolicy: "digest_only"
+      }),
+    "dell_commercial_engine|project|scope|digest_only": Object.freeze({
+      systemKey: "dell_commercial_engine", localEntityKind: "project",
+      remoteEntityKind: "scope", referencePolicy: "digest_only"
+    }),
+    "dell_commercial_engine|project|quote|digest_only": Object.freeze({
+      systemKey: "dell_commercial_engine", localEntityKind: "project",
+      remoteEntityKind: "quote", referencePolicy: "digest_only"
+    }),
+    "dell_commercial_engine|project|work_receipt|digest_only": Object.freeze({
+      systemKey: "dell_commercial_engine", localEntityKind: "project",
+      remoteEntityKind: "work_receipt", referencePolicy: "digest_only"
+    })
+  });
   var RECONCILIATION_CASE_KINDS = new Set([
     "abandoned_claim", "stale_delivery_status", "unmatched_provider_event",
     "suppression_conflict", "unbound_inbound_event",
@@ -171,9 +229,22 @@
     var repair = null;
     if (value.repair !== null) {
       exact(value.repair, ["kind"]);
-      check(value.repair.kind === "professional_reversal_reconcile");
+      check([
+        "professional_reversal_reconcile",
+        "adjacent_crosswalk_resolution"
+      ].includes(value.repair.kind));
+      check(
+        (value.repair.kind === "professional_reversal_reconcile" &&
+          value.kind === "reversal_reconciliation") ||
+        (value.repair.kind === "adjacent_crosswalk_resolution" &&
+          value.kind === "adjacent_identity_review")
+      );
       repair = Object.freeze({ kind: value.repair.kind });
     }
+    check(
+      value.kind !== "adjacent_identity_review" ||
+      (repair && repair.kind === "adjacent_crosswalk_resolution")
+    );
     return Object.freeze({
       schema: value.schema,
       id: uuid(value.id),
@@ -510,6 +581,273 @@
     });
   }
 
+  function validateAdjacentContract(value) {
+    exact(value, [
+      "adapterMode", "auditPolicy", "authenticationBoundary",
+      "authorityOwner", "automaticCommands", "conflictOwner",
+      "contractRevision", "failureBehavior", "heldBehavior",
+      "identityScopePolicy", "providerEffects", "readEventDirection",
+      "reconciliationPolicy", "remoteWrites", "retryPolicy",
+      "semanticIdempotencyPolicy", "systemKey", "writeEffectDirection"
+    ]);
+    check(
+      ADJACENT_SYSTEM_KEYS.has(value.systemKey) &&
+      value.adapterMode === "manual_read_only" &&
+      value.writeEffectDirection === "none_held" &&
+      value.automaticCommands === false && value.remoteWrites === false &&
+      value.providerEffects === false
+    );
+    return Object.freeze({
+      systemKey: value.systemKey,
+      authorityOwner: text(value.authorityOwner, 1000),
+      readEventDirection: text(value.readEventDirection, 200),
+      writeEffectDirection: value.writeEffectDirection,
+      authenticationBoundary: text(value.authenticationBoundary, 1000),
+      identityScopePolicy: text(value.identityScopePolicy, 200),
+      semanticIdempotencyPolicy: text(value.semanticIdempotencyPolicy, 300),
+      conflictOwner: text(value.conflictOwner, 200),
+      retryPolicy: text(value.retryPolicy, 200),
+      reconciliationPolicy: text(value.reconciliationPolicy, 300),
+      auditPolicy: text(value.auditPolicy, 300),
+      failureBehavior: text(value.failureBehavior, 200),
+      heldBehavior: text(value.heldBehavior, 300),
+      adapterMode: value.adapterMode,
+      automaticCommands: false,
+      remoteWrites: false,
+      providerEffects: false,
+      contractRevision: integer(value.contractRevision, 1)
+    });
+  }
+
+  function validateAdjacentContracts(value) {
+    exact(value, [
+      "automaticCommands", "mode", "providerEffects", "remoteWrites",
+      "schema", "systems"
+    ]);
+    check(
+      value.schema === "sitesourcery.adjacent-contracts/v1" &&
+      value.mode === "manual-read-only" &&
+      value.automaticCommands === false && value.remoteWrites === false &&
+      value.providerEffects === false && Array.isArray(value.systems) &&
+      value.systems.length === ADJACENT_SYSTEM_KEYS.size
+    );
+    var systems = value.systems.map(validateAdjacentContract);
+    check(
+      new Set(systems.map(function (system) { return system.systemKey; })).size ===
+        ADJACENT_SYSTEM_KEYS.size &&
+      systems.every(function (system) {
+        return ADJACENT_SYSTEM_KEYS.has(system.systemKey);
+      })
+    );
+    return Object.freeze({
+      schema: value.schema,
+      systems: Object.freeze(systems),
+      mode: value.mode,
+      remoteWrites: false,
+      providerEffects: false,
+      automaticCommands: false
+    });
+  }
+
+  function validateAdjacentCrosswalk(value) {
+    exact(value, [
+      "id", "localEntityId", "localEntityKind", "organizationId",
+      "projectId", "provenanceDigest", "recordedAt",
+      "remoteEntityKind", "remoteReferenceDigest", "requestDigest",
+      "revision", "safeRemoteReference", "sourceRevisionDigest",
+      "sourceSnapshotId", "state", "supersedesCrosswalkId", "systemKey",
+      "updatedAt"
+    ]);
+    check(
+      ADJACENT_SYSTEM_KEYS.has(value.systemKey) &&
+      ADJACENT_CROSSWALK_STATES.has(value.state) &&
+      (value.safeRemoteReference === null || (
+        value.systemKey === "client_profile_hub" &&
+        (/^SSC-[0-9]{4}-[0-9]{3,}$/u.test(value.safeRemoteReference) ||
+          /^SS-[0-9]{4}-[0-9]{3,}$/u.test(value.safeRemoteReference))
+      ))
+    );
+    return Object.freeze({
+      id: uuid(value.id),
+      organizationId: uuid(value.organizationId),
+      projectId: uuid(value.projectId, true),
+      systemKey: value.systemKey,
+      sourceSnapshotId: uuid(value.sourceSnapshotId),
+      localEntityKind: text(value.localEntityKind, 100),
+      localEntityId: uuid(value.localEntityId),
+      remoteEntityKind: text(value.remoteEntityKind, 100),
+      safeRemoteReference: optionalText(value.safeRemoteReference, 100),
+      remoteReferenceDigest: digest(value.remoteReferenceDigest),
+      sourceRevisionDigest: digest(value.sourceRevisionDigest),
+      provenanceDigest: digest(value.provenanceDigest),
+      state: value.state,
+      supersedesCrosswalkId: uuid(value.supersedesCrosswalkId, true),
+      revision: integer(value.revision, 1),
+      requestDigest: digest(value.requestDigest),
+      recordedAt: instant(value.recordedAt),
+      updatedAt: instant(value.updatedAt)
+    });
+  }
+
+  function validateAdjacentObservation(value) {
+    exact(value, [
+      "crosswalkId", "id", "observationKind", "observationState",
+      "organizationId", "payloadDigest", "projectId", "provenanceDigest",
+      "recordedAt", "sourceObservedAt", "sourceSnapshotId", "systemKey"
+    ]);
+    check(ADJACENT_SYSTEM_KEYS.has(value.systemKey));
+    return Object.freeze({
+      id: uuid(value.id),
+      crosswalkId: uuid(value.crosswalkId),
+      sourceSnapshotId: uuid(value.sourceSnapshotId),
+      organizationId: uuid(value.organizationId),
+      projectId: uuid(value.projectId, true),
+      systemKey: value.systemKey,
+      observationKind: text(value.observationKind, 100),
+      observationState: text(value.observationState, 100),
+      payloadDigest: digest(value.payloadDigest),
+      provenanceDigest: digest(value.provenanceDigest),
+      sourceObservedAt: instant(value.sourceObservedAt),
+      recordedAt: instant(value.recordedAt)
+    });
+  }
+
+  function validateAdjacentSnapshot(value) {
+    exact(value, [
+      "id", "observationKind", "observationState", "payloadDigest",
+      "provenanceDigest", "recordedAt", "remoteEntityKind",
+      "remoteReferenceDigest", "sourceObservedAt", "systemKey"
+    ]);
+    check(ADJACENT_SYSTEM_KEYS.has(value.systemKey));
+    return Object.freeze({
+      id: uuid(value.id),
+      systemKey: value.systemKey,
+      remoteEntityKind: text(value.remoteEntityKind, 100),
+      remoteReferenceDigest: digest(value.remoteReferenceDigest),
+      observationKind: text(value.observationKind, 100),
+      observationState: text(value.observationState, 100),
+      payloadDigest: digest(value.payloadDigest),
+      provenanceDigest: digest(value.provenanceDigest),
+      sourceObservedAt: instant(value.sourceObservedAt),
+      recordedAt: instant(value.recordedAt)
+    });
+  }
+
+  function validateAdjacentTrace(value) {
+    exact(value, [
+      "automaticCommands", "crosswalks", "observations", "organizationId",
+      "projectId", "providerEffects", "remoteWrites", "schema",
+      "sourceSnapshots", "systemKey"
+    ]);
+    check(
+      value.schema === "sitesourcery.adjacent-trace/v1" &&
+      value.automaticCommands === false && value.remoteWrites === false &&
+      value.providerEffects === false && Array.isArray(value.crosswalks) &&
+      value.crosswalks.length <= 200 && Array.isArray(value.observations) &&
+      value.observations.length <= 500 && Array.isArray(value.sourceSnapshots) &&
+      value.sourceSnapshots.length <= 100 &&
+      (value.systemKey === null || ADJACENT_SYSTEM_KEYS.has(value.systemKey))
+    );
+    var organizationId = uuid(value.organizationId);
+    var projectId = uuid(value.projectId, true);
+    var crosswalks = value.crosswalks.map(validateAdjacentCrosswalk);
+    var observations = value.observations.map(validateAdjacentObservation);
+    var snapshots = value.sourceSnapshots.map(validateAdjacentSnapshot);
+    check(
+      crosswalks.every(function (entry) {
+        return entry.organizationId === organizationId &&
+          (projectId === null || entry.projectId === null ||
+            entry.projectId === projectId);
+      }) && observations.every(function (entry) {
+        return entry.organizationId === organizationId &&
+          (projectId === null || entry.projectId === null ||
+            entry.projectId === projectId);
+      })
+    );
+    return Object.freeze({
+      schema: value.schema,
+      organizationId: organizationId,
+      projectId: projectId,
+      systemKey: value.systemKey,
+      crosswalks: Object.freeze(crosswalks),
+      observations: Object.freeze(observations),
+      sourceSnapshots: Object.freeze(snapshots),
+      remoteWrites: false,
+      providerEffects: false,
+      automaticCommands: false
+    });
+  }
+
+  function validateAdjacentResolutionReceipt(value) {
+    exact(value, [
+      "automaticCommands", "commandId", "crosswalkRevision",
+      "crosswalkState", "crosswalkUpdatedAt", "id", "organizationId",
+      "projectId", "providerEffects", "recordedAt", "remoteWrites",
+      "replay", "requestDigest", "revision", "schema",
+      "semanticEvidenceDigest", "state", "systemKey"
+    ]);
+    check(
+      value.schema === "sitesourcery.adjacent-resolution-receipt/v1" &&
+      ADJACENT_SYSTEM_KEYS.has(value.systemKey) &&
+      ADJACENT_CROSSWALK_STATES.has(value.crosswalkState) &&
+      typeof value.replay === "boolean" && value.automaticCommands === false &&
+      value.remoteWrites === false && value.providerEffects === false
+    );
+    return Object.freeze({
+      schema: value.schema,
+      id: uuid(value.id),
+      commandId: text(value.commandId, 200),
+      requestDigest: digest(value.requestDigest),
+      semanticEvidenceDigest: digest(value.semanticEvidenceDigest),
+      systemKey: value.systemKey,
+      organizationId: uuid(value.organizationId),
+      projectId: uuid(value.projectId, true),
+      state: text(value.state, 64),
+      revision: nullableInteger(value.revision, 1),
+      recordedAt: instant(value.recordedAt),
+      replay: value.replay,
+      remoteWrites: false,
+      providerEffects: false,
+      automaticCommands: false,
+      crosswalkState: value.crosswalkState,
+      crosswalkRevision: integer(value.crosswalkRevision, 1),
+      crosswalkUpdatedAt: instant(value.crosswalkUpdatedAt)
+    });
+  }
+
+  function validateAdjacentCrosswalkReceipt(value) {
+    exact(value, [
+      "automaticCommands", "commandId", "id", "organizationId",
+      "projectId", "providerEffects", "recordedAt", "remoteWrites",
+      "replay", "requestDigest", "revision", "schema",
+      "semanticEvidenceDigest", "state", "systemKey"
+    ]);
+    check(
+      value.schema === "sitesourcery.adjacent-crosswalk-receipt/v1" &&
+      ADJACENT_SYSTEM_KEYS.has(value.systemKey) &&
+      ["manual_review", "conflict"].includes(value.state) &&
+      typeof value.replay === "boolean" && value.automaticCommands === false &&
+      value.remoteWrites === false && value.providerEffects === false
+    );
+    return Object.freeze({
+      schema: value.schema,
+      id: uuid(value.id),
+      commandId: text(value.commandId, 200),
+      requestDigest: digest(value.requestDigest),
+      semanticEvidenceDigest: digest(value.semanticEvidenceDigest),
+      systemKey: value.systemKey,
+      organizationId: uuid(value.organizationId),
+      projectId: uuid(value.projectId, true),
+      state: value.state,
+      revision: integer(value.revision, 1),
+      recordedAt: instant(value.recordedAt),
+      replay: value.replay,
+      remoteWrites: false,
+      providerEffects: false,
+      automaticCommands: false
+    });
+  }
+
   function human(value) {
     var words = String(value == null ? "" : value).replaceAll("_", " ");
     return words ? words.charAt(0).toUpperCase() + words.slice(1) : "Not recorded";
@@ -582,6 +920,42 @@
     var numberBindingProvision = documentRef.getElementById(
       "operator-number-binding-provision"
     );
+    var adjacentContractsRoot = documentRef.getElementById(
+      "operator-adjacent-contracts"
+    );
+    var adjacentContractCount = documentRef.getElementById(
+      "operator-adjacent-contract-count"
+    );
+    var adjacentTraceRoot = documentRef.getElementById(
+      "operator-adjacent-trace"
+    );
+    var adjacentTraceCount = documentRef.getElementById(
+      "operator-adjacent-trace-count"
+    );
+    var adjacentDetailRoot = documentRef.getElementById(
+      "operator-adjacent-detail"
+    );
+    var adjacentDetailTitle = documentRef.getElementById(
+      "operator-adjacent-detail-title"
+    );
+    var adjacentFactsRoot = documentRef.getElementById(
+      "operator-adjacent-facts"
+    );
+    var adjacentResolutionForm = documentRef.getElementById(
+      "operator-adjacent-resolution-form"
+    );
+    var adjacentResolutionKind = documentRef.getElementById(
+      "operator-adjacent-resolution-kind"
+    );
+    var adjacentCrosswalkOpen = documentRef.getElementById(
+      "operator-adjacent-crosswalk-open"
+    );
+    var adjacentCrosswalkEntry = documentRef.getElementById(
+      "operator-adjacent-crosswalk-entry"
+    );
+    var adjacentCrosswalkForm = documentRef.getElementById(
+      "operator-adjacent-crosswalk-form"
+    );
     var serviceCommandRoot = documentRef.getElementById(
       "operator-service-command"
     );
@@ -618,6 +992,9 @@
       careSnapshot: null,
       responderSnapshot: null,
       numberBindings: [],
+      adjacentContracts: [],
+      adjacentTrace: null,
+      selectedAdjacent: null,
       serviceCommand: null,
       busy: false
     };
@@ -649,6 +1026,8 @@
       refreshButton.disabled = value || !state.organizationId;
       organizationSelect.disabled = value || state.organizations.length === 0;
       numberBindingProvision.disabled = value || !state.organizationId;
+      adjacentCrosswalkOpen.disabled = value || !state.organizationId ||
+        !state.adjacentTrace || state.adjacentTrace.sourceSnapshots.length === 0;
       Array.from(numberBindingsRoot.querySelectorAll("button")).forEach(
         function (control) { control.disabled = value; }
       );
@@ -660,6 +1039,12 @@
       ).forEach(function (control) { control.disabled = value; });
       Array.from(
         serviceCommandRoot.querySelectorAll("button, input, select")
+      ).forEach(function (control) { control.disabled = value; });
+      Array.from(
+        adjacentDetailRoot.querySelectorAll("button, input, select")
+      ).forEach(function (control) { control.disabled = value; });
+      Array.from(
+        adjacentCrosswalkEntry.querySelectorAll("button, input, select")
       ).forEach(function (control) { control.disabled = value; });
     }
 
@@ -676,7 +1061,8 @@
     }
 
     function renderRepair(item, card) {
-      if (!item.repair) return;
+      if (!item.repair ||
+        item.repair.kind !== "professional_reversal_reconcile") return;
       var template = documentRef.getElementById("operator-repair-template");
       check(template && template.content);
       var details = template.content.firstElementChild.cloneNode(true);
@@ -696,6 +1082,19 @@
         button.type = "button";
         button.dataset.reconciliationId = item.source.id;
         card.appendChild(button);
+      } else if (
+        item.kind === "adjacent_identity_review" && item.repair &&
+        item.repair.kind === "adjacent_crosswalk_resolution"
+      ) {
+        var adjacentButton = createElement(
+          documentRef,
+          "button",
+          "operator-button operator-queue-action",
+          "Review identity crosswalk"
+        );
+        adjacentButton.type = "button";
+        adjacentButton.dataset.adjacentCrosswalkId = item.source.id;
+        card.appendChild(adjacentButton);
       } else if (MANUAL_REVIEW_KINDS.has(item.kind)) {
         card.appendChild(createElement(
           documentRef,
@@ -801,6 +1200,251 @@
         fragment.append(card);
       });
       numberBindingsRoot.replaceChildren(fragment);
+    }
+
+    function renderAdjacentContracts() {
+      adjacentContractCount.textContent = String(state.adjacentContracts.length);
+      if (state.adjacentContracts.length === 0) {
+        empty(adjacentContractsRoot, "The exact adjacent contract set is unavailable.");
+        return;
+      }
+      adjacentContractsRoot.replaceChildren.apply(
+        adjacentContractsRoot,
+        state.adjacentContracts.map(function (contract) {
+          var card = createElement(documentRef, "article", "operator-card");
+          var top = createElement(documentRef, "div", "operator-card-top");
+          top.append(
+            createElement(
+              documentRef, "span", "operator-card-title",
+              human(contract.systemKey)
+            ),
+            createElement(
+              documentRef, "span", "operator-badge", "effects held"
+            )
+          );
+          card.append(
+            top,
+            meta([
+              "Authority: " + human(contract.authorityOwner),
+              "Read/events: " + human(contract.readEventDirection),
+              "Writes: " + human(contract.writeEffectDirection)
+            ]),
+            meta([
+              "Authentication: " + human(contract.authenticationBoundary),
+              "Conflicts: " + human(contract.conflictOwner)
+            ]),
+            meta([
+              "Reconciliation: " + human(contract.reconciliationPolicy),
+              "Failure: " + human(contract.failureBehavior),
+              "Revision " + contract.contractRevision
+            ])
+          );
+          return card;
+        })
+      );
+    }
+
+    function adjacentTraceCard(kind, entry) {
+      var pending = kind === "crosswalk" &&
+        ADJACENT_RESOLUTIONS[entry.state] !== undefined;
+      var card = createElement(
+        documentRef,
+        pending ? "button" : "article",
+        "operator-card"
+      );
+      if (pending) {
+        card.type = "button";
+        card.dataset.adjacentCrosswalkId = entry.id;
+      }
+      var top = createElement(documentRef, "div", "operator-card-top");
+      top.append(
+        createElement(
+          documentRef, "span", "operator-card-title",
+          human(entry.systemKey) + " · " + human(kind)
+        ),
+        createElement(
+          documentRef, "span", "operator-badge",
+          human(entry.state || entry.observationState)
+        )
+      );
+      var identity = kind === "crosswalk"
+        ? entry.safeRemoteReference || shortDigest(entry.remoteReferenceDigest)
+        : shortDigest(entry.payloadDigest);
+      card.append(
+        top,
+        meta([
+          kind === "crosswalk"
+            ? human(entry.localEntityKind) + " → " + human(entry.remoteEntityKind)
+            : human(entry.remoteEntityKind || entry.observationKind),
+          "Identity/evidence: " + identity
+        ]),
+        meta([
+          "Recorded: " + formatDate(entry.recordedAt),
+          pending ? "Operator resolution required" : "Read-only evidence"
+        ])
+      );
+      return card;
+    }
+
+    function renderAdjacentTrace() {
+      var trace = state.adjacentTrace;
+      var count = trace ? trace.crosswalks.length + trace.observations.length +
+        trace.sourceSnapshots.length : 0;
+      adjacentTraceCount.textContent = String(count);
+      if (!trace || count === 0) {
+        empty(
+          adjacentTraceRoot,
+          "No adjacent source snapshots, crosswalks, or observations are recorded in this operator scope."
+        );
+        return;
+      }
+      var cards = [];
+      trace.crosswalks.forEach(function (entry) {
+        cards.push(adjacentTraceCard("crosswalk", entry));
+      });
+      trace.observations.forEach(function (entry) {
+        cards.push(adjacentTraceCard("observation", entry));
+      });
+      trace.sourceSnapshots.forEach(function (entry) {
+        cards.push(adjacentTraceCard("source snapshot", entry));
+      });
+      adjacentTraceRoot.replaceChildren.apply(adjacentTraceRoot, cards);
+    }
+
+    function renderAdjacentDetail() {
+      var entry = state.selectedAdjacent;
+      if (!entry) {
+        adjacentDetailRoot.hidden = true;
+        return;
+      }
+      adjacentDetailTitle.textContent =
+        human(entry.systemKey) + " identity · " + entry.id;
+      adjacentFactsRoot.replaceChildren(
+        fact("State", human(entry.state)),
+        fact("Revision", String(entry.revision)),
+        fact("Local identity", human(entry.localEntityKind) + " · " + entry.localEntityId),
+        fact("Remote identity kind", human(entry.remoteEntityKind)),
+        fact("Safe reference", entry.safeRemoteReference || "Digest only"),
+        fact("Remote reference digest", shortDigest(entry.remoteReferenceDigest)),
+        fact("Request digest", shortDigest(entry.requestDigest)),
+        fact("Source revision digest", shortDigest(entry.sourceRevisionDigest)),
+        fact("Provenance digest", shortDigest(entry.provenanceDigest))
+      );
+      adjacentResolutionKind.replaceChildren.apply(
+        adjacentResolutionKind,
+        (ADJACENT_RESOLUTIONS[entry.state] || []).map(function (resolution) {
+          var option = createElement(
+            documentRef, "option", "",
+            human(resolution[0]) + " → " + human(resolution[1])
+          );
+          option.value = resolution.join(":");
+          return option;
+        })
+      );
+      adjacentResolutionForm.hidden =
+        !ADJACENT_RESOLUTIONS[entry.state] ||
+        ADJACENT_RESOLUTIONS[entry.state].length === 0;
+      adjacentDetailRoot.hidden = false;
+      adjacentDetailRoot.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function openAdjacentCrosswalk(crosswalkId) {
+      clearMessages();
+      setBusy(true);
+      try {
+        var result = validateAdjacentTrace(await state.client.request(
+          "GET",
+          "/operator/adjacent-integrations/trace?operatorOrganizationId=" +
+            encodeURIComponent(state.organizationId) + "&crosswalkId=" +
+            encodeURIComponent(uuid(crosswalkId))
+        ));
+        check(result.crosswalks.length === 1 &&
+          result.crosswalks[0].id === crosswalkId);
+        state.selectedAdjacent = result.crosswalks[0];
+        state.selectedCase = null;
+        state.selectedReconciliation = null;
+        renderDetail();
+        renderReconciliationDetail();
+        renderAdjacentDetail();
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function selectedAdjacentPair() {
+      var key = formValue(adjacentCrosswalkForm, "identityPair");
+      var pair = ADJACENT_IDENTITY_PAIRS[key];
+      check(pair !== undefined);
+      return pair;
+    }
+
+    function syncAdjacentCrosswalkForm() {
+      var pair = selectedAdjacentPair();
+      var localEntity = adjacentCrosswalkForm.elements.namedItem(
+        "localEntityId"
+      );
+      var project = adjacentCrosswalkForm.elements.namedItem("projectId");
+      var remoteReference = adjacentCrosswalkForm.elements.namedItem(
+        "remoteReference"
+      );
+      var sourceSnapshot = adjacentCrosswalkForm.elements.namedItem(
+        "sourceSnapshotId"
+      );
+      localEntity.readOnly = ["organization", "project"].includes(
+        pair.localEntityKind
+      );
+      if (pair.localEntityKind === "organization") {
+        localEntity.value = state.organizationId;
+      } else if (pair.localEntityKind === "project") {
+        localEntity.value = project.value;
+      }
+      project.required = pair.localEntityKind !== "organization";
+      if (!project.required) project.value = "";
+      remoteReference.pattern = pair.referencePolicy === "digest_only"
+        ? "sha256:[a-f0-9]{64}"
+        : pair.referencePolicy === "hub_client_id"
+          ? "SSC-[0-9]{4}-[0-9]{3,}"
+          : "SS-[0-9]{4}-[0-9]{3,}";
+      var snapshots = state.adjacentTrace
+        ? state.adjacentTrace.sourceSnapshots.filter(function (entry) {
+          return entry.systemKey === pair.systemKey;
+        })
+        : [];
+      sourceSnapshot.replaceChildren.apply(
+        sourceSnapshot,
+        snapshots.map(function (entry) {
+          var option = createElement(
+            documentRef,
+            "option",
+            "",
+            human(entry.systemKey) + " · " + human(entry.observationKind) +
+              " · " + shortDigest(entry.provenanceDigest)
+          );
+          option.value = entry.id;
+          return option;
+        })
+      );
+      sourceSnapshot.disabled = snapshots.length === 0;
+      adjacentCrosswalkForm.querySelector("button[type=submit]").disabled =
+        snapshots.length === 0;
+    }
+
+    function openAdjacentCrosswalkEntry() {
+      state.selectedAdjacent = null;
+      renderAdjacentDetail();
+      adjacentCrosswalkForm.reset();
+      syncAdjacentCrosswalkForm();
+      adjacentCrosswalkEntry.hidden = false;
+      adjacentCrosswalkEntry.scrollIntoView({
+        behavior: "smooth", block: "start"
+      });
+    }
+
+    function closeAdjacentCrosswalkEntry() {
+      adjacentCrosswalkEntry.hidden = true;
+      adjacentCrosswalkForm.reset();
     }
 
     function renderCases() {
@@ -1492,6 +2136,16 @@
             "GET",
             "/operator/responder/organizations/" + organization +
               "/number-bindings"
+          ),
+          state.client.request(
+            "GET",
+            "/operator/adjacent-integrations/contracts?operatorOrganizationId=" +
+              organization
+          ),
+          state.client.request(
+            "GET",
+            "/operator/adjacent-integrations/trace?operatorOrganizationId=" +
+              organization
           )
         ]);
         state.queue = validateQueue(values[0]).items;
@@ -1499,6 +2153,8 @@
         state.careSnapshot = values[2];
         state.responderSnapshot = values[3];
         state.numberBindings = validateNumberBindingList(values[4]).bindings;
+        state.adjacentContracts = validateAdjacentContracts(values[5]).systems;
+        state.adjacentTrace = validateAdjacentTrace(values[6]);
         if (state.selectedCase) {
           state.selectedCase = state.cases.find(function (entry) {
             return entry.id === state.selectedCase.id;
@@ -1514,6 +2170,8 @@
         renderReconciliationDetail();
         renderServiceSurfaces();
         renderNumberBindings();
+        renderAdjacentContracts();
+        renderAdjacentTrace();
         if (options && options.notice) showNotice(options.notice);
       } catch (error) {
         showError(error);
@@ -1584,11 +2242,22 @@
     });
 
     queueRoot.addEventListener("click", function (event) {
+      var adjacent = event.target.closest("[data-adjacent-crosswalk-id]");
+      if (adjacent && !state.busy) {
+        openAdjacentCrosswalk(adjacent.dataset.adjacentCrosswalkId);
+        return;
+      }
       var button = event.target.closest("[data-reconciliation-id]");
       if (!button || state.busy) return;
       state.selectedCase = null;
       renderDetail();
       openReconciliation(button.dataset.reconciliationId);
+    });
+
+    adjacentTraceRoot.addEventListener("click", function (event) {
+      var button = event.target.closest("[data-adjacent-crosswalk-id]");
+      if (!button || state.busy) return;
+      openAdjacentCrosswalk(button.dataset.adjacentCrosswalkId);
     });
 
     queueRoot.addEventListener("submit", async function (event) {
@@ -1743,6 +2412,144 @@
       }
     });
 
+    adjacentResolutionForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var selected = state.selectedAdjacent;
+      if (!selected || state.busy) return;
+      try {
+        var resolution = formValue(
+          adjacentResolutionForm, "resolutionKind"
+        ).split(":");
+        check(
+          resolution.length === 2 &&
+          (ADJACENT_RESOLUTIONS[selected.state] || []).some(function (entry) {
+            return entry[0] === resolution[0] && entry[1] === resolution[1];
+          })
+        );
+        clearMessages();
+        setBusy(true);
+        var result = validateAdjacentResolutionReceipt(
+          await state.client.request(
+            "POST",
+            "/operator/adjacent-integrations/resolutions",
+            {
+              body: {
+                crosswalkId: selected.id,
+                expectedCrosswalkRequestDigest: selected.requestDigest,
+                expectedCrosswalkRevision: selected.revision,
+                operatorOrganizationId: state.organizationId,
+                priorState: selected.state,
+                resolutionEvidenceDigest: digest(formValue(
+                  adjacentResolutionForm, "evidenceDigest"
+                )),
+                resolutionKind: resolution[0],
+                resultingState: resolution[1],
+                systemKey: selected.systemKey
+              }
+            }
+          )
+        );
+        state.selectedAdjacent = null;
+        renderAdjacentDetail();
+        adjacentResolutionForm.reset();
+        await refreshAll({
+          notice: result.replay
+            ? "The exact adjacent identity resolution was already recorded."
+            : "Local adjacent identity resolution recorded. No remote or provider effect was executed."
+        });
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    adjacentCrosswalkForm.addEventListener("change", function (event) {
+      if (event.target.name === "identityPair") syncAdjacentCrosswalkForm();
+      if (event.target.name === "projectId" &&
+        selectedAdjacentPair().localEntityKind === "project") {
+        adjacentCrosswalkForm.elements.namedItem("localEntityId").value =
+          event.target.value;
+      }
+    });
+
+    adjacentCrosswalkForm.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      if (state.busy) return;
+      try {
+        var pair = selectedAdjacentPair();
+        var projectValue = formValue(adjacentCrosswalkForm, "projectId");
+        var remoteReference = formValue(
+          adjacentCrosswalkForm, "remoteReference"
+        );
+        var sourceRevision = formValue(
+          adjacentCrosswalkForm, "sourceRevision"
+        );
+        check(
+          (pair.referencePolicy === "digest_only" &&
+            /^sha256:[a-f0-9]{64}$/u.test(remoteReference)) ||
+          (pair.referencePolicy === "hub_client_id" &&
+            /^SSC-[0-9]{4}-[0-9]{3,}$/u.test(remoteReference)) ||
+          (pair.referencePolicy === "hub_project_id" &&
+            /^SS-[0-9]{4}-[0-9]{3,}$/u.test(remoteReference))
+        );
+        check(/^(git:[a-f0-9]{40}|sha256:[a-f0-9]{64})$/u.test(
+          sourceRevision
+        ));
+        var stateValue = formValue(adjacentCrosswalkForm, "state");
+        check(["manual_review", "conflict"].includes(stateValue));
+        var supersedesValue = formValue(
+          adjacentCrosswalkForm, "supersedesCrosswalkId"
+        );
+        if (supersedesValue) uuid(supersedesValue);
+        clearMessages();
+        setBusy(true);
+        var result = validateAdjacentCrosswalkReceipt(
+          await state.client.request(
+            "POST",
+            "/operator/adjacent-integrations/crosswalks",
+            {
+              body: {
+                localEntityId: pair.localEntityKind === "organization"
+                  ? state.organizationId
+                  : pair.localEntityKind === "project"
+                    ? uuid(projectValue)
+                    : uuid(formValue(adjacentCrosswalkForm, "localEntityId")),
+                localEntityKind: pair.localEntityKind,
+                operatorOrganizationId: state.organizationId,
+                projectId: pair.localEntityKind === "organization"
+                  ? null
+                  : uuid(projectValue),
+                referencePolicy: pair.referencePolicy,
+                remoteEntityKind: pair.remoteEntityKind,
+                remoteReference: remoteReference,
+                sourceEvidenceDigest: digest(formValue(
+                  adjacentCrosswalkForm, "sourceEvidenceDigest"
+                )),
+                sourceRevision: sourceRevision,
+                sourceSnapshotId: uuid(formValue(
+                  adjacentCrosswalkForm, "sourceSnapshotId"
+                )),
+                state: stateValue,
+                supersedesCrosswalkId: supersedesValue || null,
+                systemKey: pair.systemKey
+              }
+            }
+          )
+        );
+        closeAdjacentCrosswalkEntry();
+        await refreshAll({
+          notice: result.replay
+            ? "The exact adjacent crosswalk evidence was already recorded."
+            : "Local crosswalk evidence recorded for operator review. No adjacent system was changed."
+        });
+      } catch (error) {
+        showError(error);
+      } finally {
+        setBusy(false);
+      }
+    });
+
     serviceCommandFormRoot.addEventListener("submit", async function (event) {
       var form = event.target.closest("[data-operator-service-command]");
       if (!form || !state.serviceCommand || state.busy) return;
@@ -1792,6 +2599,17 @@
       });
     documentRef.getElementById("operator-service-command-close")
       .addEventListener("click", closeServiceCommand);
+    documentRef.getElementById("operator-adjacent-detail-close")
+      .addEventListener("click", function () {
+        state.selectedAdjacent = null;
+        renderAdjacentDetail();
+      });
+    documentRef.getElementById("operator-adjacent-crosswalk-close")
+      .addEventListener("click", closeAdjacentCrosswalkEntry);
+    adjacentCrosswalkOpen.addEventListener("click", function () {
+      if (state.busy || !state.organizationId) return;
+      openAdjacentCrosswalkEntry();
+    });
     numberBindingProvision.addEventListener("click", function () {
       if (state.busy || !state.organizationId) return;
       openServiceCommand(Object.freeze({
@@ -1803,6 +2621,9 @@
       state.organizationId = organizationSelect.value;
       state.selectedCase = null;
       state.selectedReconciliation = null;
+      state.selectedAdjacent = null;
+      renderAdjacentDetail();
+      closeAdjacentCrosswalkEntry();
       closeServiceCommand();
       refreshAll();
     });
@@ -1867,6 +2688,10 @@
     validateOrganizationPayload: validateOrganizationPayload,
     validateNumberBinding: validateNumberBinding,
     validateNumberBindingList: validateNumberBindingList,
+    validateAdjacentContracts: validateAdjacentContracts,
+    validateAdjacentCrosswalkReceipt: validateAdjacentCrosswalkReceipt,
+    validateAdjacentResolutionReceipt: validateAdjacentResolutionReceipt,
+    validateAdjacentTrace: validateAdjacentTrace,
     validateQueue: validateQueue,
     validateReconciliationCase: validateReconciliationCase,
     validateResolutionReceipt: validateResolutionReceipt

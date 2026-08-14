@@ -58,6 +58,8 @@ import { verifyCareCorePostgres } from
   "./care-core-postgres-proof.mjs";
 import { verifyCareCommercePostgres } from
   "./care-commerce-postgres-proof.mjs";
+import { verifyAdjacentIntegrationPostgres } from
+  "./adjacent-integration-postgres-proof.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -7439,6 +7441,8 @@ export async function runMigrationVerification({
     await verifyJointLegalV4ReleaseState(pool);
     await verifyCustomerEngagementBootstrapState(pool);
     await verifyCustomerEngagementBootstrapJourney(pool);
+    const adjacentIntegrationProof =
+      await verifyAdjacentIntegrationPostgres(pool);
     await verifyPlatformSchema(pool);
     await verifyAlakazamPolicyAuthority(pool);
     await verifyProfessionalServicesReversalState(pool);
@@ -7499,6 +7503,17 @@ export async function runMigrationVerification({
       `reservationEvents ${careCommerceProof.reservationEvents} ` +
       `careCommands ${careCommerceProof.careCommands} ` +
       "providerEffects false paymentEffects false customerEffects false\n"
+    );
+    writeOutput(
+      `adjacentIntegrationPostgresProof ` +
+      `${adjacentIntegrationProof.assertions}/${adjacentIntegrationProof.assertions} ` +
+      `contracts ${adjacentIntegrationProof.contracts} ` +
+      `snapshots ${adjacentIntegrationProof.snapshots} ` +
+      `crosswalks ${adjacentIntegrationProof.crosswalks} ` +
+      `observations ${adjacentIntegrationProof.observations} ` +
+      `resolutions ${adjacentIntegrationProof.resolutions} ` +
+      `contractDigest ${adjacentIntegrationProof.contractDigest} ` +
+      "remoteWrites false providerEffects false automaticCommands false\n"
     );
     proof = Object.freeze({
       ownership: plan.ownership,

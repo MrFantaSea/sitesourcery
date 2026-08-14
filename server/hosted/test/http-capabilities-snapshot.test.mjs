@@ -35,6 +35,14 @@ const EXPECTED = Object.freeze({
   responderInboundEvents: true,
   care: true,
   responder: true,
+  adjacentIntegrations: Object.freeze({
+    ready: false,
+    mode: "held",
+    systems: Object.freeze([]),
+    remoteWrites: false,
+    providerEffects: false,
+    automaticCommands: false
+  }),
   domainPurchase: true,
   publishing: true
 });

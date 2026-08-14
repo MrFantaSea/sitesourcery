@@ -28,7 +28,8 @@ test("readiness proves every queue source table is forced-RLS and effect-free", 
               "stripe_invoice_finalization_failures",
               "alakazam_invoice_finalization_observations",
               "alakazam_invoice_finalization_projection",
-              "provider_reconciliation_resolution_commands"
+              "provider_reconciliation_resolution_commands",
+              "adjacent_integration_crosswalks"
             ]]);
             return {
               rows: [{

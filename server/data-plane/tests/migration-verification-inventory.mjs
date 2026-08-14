@@ -38,7 +38,8 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608120130_responder_private_material_retention.sql",
   "202608130131_worker_lifecycle_closure.sql",
   "202608130132_responder_voice_followup_closure.sql",
-  "202608130133_operator_resolution_surfaces.sql"
+  "202608130133_operator_resolution_surfaces.sql",
+  "202608130134_adjacent_integration_crosswalks.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(

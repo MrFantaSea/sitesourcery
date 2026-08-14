@@ -3703,3 +3703,129 @@ test("ALAKAZAM-POLICY-01 reserves migration 116 as one held customer-right autho
     /commerce_v2_download|service_custom|service_assessment/iu
   );
 });
+
+test("FIN-004V migration separates six held adjacent contracts, global snapshots, tenant links, and resolutions", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608130134_adjacent_integration_crosswalks.sql"
+  );
+  assert.ok(migration, "missing FIN-004V adjacent integration migration");
+  assert.match(migration.sql, /^-- FIN-004V[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const key of [
+    "private_messenger",
+    "command_deck",
+    "phone_bridge",
+    "client_profile_hub",
+    "marketing_desk",
+    "dell_commercial_engine"
+  ]) {
+    assert.match(migration.sql, new RegExp(`'${key}'`, "u"));
+  }
+  for (const column of [
+    "read_event_direction",
+    "write_effect_direction",
+    "authentication_boundary",
+    "semantic_idempotency_policy",
+    "retry_policy",
+    "reconciliation_policy",
+    "audit_policy",
+    "failure_behavior",
+    "held_behavior"
+  ]) {
+    assert.match(migration.sql, new RegExp(`\\b${column}\\b`, "u"));
+  }
+  for (const table of [
+    "adjacent_integration_system_contracts",
+    "adjacent_integration_identity_pairs",
+    "adjacent_integration_observation_contracts",
+    "adjacent_integration_global_snapshots",
+    "adjacent_integration_crosswalks",
+    "adjacent_integration_observations",
+    "adjacent_integration_crosswalk_resolutions"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(
+      migration.sql,
+      new RegExp(`alter table ss\\.${table}[\\s\\S]*enable row level security`, "iu")
+    );
+    assert.match(
+      migration.sql,
+      new RegExp(`alter table ss\\.${table}[\\s\\S]*force row level security`, "iu")
+    );
+  }
+  assert.match(
+    migration.sql,
+    /source_snapshot_id[\s\S]*references ss\.adjacent_integration_global_snapshots/iu
+  );
+  assert.match(
+    migration.sql,
+    /operator_confirm_link[\s\S]*operator_reject_link[\s\S]*operator_supersede_link[\s\S]*operator_flag_conflict/iu
+  );
+  assert.match(
+    migration.sql,
+    /service_custom_build_direct_opportunities[\s\S]*customer_engagements/iu
+  );
+  assert.match(
+    migration.sql,
+    /remote_reference !~ '\[\[:space:\]@\]'[\s\S]*\^sha256:\[0-9a-f\]\{64\}\$[\s\S]*\^SSC-[\s\S]*\^SS-/iu
+  );
+  assert.match(
+    migration.sql,
+    /semantic_evidence_digest ss\.sha256_hex generated always as/iu
+  );
+  assert.match(
+    migration.sql,
+    /adjacent_integration_crosswalk_semantic_digest_v1\([\s\S]*selected_supersedes_crosswalk_id uuid,[\s\S]*selected_initial_state text[\s\S]*'supersedesCrosswalkId', selected_supersedes_crosswalk_id,[\s\S]*'initialState', selected_initial_state/iu
+  );
+  assert.match(
+    migration.sql,
+    /initial_state text not null[\s\S]*link_evidence_digest ss\.sha256_hex generated always as/iu
+  );
+  assert.match(
+    migration.sql,
+    /adjacent_integration_global_snapshot_semantic_digest_v1\([\s\S]*selected_operator_organization_id uuid[\s\S]*'operatorOrganizationId', selected_operator_organization_id/iu
+  );
+  assert.match(
+    migration.sql,
+    /adjacent_integration_crosswalks_remote_linked_unique[\s\S]*remote_entity_kind,[\s\S]*remote_reference_digest,[\s\S]*local_entity_kind[\s\S]*where state = 'linked'/iu
+  );
+  assert.match(
+    migration.sql,
+    /adjacent_integration_crosswalks_local_linked_unique[\s\S]*local_entity_kind,[\s\S]*local_entity_id,[\s\S]*remote_entity_kind[\s\S]*where state = 'linked'/iu
+  );
+  assert.match(
+    migration.sql,
+    /operator_adjacent_integration_global_snapshots_v1\(\s*selected_system_key text,\s*selected_source_snapshot_id uuid[\s\S]*snapshot\.id = selected_source_snapshot_id/iu
+  );
+  for (const name of [
+    "record_adjacent_integration_global_snapshot_v1",
+    "record_adjacent_integration_crosswalk_v1",
+    "record_adjacent_integration_observation_v1",
+    "record_adjacent_integration_resolution_v1",
+    "operator_adjacent_integration_contracts_v1",
+    "operator_adjacent_integration_global_snapshots_v1",
+    "operator_adjacent_integration_trace_v1",
+    "operator_adjacent_integration_review_queue_v1"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create function ss\\.${name}\\b[\\s\\S]*security definer`, "iu")
+    );
+  }
+  assert.doesNotMatch(
+    migration.sql,
+    /grant insert on ss\.adjacent_integration_/iu
+  );
+  assert.match(
+    migration.sql,
+    /automatic_commands boolean not null[\s\S]*automatic_commands = false[\s\S]*remote_write_effects boolean not null[\s\S]*remote_write_effects = false[\s\S]*provider_effects boolean not null[\s\S]*provider_effects = false/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /phone_number\s+(?:text|varchar)|email_address\s+(?:text|varchar)|message_body\s+(?:text|varchar)|provider_effects\s*=\s*true|remote_write_effects\s*=\s*true|automatic_commands\s*=\s*true/iu
+  );
+});

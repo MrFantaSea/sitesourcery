@@ -175,6 +175,12 @@ import {
   createPostgresProviderReconciliationOperator
 } from "../provider-reconciliation-operator-postgres.mjs";
 import {
+  createAdjacentIntegrationService
+} from "../adjacent-integration.mjs";
+import {
+  createPostgresAdjacentIntegrationRepository
+} from "../adjacent-integration-postgres.mjs";
+import {
   createPostgresSupportCaseRepository
 } from "../support-cases-postgres.mjs";
 import { createSupportCaseService } from "../support-cases.mjs";
@@ -874,6 +880,27 @@ async function start() {
       "Canonical held operator reconciliation surfaces are not ready."
     );
   }
+  const adjacentIntegration = createAdjacentIntegrationService({
+    repository: createPostgresAdjacentIntegrationRepository({ authority }),
+    clock: commerceV2.clock,
+    ids: {
+      next: () => commerceV2.ids.next("adjacent_integration")
+    }
+  });
+  const adjacentIntegrationReadiness = await adjacentIntegration.readiness();
+  if (
+    adjacentIntegrationReadiness.ready !== true ||
+    adjacentIntegrationReadiness.verified !== true ||
+    adjacentIntegrationReadiness.systems.length !== 6 ||
+    adjacentIntegrationReadiness.mode !== "manual-read-only" ||
+    adjacentIntegrationReadiness.remoteWrites !== false ||
+    adjacentIntegrationReadiness.providerEffects !== false ||
+    adjacentIntegrationReadiness.automaticCommands !== false
+  ) {
+    throw new Error(
+      "Canonical six-system adjacent integration is not ready."
+    );
+  }
   const supportCases = createSupportCaseService({
     repository: createPostgresSupportCaseRepository({ authority }),
     mailLifecycle,
@@ -1104,6 +1131,7 @@ async function start() {
         responderSurfaces,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         operatorProviderReconciliation,
+        adjacentIntegration,
         supportCases,
         resendMailEvents,
         twilioResponderEvents,
