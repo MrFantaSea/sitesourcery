@@ -239,16 +239,19 @@ export function createPostgresCommerceTransitionNotificationRepository({
           }
 
           const sourceResult = await client.query(
-            `select *
-               from ss.commerce_transition_notification_sources
-              where audience_kind = $1 and notification_kind = $2
-                and source_table = $3 and source_id = $4
-                and source_revision = $5 and source_digest = $6
-                and source_state = $7`,
+            `select source.*
+               from ss.commerce_transition_notification_sources source
+              where source.audience_kind = $1
+                and source.notification_kind = $2
+                and source.source_table = $3 and source.source_id = $4
+                and source.source_revision = $5
+                and source.source_digest = $6
+                and source.source_state = $7
+                and source.source_occurred_at <= $8::timestamptz`,
             [
               input.audienceKind, input.notificationKind,
               input.source.table, input.source.id, input.source.revision,
-              input.source.digest, input.source.state
+              input.source.digest, input.source.state, input.requestedAt
             ]
           );
           invariant(
@@ -258,13 +261,6 @@ export function createPostgresCommerceTransitionNotificationRepository({
             { status: 409 }
           );
           const source = sourceResult.rows[0];
-          invariant(
-            Date.parse(input.requestedAt) >=
-              Date.parse(iso(source.source_occurred_at)),
-            "COMMERCE_NOTIFICATION_SOURCE_UNAVAILABLE",
-            "The notification reservation predates its committed source.",
-            { status: 409 }
-          );
 
           const messageId = systemRandomUUID();
           const messageType = input.audienceKind === "customer"
@@ -305,8 +301,7 @@ export function createPostgresCommerceTransitionNotificationRepository({
           );
 
           const notificationId = systemRandomUUID();
-          const sourceOccurredAt = iso(source.source_occurred_at);
-          await client.query(
+          const inserted = await client.query(
             `insert into ss.commerce_transition_notification_outbox (
                id, command_id, request_digest, audience_kind,
                notification_kind, source_table, source_id, source_revision,
@@ -315,23 +310,44 @@ export function createPostgresCommerceTransitionNotificationRepository({
                mail_message_id, mail_request_digest, reservation_digest,
                state, provider_effects_authorized, delivery_claimed,
                reserved_at, expires_at, revision, created_at
-             ) values (
-               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               $12, $13, $14, $15, $16,
+             )
+             select
+               $1::uuid, $2::text, $3::ss.sha256_hex, $4::text,
+               $5::text, $6::text, $7::text, $8::bigint,
+               $9::ss.sha256_hex, $10::text,
+               source.source_occurred_at,
+               source.organization_id, source.project_id,
+               source.source_customer_user_id, $11::uuid,
+               $12::ss.sha256_hex,
                ss.commerce_transition_notification_reservation_digest(
-                 $1, $3, $15, $16
+                 $1::uuid, $3::ss.sha256_hex, $11::uuid,
+                 $12::ss.sha256_hex
                ),
-               'held', false, false, $17, $18, 1, $17
-             )`,
+               'held', false, false, $13::timestamptz,
+               $14::timestamptz, 1, $13::timestamptz
+              from ss.commerce_transition_notification_sources source
+             where source.audience_kind = $4
+               and source.notification_kind = $5
+               and source.source_table = $6
+               and source.source_id = $7
+               and source.source_revision = $8
+               and source.source_digest = $9::ss.sha256_hex
+               and source.source_state = $10
+               and source.source_occurred_at <= $13::timestamptz
+             returning id`,
             [
               notificationId, input.commandId, input.requestDigest,
               input.audienceKind, input.notificationKind,
               input.source.table, input.source.id, input.source.revision,
-              input.source.digest, input.source.state, sourceOccurredAt,
-              source.organization_id, source.project_id,
-              source.source_customer_user_id, messageId, mail.requestDigest,
-              input.requestedAt, input.expiresAt
+              input.source.digest, input.source.state, messageId,
+              mail.requestDigest, input.requestedAt, input.expiresAt
             ]
+          );
+          invariant(
+            inserted.rowCount === 1,
+            "COMMERCE_NOTIFICATION_SOURCE_UNAVAILABLE",
+            "The exact committed notification source is unavailable.",
+            { status: 409 }
           );
           return readById(client, notificationId);
         }

@@ -95,6 +95,84 @@ test("committed payment failure reserves one held MAIL row without claiming deli
     const repository = createPostgresCommerceTransitionNotificationRepository({
       authority
     });
+
+    // PostgreSQL retains microseconds while JavaScript Date does not. A
+    // reservation at the beginning of the same millisecond must still be
+    // rejected when its committed source occurs later in that millisecond.
+    const microsecondSourceOccurredAt = new Date().toISOString().replace(
+      /(\.\d{3})Z$/u,
+      "$1500Z"
+    );
+    const sameMillisecondBeforeSource = new Date(
+      microsecondSourceOccurredAt
+    ).toISOString();
+    const microsecondSourceId = randomUUID();
+    const microsecondSourceCommandId =
+      `notify-microsecond-source-${randomUUID()}`;
+    const microsecondSourcePayloadDigest = opaqueDigest(
+      `microsecond-payload:${microsecondSourceId}`
+    );
+    await authority.service(
+      { actorKind: "system", isolation: "serializable" },
+      async (client) => client.query(
+        `insert into ss.stripe_invoice_finalization_failures (
+           id, command_id, request_digest, provider_event_id_digest,
+           invoice_id_digest, payload_digest,
+           signature_verification_digest, reason_code,
+           provider_created_at, recorded_at, created_at
+         ) values (
+           $1, $2, $3, $4, $5, $6, $7, 'unknown_review',
+           $8::timestamptz - interval '1 second',
+           $8::timestamptz, $8::timestamptz
+         )`,
+        [
+          microsecondSourceId,
+          microsecondSourceCommandId,
+          opaqueDigest(`microsecond-request:${microsecondSourceId}`),
+          opaqueDigest(`microsecond-event:${microsecondSourceId}`),
+          opaqueDigest(`microsecond-invoice:${microsecondSourceId}`),
+          microsecondSourcePayloadDigest,
+          opaqueDigest(`microsecond-signature:${microsecondSourceId}`),
+          microsecondSourceOccurredAt
+        ]
+      )
+    );
+    const microsecondNotificationCommandId =
+      `commerce-notify-microsecond-${randomUUID()}`;
+    const microsecondNotifications = createCommerceTransitionNotifications({
+      repository,
+      clock: { now: () => sameMillisecondBeforeSource }
+    });
+    await assert.rejects(
+      microsecondNotifications.reserve({
+        commandId: microsecondNotificationCommandId,
+        audienceKind: "operator",
+        notificationKind: "invoice_finalization_failed",
+        source: {
+          table: "ss.stripe_invoice_finalization_failures",
+          id: microsecondSourceId,
+          revision: 1,
+          digest: microsecondSourcePayloadDigest,
+          state: "open"
+        },
+        recipientDigest: "2".repeat(64),
+        subjectReferenceDigest: "3".repeat(64),
+        contentDigest: "4".repeat(64),
+        templateVersion: "invoice_finalization_failed_v1",
+        expiresAt: new Date(
+          Date.parse(sameMillisecondBeforeSource) + 3_600_000
+        ).toISOString()
+      }),
+      (error) => error.code === "COMMERCE_NOTIFICATION_SOURCE_UNAVAILABLE"
+    );
+    const noPrematureMail = await pool.query(
+      `select count(*)::int as count
+         from ss.hosted_mail_deliveries
+        where command_id = $1`,
+      [microsecondNotificationCommandId]
+    );
+    assert.equal(noPrematureMail.rows[0].count, 0);
+
     const notifications = createCommerceTransitionNotifications({
       repository,
       clock: { now: () => selectedNow }
