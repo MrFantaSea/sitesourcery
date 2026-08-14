@@ -122,3 +122,10 @@ rejection, bounded Assessment/Custom joined proof, PostgreSQL notification
 timestamp correction, exact 87-migration proof, and clean cumulative matrix is
 `FIN-005-PRESERVED-SOURCE-PROVENANCE.md`; its machine-readable denominator is
 `FIN-005-SOURCE-DISPOSITION.json`.
+
+FIN-006A's production-root replacement of the unmounted Domain stub with the
+canonical PostgreSQL-backed held runtime, truthful capability/readiness split,
+least-authority order read, zero-write held proof, adversarial corrections,
+real-PostgreSQL journey, and clean cumulative proof is
+`FIN-006A-DOMAIN-ROOT-PROVENANCE.md`. FIN-006 remains pending until every
+mandatory capability row is composition-proved.
