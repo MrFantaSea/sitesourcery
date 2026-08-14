@@ -31,6 +31,7 @@ const ARTIFACT_PLAN = createBrowserAuditArtifactPlan({
 const ARTIFACT_ROOT = ARTIFACT_PLAN.hostedRoot;
 const EXPECTED_BROWSER =
   "Google Chrome for Testing 149.0.7827.55";
+const CDP_COMMAND_TIMEOUT_MS = 10000;
 const BROWSER_CANDIDATES = Object.freeze([
   process.env.SITESOURCERY_CHROMIUM,
   "/private/tmp/sitesourcery-chrome-149.0.7827.55-mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell",
@@ -2191,9 +2192,31 @@ class Cdp {
     await this.ready;
     const id = ++this.sequence;
     const result = new Promise((resolve, reject) => {
-      this.pending.set(id, { method, reject, resolve });
+      const timeout = setTimeout(() => {
+        if (!this.pending.delete(id)) return;
+        reject(new Error(
+          `${method}: timed out after ${CDP_COMMAND_TIMEOUT_MS}ms`,
+        ));
+      }, CDP_COMMAND_TIMEOUT_MS);
+      this.pending.set(id, {
+        method,
+        reject(error) {
+          clearTimeout(timeout);
+          reject(error);
+        },
+        resolve(value) {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+      });
     });
-    this.socket.send(JSON.stringify({ id, method, params }));
+    try {
+      this.socket.send(JSON.stringify({ id, method, params }));
+    } catch (error) {
+      const pending = this.pending.get(id);
+      this.pending.delete(id);
+      pending?.reject(error);
+    }
     return result;
   }
 
