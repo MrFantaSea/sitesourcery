@@ -58,6 +58,8 @@ import { verifyCareCorePostgres } from
   "./care-core-postgres-proof.mjs";
 import { verifyCareCommercePostgres } from
   "./care-commerce-postgres-proof.mjs";
+import { verifyResponderCommercePostgres } from
+  "./responder-commerce-postgres-proof.mjs";
 import { verifyAdjacentIntegrationPostgres } from
   "./adjacent-integration-postgres-proof.mjs";
 
@@ -7460,6 +7462,7 @@ export async function runMigrationVerification({
     await verifyAccountingPurposeJournal(pool);
     const careCoreProof = await verifyCareCorePostgres(pool);
     const careCommerceProof = await verifyCareCommercePostgres(pool);
+    const responderCommerceProof = await verifyResponderCommercePostgres(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -7502,6 +7505,15 @@ export async function runMigrationVerification({
       `quotes ${careCommerceProof.quotes} reservations ${careCommerceProof.reservations} ` +
       `reservationEvents ${careCommerceProof.reservationEvents} ` +
       `careCommands ${careCommerceProof.careCommands} ` +
+      "providerEffects false paymentEffects false customerEffects false\n"
+    );
+    writeOutput(
+      `responderCommercePostgresProof ` +
+      `${responderCommerceProof.assertions}/${responderCommerceProof.assertions} ` +
+      `quotes ${responderCommerceProof.quotes} ` +
+      `reservations ${responderCommerceProof.reservations} ` +
+      `reservationEvents ${responderCommerceProof.reservationEvents} ` +
+      `commands ${responderCommerceProof.commands} ` +
       "providerEffects false paymentEffects false customerEffects false\n"
     );
     writeOutput(
