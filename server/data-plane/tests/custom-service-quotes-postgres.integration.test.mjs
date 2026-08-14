@@ -50,11 +50,35 @@ import {
 import {
   createPostgresCustomServicesCustomBuildHandoff
 } from "../../hosted/custom-services-custom-build-handoff-postgres.mjs";
+import {
+  createProfessionalServicesReversalService
+} from "../../commerce-v2/professional-services-reversal.mjs";
+import {
+  createPostgresProfessionalServicesReversalRepository
+} from "../../hosted/professional-services-reversal-postgres.mjs";
+import {
+  createAccountingPurposeJournal
+} from "../../hosted/accounting-purpose-journal.mjs";
+import {
+  createPostgresAccountingPurposeJournalRepository
+} from "../../hosted/accounting-purpose-journal-postgres.mjs";
+import {
+  createCommerceTransitionNotifications
+} from "../../hosted/commerce-transition-notifications.mjs";
+import {
+  createPostgresCommerceTransitionNotificationRepository
+} from "../../hosted/commerce-transition-notifications-postgres.mjs";
+import {
+  createCanonicalPostgresAuthority
+} from "../../hosted/repository-postgres.mjs";
 import { ExternalEffectError } from "../../domain/errors.mjs";
 import {
   projectCustomServicesAssessmentQuote
 } from "../../hosted/custom-services-assessment-quote.mjs";
 import { canonicalJson, digest } from "../../hosted/security.mjs";
+import {
+  proveAssessmentCustomArtifactContractRender
+} from "./assessment-custom-artifact-contract-browser.mjs";
 
 const require = createRequire(import.meta.url);
 const {
@@ -629,7 +653,17 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       stripe_customer_id: foreignFinalStripeCustomerId
     });
     const firstOperatorId = await seedOperator(client, "first");
-    const secondOperatorId = await seedOperator(client, "second");
+    const secondOperatorId = await seedOperator(
+      client,
+      "second",
+      [
+        "service_quote_author",
+        "service_job_manage",
+        "service_document_manage",
+        "service_payment_reconcile",
+        "service_management_manage"
+      ]
+    );
     const thirdOperatorId = await seedOperator(client, "third");
     const handoffOnlyOperatorId = await seedOperator(
       client,
@@ -3283,6 +3317,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       other.userId,
       "positive final-obligation digest proof requires distinct customers"
     );
+    let positiveJourneyEvidence = null;
 
     // Materialize this disjoint positive Site path, commit its pending final
     // evidence, then coordinate its settlement and handoff from independent
@@ -3455,8 +3490,218 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       );
       assert.equal(positiveChecking.progress.revision, 1);
 
+      // Extend the already-retained positive-final journey through one exact
+      // paid change order. The exhaustive H1N edge cases remain in the main
+      // fixture below; this is only the missing cross-contract happy path.
+      const positiveChangeBoundary =
+        createPostgresCustomServicesCustomBuildChangeCompletion({
+          authority: positiveAuthority
+        });
+      const positiveChangeIssued =
+        await positiveChangeBoundary.issueChangeOrder(
+          operatorActor,
+          positiveJobId,
+          {
+            addedScope:
+              "Add one approved responsive launch announcement to the Site build.",
+            commandId: `custom-build-e2e-change-${randomUUID()}`,
+            expiresAt: isoAfter({ days: 7 }),
+            organizationId: customer.organizationId,
+            targetCompletionDate: dateAfter(50),
+            unitCount: 1
+          }
+        );
+      const positiveChangeOrder = positiveChangeIssued.changeOrders.at(-1);
+      const positiveChangeAccepted =
+        await positiveChangeBoundary.acceptChangeOrder(
+          customerAssessmentScope,
+          positiveChangeOrder.changeOrderId,
+          {
+            acceptanceStatement:
+              "accepted_exact_change_order_and_payment_requirement",
+            acceptedDisclosureDigest:
+              positiveChangeOrder.disclosureDigest,
+            acceptedQuoteDigest: positiveChangeOrder.quoteDigest,
+            commandId: `custom-build-e2e-change-accept-${randomUUID()}`
+          }
+        );
+      assert.equal(
+        positiveChangeAccepted.state,
+        "change_order_payment_required"
+      );
+
+      let positiveChangePurpose = null;
+      const positiveChangeSessionId =
+        `cs_test_e2e_change_${randomUUID().replaceAll("-", "_")}`;
+      const positiveChangePaymentIntentId =
+        `pi_test_e2e_change_${randomUUID().replaceAll("-", "_")}`;
+      const positiveChangeEventId =
+        `evt_test_e2e_change_${randomUUID().replaceAll("-", "_")}`;
+      let positiveChangeReadbacks = 0;
+      const positiveChangePayment =
+        createPostgresCustomServicesCustomBuildChangePayment({
+          authority: positiveAuthority,
+          provider: {
+            async createCustomBuildChangeCheckout(input) {
+              positiveChangePurpose = structuredClone(input.purpose);
+              return {
+                checkoutId: positiveChangeSessionId,
+                url: "https://checkout.stripe.com/c/pay/e2e_change",
+                expiresAt: input.checkoutExpiresAt
+              };
+            },
+            async retrieveCustomBuildChangePayment(input) {
+              positiveChangeReadbacks += 1;
+              assert.deepEqual(input.purpose, positiveChangePurpose);
+              const facts = {
+                schema:
+                  "sitesourcery.stripe-custom-build-change-payment-facts/v1",
+                provider: "stripe",
+                checkoutSessionId: positiveChangeSessionId,
+                paymentIntentId: positiveChangePaymentIntentId,
+                customerId: positiveCustomerId,
+                paymentStatus: "paid",
+                subtotalMinor: 12500,
+                taxMinor: 0,
+                totalMinor: 12500,
+                taxMode: "disabled_by_owner",
+                currency: "USD",
+                purposeDigest: input.purposeDigest,
+                providerPaymentTime: new Date(
+                  Date.now() - 500
+                ).toISOString()
+              };
+              return Object.freeze({
+                ...facts,
+                providerFactsDigest: digest(facts)
+              });
+            },
+            async retrieveCustomBuildChangeCheckoutLifecycle(input) {
+              return {
+                schema:
+                  "sitesourcery.stripe-custom-build-change-checkout-lifecycle/v1",
+                provider: "stripe",
+                checkoutSessionId: input.checkoutSessionId,
+                purposeDigest: input.purposeDigest,
+                state: "paid"
+              };
+            }
+          },
+          release: {
+            approved: true,
+            currency: "USD",
+            holdScope: "new_checkout_creation_only",
+            providerEffectProcessing:
+              "settlement_and_reconciliation_continue",
+            taxMode: "disabled_by_owner"
+          },
+          clock: { now: () => new Date().toISOString() },
+          ids: { next: () => randomUUID() }
+        });
+      const positiveChangeInvoice =
+        await positiveChangePayment.readCurrentInvoice(
+          customerAssessmentScope
+        );
+      const positiveChangeCheckoutInput = {
+        ...customerAssessmentScope,
+        commandId: `custom-build-e2e-change-checkout-${randomUUID()}`,
+        invoiceId: positiveChangeInvoice.invoice.invoiceId,
+        invoiceDigest: positiveChangeInvoice.invoice.invoiceDigest
+      };
+      const positiveChangeCheckout =
+        await positiveChangePayment.createCheckout(
+          positiveChangeCheckoutInput
+        );
+      assert.deepEqual(
+        await positiveChangePayment.createCheckout(
+          positiveChangeCheckoutInput
+        ),
+        positiveChangeCheckout
+      );
+      const positiveChangePurposeDigest = digest(positiveChangePurpose);
+      const positiveChangeEvent = {
+        id: positiveChangeEventId,
+        type: "checkout.session.completed",
+        livemode: false,
+        api_version: "2026-06-24.dahlia",
+        created: Math.floor(Date.now() / 1000) - 1,
+        data: {
+          object: {
+            id: positiveChangeSessionId,
+            metadata: {
+              schema: "sitesourcery_custom_build_change_checkout_v1",
+              tenant_id: positiveChangePurpose.tenantId,
+              customer_id: positiveChangePurpose.customerId,
+              project_id: positiveChangePurpose.projectId,
+              job_id: positiveChangePurpose.jobId,
+              change_order_id: positiveChangePurpose.changeOrderId,
+              change_acceptance_id:
+                positiveChangePurpose.changeAcceptanceId,
+              change_number: String(positiveChangePurpose.changeNumber),
+              invoice_id: positiveChangePurpose.invoiceId,
+              invoice_number: positiveChangePurpose.invoiceNumber,
+              scope_boundary_digest:
+                positiveChangePurpose.scopeBoundaryDigest,
+              prior_effective_scope_digest:
+                positiveChangePurpose.priorEffectiveScopeDigest,
+              target_completion_date:
+                positiveChangePurpose.targetCompletionDate,
+              accepted_quote_digest:
+                positiveChangePurpose.acceptedQuoteDigest,
+              accepted_disclosure_digest:
+                positiveChangePurpose.acceptedDisclosureDigest,
+              invoice_digest: positiveChangePurpose.invoiceDigest,
+              purpose_digest: positiveChangePurposeDigest
+            }
+          }
+        }
+      };
+      const positiveChangeSettlement =
+        await positiveChangePayment.ingestStripeEvent(
+          positiveChangeEvent
+        );
+      assert.equal(positiveChangeSettlement.status, "payment_settled");
+      assert.deepEqual(
+        await positiveChangePayment.ingestStripeEvent(
+          positiveChangeEvent
+        ),
+        positiveChangeSettlement
+      );
+      assert.equal(positiveChangeReadbacks, 1);
+      const positiveChangeEffective =
+        await positiveChangeBoundary.readCustomer(
+          customerAssessmentScope
+        );
+      assert.equal(
+        positiveChangeEffective.changeOrders.history.at(-1).state,
+        "effective"
+      );
+
+      const positiveChangeChecking =
+        await positiveProgress.recordProgress(
+          operatorActor,
+          positiveJobId,
+          {
+            commandId: `custom-build-e2e-change-progress-${randomUUID()}`,
+            customerSummary:
+              "The paid launch announcement is included in the final responsive proof.",
+            expectedRevision: 1,
+            milestones: {
+              structure: "done",
+              content: "done",
+              responsive: "done",
+              quality: "done"
+            },
+            nextStep:
+              "Attach final desktop and phone evidence after the paid change.",
+            organizationId: customer.organizationId,
+            stage: "checking"
+          }
+        );
+      assert.equal(positiveChangeChecking.progress.revision, 2);
+
       const positiveEvidenceCapturedAt = new Date(
-        Date.parse(positiveChecking.progress.updatedAt) + 1
+        Date.parse(positiveChangeChecking.progress.updatedAt) + 1
       ).toISOString();
       const positiveCompletion =
         createPostgresCustomServicesCustomBuildChangeCompletion({
@@ -3528,7 +3773,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         }
       );
       const positiveEvidenceIds = positivePhone.evidence
-        .filter((entry) => entry.progressRevision === 1)
+        .filter((entry) => entry.progressRevision === 2)
         .map((entry) => entry.evidenceId)
         .sort();
       assert.equal(positiveEvidenceIds.length, 2);
@@ -3669,7 +3914,10 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         customerBoundDigest.rows[0].exact_customer_digest,
         "changing only customerUserId must change the obligation digest"
       );
-      assert.deepEqual(positiveFinalRow.effective_change_order_digests, []);
+      assert.deepEqual(
+        positiveFinalRow.effective_change_order_digests,
+        [positiveChangeOrder.quoteDigest]
+      );
       assert.equal(Number(positiveFinalRow.final_due_minor), 60000);
       assert.equal(Number(positiveFinalRow.credit_minor), 0);
       assert.equal(positiveFinalRow.workmanship_correction_days, 30);
@@ -3708,7 +3956,10 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         price: { amountMinor: 60000, currency: "USD" },
         taxMode: "disabled_by_owner"
       };
-      assert.deepEqual(finalPurpose.effectiveChangeOrderDigests, []);
+      assert.deepEqual(
+        finalPurpose.effectiveChangeOrderDigests,
+        [positiveChangeOrder.quoteDigest]
+      );
       const finalPurposeDigest = digest(finalPurpose);
       const finalAttemptId = randomUUID();
       const finalCreatedAt = new Date().toISOString();
@@ -4774,6 +5025,27 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         );
         assert.equal(new Date(timestamp).toISOString(), timestamp);
       }
+      positiveJourneyEvidence = {
+        assessmentReport:
+          await raceAssessmentWork.readCustomerReport(
+            raceAssessmentScope
+          ),
+        assessmentReceiptId:
+          raceAssessmentSettlementReceipt.receiptId,
+        changeOrderId: positiveChangeOrder.changeOrderId,
+        changePaymentIntentId: positiveChangePaymentIntentId,
+        changeReceiptId: positiveChangeSettlement.receiptId,
+        finalPaymentIntentId,
+        finalReceiptId: finalReceipt.id,
+        finalState: structuredClone(browserFinalState),
+        handoffDocument: structuredClone(durableDocument),
+        handoffReceiptId: positiveHandoff.rows[0].receipt_id,
+        initialReceiptId: positiveStartSettlement.receiptId,
+        organizationId: customer.organizationId,
+        projectId: customer.projectId,
+        customerId: customer.userId,
+        jobId: positiveJobId
+      };
       await setActor(
         client,
         "operator",
@@ -7255,6 +7527,275 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         error.code === "custom_build_repository_conflict" ||
         error.code === "CUSTOM_BUILD_PAYMENT_REPOSITORY_CONFLICT"
     );
+
+    // Compose only the finish-line facts that the component proofs did not
+    // previously join: accounting projection, provider-readback reversal,
+    // held customer mail, and an exact reviewed artifact-contract render.
+    assert.ok(positiveJourneyEvidence);
+    const journeyAuthority = createCanonicalPostgresAuthority({ pool });
+    const accounting = createAccountingPurposeJournal({
+      repository: createPostgresAccountingPurposeJournalRepository({
+        authority: journeyAuthority
+      })
+    });
+    const firstAccountingSync = await accounting.synchronize();
+    assert.ok(firstAccountingSync.insertedCount >= 4);
+    const accountingReplay = await accounting.synchronize();
+    assert.equal(accountingReplay.insertedCount, 0);
+    assert.equal(
+      accountingReplay.journalCount,
+      firstAccountingSync.journalCount
+    );
+    const accountingRead = await accounting.list({
+      actorId: secondOperatorId,
+      operatorOrganizationId: positiveJourneyEvidence.organizationId,
+      cursor: null,
+      limit: 200
+    });
+    const journeyReceiptIds = new Set([
+      positiveJourneyEvidence.assessmentReceiptId,
+      positiveJourneyEvidence.initialReceiptId,
+      positiveJourneyEvidence.changeReceiptId,
+      positiveJourneyEvidence.finalReceiptId
+    ]);
+    const journeyAccounting = accountingRead.entries.filter((entry) =>
+      journeyReceiptIds.has(entry.source.receiptId)
+    );
+    assert.deepEqual(
+      new Set(journeyAccounting.map((entry) => entry.purpose)),
+      new Set([
+        "assessment_payment",
+        "custom_start_payment",
+        "custom_change_payment",
+        "custom_final_payment"
+      ])
+    );
+    assert.equal(journeyAccounting.length, 4);
+    assert.equal(
+      journeyAccounting.every((entry) =>
+        entry.money.tax.state === "evidenced" &&
+        entry.money.fee.state === "not_present_in_source" &&
+        entry.money.payoutAging.state === "not_present_in_source"
+      ),
+      true
+    );
+
+    const reversalObservedAt = new Date().toISOString();
+    const reversalEventId =
+      `evt_test_e2e_reversal_${randomUUID().replaceAll("-", "_")}`;
+    const reversalChargeId =
+      `ch_test_e2e_reversal_${randomUUID().replaceAll("-", "_")}`;
+    const reversalRefundId =
+      `re_test_e2e_reversal_${randomUUID().replaceAll("-", "_")}`;
+    let reversalReadbacks = 0;
+    const reversalRepository =
+      createPostgresProfessionalServicesReversalRepository({
+        authority: journeyAuthority
+      });
+    const reversalService = createProfessionalServicesReversalService({
+      repository: reversalRepository,
+      provider: {
+        async retrieveProfessionalReversal(input) {
+          reversalReadbacks += 1;
+          assert.equal(
+            input.stripePaymentIntentId,
+            positiveJourneyEvidence.changePaymentIntentId
+          );
+          assert.equal(
+            input.professionalPayment.paymentPurpose,
+            "custom_build_change"
+          );
+          const facts = {
+            schema:
+              "sitesourcery.stripe-professional-services-reversal/v1",
+            provider: "stripe",
+            paymentPurpose: "custom_build_change",
+            organizationId: positiveJourneyEvidence.organizationId,
+            livemode: false,
+            metadataDigest: digest({
+              paymentIntentId:
+                positiveJourneyEvidence.changePaymentIntentId,
+              receiptId: positiveJourneyEvidence.changeReceiptId
+            }),
+            providerObjectId: reversalChargeId,
+            evidenceCertainty: "verified",
+            providerEffectAuthorized: false,
+            automaticRestorationAuthorized: false,
+            reversalKind: "refund",
+            outcome: "refund_partial",
+            stripeChargeId: reversalChargeId,
+            stripePaymentIntentId:
+              positiveJourneyEvidence.changePaymentIntentId,
+            stripeRefundId: reversalRefundId,
+            stripeDisputeId: null,
+            amountChargedMinor: 12500,
+            amountReversedMinor: 2500,
+            currency: "USD",
+            customerId: positiveJourneyEvidence.customerId,
+            receiptId: positiveJourneyEvidence.changeReceiptId,
+            projectId: positiveJourneyEvidence.projectId,
+            metadataCorroborated: true,
+            providerObservedAt: reversalObservedAt
+          };
+          return {
+            ...facts,
+            providerFactsDigest: digest(facts)
+          };
+        }
+      },
+      clock: { now: () => reversalObservedAt },
+      ids: { next: () => randomUUID() }
+    });
+    const reversalEvent = {
+      id: reversalEventId,
+      type: "charge.refunded",
+      livemode: false,
+      api_version: "2026-06-24.dahlia",
+      created: Math.floor(Date.parse(reversalObservedAt) / 1000),
+      data: {
+        object: {
+          id: reversalChargeId,
+          payment_intent:
+            positiveJourneyEvidence.changePaymentIntentId
+        }
+      }
+    };
+    const reversed = await reversalService.ingestStripeEvent(
+      reversalEvent
+    );
+    assert.equal(reversed.status, "recorded");
+    assert.equal(reversed.lifecycleState, "held");
+    assert.equal(reversed.creditConsequence, "preserve_settled_credit_no_reissue");
+    const reversedReplay = await reversalService.ingestStripeEvent(
+      reversalEvent
+    );
+    assert.equal(reversedReplay.status, "replay");
+    assert.equal(reversedReplay.lifecycleRevision, reversed.lifecycleRevision);
+    assert.equal(reversalReadbacks, 2);
+    const immutableHandoffAfterReversal = await pool.query(
+      `select count(*)::int as count
+         from ss.service_custom_build_handoff_receipts
+        where id = $1 and job_id = $2`,
+      [
+        positiveJourneyEvidence.handoffReceiptId,
+        positiveJourneyEvidence.jobId
+      ]
+    );
+    assert.equal(immutableHandoffAfterReversal.rows[0].count, 1);
+
+    const transitionSources = await pool.query(
+      `select audience_kind, notification_kind, source_table, source_id,
+              source_revision, source_digest, source_state,
+              source_occurred_at
+         from ss.commerce_transition_notification_sources
+        where (source_table = 'ss.service_custom_build_handoff_receipts'
+               and source_id = $1)
+           or (source_table = 'ss.service_professional_payment_lifecycles'
+               and source_id = $2)`,
+      [
+        positiveJourneyEvidence.handoffReceiptId,
+        reversed.lifecycleId
+      ]
+    );
+    const handoffSource = transitionSources.rows.find(
+      (row) => row.notification_kind === "custom_handoff_completed"
+    );
+    const reversalSource = transitionSources.rows.find(
+      (row) => row.notification_kind === "professional_reversal_recorded"
+    );
+    assert.ok(handoffSource);
+    assert.ok(reversalSource);
+    const reservationTime = new Date(
+      Math.max(
+        ...transitionSources.rows.map((row) =>
+          new Date(row.source_occurred_at).getTime()
+        )
+      ) + 1000
+    ).toISOString();
+    const notifications = createCommerceTransitionNotifications({
+      repository:
+        createPostgresCommerceTransitionNotificationRepository({
+          authority: journeyAuthority
+        }),
+      clock: { now: () => reservationTime }
+    });
+    function notificationInput(row, suffix) {
+      return {
+        commandId: `assessment-custom-e2e-${suffix}-${randomUUID()}`,
+        audienceKind: row.audience_kind,
+        notificationKind: row.notification_kind,
+        source: {
+          table: row.source_table,
+          id: row.source_id,
+          revision: Number(row.source_revision),
+          digest: row.source_digest,
+          state: row.source_state
+        },
+        recipientDigest: digest({ suffix, kind: "recipient" }),
+        subjectReferenceDigest: digest({ suffix, kind: "subject" }),
+        contentDigest: digest({ suffix, kind: "content" }),
+        templateVersion: `${suffix}_v1`,
+        expiresAt: new Date(
+          Date.parse(reservationTime) + 3_600_000
+        ).toISOString()
+      };
+    }
+    const handoffMailInput = notificationInput(handoffSource, "handoff");
+    const handoffMail = await notifications.reserve(handoffMailInput);
+    assert.deepEqual(
+      await notifications.reserve(handoffMailInput),
+      handoffMail
+    );
+    const reversalMail = await notifications.reserve(
+      notificationInput(reversalSource, "reversal")
+    );
+    for (const reserved of [handoffMail, reversalMail]) {
+      assert.equal(reserved.reservation.state, "held");
+      assert.equal(reserved.mail.lifecycleState, "pending");
+      assert.equal(reserved.mail.deliveryConfirmed, false);
+      assert.equal(reserved.providerEffectsAuthorized, false);
+      assert.equal(reserved.deliveryClaimed, false);
+    }
+    const exactHeldMail = await pool.query(
+      `select mail.id, mail.state,
+              count(claim.message_id)::int as dispatch_claim_count
+         from ss.hosted_mail_deliveries mail
+         left join ss.hosted_mail_dispatch_claims claim
+           on claim.message_id = mail.id
+        where mail.id = any($1::uuid[])
+        group by mail.id, mail.state
+        order by mail.id`,
+      [[handoffMail.mail.messageId, reversalMail.mail.messageId]]
+    );
+    assert.equal(exactHeldMail.rowCount, 2);
+    assert.equal(
+      exactHeldMail.rows.every(
+        (row) => row.state === "pending" && row.dispatch_claim_count === 0
+      ),
+      true
+    );
+    const customerMail = await notifications.listCustomer({
+      actorId: positiveJourneyEvidence.customerId,
+      organizationId: positiveJourneyEvidence.organizationId,
+      projectId: positiveJourneyEvidence.projectId
+    });
+    assert.equal(
+      customerMail.items.filter((item) =>
+        [handoffMail.id, reversalMail.id].includes(item.id)
+      ).length,
+      2
+    );
+    const browserProof = await proveAssessmentCustomArtifactContractRender({
+      projectId: positiveJourneyEvidence.projectId,
+      assessmentReport: positiveJourneyEvidence.assessmentReport,
+      finalState: positiveJourneyEvidence.finalState,
+      handoffDocument: positiveJourneyEvidence.handoffDocument
+    });
+    assert.deepEqual(browserProof, {
+      browser: "Google Chrome for Testing 149.0.7827.55",
+      renderedArtifacts: 3,
+      viewport: "390x844"
+    });
 
     const customBuildCounts = await pool.query(
       `select
