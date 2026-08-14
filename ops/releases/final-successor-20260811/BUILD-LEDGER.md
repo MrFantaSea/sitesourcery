@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-005 proved; FIN-006A/B/C subcohorts proved; FIN-006 active
+Status: FIN-005 proved; FIN-006A/B/C/D subcohorts proved; FIN-006 active
 
 ## Governing inputs
 
@@ -148,3 +148,13 @@ cumulative proof is `FIN-006C-RESPONDER-COMMERCE-ROOT-PROVENANCE.md`.
 Payment, tax, Twilio/carrier, mail, customer, and provider effects remain held;
 FIN-006 remains pending until every mandatory capability/process row is
 composition-proved.
+
+FIN-006D's provider-neutral carrier-preserving forwarding authority, immutable
+conditional-destination no-Dial role, exact customer/operator tenancy,
+organization-scoped replay, signed lifecycle-edge Hangup proof, Twilio inbound
+reuse, operator binding control, all-89-migration real-PostgreSQL journey,
+adversarial corrections, and clean cumulative proof is
+`FIN-006D-RESPONDER-FORWARDING-PROVENANCE.md`. Carrier/Twilio configuration,
+message sends, native-client distribution, and every external effect remain
+held; FIN-006 remains pending until the native-client and remaining unified
+composition rows are proved.
