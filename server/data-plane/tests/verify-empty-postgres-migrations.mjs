@@ -62,6 +62,8 @@ import { verifyResponderCommercePostgres } from
   "./responder-commerce-postgres-proof.mjs";
 import { verifyResponderForwardingPostgres } from
   "./responder-forwarding-postgres-proof.mjs";
+import { verifyResponderNativeClientPostgres } from
+  "./responder-native-client-postgres-proof.mjs";
 import { verifyAdjacentIntegrationPostgres } from
   "./adjacent-integration-postgres-proof.mjs";
 
@@ -7467,6 +7469,8 @@ export async function runMigrationVerification({
     const responderCommerceProof = await verifyResponderCommercePostgres(pool);
     const responderForwardingProof =
       await verifyResponderForwardingPostgres(pool);
+    const responderNativeClientProof =
+      await verifyResponderNativeClientPostgres(pool);
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -7533,6 +7537,18 @@ export async function runMigrationVerification({
       `remoteWrites ${responderForwardingProof.remoteWrites} ` +
       `providerEffects ${responderForwardingProof.providerEffects} ` +
       `messageSendEffects ${responderForwardingProof.messageSendEffects}\n`
+    );
+    writeOutput(
+      `responderNativeClientPostgresProof ` +
+      `${responderNativeClientProof.assertions}/` +
+      `${responderNativeClientProof.expectedAssertions} ` +
+      `installations ${responderNativeClientProof.installations} ` +
+      `tokens ${responderNativeClientProof.tokens} ` +
+      `stateTransitions ${responderNativeClientProof.stateTransitions} ` +
+      `commands ${responderNativeClientProof.commands} ` +
+      `providerEffects ${responderNativeClientProof.providerEffects} ` +
+      `pushDeliveryEffects ${responderNativeClientProof.pushDeliveryEffects} ` +
+      `voiceCallEffects ${responderNativeClientProof.voiceCallEffects}\n`
     );
     writeOutput(
       `adjacentIntegrationPostgresProof ` +

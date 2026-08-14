@@ -65,6 +65,23 @@ const HELD_RESPONDER_FORWARDING_CAPABILITY = Object.freeze({
   providerEffects: false,
   messageSendEffects: false
 });
+const HELD_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
+  ready: false,
+  backendReady: false,
+  clientsReady: false,
+  mounted: false,
+  mode: "held-local",
+  acceptedRegistrationPlatforms: Object.freeze(["ios", "android"]),
+  initialClient: "ios",
+  clientArtifacts: Object.freeze({ ios: false, android: false }),
+  tokenStorage: "sealed",
+  voipSessionState: "held",
+  providerEffects: false,
+  pushDeliveryEffects: false,
+  voiceCallEffects: false,
+  carrierCommandEffects: false,
+  messageSendEffects: false
+});
 
 function writeRequest(
   path,
@@ -358,6 +375,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     },
     responder: false,
     responderForwarding: HELD_RESPONDER_FORWARDING_CAPABILITY,
+    responderNativeClient: HELD_RESPONDER_NATIVE_CLIENT_CAPABILITY,
     responderCommerce: HELD_RESPONDER_COMMERCE_CAPABILITY,
     adjacentIntegrations: {
       ready: false,
@@ -407,6 +425,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     },
     responder: false,
     responderForwarding: HELD_RESPONDER_FORWARDING_CAPABILITY,
+    responderNativeClient: HELD_RESPONDER_NATIVE_CLIENT_CAPABILITY,
     responderCommerce: HELD_RESPONDER_COMMERCE_CAPABILITY,
     adjacentIntegrations: {
       ready: false,

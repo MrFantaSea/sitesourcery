@@ -242,6 +242,12 @@ import {
   createPostgresResponderForwardingRepository
 } from "../responder-forwarding-postgres.mjs";
 import {
+  createPostgresResponderNativeClientRepository
+} from "../responder-native-client-postgres.mjs";
+import {
+  createResponderNativeTokenAuthority
+} from "../responder-native-token-authority.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -1085,6 +1091,42 @@ async function start() {
       "Canonical carrier-preserving Responder forwarding is not ready."
     );
   }
+  const responderNativeTokenAuthority =
+    identityPepperConfiguration.compose(createResponderNativeTokenAuthority);
+  const responderNativeClient = {
+    repository: createPostgresResponderNativeClientRepository({
+      authority,
+      verifierKeyVersions: [
+        ...responderNativeTokenAuthority.verifierVersions
+      ]
+    }),
+    tokenAuthority: responderNativeTokenAuthority,
+    clock: commerceV2.clock
+  };
+  const [
+    responderNativeClientReadiness,
+    responderNativeTokenReadiness
+  ] = await Promise.all([
+    responderNativeClient.repository.readiness(),
+    responderNativeTokenAuthority.readiness()
+  ]);
+  if (
+    responderNativeClientReadiness.ready !== true ||
+    responderNativeClientReadiness.verified !== true ||
+    responderNativeClientReadiness.providerEffects !== false ||
+    responderNativeClientReadiness.pushDeliveryEffects !== false ||
+    responderNativeClientReadiness.voiceCallEffects !== false ||
+    responderNativeClientReadiness.carrierCommandEffects !== false ||
+    responderNativeClientReadiness.messageSendEffects !== false ||
+    responderNativeTokenReadiness.ready !== true ||
+    responderNativeTokenReadiness.verified !== true ||
+    responderNativeTokenReadiness.providerEffects !== false ||
+    responderNativeTokenReadiness.pushDeliveryEffects !== false
+  ) {
+    throw new Error(
+      "Canonical held Responder native-client authority is not ready."
+    );
+  }
   const twilioResponderInbound =
     createConfiguredTwilioResponderInboundHttp({
       environment: process.env,
@@ -1246,6 +1288,7 @@ async function start() {
         responderSurfaces,
         responderCommerce,
         responderForwarding,
+        responderNativeClient,
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         operatorProviderReconciliation,
         adjacentIntegration,
@@ -1326,6 +1369,25 @@ async function start() {
         launchMode: responderForwardingReadiness.launchMode,
         initialAdapter: responderForwardingReadiness.initialAdapter,
         providerEffects: false
+      },
+      responderNativeClient: {
+        ready: false,
+        backendReady:
+          responderNativeClientReadiness.ready === true &&
+          responderNativeTokenReadiness.ready === true,
+        clientsReady: false,
+        mode: responderNativeClientReadiness.mode,
+        acceptedRegistrationPlatforms: ["ios", "android"],
+        initialClient: "ios",
+        clientArtifacts: {
+          ios: false,
+          android: false
+        },
+        tokenStorage: "sealed",
+        voipSessionState: "held",
+        providerEffects: false,
+        pushDeliveryEffects: false,
+        voiceCallEffects: false
       },
       database: readiness.persistence.database,
       postgresBudget: authority.budgetReadiness(),

@@ -3913,7 +3913,10 @@ test("FIN-006D persists carrier-preserving Responder forwarding without a loop o
     );
     assert.match(
       migration.sql,
-      new RegExp(`alter table ss\\.${table} force row level security`, "iu")
+      new RegExp(
+        `alter table ss\\.${table}\\s+force row level security`,
+        "iu"
+      )
     );
   }
   assert.match(
@@ -3959,5 +3962,65 @@ test("FIN-006D persists carrier-preserving Responder forwarding without a loop o
   assert.doesNotMatch(
     migration.sql,
     /phone_number\s+(?:text|varchar)|business_line\s+(?:text|varchar)|carrier_code\s+(?:text|varchar)|automatic_carrier_commands\s*=\s*true|remote_write_effects\s*=\s*true|provider_effects\s*=\s*true|message_send_effects\s*=\s*true|<Dial/iu
+  );
+});
+
+test("FIN-006E1 persists sealed native-client authority without external effects", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608140137_responder_native_client_authority.sql"
+  );
+  assert.ok(migration, "missing FIN-006E1 native-client migration 137");
+  assert.match(migration.sql, /^-- FIN-006E1[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "responder_native_commands",
+    "responder_native_installations",
+    "responder_native_push_token_registrations",
+    "responder_native_state_transitions"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(
+      migration.sql,
+      new RegExp(
+        `alter table ss\\.${table}\\s+force row level security`,
+        "iu"
+      )
+    );
+  }
+  assert.match(
+    migration.sql,
+    /primary key \(organization_id, command_id\)[\s\S]*unique \(organization_id, installation_id, resulting_revision\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /token_lookup_digest ss\.sha256_hex not null unique[\s\S]*nonce bytea not null[\s\S]*authentication_tag bytea not null[\s\S]*ciphertext bytea not null/iu
+  );
+  assert.match(
+    migration.sql,
+    /responder_native_token_envelope_digest_v1[\s\S]*encode\(selected_ciphertext, 'base64'\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /create_installation'[\s\S]*'register_token'[\s\S]*'suspend'[\s\S]*'resume'[\s\S]*'revoke'[\s\S]*resulting_revision = expected_revision \+ 1/iu
+  );
+  assert.match(
+    migration.sql,
+    /operation = 'suspend' and reason = 'logout'[\s\S]*operation = 'resume' and reason = 'login'[\s\S]*operation = 'revoke'[\s\S]*device_lost[\s\S]*token_compromise/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_responder_native_client_contract_v1\(\)[\s\S]*canonical-responder-native-client-v1-held-sealed-token-authority/iu
+  );
+  assert.match(
+    migration.sql,
+    /provider_effects boolean not null default false[\s\S]*push_delivery_effects boolean not null default false[\s\S]*voice_call_effects boolean not null default false[\s\S]*carrier_command_effects boolean not null default false[\s\S]*message_send_effects boolean not null default false/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /push_token\s+(?:text|varchar)|device_token\s+(?:text|varchar)|provider_effects\s*=\s*true|push_delivery_effects\s*=\s*true|voice_call_effects\s*=\s*true|carrier_command_effects\s*=\s*true|message_send_effects\s*=\s*true|grant all privileges/iu
   );
 });

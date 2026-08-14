@@ -15,6 +15,7 @@ const QUOTE = "50000000-0000-4000-8000-000000000001";
 const BINDING = "60000000-0000-4000-8000-000000000001";
 const ONBOARDING = "70000000-0000-4000-8000-000000000001";
 const INBOUND = "80000000-0000-4000-8000-000000000001";
+const INSTALLATION = "90000000-0000-4000-8000-000000000001";
 
 function canonicalService(organizationIds = [ORG_A]) {
   const calls = [];
@@ -155,6 +156,111 @@ function responderForwarding() {
           { digest: "a".repeat(64), keyVersion: "forward-v2" },
           { digest: "b".repeat(64), keyVersion: "forward-v1" }
         ];
+      }
+    },
+    clock: { now: () => "2026-08-14T20:00:00.000Z" }
+  };
+}
+
+function responderNativeClient() {
+  const calls = [];
+  const installation = {
+    id: INSTALLATION,
+    organizationId: ORG_A,
+    projectId: PROJECT,
+    customerUserId: USER,
+    platform: "ios",
+    bundleId: "com.sitesourcery.responder",
+    appEnvironment: "sandbox",
+    appVersion: "1.0.0",
+    buildNumber: "1",
+    installationKeyDigest: "1".repeat(64),
+    state: "active",
+    revision: 1,
+    pushRegistrations: []
+  };
+  return {
+    calls,
+    repository: {
+      kind: "responder-native-client-postgres",
+      mode: "held-local",
+      providerEffects: false,
+      pushDeliveryEffects: false,
+      voiceCallEffects: false,
+      carrierCommandEffects: false,
+      messageSendEffects: false,
+      async readiness() {
+        return {
+          ready: true,
+          verified: true,
+          mode: "held-local",
+          providerEffects: false,
+          pushDeliveryEffects: false,
+          voiceCallEffects: false,
+          carrierCommandEffects: false,
+          messageSendEffects: false
+        };
+      },
+      async listInstallations(...args) {
+        calls.push(["listInstallations", ...args]);
+        return { installations: [installation] };
+      },
+      async createInstallation(...args) {
+        calls.push(["createInstallation", ...args]);
+        return { installation };
+      },
+      async getInstallation(...args) {
+        calls.push(["getInstallation", ...args]);
+        return installation;
+      },
+      async registerToken(...args) {
+        calls.push(["registerToken", ...args]);
+        return { installation: { ...installation, revision: 2 } };
+      },
+      async suspendInstallation(...args) {
+        calls.push(["suspendInstallation", ...args]);
+        return { installation: { ...installation, state: "suspended" } };
+      },
+      async resumeInstallation(...args) {
+        calls.push(["resumeInstallation", ...args]);
+        return { installation };
+      },
+      async revokeInstallation(...args) {
+        calls.push(["revokeInstallation", ...args]);
+        return { installation: { ...installation, state: "revoked" } };
+      },
+      async requireHeldVoipSession(...args) {
+        calls.push(["requireHeldVoipSession", ...args]);
+        const error = new Error("held");
+        error.code = "RESPONDER_NATIVE_VOIP_HELD";
+        error.status = 409;
+        throw error;
+      }
+    },
+    tokenAuthority: {
+      kind: "responder-native-token-authority",
+      providerEffects: false,
+      pushDeliveryEffects: false,
+      async readiness() {
+        return {
+          ready: true,
+          verified: true,
+          kind: "responder-native-token-authority",
+          providerEffects: false,
+          pushDeliveryEffects: false
+        };
+      },
+      tokenLookupCandidates() {
+        return [{ digest: "a".repeat(64), keyVersion: "native-v1" }];
+      },
+      async sealToken() {
+        return {
+          keyVersion: "native-v1",
+          tokenLookupDigest: "a".repeat(64),
+          nonce: Buffer.alloc(12),
+          authenticationTag: Buffer.alloc(16),
+          ciphertext: Buffer.alloc(64)
+        };
       }
     },
     clock: { now: () => "2026-08-14T20:00:00.000Z" }
@@ -394,6 +500,42 @@ test("Responder forwarding is mounted through the root with narrow customer and 
   assert.equal(durableCallShape.includes("sessionDigest"), false);
 });
 
+test("Responder native-client routes reuse hosted auth and seal raw APNs tokens", async () => {
+  const canonical = canonicalService();
+  canonical.authenticate = async () => ({
+    userId: USER,
+    sessionId: "90000000-0000-4000-8000-000000000009",
+    sessionDigest: "s".repeat(64),
+    user: { email: "native-private@example.test" }
+  });
+  const native = responderNativeClient();
+  const api = createHostedApi(canonical, { responderNativeClient: native });
+  const listed = await api.fetch(get(
+    `/api/v1/responder/projects/${PROJECT}/native-installations`
+  ));
+  assert.equal(listed.status, 200);
+  const token = "ab".repeat(32);
+  const registered = await api.fetch(post(
+    `/api/v1/responder/projects/${PROJECT}/native-installations/` +
+      `${INSTALLATION}/push-tokens`,
+    { expectedRevision: 1, purpose: "voip", token }
+  ));
+  assert.equal(registered.status, 200);
+  assert.deepEqual(native.calls.map((entry) => entry[0]), [
+    "listInstallations", "getInstallation", "registerToken"
+  ]);
+  assert.deepEqual(native.calls[0][1], {
+    kind: "customer", userId: USER, organizationId: ORG_A
+  });
+  const durable = native.calls[2][2];
+  assert.equal(Object.hasOwn(durable, "token"), false);
+  assert.equal(durable.envelope.tokenLookupDigest, "a".repeat(64));
+  const durableShape = JSON.stringify(native.calls);
+  assert.equal(durableShape.includes(token), false);
+  assert.equal(durableShape.includes("native-private@example.test"), false);
+  assert.equal(durableShape.includes("sessionDigest"), false);
+});
+
 test("Responder root rejects any composition claiming external effects", () => {
   const unsafe = responderSurfaces();
   unsafe.billingEffects = true;
@@ -408,6 +550,14 @@ test("Responder root rejects any composition claiming external effects", () => {
   assert.throws(
     () => createHostedApi(canonicalService(), {
       responderForwarding: unsafeForwarding
+    }),
+    (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
+  );
+  const unsafeNative = responderNativeClient();
+  unsafeNative.repository.pushDeliveryEffects = true;
+  assert.throws(
+    () => createHostedApi(canonicalService(), {
+      responderNativeClient: unsafeNative
     }),
     (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
   );
