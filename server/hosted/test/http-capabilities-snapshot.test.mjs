@@ -19,7 +19,9 @@ const NAMES = Object.freeze([
   "careCommerce",
   "responder",
   "responderCommerce",
-  "responderForwarding"
+  "responderForwarding",
+  "responderNativeClient",
+  "responderNativeToken"
 ]);
 const FULL_DOMAIN_READINESS = Object.freeze({
   ready: true,
@@ -124,6 +126,40 @@ const FULL_RESPONDER_FORWARDING_CAPABILITY = Object.freeze({
   providerEffects: false,
   messageSendEffects: false
 });
+const FULL_RESPONDER_NATIVE_CLIENT_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  mode: "held-local",
+  providerEffects: false,
+  pushDeliveryEffects: false,
+  voiceCallEffects: false,
+  carrierCommandEffects: false,
+  messageSendEffects: false
+});
+const FULL_RESPONDER_NATIVE_TOKEN_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  kind: "responder-native-token-authority",
+  providerEffects: false,
+  pushDeliveryEffects: false
+});
+const FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
+  ready: false,
+  backendReady: true,
+  clientsReady: false,
+  mounted: true,
+  mode: "held-local",
+  acceptedRegistrationPlatforms: Object.freeze(["ios", "android"]),
+  initialClient: "ios",
+  clientArtifacts: Object.freeze({ ios: false, android: false }),
+  tokenStorage: "sealed",
+  voipSessionState: "held",
+  providerEffects: false,
+  pushDeliveryEffects: false,
+  voiceCallEffects: false,
+  carrierCommandEffects: false,
+  messageSendEffects: false
+});
 const EXPECTED = Object.freeze({
   accountRegistration: true,
   accountRecoveryEmail: true,
@@ -141,8 +177,9 @@ const EXPECTED = Object.freeze({
   responderInboundEvents: true,
   care: true,
   careCommerce: FULL_CARE_COMMERCE_CAPABILITY,
-  responder: true,
+  responder: false,
   responderForwarding: FULL_RESPONDER_FORWARDING_CAPABILITY,
+  responderNativeClient: FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY,
   responderCommerce: FULL_RESPONDER_COMMERCE_CAPABILITY,
   adjacentIntegrations: Object.freeze({
     ready: false,
@@ -184,6 +221,9 @@ function apiFixture({
   includeResponderCommerce = true,
   responderForwardingReadiness = FULL_RESPONDER_FORWARDING_READINESS,
   includeResponderForwarding = true,
+  responderNativeClientReadiness = FULL_RESPONDER_NATIVE_CLIENT_READINESS,
+  responderNativeTokenReadiness = FULL_RESPONDER_NATIVE_TOKEN_READINESS,
+  includeResponderNativeClient = true,
   serviceReadiness
 } = {}) {
   const calls = Object.fromEntries(NAMES.map((name) => [name, 0]));
@@ -420,6 +460,46 @@ function apiFixture({
             }
           }
         }
+      : null,
+    responderNativeClient: includeResponderNativeClient
+      ? {
+          repository: {
+            kind: "responder-native-client-postgres",
+            mode: "held-local",
+            providerEffects: false,
+            pushDeliveryEffects: false,
+            voiceCallEffects: false,
+            carrierCommandEffects: false,
+            messageSendEffects: false,
+            readiness: counted(
+              "responderNativeClient",
+              responderNativeClientReadiness
+            ),
+            ...Object.fromEntries([
+              "createInstallation", "getInstallation",
+              "listInstallations", "registerToken",
+              "requireHeldVoipSession", "suspendInstallation",
+              "resumeInstallation", "revokeInstallation"
+            ].map((name) => [name, async () => {
+              throw new Error("not reached");
+            }]))
+          },
+          tokenAuthority: {
+            kind: "responder-native-token-authority",
+            providerEffects: false,
+            pushDeliveryEffects: false,
+            readiness: counted(
+              "responderNativeToken",
+              responderNativeTokenReadiness
+            ),
+            tokenLookupCandidates() {
+              throw new Error("not reached");
+            },
+            async sealToken() {
+              throw new Error("not reached");
+            }
+          }
+        }
       : null
   });
   return { api, calls };
@@ -590,6 +670,85 @@ test("capabilities do not claim complete Responder without carrier-preserving fo
   });
   assert.equal(fixture.calls.responder, 1);
   assert.equal(fixture.calls.responderForwarding, 0);
+});
+
+test("capabilities do not claim complete Responder without native-client authority", async () => {
+  const fixture = apiFixture({ includeResponderNativeClient: false });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    ...EXPECTED,
+    responder: false,
+    responderNativeClient: {
+      ready: false,
+      backendReady: false,
+      clientsReady: false,
+      mounted: false,
+      mode: "held-local",
+      acceptedRegistrationPlatforms: ["ios", "android"],
+      initialClient: "ios",
+      clientArtifacts: { ios: false, android: false },
+      tokenStorage: "sealed",
+      voipSessionState: "held",
+      providerEffects: false,
+      pushDeliveryEffects: false,
+      voiceCallEffects: false,
+      carrierCommandEffects: false,
+      messageSendEffects: false
+    }
+  });
+  assert.equal(fixture.calls.responder, 1);
+  assert.equal(fixture.calls.responderNativeClient, 0);
+  assert.equal(fixture.calls.responderNativeToken, 0);
+});
+
+test("capabilities report backend-only native authority without claiming apps", async () => {
+  const fixture = apiFixture();
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.responder, false);
+  assert.deepEqual(
+    body.responderNativeClient,
+    FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY
+  );
+});
+
+test("capabilities fail native backend closed when token authority degrades", async () => {
+  const fixture = apiFixture({
+    responderNativeTokenReadiness: {
+      ...FULL_RESPONDER_NATIVE_TOKEN_READINESS,
+      ready: false,
+      verified: false
+    }
+  });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.responder, false);
+  assert.deepEqual(body.responderNativeClient, {
+    ...FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY,
+    backendReady: false
+  });
+});
+
+test("capabilities fail native backend closed when storage ACL readiness drifts", async () => {
+  const fixture = apiFixture({
+    responderNativeClientReadiness: {
+      ...FULL_RESPONDER_NATIVE_CLIENT_READINESS,
+      ready: false,
+      verified: false,
+      code: "RESPONDER_NATIVE_CLIENT_STORAGE_NOT_READY"
+    }
+  });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.responder, false);
+  assert.deepEqual(body.responderNativeClient, {
+    ...FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY,
+    backendReady: false
+  });
 });
 
 test("capabilities fail Responder closed when commerce catalog authority drifts", async () => {

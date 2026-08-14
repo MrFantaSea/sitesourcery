@@ -119,6 +119,9 @@ import {
   createResponderForwardingHttpBoundary
 } from "./responder-forwarding-http.mjs";
 import {
+  createResponderNativeClientHttpBoundary
+} from "./responder-native-client-http.mjs";
+import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
 import {
@@ -908,6 +911,7 @@ export function createHostedApi(
     twilioResponderInbound = null,
     responderNumberBindings = null,
     responderForwarding = null,
+    responderNativeClient = null,
     stripeWebhook = null,
     capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
@@ -1184,6 +1188,49 @@ export function createHostedApi(
           product: "Responder forwarding",
           selectionCode:
             "RESPONDER_FORWARDING_ORGANIZATION_SELECTION_REQUIRED"
+        }),
+        async requireWriteGuard(request) {
+          requireCsrf(
+            request,
+            parseCookies(request.headers.get("cookie"))
+          );
+          return true;
+        }
+      });
+  invariant(
+    responderNativeClient === null ||
+      (
+        responderNativeClient?.repository?.kind ===
+          "responder-native-client-postgres" &&
+        responderNativeClient.repository.mode === "held-local" &&
+        responderNativeClient.repository.providerEffects === false &&
+        responderNativeClient.repository.pushDeliveryEffects === false &&
+        responderNativeClient.repository.voiceCallEffects === false &&
+        responderNativeClient?.tokenAuthority?.kind ===
+          "responder-native-token-authority" &&
+        responderNativeClient.tokenAuthority.providerEffects === false &&
+        responderNativeClient.tokenAuthority.pushDeliveryEffects === false &&
+        typeof responderNativeClient.tokenAuthority.readiness === "function"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Responder native clients must use sealed held authority.",
+    { status: 500 }
+  );
+  const responderNativeClientHttpBoundary = responderNativeClient === null
+    ? null
+    : createResponderNativeClientHttpBoundary({
+        repository: responderNativeClient.repository,
+        tokenAuthority: responderNativeClient.tokenAuthority,
+        ...(responderNativeClient.clock
+          ? { clock: responderNativeClient.clock }
+          : {}),
+        authenticate: (request, route) => authenticatedOrganizationActor({
+          service,
+          request,
+          route,
+          product: "Responder native client",
+          selectionCode:
+            "RESPONDER_NATIVE_CLIENT_ORGANIZATION_SELECTION_REQUIRED"
         }),
         async requireWriteGuard(request) {
           requireCsrf(
@@ -1562,6 +1609,8 @@ export function createHostedApi(
           responderReadiness,
           responderCommerceReadiness,
           responderForwardingReadiness,
+          responderNativeClientReadiness,
+          responderNativeTokenReadiness,
           adjacentIntegrationReadiness
         ] = await Promise.all([
           service.readiness(),
@@ -1643,6 +1692,27 @@ export function createHostedApi(
                 messageSendEffects: false
               }
             : responderForwarding.repository.readiness(),
+          responderNativeClient === null
+            ? {
+                ready: false,
+                verified: false,
+                mode: "held-local",
+                providerEffects: false,
+                pushDeliveryEffects: false,
+                voiceCallEffects: false,
+                carrierCommandEffects: false,
+                messageSendEffects: false
+              }
+            : responderNativeClient.repository.readiness(),
+          responderNativeClient === null
+            ? {
+                ready: false,
+                verified: false,
+                kind: "responder-native-token-authority",
+                providerEffects: false,
+                pushDeliveryEffects: false
+              }
+            : responderNativeClient.tokenAuthority.readiness(),
           adjacentIntegration === null
             ? {
                 ready: false,
@@ -1661,6 +1731,19 @@ export function createHostedApi(
           readiness?.recovery ?? {};
         const domains =
           readiness?.providers?.domains ?? {};
+        const responderNativeBackendReady =
+          responderNativeClientReadiness?.ready === true &&
+          responderNativeClientReadiness?.verified === true &&
+          responderNativeClientReadiness?.providerEffects === false &&
+          responderNativeClientReadiness?.pushDeliveryEffects === false &&
+          responderNativeClientReadiness?.voiceCallEffects === false &&
+          responderNativeClientReadiness?.carrierCommandEffects === false &&
+          responderNativeClientReadiness?.messageSendEffects === false &&
+          responderNativeTokenReadiness?.ready === true &&
+          responderNativeTokenReadiness?.verified === true &&
+          responderNativeTokenReadiness?.providerEffects === false &&
+          responderNativeTokenReadiness?.pushDeliveryEffects === false;
+        const responderNativeClientsReady = false;
         return Object.freeze({
           accountRegistration:
             registration.ready === true &&
@@ -1768,7 +1851,9 @@ export function createHostedApi(
               false &&
             responderForwardingReadiness?.remoteWriteEffects === false &&
             responderForwardingReadiness?.providerEffects === false &&
-            responderForwardingReadiness?.messageSendEffects === false,
+            responderForwardingReadiness?.messageSendEffects === false &&
+            responderNativeBackendReady &&
+            responderNativeClientsReady,
           responderForwarding: Object.freeze({
             ready:
               responderForwardingReadiness?.ready === true &&
@@ -1789,6 +1874,26 @@ export function createHostedApi(
             automaticCarrierCommands: false,
             remoteWriteEffects: false,
             providerEffects: false,
+            messageSendEffects: false
+          }),
+          responderNativeClient: Object.freeze({
+            ready: responderNativeClientsReady,
+            backendReady: responderNativeBackendReady,
+            clientsReady: responderNativeClientsReady,
+            mounted: responderNativeClient !== null,
+            mode: responderNativeClientReadiness?.mode ?? "held-local",
+            acceptedRegistrationPlatforms: Object.freeze(["ios", "android"]),
+            initialClient: "ios",
+            clientArtifacts: Object.freeze({
+              ios: false,
+              android: false
+            }),
+            tokenStorage: "sealed",
+            voipSessionState: "held",
+            providerEffects: false,
+            pushDeliveryEffects: false,
+            voiceCallEffects: false,
+            carrierCommandEffects: false,
             messageSendEffects: false
           }),
           responderCommerce: Object.freeze({
@@ -2136,6 +2241,14 @@ export function createHostedApi(
             await responderForwardingHttpBoundary.dispatch(request);
           if (forwardingResponse !== null) {
             return rootedResponse(forwardingResponse, requestId);
+          }
+        }
+
+        if (responderNativeClientHttpBoundary !== null) {
+          const nativeResponse =
+            await responderNativeClientHttpBoundary.dispatch(request);
+          if (nativeResponse !== null) {
+            return rootedResponse(nativeResponse, requestId);
           }
         }
 
