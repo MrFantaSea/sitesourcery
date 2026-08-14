@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("production root composes durable, verified, effect-held Care surfaces", async () => {
+test("production root composes durable, verified, effect-held Care surfaces and commerce", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
@@ -11,7 +11,11 @@ test("production root composes durable, verified, effect-held Care surfaces", as
     "createPostgresCareCoreRepository",
     "createPostgresCareSurfaceRepository",
     "createCareMailReservationInterface",
-    "createCareSurfacesService"
+    "createCareSurfacesService",
+    "createPostgresCareCommerceEligibility",
+    "createPostgresCareCommerceRepository",
+    "createCareCommerceMailReservationInterface",
+    "createHeldCareCommerceService"
   ]) {
     assert.match(source, new RegExp(`\\b${constructor}\\b`, "u"));
   }
@@ -34,6 +38,24 @@ test("production root composes durable, verified, effect-held Care surfaces", as
   );
   assert.match(
     source,
-    /createHostedApi\(service, \{[\s\S]*?careSurfaces,[\s\S]*?operatorWorkQueue:/u
+    /const careCommerce = createHeldCareCommerceService\(\{\s*eligibility: createPostgresCareCommerceEligibility\(\{ authority \}\),\s*repository: createPostgresCareCommerceRepository\(\{ authority \}\),\s*ids: commerceV2[.]ids,\s*clock: commerceV2[.]clock,\s*mailReservations: createCareCommerceMailReservationInterface\(\{\s*lifecycle: mailLifecycle,\s*clock: commerceV2[.]clock\s*\}\)\s*\}\)/u
+  );
+  assert.match(
+    source,
+    /const careCommerceReadiness = await careCommerce[.]readiness\(\)/u
+  );
+  for (const field of [
+    "commercialReady", "taxPurposeReleased", "commercialEffects",
+    "customerEffects", "mailDeliveryEffects", "paymentEffects",
+    "providerEffects"
+  ]) {
+    assert.match(
+      source,
+      new RegExp(`careCommerceReadiness[.]${field} !== false`, "u")
+    );
+  }
+  assert.match(
+    source,
+    /createHostedApi\(service, \{[\s\S]*?careSurfaces,\s*careCommerce,[\s\S]*?operatorWorkQueue:/u
   );
 });

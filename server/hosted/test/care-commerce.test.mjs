@@ -79,7 +79,8 @@ function eligibility(input, overrides = {}) {
 
 function fixture({
   corruptReservation = false,
-  eligibilityOverrides = () => ({})
+  eligibilityOverrides = () => ({}),
+  mailReadiness = { ready: true, verified: true }
 } = {}) {
   const backingRepository = createMemoryCareCommerceRepository();
   const repository = corruptReservation
@@ -117,7 +118,7 @@ function fixture({
       deliveryEffects: false,
       providerEffects: false,
       async readiness() {
-        return { ready: true, verified: true };
+        return structuredClone(mailReadiness);
       },
       async reserve(input) {
         mailCalls.push(input);
@@ -291,6 +292,26 @@ test("held quote and invoice reservation bind exact org/project/contract/period 
   assert.equal("actorId" in customerProjection.record, false);
   assert.equal("customerId" in customerProjection.record, false);
   assert.match(customerProjection.projectionDigest, /^[0-9a-f]{64}$/u);
+});
+
+test("Care commerce readiness fails closed when mail reservation is unverified", async () => {
+  const { service } = fixture({
+    mailReadiness: { ready: true, verified: false }
+  });
+  assert.deepEqual(await service.readiness(), {
+    schema: "sitesourcery.care-commerce-readiness/v1",
+    ready: true,
+    verified: false,
+    commercialReady: false,
+    durableCommercialState: false,
+    taxPurposeReleased: false,
+    mailReservationReady: false,
+    commercialEffects: false,
+    customerEffects: false,
+    mailDeliveryEffects: false,
+    paymentEffects: false,
+    providerEffects: false
+  });
 });
 
 test("command reuse, reservation overlap, and eligibility drift fail closed", async () => {

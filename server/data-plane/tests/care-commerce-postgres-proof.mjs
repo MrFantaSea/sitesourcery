@@ -7,6 +7,8 @@ import {
 } from "../../hosted/care-commerce-postgres.mjs";
 import { createHeldCareCommerceService } from
   "../../hosted/care-commerce.mjs";
+import { createCareCommerceHttpBoundary } from
+  "../../hosted/care-commerce-http.mjs";
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
 
@@ -148,6 +150,51 @@ export async function verifyCareCommercePostgres(pool) {
   assert.equal(ready.commercialReady, false);
   assert.equal(ready.providerEffects, false);
   passed("readiness-durable-held");
+
+  const http = createCareCommerceHttpBoundary({
+    service,
+    async authenticate(_request, route) {
+      return {
+        userId: route.audience === "customer"
+          ? scope.customer_user_id
+          : operatorId,
+        organizationId: route.audience === "operator"
+          ? route.params.organizationId
+          : scope.organization_id
+      };
+    },
+    async requireWriteGuard() {
+      return true;
+    }
+  });
+  const customerBase =
+    `https://app.sitesourcery.test/api/v1/care/projects/${scope.project_id}` +
+    `/contracts/${scope.contract_id}/periods/${scope.period_id}/commerce`;
+  const operatorBase =
+    "https://app.sitesourcery.test/api/v1/operator/care/organizations/" +
+    `${scope.organization_id}/projects/${scope.project_id}` +
+    `/contracts/${scope.contract_id}/periods/${scope.period_id}/commerce`;
+  const customerCatalog = await http.dispatch(
+    new Request(`${customerBase}/catalog`)
+  );
+  assert.equal(customerCatalog.status, 200);
+  assert.equal((await customerCatalog.json()).audience, "customer");
+  const operatorCatalog = await http.dispatch(
+    new Request(`${operatorBase}/catalog`)
+  );
+  assert.equal(operatorCatalog.status, 200);
+  assert.equal((await operatorCatalog.json()).audience, "operator");
+  const httpWrongOrganizationId = randomUUID();
+  await expectCode(
+    () => http.dispatch(new Request(
+      "https://app.sitesourcery.test/api/v1/operator/care/organizations/" +
+      `${httpWrongOrganizationId}/projects/${scope.project_id}` +
+      `/contracts/${scope.contract_id}/periods/${scope.period_id}` +
+      "/commerce/catalog"
+    )),
+    "CARE_COMMERCE_UNAVAILABLE"
+  );
+  passed("http-customer-operator-and-cross-org-boundary");
 
   const quoteInput = {
     ...operatorScope,
@@ -356,6 +403,7 @@ export async function verifyCareCommercePostgres(pool) {
 
   assert.deepEqual(gates, [
     "readiness-durable-held",
+    "http-customer-operator-and-cross-org-boundary",
     "quote-exact-and-replay-safe",
     "command-fingerprint-drift-denied",
     "one-per-quote-reservation-and-replay",

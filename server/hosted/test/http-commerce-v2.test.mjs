@@ -318,6 +318,18 @@ test("public capabilities enable only actions whose server boundary can succeed"
     responderProviderEvents: false,
     responderInboundEvents: false,
     care: false,
+    careCommerce: {
+      ready: false,
+      mounted: false,
+      mode: "held-local",
+      commercialReady: false,
+      taxPurposeReleased: false,
+      commercialEffects: false,
+      customerEffects: false,
+      mailDeliveryEffects: false,
+      paymentEffects: false,
+      providerEffects: false
+    },
     responder: false,
     adjacentIntegrations: {
       ready: false,
@@ -353,6 +365,18 @@ test("public capabilities enable only actions whose server boundary can succeed"
     responderProviderEvents: false,
     responderInboundEvents: false,
     care: false,
+    careCommerce: {
+      ready: false,
+      mounted: false,
+      mode: "held-local",
+      commercialReady: false,
+      taxPurposeReleased: false,
+      commercialEffects: false,
+      customerEffects: false,
+      mailDeliveryEffects: false,
+      paymentEffects: false,
+      providerEffects: false
+    },
     responder: false,
     adjacentIntegrations: {
       ready: false,

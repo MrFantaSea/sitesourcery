@@ -119,6 +119,9 @@ import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
 import {
+  createCareCommerceHttpBoundary
+} from "./care-commerce-http.mjs";
+import {
   createResponderSurfacesHttpBoundary
 } from "./responder-surfaces-http.mjs";
 import { digestUserAgent } from "./project-legal-authority.mjs";
@@ -887,6 +890,7 @@ export function createHostedApi(
     customServicesOwner = null,
     engagementBootstrap = null,
     careSurfaces = null,
+    careCommerce = null,
     responderSurfaces = null,
     operatorWorkQueue = null,
     operatorProviderReconciliation = null,
@@ -976,6 +980,49 @@ export function createHostedApi(
           product: "Care",
           selectionCode: "CARE_ORGANIZATION_SELECTION_REQUIRED"
         }),
+        async requireWriteGuard(request) {
+          requireCsrf(
+            request,
+            parseCookies(request.headers.get("cookie"))
+          );
+          return true;
+        }
+      });
+  invariant(
+    careCommerce === null ||
+      (
+        careCommerce?.kind === "care-commerce" &&
+        careCommerce.mode === "held-local" &&
+        careCommerce.commercialEffects === false &&
+        careCommerce.customerEffects === false &&
+        careCommerce.mailDeliveryEffects === false &&
+        careCommerce.paymentEffects === false &&
+        careCommerce.providerEffects === false &&
+        typeof careCommerce.readiness === "function"
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Care commerce must use the verified effect-held composition.",
+    { status: 500 }
+  );
+  const careCommerceHttpBoundary = careCommerce === null
+    ? null
+    : createCareCommerceHttpBoundary({
+        service: careCommerce,
+        async authenticate(request, route) {
+          const selected = await authenticatedOrganizationActor({
+            service,
+            request,
+            route,
+            product: "Care commerce",
+            selectionCode: "CARE_COMMERCE_ORGANIZATION_SELECTION_REQUIRED"
+          });
+          return selected === null
+            ? null
+            : Object.freeze({
+                userId: selected.userId,
+                organizationId: selected.organizationId
+              });
+        },
         async requireWriteGuard(request) {
           requireCsrf(
             request,
@@ -1419,6 +1466,7 @@ export function createHostedApi(
           twilioResponderEventReadiness,
           twilioResponderInboundReadiness,
           careReadiness,
+          careCommerceReadiness,
           responderReadiness,
           adjacentIntegrationReadiness
         ] = await Promise.all([
@@ -1447,6 +1495,21 @@ export function createHostedApi(
                 providerEffects: false
               }
             : careSurfaces.readiness(),
+          careCommerce === null
+            ? {
+                ready: false,
+                verified: false,
+                commercialReady: false,
+                durableCommercialState: false,
+                taxPurposeReleased: false,
+                mailReservationReady: false,
+                commercialEffects: false,
+                customerEffects: false,
+                mailDeliveryEffects: false,
+                paymentEffects: false,
+                providerEffects: false
+              }
+            : careCommerce.readiness(),
           responderSurfaces === null
             ? {
                 ready: false,
@@ -1518,7 +1581,43 @@ export function createHostedApi(
             careReadiness?.customerEffects === false &&
             careReadiness?.mailReservation?.deliveryEffects === false &&
             careReadiness?.paymentEffects === false &&
-            careReadiness?.providerEffects === false,
+            careReadiness?.providerEffects === false &&
+            careCommerceReadiness?.ready === true &&
+            careCommerceReadiness?.verified === true &&
+            careCommerceReadiness?.commercialReady === false &&
+            careCommerceReadiness?.durableCommercialState === true &&
+            careCommerceReadiness?.taxPurposeReleased === false &&
+            careCommerceReadiness?.mailReservationReady === true &&
+            careCommerceReadiness?.commercialEffects === false &&
+            careCommerceReadiness?.customerEffects === false &&
+            careCommerceReadiness?.mailDeliveryEffects === false &&
+            careCommerceReadiness?.paymentEffects === false &&
+            careCommerceReadiness?.providerEffects === false,
+          careCommerce: Object.freeze({
+            ready:
+              careCommerceReadiness?.ready === true &&
+              careCommerceReadiness?.verified === true &&
+              careCommerceReadiness?.commercialReady === false &&
+              careCommerceReadiness?.durableCommercialState === true &&
+              careCommerceReadiness?.taxPurposeReleased === false &&
+              careCommerceReadiness?.mailReservationReady === true &&
+              careCommerceReadiness?.commercialEffects === false &&
+              careCommerceReadiness?.customerEffects === false &&
+              careCommerceReadiness?.mailDeliveryEffects === false &&
+              careCommerceReadiness?.paymentEffects === false &&
+              careCommerceReadiness?.providerEffects === false,
+            mounted: careCommerce !== null,
+            mode: "held-local",
+            commercialReady:
+              careCommerceReadiness?.commercialReady === true,
+            taxPurposeReleased:
+              careCommerceReadiness?.taxPurposeReleased === true,
+            commercialEffects: false,
+            customerEffects: false,
+            mailDeliveryEffects: false,
+            paymentEffects: false,
+            providerEffects: false
+          }),
           responder:
             responderReadiness?.ready === true &&
             responderReadiness?.verified === true &&
@@ -1811,6 +1910,14 @@ export function createHostedApi(
             await careSurfacesHttpBoundary.dispatch(request);
           if (careResponse !== null) {
             return rootedResponse(careResponse, requestId);
+          }
+        }
+
+        if (careCommerceHttpBoundary !== null) {
+          const commerceResponse =
+            await careCommerceHttpBoundary.dispatch(request);
+          if (commerceResponse !== null) {
+            return rootedResponse(commerceResponse, requestId);
           }
         }
 
