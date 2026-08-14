@@ -27,20 +27,28 @@ and prototypes remain preserved. No archive is safe or authorized to delete.
 
 ## Real gaps found
 
-The audit found three bounded requirements, not a reason to rebuild existing
+The semantic comparison found two bounded requirements, not a reason to rebuild existing
 systems:
 
-1. **FIN-005B — Domain held surfaces.** Twelve absent customer/operator held
-   lifecycle and purchase-authority files must be adapted to the already-proved
-   Domain system and the current `disabled_by_owner` tax rule.
-2. **FIN-005C — Assessment/Custom joined proof.** Adapt two donor test paths to
+1. **FIN-005B — Assessment/Custom joined proof.** Adapt two donor test paths to
    prove the complete assessment-credit-to-Custom lifecycle in one real
    PostgreSQL and browser journey. This is proof work, not new production
    semantics.
-3. **FIN-009/010 release authority requirement.** Port the donor's unique
+2. **FIN-009/010 release authority requirement.** Port the donor's unique
    owner-signature and atomic one-shot finalizer invariants into the current
    exact-candidate staging/cutover authority. The obsolete V3 Pages workflow is
    retained as a donor and will not be restored wholesale during FIN-005.
+
+The 12 absent Domain files are not a missing product slice. The donor builds a
+second, unmounted customer/operator UI and a parallel ten-route backend. Its
+browser proof renders fixtures without calling that backend, and its purchase
+authority accepts `exclusive_calculated_at_checkout`, which conflicts with the
+later owner-selected `disabled_by_owner` tax state. The successor already has
+the fuller customer Domain storefront, browser API, PostgreSQL runtime,
+provider-route/lifecycle repositories, lifecycle worker, HTTP routes, and
+operator work queue. Copying the donor would create another half-connected
+system. Truthful held-root composition of the existing system remains assigned
+to FIN-006.
 
 The v46 service divergence is explicitly superseded: its migration is an exact
 blob match, while the current implementation preserves final-payment behavior
@@ -51,11 +59,10 @@ authority defects.
 
 Proceed with one implementation writer and one subcohort at a time:
 
-1. adapt and prove FIN-005B Domain held surfaces;
-2. adapt and prove FIN-005C Assessment/Custom joined proof;
-3. revalidate that no classified lane became dirty or changed;
-4. run the cumulative ladder once after the required imports; and
-5. seal FIN-005 provenance and ledger state.
+1. adapt and prove FIN-005B Assessment/Custom joined proof;
+2. revalidate that no classified lane became dirty or changed;
+3. run the cumulative ladder once after the required proof import; and
+4. seal FIN-005 provenance and ledger state.
 
 No further broad branch mapping is authorized unless the Git inventory changes.
 The JSON ledger is the resume and deduplication boundary for later terminals.
