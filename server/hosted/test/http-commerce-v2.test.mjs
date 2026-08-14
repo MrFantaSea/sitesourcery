@@ -39,6 +39,20 @@ const HELD_DOMAIN_CAPABILITY = Object.freeze({
   remoteWrites: false,
   automaticCommands: false
 });
+const HELD_RESPONDER_COMMERCE_CAPABILITY = Object.freeze({
+  ready: false,
+  mounted: false,
+  mode: "held-local",
+  durableCommercialState: false,
+  catalogAuthorityVerified: false,
+  taxPurposeReleased: false,
+  sellable: false,
+  commercialEffects: false,
+  customerEffects: false,
+  mailDeliveryEffects: false,
+  paymentEffects: false,
+  providerEffects: false
+});
 
 function writeRequest(
   path,
@@ -331,6 +345,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
       providerEffects: false
     },
     responder: false,
+    responderCommerce: HELD_RESPONDER_COMMERCE_CAPABILITY,
     adjacentIntegrations: {
       ready: false,
       mode: "held",
@@ -378,6 +393,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
       providerEffects: false
     },
     responder: false,
+    responderCommerce: HELD_RESPONDER_COMMERCE_CAPABILITY,
     adjacentIntegrations: {
       ready: false,
       mode: "held",
