@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-005 proved; FIN-006A/B/C/D subcohorts proved; FIN-006 active
+Status: FIN-005 proved; FIN-006A/B/C/D/E1 subcohorts proved; FIN-006 active
 
 ## Governing inputs
 
@@ -158,3 +158,13 @@ adversarial corrections, and clean cumulative proof is
 message sends, native-client distribution, and every external effect remain
 held; FIN-006 remains pending until the native-client and remaining unified
 composition rows are proved.
+
+FIN-006E1's tenant-scoped native installation authority, sealed and
+purpose-separated APNs/FCM token storage, append-only suspension/resume/
+revocation evidence, exact ACL-readiness gate, mounted authenticated routes,
+truthful backend-ready/apps-unbuilt capability projection, all-90-migration
+real-PostgreSQL journey, adversarial corrections, and clean cumulative proof is
+`FIN-006E1-NATIVE-CLIENT-AUTHORITY-PROVENANCE.md`. Every push, Voice, carrier,
+message, provider, app-distribution, public, and deployment effect remains
+held; FIN-006 remains pending until both native clients and the unified
+composition matrix are proved.
