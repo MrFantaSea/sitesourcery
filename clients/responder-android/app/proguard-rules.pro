@@ -1,0 +1,3 @@
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+-keep class com.twilio.voice.** { *; }
+-dontwarn org.conscrypt.**

@@ -118,6 +118,8 @@ function envelope(value) {
     value && typeof value === "object" && !Array.isArray(value) &&
       VERSION.test(value.keyVersion ?? "") &&
       SHA256.test(value.tokenLookupDigest ?? "") &&
+      SHA256.test(value.tokenOwnershipDigest ?? "") &&
+      SHA256.test(value.tokenReceiptDigest ?? "") &&
       Buffer.isBuffer(value.nonce) && value.nonce.length === 12 &&
       Buffer.isBuffer(value.authenticationTag) &&
       value.authenticationTag.length === 16 &&
@@ -144,6 +146,8 @@ function voiceSessionAuthority(row) {
     userId: row.customer_user_id,
     installationId: row.installation_id,
     installationRevision: Number(row.installation_revision),
+    clientPlatform: row.client_platform,
+    transport: row.transport,
     appEnvironment: row.app_environment
   });
 }
@@ -183,8 +187,15 @@ function voiceSessionProjection(
     semanticReplay,
     installationId: row.installation_id,
     installationRevision: Number(row.installation_revision),
+    organizationId: row.organization_id,
+    projectId: row.project_id,
+    customerUserId: row.customer_user_id,
+    appEnvironment: row.app_environment,
     provider: "twilio",
-    transport: "twilio_voice_ios",
+    clientPlatform: row.client_platform,
+    transport: row.transport,
+    identityDigest: row.identity_digest,
+    credentialDigest: row.credential_digest,
     accessToken,
     issuedAt: iso(row.issued_at),
     expiresAt: iso(row.expires_at),
@@ -322,6 +333,32 @@ async function commandReceipt(
     voipSessionState = "held"
   } = {}
 ) {
+  let tokenReceiptDigest = null;
+  if (row.operation === "register_token") {
+    const tokenReceipt = await client.query(
+      `select registration.token_ownership_kind,
+              registration.token_receipt_digest
+         from ss.responder_native_push_token_registrations registration
+        where registration.organization_id = $1
+          and registration.id = $2`,
+      [row.organization_id, row.token_registration_id]
+    );
+    invariant(
+      tokenReceipt.rowCount === 1 && (
+        (
+          tokenReceipt.rows[0].token_ownership_kind === "physical_v1" &&
+          SHA256.test(tokenReceipt.rows[0].token_receipt_digest ?? "")
+        ) || (
+          tokenReceipt.rows[0].token_ownership_kind === "legacy_purpose_bound" &&
+          tokenReceipt.rows[0].token_receipt_digest === null
+        )
+      ),
+      "RESPONDER_NATIVE_CLIENT_CONFLICT",
+      "The native push-token receipt is unavailable.",
+      { status: 409 }
+    );
+    tokenReceiptDigest = tokenReceipt.rows[0].token_receipt_digest;
+  }
   return deepFreeze({
     schema: "sitesourcery.responder-native-command-receipt/v1",
     commandId: row.command_id,
@@ -329,6 +366,7 @@ async function commandReceipt(
     operation: row.operation,
     replayed,
     semanticReplay,
+    tokenReceiptDigest,
     installation: await loadInstallation(
       client,
       actor,
@@ -400,6 +438,10 @@ export function createPostgresResponderNativeClientRepository({
       voiceAccess.providerEffects === false &&
       voiceAccess.pushDeliveryEffects === false &&
       voiceAccess.voiceCallEffects === false &&
+      Array.isArray(voiceAccess.transports) &&
+      voiceAccess.transports.length === 2 &&
+      voiceAccess.transports.includes("twilio_voice_ios") &&
+      voiceAccess.transports.includes("twilio_voice_android") &&
       typeof voiceAccess.issueSession === "function" &&
       typeof voiceAccess.openSession === "function" &&
       Array.isArray(voiceAccess.verifierVersions) &&
@@ -546,7 +588,164 @@ export function createPostgresResponderNativeClientRepository({
               ) is not null
               and ss.hosted_responder_native_voice_session_contract_v1() =
                 'canonical-responder-native-voice-session-v1-sealed-replay-held'
+              and to_regprocedure(
+                'ss.hosted_responder_android_voice_contract_v1()'
+              ) is not null
+              and ss.hosted_responder_android_voice_contract_v1() =
+                'canonical-responder-android-voice-v1-fcm-dual-purpose-receipt-bound-held'
                 as contract_ready,
+              (
+                to_regprocedure(
+                  'ss.responder_native_token_payload_digest_v2(text,ss.sha256_hex,ss.sha256_hex,ss.sha256_hex)'
+                ) is not null
+                and to_regprocedure(
+                  'ss.responder_native_token_envelope_digest_v2(ss.sha256_hex,ss.sha256_hex,ss.sha256_hex,text,bytea,bytea,bytea)'
+                ) is not null
+                and has_function_privilege(
+                  'service_role',
+                  'ss.responder_native_token_payload_digest_v2(text,ss.sha256_hex,ss.sha256_hex,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and has_function_privilege(
+                  'service_role',
+                  'ss.responder_native_token_envelope_digest_v2(ss.sha256_hex,ss.sha256_hex,ss.sha256_hex,text,bytea,bytea,bytea)',
+                  'EXECUTE'
+                )
+                and not exists (
+                  select 1
+                    from pg_proc procedure_record
+                    join pg_namespace procedure_namespace
+                      on procedure_namespace.oid = procedure_record.pronamespace
+                    cross join lateral aclexplode(coalesce(
+                      procedure_record.proacl,
+                      acldefault('f', procedure_record.proowner)
+                    )) procedure_acl
+                   where procedure_namespace.nspname = 'ss'
+                     and procedure_record.proname = any(array[
+                       'responder_native_token_payload_digest_v2',
+                       'responder_native_token_envelope_digest_v2'
+                     ])
+                     and procedure_acl.grantee = 0
+                     and procedure_acl.privilege_type = 'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'anon',
+                  'ss.responder_native_token_payload_digest_v2(text,ss.sha256_hex,ss.sha256_hex,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'anon',
+                  'ss.responder_native_token_envelope_digest_v2(ss.sha256_hex,ss.sha256_hex,ss.sha256_hex,text,bytea,bytea,bytea)',
+                  'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'authenticated',
+                  'ss.responder_native_token_payload_digest_v2(text,ss.sha256_hex,ss.sha256_hex,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'authenticated',
+                  'ss.responder_native_token_envelope_digest_v2(ss.sha256_hex,ss.sha256_hex,ss.sha256_hex,text,bytea,bytea,bytea)',
+                  'EXECUTE'
+                )
+              ) as receipt_functions_ready,
+              (
+                to_regprocedure(
+                  'ss.responder_native_voice_session_request_digest_v2(uuid,uuid,uuid,uuid,bigint,text,text,text,ss.sha256_hex)'
+                ) is not null
+                and to_regprocedure(
+                  'ss.responder_native_voice_session_envelope_digest_v2(text,text,text,bytea,bytea,bytea,ss.sha256_hex)'
+                ) is not null
+                and has_function_privilege(
+                  'service_role',
+                  'ss.responder_native_voice_session_request_digest_v2(uuid,uuid,uuid,uuid,bigint,text,text,text,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and has_function_privilege(
+                  'service_role',
+                  'ss.responder_native_voice_session_envelope_digest_v2(text,text,text,bytea,bytea,bytea,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and not exists (
+                  select 1
+                    from pg_proc procedure_record
+                    join pg_namespace procedure_namespace
+                      on procedure_namespace.oid = procedure_record.pronamespace
+                    cross join lateral aclexplode(coalesce(
+                      procedure_record.proacl,
+                      acldefault('f', procedure_record.proowner)
+                    )) procedure_acl
+                   where procedure_namespace.nspname = 'ss'
+                     and procedure_record.proname = any(array[
+                       'responder_native_voice_session_request_digest_v2',
+                       'responder_native_voice_session_envelope_digest_v2'
+                     ])
+                     and procedure_acl.grantee = 0
+                     and procedure_acl.privilege_type = 'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'anon',
+                  'ss.responder_native_voice_session_request_digest_v2(uuid,uuid,uuid,uuid,bigint,text,text,text,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'anon',
+                  'ss.responder_native_voice_session_envelope_digest_v2(text,text,text,bytea,bytea,bytea,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'authenticated',
+                  'ss.responder_native_voice_session_request_digest_v2(uuid,uuid,uuid,uuid,bigint,text,text,text,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+                and not has_function_privilege(
+                  'authenticated',
+                  'ss.responder_native_voice_session_envelope_digest_v2(text,text,text,bytea,bytea,bytea,ss.sha256_hex)',
+                  'EXECUTE'
+                )
+              ) as voice_functions_ready,
+              (
+                exists (
+                  select 1
+                    from pg_constraint constraint_record
+                   where constraint_record.conrelid =
+                     'ss.responder_native_push_token_registrations'::regclass
+                     and constraint_record.conname =
+                       'responder_native_token_receipt_posture_check'
+                     and constraint_record.convalidated
+                )
+                and exists (
+                  select 1
+                    from pg_trigger trigger_record
+                   where trigger_record.tgrelid =
+                     'ss.responder_native_push_token_registrations'::regclass
+                     and trigger_record.tgname =
+                       'responder_native_push_tokens_guard'
+                     and not trigger_record.tgisinternal
+                     and trigger_record.tgenabled = 'O'
+                )
+              ) as receipt_guard_ready,
+              (
+                exists (
+                  select 1
+                    from pg_constraint constraint_record
+                   where constraint_record.conrelid =
+                     'ss.responder_native_voice_sessions'::regclass
+                     and constraint_record.conname =
+                       'responder_native_voice_platform_transport_check'
+                     and constraint_record.convalidated
+                )
+                and exists (
+                  select 1
+                    from pg_trigger trigger_record
+                   where trigger_record.tgrelid =
+                     'ss.responder_native_voice_sessions'::regclass
+                     and trigger_record.tgname =
+                       'responder_native_voice_sessions_guard'
+                     and not trigger_record.tgisinternal
+                     and trigger_record.tgenabled = 'O'
+                )
+              ) as voice_guard_ready,
               (select count(*) = 6
                  and bool_and(
                    relation.relrowsecurity
@@ -667,18 +866,32 @@ export function createPostgresResponderNativeClientRepository({
                    and voice_session.key_version <> all($3::text[])
               ) as voice_keys_covered,
               not exists (
-                select registration.token_lookup_digest
+                select registration.token_ownership_digest
                   from ss.responder_native_push_token_registrations registration
                   join ss.responder_native_installations installation
                     on installation.organization_id = registration.organization_id
                    and installation.id = registration.installation_id
-                 group by registration.token_lookup_digest
+                 group by registration.token_ownership_digest
                 having count(distinct installation.customer_user_id) > 1
                     or count(distinct installation.platform) > 1
                     or count(distinct installation.bundle_id) > 1
                     or count(distinct installation.app_environment) > 1
-                    or count(distinct registration.push_purpose) > 1
+                    or (
+                      count(distinct registration.push_purpose) > 1
+                      and bool_or(installation.platform <> 'android')
+                    )
               ) as token_ownership_ready,
+              not exists (
+                select 1
+                  from ss.responder_native_push_token_registrations registration
+                 where (
+                   registration.token_ownership_kind = 'legacy_purpose_bound'
+                   and registration.token_receipt_digest is not null
+                 ) or (
+                   registration.token_ownership_kind = 'physical_v1'
+                   and registration.token_receipt_digest is null
+                 )
+              ) as token_receipts_ready,
               not exists (
                 select registration.organization_id,
                        registration.installation_id,
@@ -704,9 +917,14 @@ export function createPostgresResponderNativeClientRepository({
         );
         const row = result.rows[0] ?? {};
         const ready = row.contract_ready === true &&
+          row.receipt_functions_ready === true &&
+          row.voice_functions_ready === true &&
+          row.receipt_guard_ready === true &&
+          row.voice_guard_ready === true &&
           row.tables_ready === true && row.token_keys_covered === true &&
           row.voice_keys_covered === true &&
           row.token_ownership_ready === true &&
+          row.token_receipts_ready === true &&
           row.active_tokens_ready === true;
         return deepFreeze({
           ready,
@@ -862,6 +1080,10 @@ export function createPostgresResponderNativeClientRepository({
         pushPurpose: input.pushPurpose,
         envelope: selectedEnvelope,
         tokenLookupCandidateDigests: input.tokenLookupCandidateDigests,
+        tokenCollisionCandidateDigests:
+          input.tokenCollisionCandidateDigests ?? input.tokenLookupCandidateDigests,
+        tokenOwnershipCandidateDigests:
+          input.tokenOwnershipCandidateDigests,
         recordedAt: instant(input.recordedAt, "Recorded time")
       };
       invariant(
@@ -875,6 +1097,26 @@ export function createPostgresResponderNativeClientRepository({
             selected.envelope.tokenLookupDigest &&
           selected.tokenLookupCandidateDigests.every(
             (entry) => typeof entry === "string" && SHA256.test(entry)
+          ) &&
+          Array.isArray(selected.tokenCollisionCandidateDigests) &&
+          selected.tokenCollisionCandidateDigests.length >=
+            selected.tokenLookupCandidateDigests.length &&
+          selected.tokenCollisionCandidateDigests.length <= 8 &&
+          selected.tokenLookupCandidateDigests.every((entry) =>
+            selected.tokenCollisionCandidateDigests.includes(entry)
+          ) &&
+          new Set(selected.tokenCollisionCandidateDigests).size ===
+            selected.tokenCollisionCandidateDigests.length &&
+          selected.tokenCollisionCandidateDigests.every(
+            (entry) => typeof entry === "string" && SHA256.test(entry)
+          ) &&
+          Array.isArray(selected.tokenOwnershipCandidateDigests) &&
+          selected.tokenOwnershipCandidateDigests.length ===
+            selected.tokenLookupCandidateDigests.length &&
+          selected.tokenOwnershipCandidateDigests[0] ===
+            selected.envelope.tokenOwnershipDigest &&
+          selected.tokenOwnershipCandidateDigests.every(
+            (entry) => typeof entry === "string" && SHA256.test(entry)
           ),
         "RESPONDER_NATIVE_CLIENT_INVALID",
         "The native push-token registration is invalid.",
@@ -887,15 +1129,24 @@ export function createPostgresResponderNativeClientRepository({
             "select pg_advisory_xact_lock(hashtextextended($1, 0))",
             [`responder-native-installation:${selected.installationId}`]
           );
+          for (const ownershipDigest of
+            selected.tokenOwnershipCandidateDigests) {
+            await client.query(
+              "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+              [`responder-native-token-ownership:${ownershipDigest}`]
+            );
+          }
           const digestRows = await client.query(
             `select
-               ss.responder_native_token_envelope_digest_v1(
-                 $1,$2,$3,$4,$5
+               ss.responder_native_token_envelope_digest_v2(
+                 $1,$2,$3,$4,$5,$6,$7
                ) as envelope_digest,
-               ss.responder_native_token_payload_digest_v1($6,$1)
+               ss.responder_native_token_payload_digest_v2($8,$1,$2,$3)
                  as payload_digest`,
             [
               selected.envelope.tokenLookupDigest,
+              selected.envelope.tokenOwnershipDigest,
+              selected.envelope.tokenReceiptDigest,
               selected.envelope.keyVersion, selected.envelope.nonce,
               selected.envelope.authenticationTag,
               selected.envelope.ciphertext, selected.pushPurpose
@@ -929,9 +1180,7 @@ export function createPostgresResponderNativeClientRepository({
           );
           invariant(
             installed.state === "active" &&
-              installed.revision === selected.expectedRevision &&
-              (selected.pushPurpose !== "voip" ||
-                installed.platform === "ios"),
+              installed.revision === selected.expectedRevision,
             "RESPONDER_NATIVE_CLIENT_RETRY_REQUIRED",
             "Responder native-client state changed; retry safely.",
             { status: 409 }
@@ -942,6 +1191,9 @@ export function createPostgresResponderNativeClientRepository({
                     registration.push_purpose, registration.key_version,
                     registration.command_id,
                     registration.token_lookup_digest,
+                    registration.token_ownership_digest,
+                    registration.token_ownership_kind,
+                    registration.token_receipt_digest,
                     installation.customer_user_id,
                     installation.platform, installation.bundle_id,
                     installation.app_environment,
@@ -954,8 +1206,12 @@ export function createPostgresResponderNativeClientRepository({
                  on retirement.organization_id = registration.organization_id
                 and retirement.registration_id = registration.id
               where registration.token_lookup_digest = any($1::text[])
+                 or registration.token_ownership_digest = any($2::text[])
               order by registration.created_at desc, registration.id desc`,
-            [selected.tokenLookupCandidateDigests]
+            [
+              selected.tokenCollisionCandidateDigests,
+              selected.tokenOwnershipCandidateDigests
+            ]
           );
           for (const collision of collisions.rows) {
             invariant(
@@ -963,7 +1219,15 @@ export function createPostgresResponderNativeClientRepository({
                 collision.platform === installed.platform &&
                 collision.bundle_id === installed.bundleId &&
                 collision.app_environment === installed.appEnvironment &&
-                collision.push_purpose === selected.pushPurpose,
+                (
+                  collision.push_purpose === selected.pushPurpose ||
+                  (
+                    installed.platform === "android" &&
+                    selected.tokenOwnershipCandidateDigests.includes(
+                      collision.token_ownership_digest
+                    )
+                  )
+                ),
               "RESPONDER_NATIVE_CLIENT_CONFLICT",
               "The native push token is already bound elsewhere.",
               { status: 409 }
@@ -973,9 +1237,14 @@ export function createPostgresResponderNativeClientRepository({
             collision.organization_id === selected.organizationId &&
               collision.installation_id === selected.installationId &&
               collision.push_purpose === selected.pushPurpose &&
+              collision.token_ownership_kind === "physical_v1" &&
               collision.key_version === selected.envelope.keyVersion &&
               collision.token_lookup_digest ===
                 selected.envelope.tokenLookupDigest &&
+              collision.token_ownership_digest ===
+                selected.envelope.tokenOwnershipDigest &&
+              collision.token_receipt_digest ===
+                selected.envelope.tokenReceiptDigest &&
               collision.unretired === true
           );
           if (exactCurrent) {
@@ -1061,14 +1330,19 @@ export function createPostgresResponderNativeClientRepository({
           await client.query(
             `insert into ss.responder_native_push_token_registrations (
                id, organization_id, project_id, installation_id, command_id,
-               push_purpose, token_lookup_digest, key_version, nonce,
+               push_purpose, token_lookup_digest, token_ownership_digest,
+               token_ownership_kind, token_receipt_digest, key_version, nonce,
                authentication_tag, ciphertext, envelope_digest, created_at
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+             ) values (
+               $1,$2,$3,$4,$5,$6,$7,$8,'physical_v1',$9,$10,$11,$12,$13,$14,$15
+             )`,
             [
               selected.registrationId, selected.organizationId,
               selected.projectId, selected.installationId,
               selected.commandId, selected.pushPurpose,
               selected.envelope.tokenLookupDigest,
+              selected.envelope.tokenOwnershipDigest,
+              selected.envelope.tokenReceiptDigest,
               selected.envelope.keyVersion, selected.envelope.nonce,
               selected.envelope.authenticationTag,
               selected.envelope.ciphertext, selected.envelopeDigest,
@@ -1425,20 +1699,21 @@ export function createPostgresResponderNativeClientRepository({
           invariant(
             installed.state === "active" &&
               installed.revision === selected.expectedRevision &&
-              installed.platform === "ios" &&
               voipRegistration,
             "RESPONDER_NATIVE_CLIENT_UNAVAILABLE",
             "Responder native VoIP registration is unavailable.",
             { status: 404 }
           );
+          const clientPlatform = installed.platform;
+          const transport = `twilio_voice_${clientPlatform}`;
           const request = await client.query(
-            `select ss.responder_native_voice_session_request_digest_v1(
-               $1,$2,$3,$4,$5,$6,$7
+            `select ss.responder_native_voice_session_request_digest_v2(
+               $1,$2,$3,$4,$5,$6,$7,$8,$9
              ) as request_digest`,
             [
               actor.userId, selected.organizationId, selected.projectId,
               selected.installationId, selected.expectedRevision,
-              installed.appEnvironment,
+              clientPlatform, transport, installed.appEnvironment,
               voipRegistration.tokenReferenceDigest
             ]
           );
@@ -1452,6 +1727,8 @@ export function createPostgresResponderNativeClientRepository({
             userId: actor.userId,
             installationId: selected.installationId,
             installationRevision: selected.expectedRevision,
+            clientPlatform,
+            transport,
             appEnvironment: installed.appEnvironment
           });
           if (voiceAccess.mode === "held") {
@@ -1516,10 +1793,11 @@ export function createPostgresResponderNativeClientRepository({
           }
           const issued = voiceAccess.issueSession(authorityValue);
           const envelopeDigest = await client.query(
-            `select ss.responder_native_voice_session_envelope_digest_v1(
-               $1,$2,$3,$4,$5
+            `select ss.responder_native_voice_session_envelope_digest_v2(
+               $1,$2,$3,$4,$5,$6,$7
              ) as envelope_digest`,
             [
+              clientPlatform, transport,
               issued.envelope.keyVersion, issued.envelope.nonce,
               issued.envelope.authenticationTag, issued.envelope.ciphertext,
               issued.tokenDigest
@@ -1529,20 +1807,22 @@ export function createPostgresResponderNativeClientRepository({
             `insert into ss.responder_native_voice_sessions (
                id, organization_id, project_id, installation_id,
                customer_user_id, command_id, request_digest,
-               installation_revision, app_environment,
+               installation_revision, client_platform, transport,
+               app_environment,
                voip_registration_reference_digest, identity_digest,
                endpoint_digest, credential_digest, jti_digest, token_digest,
                key_version, nonce, authentication_tag, ciphertext,
                envelope_digest, issued_at, expires_at, created_at
              ) values (
                $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-               $17,$18,$19,$20,$21,$22,$21
+               $17,$18,$19,$20,$21,$22,$23,$24,$23
              )`,
             [
               selected.sessionId, selected.organizationId,
               selected.projectId, selected.installationId, actor.userId,
               selected.commandId, selected.requestDigest,
-              selected.expectedRevision, installed.appEnvironment,
+              selected.expectedRevision, clientPlatform, transport,
+              installed.appEnvironment,
               voipRegistration.tokenReferenceDigest,
               issued.identityDigest, issued.endpointDigest,
               issued.credentialDigest, issued.jtiDigest, issued.tokenDigest,

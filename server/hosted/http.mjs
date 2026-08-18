@@ -1218,6 +1218,13 @@ export function createHostedApi(
         responderNativeClient.voiceAccess.providerEffects === false &&
         responderNativeClient.voiceAccess.pushDeliveryEffects === false &&
         responderNativeClient.voiceAccess.voiceCallEffects === false &&
+        Array.isArray(responderNativeClient.voiceAccess.transports) &&
+        responderNativeClient.voiceAccess.transports.includes(
+          "twilio_voice_ios"
+        ) &&
+        responderNativeClient.voiceAccess.transports.includes(
+          "twilio_voice_android"
+        ) &&
         typeof responderNativeClient.voiceAccess.issueSession === "function" &&
         typeof responderNativeClient.voiceAccess.openSession === "function" &&
         typeof responderNativeClient.voiceAccess.readiness === "function"
@@ -1777,6 +1784,13 @@ export function createHostedApi(
           responderNativeVoiceReadiness?.providerEffects === false &&
           responderNativeVoiceReadiness?.pushDeliveryEffects === false &&
           responderNativeVoiceReadiness?.voiceCallEffects === false &&
+          Array.isArray(responderNativeVoiceReadiness?.transports) &&
+          responderNativeVoiceReadiness.transports.includes(
+            "twilio_voice_ios"
+          ) &&
+          responderNativeVoiceReadiness.transports.includes(
+            "twilio_voice_android"
+          ) &&
           responderNativeVoiceReadiness?.routingReady === false &&
           responderNativeVoiceReadiness?.operationalCalls === false;
         const responderNativeClientsReady = false;
@@ -1927,6 +1941,9 @@ export function createHostedApi(
             tokenStorage: "sealed",
             voipSessionState:
               responderNativeVoiceReadiness?.mode ?? "held",
+            voipTransports: Object.freeze(
+              responderNativeVoiceReadiness?.transports ?? []
+            ),
             providerAuthorizationEffects:
               responderNativeVoiceReadiness?.providerAuthorizationEffects ===
                 true,

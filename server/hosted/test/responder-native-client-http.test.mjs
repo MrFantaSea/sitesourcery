@@ -22,13 +22,13 @@ const IDS = [
   "20000000-0000-4000-8000-000000000003"
 ];
 
-function repository(calls) {
+function repository(calls, platform = "ios") {
   const installation = Object.freeze({
     id: INSTALLATION,
     organizationId: ORGANIZATION,
     projectId: PROJECT,
     customerUserId: USER,
-    platform: "ios",
+    platform,
     bundleId: "com.sitesourcery.responder",
     appEnvironment: "sandbox",
     appVersion: "1.0.0",
@@ -89,11 +89,15 @@ function repository(calls) {
   };
 }
 
-function boundary({ signedIn = true, writeAllowed = true } = {}) {
+function boundary({
+  signedIn = true,
+  writeAllowed = true,
+  platform = "ios"
+} = {}) {
   const calls = [];
   let index = 0;
   const selected = createResponderNativeClientHttpBoundary({
-    repository: repository(calls),
+    repository: repository(calls, platform),
     tokenAuthority: createResponderNativeTokenAuthority({
       pepper: Buffer.alloc(32, 4),
       pepperVersion: "v1",
@@ -195,6 +199,41 @@ test("native-client HTTP seals APNs token before repository handoff", async () =
   assert.ok(Buffer.isBuffer(handedOff.envelope.ciphertext));
   assert.equal(Object.hasOwn(handedOff, "token"), false);
   assert.doesNotMatch(JSON.stringify(handedOff), new RegExp(TOKEN, "u"));
+});
+
+test("native-client HTTP separates Android FCM purposes under one owner", async () => {
+  const { selected, calls } = boundary({ platform: "android" });
+  const androidToken = "fcm:token_value-1234567890";
+  for (const [index, purpose] of ["notification", "voip"].entries()) {
+    const response = await selected.dispatch(request(
+      "POST",
+      `/api/v1/responder/projects/${PROJECT}/native-installations/` +
+        `${INSTALLATION}/push-tokens`,
+      { expectedRevision: index + 1, purpose, token: androidToken },
+      `android-token-${purpose}-0001`
+    ));
+    assert.equal(response.status, 200);
+  }
+  const handedOff = calls.filter((entry) => entry[0] === "token")
+    .map((entry) => entry[2]);
+  assert.deepEqual(handedOff.map((entry) => entry.pushPurpose), [
+    "notification", "voip"
+  ]);
+  assert.notEqual(
+    handedOff[0].envelope.tokenLookupDigest,
+    handedOff[1].envelope.tokenLookupDigest
+  );
+  assert.equal(
+    handedOff[0].envelope.tokenOwnershipDigest,
+    handedOff[1].envelope.tokenOwnershipDigest
+  );
+  assert.deepEqual(
+    handedOff.map((entry) => entry.tokenOwnershipCandidateDigests[0]),
+    [
+      handedOff[0].envelope.tokenOwnershipDigest,
+      handedOff[1].envelope.tokenOwnershipDigest
+    ]
+  );
 });
 
 test("native-client HTTP records exact local token retirement", async () => {

@@ -65,7 +65,8 @@ import { verifyResponderForwardingPostgres } from
 import {
   seedResponderNativeE1UpgradeHistory,
   verifyResponderNativeClientPostgres,
-  verifyResponderNativeE2UpgradeHistory
+  verifyResponderNativeE2UpgradeHistory,
+  verifyResponderNativeE3UpgradeHistory
 } from
   "./responder-native-client-postgres-proof.mjs";
 import { verifyAdjacentIntegrationPostgres } from
@@ -403,17 +404,81 @@ async function applyMigrations(pool, expectedMigrationNames = null) {
   };
 }
 
+async function verifyResponderNativeE3RequiresVoiceDrain(
+  pool,
+  migrationSql,
+  ids
+) {
+  await pool.query("begin");
+  try {
+    await pool.query(
+      `alter table ss.responder_native_voice_sessions
+         disable trigger responder_native_voice_sessions_guard`
+    );
+    await pool.query(
+      `with selected_time as (
+         select clock_timestamp() as issued_at
+       )
+       insert into ss.responder_native_voice_sessions (
+         id, organization_id, project_id, installation_id,
+         customer_user_id, command_id, request_digest,
+         installation_revision, app_environment,
+         voip_registration_reference_digest, identity_digest,
+         endpoint_digest, credential_digest, jti_digest, token_digest,
+         key_version, nonce, authentication_tag, ciphertext,
+         envelope_digest, issued_at, expires_at, created_at
+       )
+       select $1,$2,$3,$4,$5,'native.e2.voice.drain.0001',
+              repeat('1',64),3,'sandbox',repeat('2',64),repeat('3',64),
+              repeat('4',64),repeat('5',64),repeat('6',64),repeat('7',64),
+              'drain-proof-v1',decode(repeat('08',12),'hex'),
+              decode(repeat('09',16),'hex'),decode(repeat('0a',64),'hex'),
+              repeat('b',64),selected_time.issued_at,
+              selected_time.issued_at + interval '5 minutes',
+              selected_time.issued_at
+         from selected_time`,
+      [
+        randomUUID(), ids.organization, ids.project, ids.installation,
+        ids.customer
+      ]
+    );
+    await pool.query(
+      `alter table ss.responder_native_voice_sessions
+         enable trigger responder_native_voice_sessions_guard`
+    );
+    await assert.rejects(
+      pool.query(migrationSql),
+      (error) => error?.code === "55000" &&
+        /requires expired FIN-006E2 Voice sessions/u.test(error.message)
+    );
+    return true;
+  } finally {
+    await pool.query("rollback");
+  }
+}
+
 async function applyPostPrivacyMigrations(
   pool,
   postPrivacyNames
 ) {
   let responderNativeE1Fixture = null;
   let responderNativeE2UpgradeProof = null;
+  let responderNativeE3UpgradeProof = null;
   for (const name of postPrivacyNames) {
-    try {
-      await pool.query(
-        await readFile(new URL(name, MIGRATIONS), "utf8")
+    const migrationSql = await readFile(new URL(name, MIGRATIONS), "utf8");
+    let activeVoiceDrainRejected = false;
+    if (name === "202608170139_responder_android_voice_authority.sql") {
+      assert.ok(
+        responderNativeE1Fixture && responderNativeE2UpgradeProof,
+        "FIN-006E3 drain proof requires the exact FIN-006E1/E2 history"
       );
+      activeVoiceDrainRejected =
+        await verifyResponderNativeE3RequiresVoiceDrain(
+          pool, migrationSql, responderNativeE1Fixture
+        );
+    }
+    try {
+      await pool.query(migrationSql);
     } catch (error) {
       error.message = `${name}: ${error.message}`;
       throw error;
@@ -432,12 +497,29 @@ async function applyPostPrivacyMigrations(
           pool, responderNativeE1Fixture
         );
     }
+    if (name === "202608170139_responder_android_voice_authority.sql") {
+      assert.ok(
+        responderNativeE1Fixture && responderNativeE2UpgradeProof,
+        "FIN-006E3 upgrade proof requires the exact FIN-006E1/E2 history"
+      );
+      responderNativeE3UpgradeProof =
+        await verifyResponderNativeE3UpgradeHistory(
+          pool, responderNativeE1Fixture, { activeVoiceDrainRejected }
+        );
+    }
   }
   assert.ok(
     responderNativeE2UpgradeProof,
     "FIN-006E2 upgrade proof did not execute"
   );
-  return responderNativeE2UpgradeProof;
+  assert.ok(
+    responderNativeE3UpgradeProof,
+    "FIN-006E3 upgrade proof did not execute"
+  );
+  return Object.freeze({
+    responderNativeE2UpgradeProof,
+    responderNativeE3UpgradeProof
+  });
 }
 
 async function verifyDurableMailLifecycle(pool) {
@@ -7465,10 +7547,10 @@ export async function runMigrationVerification({
     const v2Before = await v2AuthorityFingerprint(pool);
     const readinessBefore = await verifyProjectLegalReadiness(pool, false);
     await applyJointLegalV3Release(pool, releaseSql);
-    const responderNativeE2UpgradeProof = await applyPostPrivacyMigrations(
-      pool,
-      postPrivacyNames
-    );
+    const {
+      responderNativeE2UpgradeProof,
+      responderNativeE3UpgradeProof
+    } = await applyPostPrivacyMigrations(pool, postPrivacyNames);
     await verifyJointLegalV4ReleaseState(pool);
     await verifyCustomerEngagementBootstrapState(pool);
     await verifyCustomerEngagementBootstrapJourney(pool);
@@ -7571,6 +7653,14 @@ export async function runMigrationVerification({
       `retirements ${responderNativeE2UpgradeProof.retirements} ` +
       `activeRegistrations ` +
       `${responderNativeE2UpgradeProof.activeRegistrations}\n`
+    );
+    writeOutput(
+      `responderNativeE3UpgradeProof ` +
+      `${responderNativeE3UpgradeProof.assertions}/` +
+      `${responderNativeE3UpgradeProof.expectedAssertions} ` +
+      `registrations ${responderNativeE3UpgradeProof.registrations} ` +
+      `conservativeLegacyOwnership ` +
+      `${responderNativeE3UpgradeProof.conservativeLegacyOwnership}\n`
     );
     writeOutput(
       `responderNativeClientPostgresProof ` +

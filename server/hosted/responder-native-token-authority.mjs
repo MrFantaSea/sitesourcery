@@ -1,6 +1,7 @@
 import {
   createCipheriv,
   createDecipheriv,
+  createHash,
   createHmac,
   randomBytes as systemRandomBytes,
   timingSafeEqual
@@ -22,8 +23,12 @@ const ENVIRONMENTS = new Set(["sandbox", "production"]);
 const PURPOSES = new Set(["notification", "voip"]);
 const LOOKUP_PURPOSE =
   "sitesourcery.responder-native-push-token-lookup/v1";
+const OWNERSHIP_PURPOSE =
+  "sitesourcery.responder-native-push-token-ownership/v1";
 const ENCRYPTION_PURPOSE =
   "sitesourcery.responder-native-push-token-encryption/v1";
+const RECEIPT_PURPOSE =
+  "sitesourcery.responder-native-token-receipt/v1";
 
 function exactObject(value, fields, code) {
   invariant(
@@ -84,12 +89,24 @@ function installationAuthority(value) {
 
 function purpose(value, platform) {
   invariant(
-    PURPOSES.has(value) && (value !== "voip" || platform === "ios"),
+    PURPOSES.has(value) && PLATFORMS.has(platform),
     "RESPONDER_NATIVE_TOKEN_INVALID",
     "Responder native push purpose is invalid.",
     { status: 400 }
   );
   return value;
+}
+
+function ownershipDigestFor(key, selectedAuthority, selectedToken) {
+  return createHmac("sha256", key)
+    .update(canonicalJson({
+      schema: OWNERSHIP_PURPOSE,
+      platform: selectedAuthority.platform,
+      bundleId: selectedAuthority.bundleId,
+      environment: selectedAuthority.environment,
+      token: selectedToken
+    }), "utf8")
+    .digest("hex");
 }
 
 function token(value, platform) {
@@ -116,7 +133,48 @@ function digestFor(key, selectedAuthority, selectedPurpose, selectedToken) {
     .digest("hex");
 }
 
+function tokenReceiptDigestFor(
+  selectedAuthority,
+  selectedPurpose,
+  selectedToken
+) {
+  const tokenDigest = createHash("sha256")
+    .update(selectedToken, "utf8")
+    .digest("hex");
+  return createHash("sha256").update(canonicalJson({
+    schema: RECEIPT_PURPOSE,
+    organizationId: selectedAuthority.organizationId,
+    projectId: selectedAuthority.projectId,
+    customerUserId: selectedAuthority.userId,
+    installationId: selectedAuthority.id,
+    platform: selectedAuthority.platform,
+    bundleId: selectedAuthority.bundleId,
+    appEnvironment: selectedAuthority.environment,
+    pushPurpose: selectedPurpose,
+    tokenDigest
+  }), "utf8").digest("hex");
+}
+
 function aad(
+  selectedAuthority,
+  selectedPurpose,
+  selectedKeyVersion,
+  tokenLookupDigest,
+  tokenOwnershipDigest,
+  tokenReceiptDigest
+) {
+  return Buffer.from(canonicalJson({
+    schema: "sitesourcery.responder-native-push-token-aad/v2",
+    ...selectedAuthority,
+    purpose: selectedPurpose,
+    keyVersion: selectedKeyVersion,
+    tokenLookupDigest,
+    tokenOwnershipDigest,
+    tokenReceiptDigest
+  }), "utf8");
+}
+
+function legacyAad(
   selectedAuthority,
   selectedPurpose,
   selectedKeyVersion,
@@ -140,12 +198,20 @@ function plaintext(selectedToken) {
 
 function envelope(value) {
   exactObject(value, [
-    "keyVersion", "tokenLookupDigest", "nonce", "authenticationTag",
-    "ciphertext"
+    "keyVersion", "tokenLookupDigest", "tokenOwnershipDigest",
+    "tokenReceiptDigest", "nonce", "authenticationTag", "ciphertext"
   ], "RESPONDER_NATIVE_TOKEN_INVALID");
   invariant(
     VERSION.test(value.keyVersion ?? "") &&
       SHA256.test(value.tokenLookupDigest ?? "") &&
+      SHA256.test(value.tokenOwnershipDigest ?? "") &&
+      (
+        SHA256.test(value.tokenReceiptDigest ?? "") ||
+        (
+          value.tokenReceiptDigest === null &&
+          value.tokenOwnershipDigest === value.tokenLookupDigest
+        )
+      ) &&
       Buffer.isBuffer(value.nonce) && value.nonce.length === 12 &&
       Buffer.isBuffer(value.authenticationTag) &&
       value.authenticationTag.length === 16 &&
@@ -176,6 +242,7 @@ export function createResponderNativeTokenAuthority({
   const keyring = new Map();
   keyring.set(currentVersion, {
     lookup: purposeKey(currentPepper, LOOKUP_PURPOSE),
+    ownership: purposeKey(currentPepper, OWNERSHIP_PURPOSE),
     encryption: purposeKey(currentPepper, ENCRYPTION_PURPOSE)
   });
   for (const [version, priorPepper] of Object.entries(previousPeppers)) {
@@ -198,6 +265,7 @@ export function createResponderNativeTokenAuthority({
     );
     keyring.set(selectedVersion, {
       lookup: purposeKey(bytes, LOOKUP_PURPOSE),
+      ownership: purposeKey(bytes, OWNERSHIP_PURPOSE),
       encryption: purposeKey(bytes, ENCRYPTION_PURPOSE)
     });
   }
@@ -232,6 +300,11 @@ export function createResponderNativeTokenAuthority({
           selectedAuthority,
           selectedPurpose,
           selectedToken
+        ),
+        ownershipDigest: ownershipDigestFor(
+          keys.ownership,
+          selectedAuthority,
+          selectedToken
         )
       })));
     },
@@ -242,6 +315,16 @@ export function createResponderNativeTokenAuthority({
       const keys = keyring.get(currentVersion);
       const tokenLookupDigest = digestFor(
         keys.lookup,
+        selectedAuthority,
+        selectedPurpose,
+        selectedToken
+      );
+      const tokenOwnershipDigest = ownershipDigestFor(
+        keys.ownership,
+        selectedAuthority,
+        selectedToken
+      );
+      const tokenReceiptDigest = tokenReceiptDigestFor(
         selectedAuthority,
         selectedPurpose,
         selectedToken
@@ -260,7 +343,9 @@ export function createResponderNativeTokenAuthority({
           selectedAuthority,
           selectedPurpose,
           currentVersion,
-          tokenLookupDigest
+          tokenLookupDigest,
+          tokenOwnershipDigest,
+          tokenReceiptDigest
         ));
         const ciphertext = Buffer.concat([
           cipher.update(cleartext), cipher.final()
@@ -268,6 +353,8 @@ export function createResponderNativeTokenAuthority({
         return Object.freeze({
           keyVersion: currentVersion,
           tokenLookupDigest,
+          tokenOwnershipDigest,
+          tokenReceiptDigest,
           nonce,
           authenticationTag: cipher.getAuthTag(),
           ciphertext
@@ -289,15 +376,25 @@ export function createResponderNativeTokenAuthority({
       );
       let cleartext;
       try {
+        const legacy = selectedEnvelope.tokenReceiptDigest === null;
         const decipher = createDecipheriv(
           "aes-256-gcm", keys.encryption, selectedEnvelope.nonce
         );
-        decipher.setAAD(aad(
-          selectedAuthority,
-          selectedPurpose,
-          selectedEnvelope.keyVersion,
-          selectedEnvelope.tokenLookupDigest
-        ));
+        decipher.setAAD(legacy
+          ? legacyAad(
+              selectedAuthority,
+              selectedPurpose,
+              selectedEnvelope.keyVersion,
+              selectedEnvelope.tokenLookupDigest
+            )
+          : aad(
+              selectedAuthority,
+              selectedPurpose,
+              selectedEnvelope.keyVersion,
+              selectedEnvelope.tokenLookupDigest,
+              selectedEnvelope.tokenOwnershipDigest,
+              selectedEnvelope.tokenReceiptDigest
+            ));
         decipher.setAuthTag(selectedEnvelope.authenticationTag);
         cleartext = Buffer.concat([
           decipher.update(selectedEnvelope.ciphertext), decipher.final()
@@ -322,7 +419,22 @@ export function createResponderNativeTokenAuthority({
           selectedToken
         );
         invariant(
-          expectedDigest === selectedEnvelope.tokenLookupDigest,
+          expectedDigest === selectedEnvelope.tokenLookupDigest &&
+            (
+              legacy ||
+              (
+                ownershipDigestFor(
+                  keys.ownership,
+                  selectedAuthority,
+                  selectedToken
+                ) === selectedEnvelope.tokenOwnershipDigest &&
+                tokenReceiptDigestFor(
+                  selectedAuthority,
+                  selectedPurpose,
+                  selectedToken
+                ) === selectedEnvelope.tokenReceiptDigest
+              )
+            ),
           "RESPONDER_NATIVE_TOKEN_UNAVAILABLE",
           "Responder native token could not be opened.",
           { status: 503 }

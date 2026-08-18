@@ -328,6 +328,13 @@ export function createResponderNativeClientHttpBoundary({
         const candidates = tokenAuthority.tokenLookupCandidates(
           tokenScope, parsed.purpose, parsed.token
         );
+        const collisionCandidates = installed.platform === "android"
+          ? ["notification", "voip"].flatMap((purpose) =>
+              tokenAuthority.tokenLookupCandidates(
+                tokenScope, purpose, parsed.token
+              ).map((entry) => entry.digest)
+            )
+          : candidates.map((entry) => entry.digest);
         const sealed = await tokenAuthority.sealToken(
           tokenScope, parsed.purpose, parsed.token
         );
@@ -340,6 +347,9 @@ export function createResponderNativeClientHttpBoundary({
           pushPurpose: parsed.purpose,
           tokenLookupCandidateDigests:
             candidates.map((entry) => entry.digest),
+          tokenCollisionCandidateDigests: [...new Set(collisionCandidates)],
+          tokenOwnershipCandidateDigests:
+            candidates.map((entry) => entry.ownershipDigest),
           envelope: sealed,
           recordedAt: now(clock)
         }));
