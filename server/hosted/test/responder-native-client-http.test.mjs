@@ -62,6 +62,10 @@ function repository(calls) {
       calls.push(["token", actor, input]);
       return { schema: "sitesourcery.responder-native-command-receipt/v1" };
     },
+    async retireToken(actor, input) {
+      calls.push(["retire-token", actor, input]);
+      return { schema: "sitesourcery.responder-native-command-receipt/v1" };
+    },
     async suspendInstallation(actor, input) {
       calls.push(["suspend", actor, input]);
       return { schema: "sitesourcery.responder-native-command-receipt/v1" };
@@ -74,7 +78,7 @@ function repository(calls) {
       calls.push(["revoke", actor, input]);
       return { schema: "sitesourcery.responder-native-command-receipt/v1" };
     },
-    async requireHeldVoipSession(actor, input) {
+    async issueVoipSession(actor, input) {
       calls.push(["voip", actor, input]);
       throw new HostedError(
         "RESPONDER_NATIVE_VOIP_HELD",
@@ -133,6 +137,14 @@ test("native-client route matcher is exact", () => {
   );
   assert.equal(
     matchResponderNativeClientHttpRoute(
+      "POST",
+      `/api/v1/responder/projects/${PROJECT}/native-installations/` +
+        `${INSTALLATION}/push-tokens/retire`
+    )?.operation,
+    "retireToken"
+  );
+  assert.equal(
+    matchResponderNativeClientHttpRoute(
       "POST", "/api/v1/responder/projects/not-a-uuid/native-installations"
     ),
     null
@@ -183,6 +195,25 @@ test("native-client HTTP seals APNs token before repository handoff", async () =
   assert.ok(Buffer.isBuffer(handedOff.envelope.ciphertext));
   assert.equal(Object.hasOwn(handedOff, "token"), false);
   assert.doesNotMatch(JSON.stringify(handedOff), new RegExp(TOKEN, "u"));
+});
+
+test("native-client HTTP records exact local token retirement", async () => {
+  const { selected, calls } = boundary();
+  const response = await selected.dispatch(request(
+    "POST",
+    `/api/v1/responder/projects/${PROJECT}/native-installations/` +
+      `${INSTALLATION}/push-tokens/retire`,
+    {
+      expectedRevision: 2,
+      purpose: "voip",
+      evidenceDigest: "4".repeat(64)
+    },
+    "native-token-retire-0001"
+  ));
+  assert.equal(response.status, 200);
+  assert.equal(calls[0][0], "retire-token");
+  assert.equal(calls[0][2].reason, "customer_request");
+  assert.equal(calls[0][2].retirementId, IDS[0]);
 });
 
 test("native-client HTTP suspends logout, resumes safely, and holds VoIP", async () => {

@@ -4024,3 +4024,85 @@ test("FIN-006E1 persists sealed native-client authority without external effects
     /push_token\s+(?:text|varchar)|device_token\s+(?:text|varchar)|provider_effects\s*=\s*true|push_delivery_effects\s*=\s*true|voice_call_effects\s*=\s*true|carrier_command_effects\s*=\s*true|message_send_effects\s*=\s*true|grant all privileges/iu
   );
 });
+
+test("FIN-006E2 seals replayable Voice sessions and retires app tokens safely", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608160138_responder_native_voice_sessions.sql"
+  );
+  assert.ok(migration, "missing FIN-006E2 native Voice migration 138");
+  assert.match(migration.sql, /^-- FIN-006E2[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const table of [
+    "responder_native_push_token_retirements",
+    "responder_native_voice_sessions"
+  ]) {
+    assert.match(
+      migration.sql,
+      new RegExp(`create table ss\\.${table}\\b`, "iu")
+    );
+    assert.match(
+      migration.sql,
+      new RegExp(
+        `alter table ss\\.${table}\\s+force row level security`,
+        "iu"
+      )
+    );
+  }
+  assert.match(
+    migration.sql,
+    /RESPONDER_NATIVE_TOKEN_UNIQUE_CONSTRAINT_MISSING[\s\S]*drop constraint %I[\s\S]*create index responder_native_token_installation_lookup/iu
+  );
+  assert.match(
+    migration.sql,
+    /create temporary table responder_native_token_retirement_backfill[\s\S]*lead\(registration\.id\)[\s\S]*insert into ss\.responder_native_push_token_retirements/iu
+  );
+  assert.match(
+    migration.sql,
+    /disable trigger responder_native_commands_guard[\s\S]*set token_retirement_id = backfill\.id[\s\S]*enable trigger responder_native_commands_guard[\s\S]*RESPONDER_NATIVE_E1_TOKEN_HISTORY_BACKFILL_FAILED/iu
+  );
+  assert.match(
+    migration.sql,
+    /pg_advisory_xact_lock\(hashtextextended\([\s\S]*responder-native-token:[\s\S]*prior_installation\.customer_user_id\s*<>\s*selected_installation\.customer_user_id/iu
+  );
+  assert.match(
+    migration.sql,
+    /'retire_token'[\s\S]*responder_native_token_retirement_payload_digest_v1/iu
+  );
+  assert.match(
+    migration.sql,
+    /reason in \('token_replaced', 'customer_request'\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /responder_native_commands_revision_step_check[\s\S]*resulting_revision = expected_revision \+ 1/iu
+  );
+  assert.match(
+    migration.sql,
+    /selected_replacement\.token_lookup_digest[\s\S]*selected_registration\.token_lookup_digest[\s\S]*sitesourcery\.responder-native-token-rotation-evidence\/v1/iu
+  );
+  assert.match(
+    migration.sql,
+    /responder_native_voice_session_request_digest_v1[\s\S]*voipRegistrationReferenceDigest[\s\S]*responder_native_voice_session_envelope_digest_v1/iu
+  );
+  assert.match(
+    migration.sql,
+    /ciphertext bytea not null[\s\S]*provider_authorization_effects boolean not null default true/iu
+  );
+  assert.match(
+    migration.sql,
+    /expires_at = issued_at \+ interval '5 minutes'/iu
+  );
+  assert.match(
+    migration.sql,
+    /selected_installation\.platform <> 'ios'[\s\S]*selected_token_operation <> 'register_token'[\s\S]*new\.voip_registration_reference_digest/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_responder_native_voice_session_contract_v1\(\)[\s\S]*canonical-responder-native-voice-session-v1-sealed-replay-held/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /access_token\s+(?:text|varchar)|push_token\s+(?:text|varchar)|device_token\s+(?:text|varchar)|outgoing_allowed boolean not null default true|provider_effects\s*=\s*true|push_delivery_effects\s*=\s*true|voice_call_effects\s*=\s*true|grant all privileges/iu
+  );
+});

@@ -248,6 +248,9 @@ import {
   createResponderNativeTokenAuthority
 } from "../responder-native-token-authority.mjs";
 import {
+  createTwilioResponderVoiceAccess
+} from "../twilio-responder-voice-access.mjs";
+import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
@@ -1093,22 +1096,30 @@ async function start() {
   }
   const responderNativeTokenAuthority =
     identityPepperConfiguration.compose(createResponderNativeTokenAuthority);
+  const responderNativeVoiceAccess = identityPepperConfiguration.compose(
+    createTwilioResponderVoiceAccess,
+    { environment: process.env }
+  );
   const responderNativeClient = {
     repository: createPostgresResponderNativeClientRepository({
       authority,
       verifierKeyVersions: [
         ...responderNativeTokenAuthority.verifierVersions
-      ]
+      ],
+      voiceAccess: responderNativeVoiceAccess
     }),
     tokenAuthority: responderNativeTokenAuthority,
+    voiceAccess: responderNativeVoiceAccess,
     clock: commerceV2.clock
   };
   const [
     responderNativeClientReadiness,
-    responderNativeTokenReadiness
+    responderNativeTokenReadiness,
+    responderNativeVoiceReadiness
   ] = await Promise.all([
     responderNativeClient.repository.readiness(),
-    responderNativeTokenAuthority.readiness()
+    responderNativeTokenAuthority.readiness(),
+    responderNativeVoiceAccess.readiness()
   ]);
   if (
     responderNativeClientReadiness.ready !== true ||
@@ -1121,7 +1132,17 @@ async function start() {
     responderNativeTokenReadiness.ready !== true ||
     responderNativeTokenReadiness.verified !== true ||
     responderNativeTokenReadiness.providerEffects !== false ||
-    responderNativeTokenReadiness.pushDeliveryEffects !== false
+    responderNativeTokenReadiness.pushDeliveryEffects !== false ||
+    responderNativeVoiceReadiness.ready !== true ||
+    responderNativeVoiceReadiness.verified !== true ||
+    responderNativeVoiceReadiness.mode !== responderNativeVoiceAccess.mode ||
+    responderNativeVoiceReadiness.providerEffects !== false ||
+    responderNativeVoiceReadiness.pushDeliveryEffects !== false ||
+    responderNativeVoiceReadiness.voiceCallEffects !== false ||
+    responderNativeVoiceReadiness.providerAuthorizationEffects !==
+      (responderNativeVoiceAccess.mode === "verified") ||
+    responderNativeVoiceReadiness.routingReady !== false ||
+    responderNativeVoiceReadiness.operationalCalls !== false
   ) {
     throw new Error(
       "Canonical held Responder native-client authority is not ready."
@@ -1374,7 +1395,8 @@ async function start() {
         ready: false,
         backendReady:
           responderNativeClientReadiness.ready === true &&
-          responderNativeTokenReadiness.ready === true,
+          responderNativeTokenReadiness.ready === true &&
+          responderNativeVoiceReadiness.ready === true,
         clientsReady: false,
         mode: responderNativeClientReadiness.mode,
         acceptedRegistrationPlatforms: ["ios", "android"],
@@ -1384,7 +1406,9 @@ async function start() {
           android: false
         },
         tokenStorage: "sealed",
-        voipSessionState: "held",
+        voipSessionState: responderNativeVoiceReadiness.mode,
+        providerAuthorizationEffects:
+          responderNativeVoiceReadiness.providerAuthorizationEffects,
         providerEffects: false,
         pushDeliveryEffects: false,
         voiceCallEffects: false

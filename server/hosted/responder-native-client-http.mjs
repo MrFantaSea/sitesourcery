@@ -35,6 +35,12 @@ export const RESPONDER_NATIVE_CLIENT_HTTP_ROUTES = deepFreeze([
   {
     method: "POST",
     pattern:
+      "/api/v1/responder/projects/:projectId/native-installations/:installationId/push-tokens/retire",
+    operation: "retireToken"
+  },
+  {
+    method: "POST",
+    pattern:
       "/api/v1/responder/projects/:projectId/native-installations/:installationId/revoke",
     operation: "revoke"
   },
@@ -187,12 +193,13 @@ export function createResponderNativeClientHttpBoundary({
       repository.voiceCallEffects === false &&
       typeof repository.createInstallation === "function" &&
       typeof repository.registerToken === "function" &&
+      typeof repository.retireToken === "function" &&
       typeof repository.suspendInstallation === "function" &&
       typeof repository.resumeInstallation === "function" &&
       typeof repository.revokeInstallation === "function" &&
       typeof repository.listInstallations === "function" &&
       typeof repository.getInstallation === "function" &&
-      typeof repository.requireHeldVoipSession === "function" &&
+      typeof repository.issueVoipSession === "function" &&
       tokenAuthority?.kind === "responder-native-token-authority" &&
       tokenAuthority.providerEffects === false &&
       tokenAuthority.pushDeliveryEffects === false &&
@@ -337,6 +344,31 @@ export function createResponderNativeClientHttpBoundary({
           recordedAt: now(clock)
         }));
       }
+      if (route.operation === "retireToken") {
+        exactKeys(parsed, ["expectedRevision", "purpose", "evidenceDigest"]);
+        invariant(
+          Number.isSafeInteger(parsed.expectedRevision) &&
+            parsed.expectedRevision > 0 &&
+            (parsed.purpose === "notification" ||
+              parsed.purpose === "voip") &&
+            typeof parsed.evidenceDigest === "string" &&
+            SHA256.test(parsed.evidenceDigest),
+          "RESPONDER_NATIVE_CLIENT_INVALID",
+          "The native push-token retirement is invalid.",
+          { status: 400 }
+        );
+        return json(await repository.retireToken(actor, {
+          ...scope,
+          installationId: route.params.installationId,
+          commandId: selectedCommandId,
+          retirementId: randomUUID(),
+          expectedRevision: parsed.expectedRevision,
+          pushPurpose: parsed.purpose,
+          reason: "customer_request",
+          evidenceDigest: parsed.evidenceDigest,
+          recordedAt: now(clock)
+        }));
+      }
       if (route.operation === "revoke") {
         exactKeys(parsed, ["expectedRevision", "reason", "evidenceDigest"]);
         invariant(
@@ -384,12 +416,20 @@ export function createResponderNativeClientHttpBoundary({
         }));
       }
       exactKeys(parsed, ["expectedRevision"]);
-      await repository.requireHeldVoipSession(actor, {
+      invariant(
+        Number.isSafeInteger(parsed.expectedRevision) &&
+          parsed.expectedRevision > 0,
+        "RESPONDER_NATIVE_CLIENT_INVALID",
+        "The native VoIP session request is invalid.",
+        { status: 400 }
+      );
+      return json(await repository.issueVoipSession(actor, {
         ...scope,
         installationId: route.params.installationId,
+        commandId: selectedCommandId,
+        sessionId: randomUUID(),
         expectedRevision: parsed.expectedRevision
-      });
-      return null;
+      }));
     }
   });
 }

@@ -21,7 +21,8 @@ const NAMES = Object.freeze([
   "responderCommerce",
   "responderForwarding",
   "responderNativeClient",
-  "responderNativeToken"
+  "responderNativeToken",
+  "responderNativeVoice"
 ]);
 const FULL_DOMAIN_READINESS = Object.freeze({
   ready: true,
@@ -143,6 +144,18 @@ const FULL_RESPONDER_NATIVE_TOKEN_READINESS = Object.freeze({
   providerEffects: false,
   pushDeliveryEffects: false
 });
+const FULL_RESPONDER_NATIVE_VOICE_READINESS = Object.freeze({
+  ready: true,
+  verified: true,
+  kind: "twilio-responder-voice-access",
+  mode: "held",
+  providerAuthorizationEffects: false,
+  providerEffects: false,
+  pushDeliveryEffects: false,
+  voiceCallEffects: false,
+  routingReady: false,
+  operationalCalls: false
+});
 const FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
   ready: false,
   backendReady: true,
@@ -154,6 +167,7 @@ const FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
   clientArtifacts: Object.freeze({ ios: false, android: false }),
   tokenStorage: "sealed",
   voipSessionState: "held",
+  providerAuthorizationEffects: false,
   providerEffects: false,
   pushDeliveryEffects: false,
   voiceCallEffects: false,
@@ -223,6 +237,7 @@ function apiFixture({
   includeResponderForwarding = true,
   responderNativeClientReadiness = FULL_RESPONDER_NATIVE_CLIENT_READINESS,
   responderNativeTokenReadiness = FULL_RESPONDER_NATIVE_TOKEN_READINESS,
+  responderNativeVoiceReadiness = FULL_RESPONDER_NATIVE_VOICE_READINESS,
   includeResponderNativeClient = true,
   serviceReadiness
 } = {}) {
@@ -477,8 +492,8 @@ function apiFixture({
             ),
             ...Object.fromEntries([
               "createInstallation", "getInstallation",
-              "listInstallations", "registerToken",
-              "requireHeldVoipSession", "suspendInstallation",
+              "listInstallations", "registerToken", "retireToken",
+              "issueVoipSession", "suspendInstallation",
               "resumeInstallation", "revokeInstallation"
             ].map((name) => [name, async () => {
               throw new Error("not reached");
@@ -496,6 +511,23 @@ function apiFixture({
               throw new Error("not reached");
             },
             async sealToken() {
+              throw new Error("not reached");
+            }
+          },
+          voiceAccess: {
+            kind: "twilio-responder-voice-access",
+            mode: responderNativeVoiceReadiness.mode,
+            providerEffects: false,
+            pushDeliveryEffects: false,
+            voiceCallEffects: false,
+            readiness: counted(
+              "responderNativeVoice",
+              responderNativeVoiceReadiness
+            ),
+            issueSession() {
+              throw new Error("not reached");
+            },
+            openSession() {
               throw new Error("not reached");
             }
           }
@@ -690,6 +722,7 @@ test("capabilities do not claim complete Responder without native-client authori
       clientArtifacts: { ios: false, android: false },
       tokenStorage: "sealed",
       voipSessionState: "held",
+      providerAuthorizationEffects: false,
       providerEffects: false,
       pushDeliveryEffects: false,
       voiceCallEffects: false,
@@ -700,6 +733,7 @@ test("capabilities do not claim complete Responder without native-client authori
   assert.equal(fixture.calls.responder, 1);
   assert.equal(fixture.calls.responderNativeClient, 0);
   assert.equal(fixture.calls.responderNativeToken, 0);
+  assert.equal(fixture.calls.responderNativeVoice, 0);
 });
 
 test("capabilities report backend-only native authority without claiming apps", async () => {
@@ -718,6 +752,24 @@ test("capabilities fail native backend closed when token authority degrades", as
   const fixture = apiFixture({
     responderNativeTokenReadiness: {
       ...FULL_RESPONDER_NATIVE_TOKEN_READINESS,
+      ready: false,
+      verified: false
+    }
+  });
+  const response = await get(fixture.api);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.responder, false);
+  assert.deepEqual(body.responderNativeClient, {
+    ...FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY,
+    backendReady: false
+  });
+});
+
+test("capabilities fail native backend closed when Voice authority degrades", async () => {
+  const fixture = apiFixture({
+    responderNativeVoiceReadiness: {
+      ...FULL_RESPONDER_NATIVE_VOICE_READINESS,
       ready: false,
       verified: false
     }
