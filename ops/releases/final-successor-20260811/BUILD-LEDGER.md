@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-005 proved; FIN-006A/B/C/D/E1 subcohorts proved; FIN-006 active
+Status: FIN-005 proved; FIN-006A/B/C/D/E1/E2/E3 subcohorts proved; FIN-006 active
 
 ## Governing inputs
 
@@ -179,4 +179,16 @@ process-alive screenshot proof, adversarial corrections, and clean cumulative
 matrix is `FIN-006E2-RESPONDER-IOS-VOICE-PROVENANCE.md`. Provider use, real
 calls/pushes/messages, carrier commands, signing/distribution, public changes,
 and deployment remain held; Android and final unified composition remain under
+FIN-006.
+
+FIN-006E3's Android Compose client, exact cookie/CSRF and encrypted local
+authority, serialized dual-purpose FCM registration, receipt-bound replay,
+process-death cleanup, supported Twilio Voice/Core Telecom lifecycle,
+generation-fenced call actions, wrong-actor recovery, manifest least-authority
+gates, migration 139, all-92-migration PostgreSQL journey, clean Debug/unsigned
+Release builds, API 36 process-alive screenshot proof, adversarial corrections,
+and clean cumulative matrix is
+`FIN-006E3-RESPONDER-ANDROID-VOICE-PROVENANCE.md`. Provider use, real
+calls/pushes/messages, carrier commands, signing/distribution, public changes,
+and deployment remain held; the final unified composition matrix remains under
 FIN-006.
