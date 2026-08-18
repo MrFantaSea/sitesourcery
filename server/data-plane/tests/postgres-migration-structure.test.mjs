@@ -4106,3 +4106,45 @@ test("FIN-006E2 seals replayable Voice sessions and retires app tokens safely", 
     /access_token\s+(?:text|varchar)|push_token\s+(?:text|varchar)|device_token\s+(?:text|varchar)|outgoing_allowed boolean not null default true|provider_effects\s*=\s*true|push_delivery_effects\s*=\s*true|voice_call_effects\s*=\s*true|grant all privileges/iu
   );
 });
+
+test("FIN-006E3 binds Android dual-purpose FCM and Voice authority", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608170139_responder_android_voice_authority.sql"
+  );
+  assert.ok(migration, "missing FIN-006E3 Android Voice migration 139");
+  assert.match(migration.sql, /^-- FIN-006E3[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  assert.match(
+    migration.sql,
+    /token_ownership_digest ss\.sha256_hex[\s\S]*legacy_purpose_bound[\s\S]*physical_v1/iu
+  );
+  assert.match(
+    migration.sql,
+    /responder_native_token_payload_digest_v2[\s\S]*tokenOwnershipDigest[\s\S]*responder_native_token_envelope_digest_v2/iu
+  );
+  assert.match(
+    migration.sql,
+    /responder-native-token-ownership:[\s\S]*prior\.token_ownership_digest = new\.token_ownership_digest[\s\S]*selected_installation\.platform <> 'android'/iu
+  );
+  assert.match(
+    migration.sql,
+    /client_platform text not null default 'ios'[\s\S]*transport text not null default 'twilio_voice_ios'[\s\S]*twilio_voice_android/iu
+  );
+  assert.match(
+    migration.sql,
+    /responder_native_voice_session_request_digest_v2[\s\S]*clientPlatform[\s\S]*transport[\s\S]*responder_native_voice_session_envelope_digest_v2/iu
+  );
+  assert.match(
+    migration.sql,
+    /lock table ss\.responder_native_voice_sessions in access exclusive mode[\s\S]*expires_at > clock_timestamp\(\)[\s\S]*requires expired FIN-006E2 Voice sessions/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_responder_android_voice_contract_v1\(\)[\s\S]*canonical-responder-android-voice-v1-fcm-dual-purpose-receipt-bound-held/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /push_token\s+(?:text|varchar)|device_token\s+(?:text|varchar)|outgoing_allowed boolean not null default true|provider_effects\s*=\s*true|push_delivery_effects\s*=\s*true|voice_call_effects\s*=\s*true|grant all privileges/iu
+  );
+});

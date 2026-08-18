@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Site Sourcery Responder</string>
+    <string name="call_channel_name">Responder calls</string>
+    <string name="activity_channel_name">Responder activity</string>
+    <string name="incoming_call">Site Sourcery call</string>
+</resources>

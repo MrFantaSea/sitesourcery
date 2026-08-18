@@ -76,6 +76,7 @@ const HELD_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
   clientArtifacts: Object.freeze({ ios: false, android: false }),
   tokenStorage: "sealed",
   voipSessionState: "held",
+  voipTransports: Object.freeze([]),
   providerAuthorizationEffects: false,
   providerEffects: false,
   pushDeliveryEffects: false,

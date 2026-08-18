@@ -244,6 +244,7 @@ function responderNativeClient() {
     voiceAccess: {
       kind: "twilio-responder-voice-access",
       mode: "held",
+      transports: ["twilio_voice_ios", "twilio_voice_android"],
       providerEffects: false,
       pushDeliveryEffects: false,
       voiceCallEffects: false,
@@ -259,6 +260,7 @@ function responderNativeClient() {
           verified: true,
           kind: "twilio-responder-voice-access",
           mode: "held",
+          transports: ["twilio_voice_ios", "twilio_voice_android"],
           providerAuthorizationEffects: false,
           providerEffects: false,
           pushDeliveryEffects: false,
@@ -282,12 +284,17 @@ function responderNativeClient() {
         };
       },
       tokenLookupCandidates() {
-        return [{ digest: "a".repeat(64), keyVersion: "native-v1" }];
+        return [{
+          digest: "a".repeat(64),
+          ownershipDigest: "b".repeat(64),
+          keyVersion: "native-v1"
+        }];
       },
       async sealToken() {
         return {
           keyVersion: "native-v1",
           tokenLookupDigest: "a".repeat(64),
+          tokenOwnershipDigest: "b".repeat(64),
           nonce: Buffer.alloc(12),
           authenticationTag: Buffer.alloc(16),
           ciphertext: Buffer.alloc(64)

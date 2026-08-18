@@ -14,6 +14,8 @@ const AUTHORITY = Object.freeze({
   userId: "10000000-0000-4000-8000-000000000004",
   installationId: "10000000-0000-4000-8000-000000000005",
   installationRevision: 3,
+  clientPlatform: "ios",
+  transport: "twilio_voice_ios",
   appEnvironment: "sandbox"
 });
 
@@ -25,7 +27,11 @@ const VERIFIED = Object.freeze({
   SITESOURCERY_TWILIO_VOICE_SANDBOX_PUSH_CREDENTIAL_SID:
     `CR${"4".repeat(32)}`,
   SITESOURCERY_TWILIO_VOICE_PRODUCTION_PUSH_CREDENTIAL_SID:
-    `CR${"5".repeat(32)}`
+    `CR${"5".repeat(32)}`,
+  SITESOURCERY_TWILIO_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_SID:
+    `CR${"6".repeat(32)}`,
+  SITESOURCERY_TWILIO_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_SID:
+    `CR${"7".repeat(32)}`
 });
 
 function authority(environment = {}) {
@@ -46,7 +52,7 @@ test("Twilio Voice access is held by default without staged credentials", async 
     kind: "twilio-responder-voice-access",
     mode: "held",
     provider: "twilio",
-    transport: "twilio_voice_ios",
+    transports: ["twilio_voice_ios", "twilio_voice_android"],
     signerReady: false,
     issuanceEnabled: false,
     ttlSeconds: 300,
@@ -64,6 +70,31 @@ test("Twilio Voice access is held by default without staged credentials", async 
     () => selected.issueSession(AUTHORITY),
     { code: "RESPONDER_NATIVE_VOIP_HELD" }
   );
+});
+
+test("verified Twilio Voice access selects Android FCM authority exactly", () => {
+  const selected = authority(VERIFIED);
+  const androidAuthority = {
+    ...AUTHORITY,
+    clientPlatform: "android",
+    transport: "twilio_voice_android"
+  };
+  const issued = selected.issueSession(androidAuthority);
+  const payload = JSON.parse(Buffer.from(
+    issued.accessToken.split(".")[1], "base64url"
+  ));
+  assert.match(
+    payload.grants.voice.endpoint_id,
+    /^ssr_android_[0-9a-f]{48}$/u
+  );
+  assert.equal(
+    payload.grants.voice.push_credential_sid,
+    VERIFIED.SITESOURCERY_TWILIO_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_SID
+  );
+  assert.equal(payload.grants.voice.outgoing, undefined);
+  assert.equal(issued.providerEffects, false);
+  assert.equal(issued.pushDeliveryEffects, false);
+  assert.equal(issued.voiceCallEffects, false);
 });
 
 test("verified Twilio Voice access issues only an incoming opaque grant", async () => {

@@ -1139,6 +1139,11 @@ async function start() {
     responderNativeVoiceReadiness.providerEffects !== false ||
     responderNativeVoiceReadiness.pushDeliveryEffects !== false ||
     responderNativeVoiceReadiness.voiceCallEffects !== false ||
+    !Array.isArray(responderNativeVoiceReadiness.transports) ||
+    !responderNativeVoiceReadiness.transports.includes("twilio_voice_ios") ||
+    !responderNativeVoiceReadiness.transports.includes(
+      "twilio_voice_android"
+    ) ||
     responderNativeVoiceReadiness.providerAuthorizationEffects !==
       (responderNativeVoiceAccess.mode === "verified") ||
     responderNativeVoiceReadiness.routingReady !== false ||

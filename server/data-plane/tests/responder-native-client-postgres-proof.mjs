@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createCipheriv, createHmac, randomUUID } from "node:crypto";
 import jwt from "jsonwebtoken";
 
 import { createPostgresResponderNativeClientRepository } from
@@ -10,11 +10,12 @@ import { createTwilioResponderVoiceAccess } from
   "../../hosted/twilio-responder-voice-access.mjs";
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
-import { digest } from "../../hosted/security.mjs";
+import { canonicalJson, digest } from "../../hosted/security.mjs";
 
 const EXPECTED_GATES = Object.freeze([
   "storage-contract-acl-readiness-held",
   "storage-acl-drift-fails-readiness",
+  "legacy-token-reobserved-as-receipt-bound",
   "create-command-replay-and-semantic-deduplication",
   "organization-scoped-command-independence",
   "sealed-notification-registration-and-replay",
@@ -23,6 +24,11 @@ const EXPECTED_GATES = Object.freeze([
   "voice-replay-requires-active-membership",
   "sealed-voice-session-replay-expiry-and-renewal",
   "expired-voice-sessions-release-retired-keys",
+  "android-dual-purpose-fcm-ownership",
+  "android-voice-session-platform-transport",
+  "cross-tenant-cross-purpose-ownership-denied",
+  "legacy-cross-purpose-reassignment-denied",
+  "direct-sql-platform-transport-mismatch-denied",
   "same-current-token-launch-readback",
   "same-customer-token-shares-across-projects",
   "token-rotation-and-explicit-retirement",
@@ -112,6 +118,54 @@ const E1_UPGRADE_FIXTURE = Object.freeze({
   firstRegistration: "61000000-0000-4000-8000-000000000006",
   secondRegistration: "61000000-0000-4000-8000-000000000007"
 });
+const LEGACY_ANDROID_TOKEN = "fcm:legacy_upgrade_token_1234567890";
+const LEGACY_TOKEN_PEPPER = Buffer.alloc(32, 19);
+const LEGACY_TOKEN_VERSION = "native-pg-v1";
+const LEGACY_LOOKUP_PURPOSE =
+  "sitesourcery.responder-native-push-token-lookup/v1";
+const LEGACY_ENCRYPTION_PURPOSE =
+  "sitesourcery.responder-native-push-token-encryption/v1";
+
+function legacyPurposeKey(purpose) {
+  return createHmac("sha256", LEGACY_TOKEN_PEPPER)
+    .update(purpose, "utf8").digest();
+}
+
+function legacyTokenEnvelope(authority, purpose, token) {
+  const tokenLookupDigest = createHmac(
+    "sha256", legacyPurposeKey(LEGACY_LOOKUP_PURPOSE)
+  ).update(canonicalJson({
+    schema: LEGACY_LOOKUP_PURPOSE,
+    platform: authority.platform,
+    bundleId: authority.bundleId,
+    environment: authority.environment,
+    purpose,
+    token
+  }), "utf8").digest("hex");
+  const nonce = Buffer.alloc(12, 31);
+  const cipher = createCipheriv(
+    "aes-256-gcm", legacyPurposeKey(LEGACY_ENCRYPTION_PURPOSE), nonce
+  );
+  cipher.setAAD(Buffer.from(canonicalJson({
+    schema: "sitesourcery.responder-native-push-token-aad/v1",
+    ...authority,
+    purpose,
+    keyVersion: LEGACY_TOKEN_VERSION,
+    tokenLookupDigest
+  }), "utf8"));
+  const cleartext = Buffer.from(canonicalJson({
+    schema: "sitesourcery.responder-native-push-token/v1",
+    token
+  }), "utf8");
+  const ciphertext = Buffer.concat([cipher.update(cleartext), cipher.final()]);
+  cleartext.fill(0);
+  return {
+    tokenLookupDigest,
+    nonce,
+    authenticationTag: cipher.getAuthTag(),
+    ciphertext
+  };
+}
 
 export async function seedResponderNativeE1UpgradeHistory(pool) {
   const ids = E1_UPGRADE_FIXTURE;
@@ -155,7 +209,7 @@ export async function seedResponderNativeE1UpgradeHistory(pool) {
   }, async (client) => {
     const installationPayload = await client.query(
       `select ss.responder_native_installation_payload_digest_v1(
-         $1,$2,$3,'ios','com.sitesourcery.responder','sandbox','1.0.0','1',$4
+         $1,$2,$3,'android','com.sitesourcery.responder','sandbox','1.0.0','1',$4
        ) as digest`,
       [
         ids.organization, ids.project, ids.customer,
@@ -193,7 +247,7 @@ export async function seedResponderNativeE1UpgradeHistory(pool) {
          create_command_id, platform, bundle_id, app_environment,
          app_version, build_number, installation_key_digest, created_at
        ) values (
-         $1,$2,$3,$4,'native.e1.upgrade.create.0001','ios',
+         $1,$2,$3,$4,'native.e1.upgrade.create.0001','android',
          'com.sitesourcery.responder','sandbox','1.0.0','1',$5,$6
        )`,
       [
@@ -209,20 +263,24 @@ export async function seedResponderNativeE1UpgradeHistory(pool) {
       expectedRevision,
       tokenLookupDigest,
       fill,
+      sealed = null,
       createdAt
     }) => {
-      const nonce = Buffer.alloc(12, fill);
-      const authenticationTag = Buffer.alloc(16, fill + 1);
-      const ciphertext = Buffer.alloc(64, fill + 2);
+      const nonce = sealed?.nonce ?? Buffer.alloc(12, fill);
+      const authenticationTag = sealed?.authenticationTag ?? Buffer.alloc(16, fill + 1);
+      const ciphertext = sealed?.ciphertext ?? Buffer.alloc(64, fill + 2);
       const digests = await client.query(
         `select
            ss.responder_native_token_envelope_digest_v1(
-             $1,'native-pg-v1',$2,$3,$4
+             $1,$2,$3,$4,$5
            ) as envelope_digest,
            ss.responder_native_token_payload_digest_v1(
              'notification',$1
            ) as payload_digest`,
-        [tokenLookupDigest, nonce, authenticationTag, ciphertext]
+        [
+          tokenLookupDigest, LEGACY_TOKEN_VERSION,
+          nonce, authenticationTag, ciphertext
+        ]
       );
       const request = await client.query(
         `select ss.responder_native_command_request_digest_v1(
@@ -257,16 +315,29 @@ export async function seedResponderNativeE1UpgradeHistory(pool) {
            push_purpose, token_lookup_digest, key_version, nonce,
            authentication_tag, ciphertext, envelope_digest, created_at
          ) values (
-           $1,$2,$3,$4,$5,'notification',$6,'native-pg-v1',$7,$8,$9,$10,$11
+           $1,$2,$3,$4,$5,'notification',$6,$7,$8,$9,$10,$11,$12
          )`,
         [
           registrationId, ids.organization, ids.project, ids.installation,
-          selectedCommandId, tokenLookupDigest, nonce, authenticationTag,
-          ciphertext, digests.rows[0].envelope_digest, createdAt
+          selectedCommandId, tokenLookupDigest, LEGACY_TOKEN_VERSION,
+          nonce, authenticationTag, ciphertext,
+          digests.rows[0].envelope_digest, createdAt
         ]
       );
     };
 
+    const legacyAuthority = {
+      id: ids.installation,
+      organizationId: ids.organization,
+      projectId: ids.project,
+      userId: ids.customer,
+      platform: "android",
+      bundleId: "com.sitesourcery.responder",
+      environment: "sandbox"
+    };
+    const sealedLegacy = legacyTokenEnvelope(
+      legacyAuthority, "notification", LEGACY_ANDROID_TOKEN
+    );
     await register({
       commandId: "native.e1.upgrade.token.0001",
       registrationId: ids.firstRegistration,
@@ -279,8 +350,9 @@ export async function seedResponderNativeE1UpgradeHistory(pool) {
       commandId: "native.e1.upgrade.token.0002",
       registrationId: ids.secondRegistration,
       expectedRevision: 2,
-      tokenLookupDigest: digest("native-e1-upgrade-token-two"),
+      tokenLookupDigest: sealedLegacy.tokenLookupDigest,
       fill: 21,
+      sealed: sealedLegacy,
       createdAt: "2026-08-16T10:03:00.000Z"
     });
   });
@@ -341,6 +413,71 @@ export async function verifyResponderNativeE2UpgradeHistory(pool, ids) {
   });
 }
 
+export async function verifyResponderNativeE3UpgradeHistory(
+  pool,
+  ids,
+  { activeVoiceDrainRejected = false } = {}
+) {
+  assert.deepEqual(ids, E1_UPGRADE_FIXTURE);
+  assert.equal(activeVoiceDrainRejected, true);
+  const result = await pool.query(
+    `select
+       count(*)::integer as registrations,
+       bool_and(token_ownership_digest = token_lookup_digest) as conservative,
+       bool_and(token_ownership_kind = 'legacy_purpose_bound') as legacy,
+       ss.hosted_responder_android_voice_contract_v1() =
+         'canonical-responder-android-voice-v1-fcm-dual-purpose-receipt-bound-held'
+         as contract_ready
+       from ss.responder_native_push_token_registrations
+      where organization_id = $1 and installation_id = $2`,
+    [ids.organization, ids.installation]
+  );
+  assert.deepEqual(result.rows[0], {
+    registrations: 2,
+    conservative: true,
+    legacy: true,
+    contract_ready: true
+  });
+  const encrypted = await pool.query(
+    `select key_version, token_lookup_digest, token_ownership_digest,
+            token_receipt_digest, nonce, authentication_tag, ciphertext
+       from ss.responder_native_push_token_registrations
+      where organization_id = $1 and id = $2`,
+    [ids.organization, ids.secondRegistration]
+  );
+  assert.equal(encrypted.rowCount, 1);
+  const tokenAuthority = createResponderNativeTokenAuthority({
+    pepper: LEGACY_TOKEN_PEPPER,
+    pepperVersion: LEGACY_TOKEN_VERSION,
+    randomBytes: () => Buffer.alloc(12, 1)
+  });
+  assert.equal(await tokenAuthority.openToken({
+    id: ids.installation,
+    organizationId: ids.organization,
+    projectId: ids.project,
+    userId: ids.customer,
+    platform: "android",
+    bundleId: "com.sitesourcery.responder",
+    environment: "sandbox"
+  }, "notification", {
+    keyVersion: encrypted.rows[0].key_version,
+    tokenLookupDigest: encrypted.rows[0].token_lookup_digest,
+    tokenOwnershipDigest: encrypted.rows[0].token_ownership_digest,
+    tokenReceiptDigest: encrypted.rows[0].token_receipt_digest,
+    nonce: encrypted.rows[0].nonce,
+    authenticationTag: encrypted.rows[0].authentication_tag,
+    ciphertext: encrypted.rows[0].ciphertext
+  }), LEGACY_ANDROID_TOKEN);
+  return Object.freeze({
+    assertions: 3,
+    expectedAssertions: 3,
+    registrations: 2,
+    conservativeLegacyOwnership: true,
+    legacyCiphertextReadable: true,
+    activeVoiceDrainRejected: true
+  });
+}
+
 export async function verifyResponderNativeClientPostgres(pool) {
   const gates = [];
   const passed = (name) => gates.push(name);
@@ -371,7 +508,11 @@ export async function verifyResponderNativeClientPostgres(pool) {
       SITESOURCERY_TWILIO_VOICE_SANDBOX_PUSH_CREDENTIAL_SID:
         `CR${"4".repeat(32)}`,
       SITESOURCERY_TWILIO_VOICE_PRODUCTION_PUSH_CREDENTIAL_SID:
-        `CR${"5".repeat(32)}`
+        `CR${"5".repeat(32)}`,
+      SITESOURCERY_TWILIO_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_SID:
+        `CR${"6".repeat(32)}`,
+      SITESOURCERY_TWILIO_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_SID:
+        `CR${"7".repeat(32)}`
     },
     randomBytes() {
       const selected = Buffer.alloc(12);
@@ -506,7 +647,145 @@ export async function verifyResponderNativeClientPostgres(pool) {
     );
   }
   assert.equal((await repository.readiness()).ready, true);
+  await pool.query(
+    `revoke execute on function ss.responder_native_token_payload_digest_v2(
+       text, ss.sha256_hex, ss.sha256_hex, ss.sha256_hex
+     ) from service_role`
+  );
+  try {
+    assert.equal((await repository.readiness()).ready, false);
+  } finally {
+    await pool.query(
+      `grant execute on function ss.responder_native_token_payload_digest_v2(
+         text, ss.sha256_hex, ss.sha256_hex, ss.sha256_hex
+      ) to service_role`
+    );
+  }
+  await pool.query(
+    `revoke execute on function
+       ss.responder_native_voice_session_request_digest_v2(
+         uuid, uuid, uuid, uuid, bigint, text, text, text, ss.sha256_hex
+       ) from service_role`
+  );
+  try {
+    assert.equal((await repository.readiness()).ready, false);
+  } finally {
+    await pool.query(
+      `grant execute on function
+         ss.responder_native_voice_session_request_digest_v2(
+           uuid, uuid, uuid, uuid, bigint, text, text, text, ss.sha256_hex
+         ) to service_role`
+    );
+  }
+  await pool.query(
+    `alter table ss.responder_native_push_token_registrations
+       disable trigger responder_native_push_tokens_guard`
+  );
+  try {
+    assert.equal((await repository.readiness()).ready, false);
+  } finally {
+    await pool.query(
+      `alter table ss.responder_native_push_token_registrations
+         enable trigger responder_native_push_tokens_guard`
+    );
+  }
+  await pool.query(
+    `alter table ss.responder_native_voice_sessions
+       disable trigger responder_native_voice_sessions_guard`
+  );
+  try {
+    assert.equal((await repository.readiness()).ready, false);
+  } finally {
+    await pool.query(
+      `alter table ss.responder_native_voice_sessions
+         enable trigger responder_native_voice_sessions_guard`
+    );
+  }
+  await pool.query(
+    `alter table ss.responder_native_voice_sessions
+       drop constraint responder_native_voice_platform_transport_check,
+       add constraint responder_native_voice_platform_transport_check check (
+         (client_platform = 'ios' and transport = 'twilio_voice_ios')
+         or (client_platform = 'android'
+           and transport = 'twilio_voice_android')
+       ) not valid`
+  );
+  try {
+    assert.equal((await repository.readiness()).ready, false);
+  } finally {
+    await pool.query(
+      `alter table ss.responder_native_voice_sessions validate constraint
+         responder_native_voice_platform_transport_check`
+    );
+  }
+  assert.equal((await repository.readiness()).ready, true);
   passed("storage-acl-drift-fails-readiness");
+
+  const legacyCustomer = {
+    kind: "customer",
+    userId: E1_UPGRADE_FIXTURE.customer,
+    organizationId: E1_UPGRADE_FIXTURE.organization
+  };
+  const legacyScope = {
+    id: E1_UPGRADE_FIXTURE.installation,
+    organizationId: E1_UPGRADE_FIXTURE.organization,
+    projectId: E1_UPGRADE_FIXTURE.project,
+    userId: E1_UPGRADE_FIXTURE.customer,
+    platform: "android",
+    bundleId: "com.sitesourcery.responder",
+    environment: "sandbox"
+  };
+  const legacySelectedCandidates = tokenAuthority.tokenLookupCandidates(
+    legacyScope, "notification", LEGACY_ANDROID_TOKEN
+  );
+  const legacyAllCandidates = ["notification", "voip"].flatMap(
+    (purpose) => tokenAuthority.tokenLookupCandidates(
+      legacyScope, purpose, LEGACY_ANDROID_TOKEN
+    ).map((entry) => entry.digest)
+  );
+  const legacySealed = await tokenAuthority.sealToken(
+    legacyScope, "notification", LEGACY_ANDROID_TOKEN
+  );
+  const legacyReobserved = await repository.registerToken(legacyCustomer, {
+    commandId: "native.pg.legacy.reobserve.0001",
+    registrationId: randomUUID(),
+    organizationId: E1_UPGRADE_FIXTURE.organization,
+    projectId: E1_UPGRADE_FIXTURE.project,
+    installationId: E1_UPGRADE_FIXTURE.installation,
+    expectedRevision: 3,
+    pushPurpose: "notification",
+    tokenLookupCandidateDigests:
+      legacySelectedCandidates.map((entry) => entry.digest),
+    tokenCollisionCandidateDigests: [...new Set(legacyAllCandidates)],
+    tokenOwnershipCandidateDigests:
+      legacySelectedCandidates.map((entry) => entry.ownershipDigest),
+    envelope: legacySealed,
+    recordedAt: tick()
+  });
+  assert.equal(legacyReobserved.installation.revision, 4);
+  assert.equal(
+    legacyReobserved.tokenReceiptDigest,
+    legacySealed.tokenReceiptDigest
+  );
+  assert.deepEqual((await pool.query(
+    `select
+       count(*) filter (
+         where registration.token_ownership_kind = 'legacy_purpose_bound'
+           and retirement.id is null
+       )::integer as active_legacy,
+       count(*) filter (
+         where registration.token_ownership_kind = 'physical_v1'
+           and retirement.id is null
+       )::integer as active_physical
+       from ss.responder_native_push_token_registrations registration
+       left join ss.responder_native_push_token_retirements retirement
+         on retirement.organization_id = registration.organization_id
+        and retirement.registration_id = registration.id
+      where registration.organization_id = $1
+        and registration.installation_id = $2`,
+    [E1_UPGRADE_FIXTURE.organization, E1_UPGRADE_FIXTURE.installation]
+  )).rows[0], { active_legacy: 0, active_physical: 1 });
+  passed("legacy-token-reobserved-as-receipt-bound");
 
   const createInput = {
     commandId: "native.pg.create.0001",
@@ -595,6 +874,8 @@ export async function verifyResponderNativeClientPostgres(pool) {
     pushPurpose: "notification",
     tokenLookupCandidateDigests:
       notificationCandidates.map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests:
+      notificationCandidates.map((entry) => entry.ownershipDigest),
     envelope: firstNotificationEnvelope,
     recordedAt: tick()
   };
@@ -602,6 +883,10 @@ export async function verifyResponderNativeClientPostgres(pool) {
     customer, notificationInput
   );
   assert.equal(notification.installation.revision, 2);
+  assert.equal(
+    notification.tokenReceiptDigest,
+    firstNotificationEnvelope.tokenReceiptDigest
+  );
   assert.equal(notification.installation.pushRegistrations.length, 1);
   const retryEnvelope = await tokenAuthority.sealToken(
     tokenScope, "notification", notificationToken
@@ -614,6 +899,10 @@ export async function verifyResponderNativeClientPostgres(pool) {
     recordedAt: tick()
   });
   assert.equal(notificationReplay.replayed, true);
+  assert.equal(
+    notificationReplay.tokenReceiptDigest,
+    firstNotificationEnvelope.tokenReceiptDigest
+  );
   assert.equal(notificationReplay.installation.revision, 2);
   assert.equal(notificationReplay.installation.pushRegistrations.length, 1);
   assert.doesNotMatch(
@@ -643,6 +932,10 @@ export async function verifyResponderNativeClientPostgres(pool) {
         .tokenLookupCandidates(
           otherScope, "notification", notificationToken
         ).map((entry) => entry.digest),
+      tokenOwnershipCandidateDigests: tokenAuthority
+        .tokenLookupCandidates(
+          otherScope, "notification", notificationToken
+        ).map((entry) => entry.ownershipDigest),
       envelope: await tokenAuthority.sealToken(
         otherScope, "notification", notificationToken
       ),
@@ -667,6 +960,9 @@ export async function verifyResponderNativeClientPostgres(pool) {
     tokenLookupCandidateDigests: tokenAuthority
       .tokenLookupCandidates(tokenScope, "voip", voipToken)
       .map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests: tokenAuthority
+      .tokenLookupCandidates(tokenScope, "voip", voipToken)
+      .map((entry) => entry.ownershipDigest),
     envelope: voipEnvelope,
     recordedAt: tick()
   });
@@ -802,6 +1098,243 @@ export async function verifyResponderNativeClientPostgres(pool) {
   assert.equal(expiredOldKey.ready, true);
   passed("expired-voice-sessions-release-retired-keys");
 
+  const androidCreateInput = {
+    ...createInput,
+    commandId: "native.pg.android.create.0001",
+    installationId: randomUUID(),
+    platform: "android",
+    installationKeyDigest: digest("native.pg.android.installation-key.0001"),
+    recordedAt: tick()
+  };
+  const androidCreated = await repository.createInstallation(
+    customer, androidCreateInput
+  );
+  const androidScope = {
+    id: androidCreated.installation.id,
+    organizationId: ids.organization,
+    projectId: ids.project,
+    userId: ids.customer,
+    platform: "android",
+    bundleId: androidCreated.installation.bundleId,
+    environment: androidCreated.installation.appEnvironment
+  };
+  const fcmToken = "fcm:sitesourcery-proof-token-1234567890";
+  const androidNotificationCandidates = tokenAuthority.tokenLookupCandidates(
+    androidScope, "notification", fcmToken
+  );
+  const androidVoipCandidates = tokenAuthority.tokenLookupCandidates(
+    androidScope, "voip", fcmToken
+  );
+  assert.notEqual(
+    androidNotificationCandidates[0].digest,
+    androidVoipCandidates[0].digest
+  );
+  assert.equal(
+    androidNotificationCandidates[0].ownershipDigest,
+    androidVoipCandidates[0].ownershipDigest
+  );
+  const androidNotification = await repository.registerToken(customer, {
+    commandId: "native.pg.android.notification.0001",
+    registrationId: randomUUID(),
+    organizationId: ids.organization,
+    projectId: ids.project,
+    installationId: androidCreated.installation.id,
+    expectedRevision: 1,
+    pushPurpose: "notification",
+    tokenLookupCandidateDigests:
+      androidNotificationCandidates.map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests:
+      androidNotificationCandidates.map((entry) => entry.ownershipDigest),
+    envelope: await tokenAuthority.sealToken(
+      androidScope, "notification", fcmToken
+    ),
+    recordedAt: tick()
+  });
+  const androidVoip = await repository.registerToken(customer, {
+    commandId: "native.pg.android.voip.0001",
+    registrationId: randomUUID(),
+    organizationId: ids.organization,
+    projectId: ids.project,
+    installationId: androidCreated.installation.id,
+    expectedRevision: androidNotification.installation.revision,
+    pushPurpose: "voip",
+    tokenLookupCandidateDigests:
+      androidVoipCandidates.map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests:
+      androidVoipCandidates.map((entry) => entry.ownershipDigest),
+    envelope: await tokenAuthority.sealToken(
+      androidScope, "voip", fcmToken
+    ),
+    recordedAt: tick()
+  });
+  assert.equal(androidVoip.installation.revision, 3);
+  assert.deepEqual((await pool.query(
+    `select count(*)::integer as count,
+            count(distinct token_lookup_digest)::integer as lookup_digests,
+            count(distinct token_ownership_digest)::integer as owner_digests,
+            bool_and(token_ownership_kind = 'physical_v1') as physical
+       from ss.responder_native_push_token_registrations
+      where organization_id = $1 and installation_id = $2`,
+    [ids.organization, androidCreated.installation.id]
+  )).rows[0], {
+    count: 2,
+    lookup_digests: 2,
+    owner_digests: 1,
+    physical: true
+  });
+  passed("android-dual-purpose-fcm-ownership");
+
+  const androidVoiceInput = {
+    commandId: "native.pg.android.voice.verified.0001",
+    sessionId: randomUUID(),
+    organizationId: ids.organization,
+    projectId: ids.project,
+    installationId: androidCreated.installation.id,
+    expectedRevision: 3
+  };
+  await expectCode(
+    () => repository.issueVoipSession(customer, {
+      ...androidVoiceInput,
+      commandId: "native.pg.android.voice.held.0001",
+      sessionId: randomUUID()
+    }),
+    "RESPONDER_NATIVE_VOIP_HELD"
+  );
+  const androidVoice = await verifiedRepository.issueVoipSession(
+    customer, androidVoiceInput
+  );
+  assert.equal(androidVoice.clientPlatform, "android");
+  assert.equal(androidVoice.transport, "twilio_voice_android");
+  assert.equal(androidVoice.incomingAllowed, true);
+  assert.equal(androidVoice.outgoingAllowed, false);
+  assert.deepEqual((await pool.query(
+    `select client_platform, transport,
+            provider_authorization_effects,
+            not provider_effects and not push_delivery_effects
+              and not voice_call_effects and not carrier_command_effects
+              and not message_send_effects as zero_external_effects
+       from ss.responder_native_voice_sessions where id = $1`,
+    [androidVoice.sessionId]
+  )).rows[0], {
+    client_platform: "android",
+    transport: "twilio_voice_android",
+    provider_authorization_effects: true,
+    zero_external_effects: true
+  });
+  passed("android-voice-session-platform-transport");
+
+  const otherAndroid = await repository.createInstallation(otherCustomer, {
+    ...androidCreateInput,
+    installationId: randomUUID(),
+    organizationId: ids.otherOrganization,
+    projectId: ids.otherProject,
+    recordedAt: tick()
+  });
+  const otherAndroidScope = {
+    ...androidScope,
+    id: otherAndroid.installation.id,
+    organizationId: ids.otherOrganization,
+    projectId: ids.otherProject,
+    userId: ids.otherCustomer
+  };
+  const otherAndroidVoipCandidates = tokenAuthority.tokenLookupCandidates(
+    otherAndroidScope, "voip", fcmToken
+  );
+  await expectCode(
+    async () => repository.registerToken(otherCustomer, {
+      commandId: "native.pg.android.voip.other.0001",
+      registrationId: randomUUID(),
+      organizationId: ids.otherOrganization,
+      projectId: ids.otherProject,
+      installationId: otherAndroid.installation.id,
+      expectedRevision: 1,
+      pushPurpose: "voip",
+      tokenLookupCandidateDigests:
+        otherAndroidVoipCandidates.map((entry) => entry.digest),
+      tokenOwnershipCandidateDigests:
+        otherAndroidVoipCandidates.map((entry) => entry.ownershipDigest),
+      envelope: await tokenAuthority.sealToken(
+        otherAndroidScope, "voip", fcmToken
+      ),
+      recordedAt: tick()
+    }),
+    "RESPONDER_NATIVE_CLIENT_CONFLICT"
+  );
+  passed("cross-tenant-cross-purpose-ownership-denied");
+
+  const legacyVoipCandidates = tokenAuthority.tokenLookupCandidates(
+    otherAndroidScope, "voip", LEGACY_ANDROID_TOKEN
+  );
+  const legacyCollisionCandidates = ["notification", "voip"].flatMap(
+    (purpose) => tokenAuthority.tokenLookupCandidates(
+      otherAndroidScope, purpose, LEGACY_ANDROID_TOKEN
+    ).map((entry) => entry.digest)
+  );
+  await expectCode(
+    async () => repository.registerToken(otherCustomer, {
+      commandId: "native.pg.android.voip.legacy.other.0001",
+      registrationId: randomUUID(),
+      organizationId: ids.otherOrganization,
+      projectId: ids.otherProject,
+      installationId: otherAndroid.installation.id,
+      expectedRevision: 1,
+      pushPurpose: "voip",
+      tokenLookupCandidateDigests:
+        legacyVoipCandidates.map((entry) => entry.digest),
+      tokenCollisionCandidateDigests: [...new Set(legacyCollisionCandidates)],
+      tokenOwnershipCandidateDigests:
+        legacyVoipCandidates.map((entry) => entry.ownershipDigest),
+      envelope: await tokenAuthority.sealToken(
+        otherAndroidScope, "voip", LEGACY_ANDROID_TOKEN
+      ),
+      recordedAt: tick()
+    }),
+    "RESPONDER_NATIVE_CLIENT_CONFLICT"
+  );
+  passed("legacy-cross-purpose-reassignment-denied");
+
+  const voiceCountBeforeMismatch = Number((await pool.query(
+    "select count(*) from ss.responder_native_voice_sessions"
+  )).rows[0].count);
+  await assert.rejects(
+    authority.service({
+      actorKind: "customer",
+      userId: ids.customer,
+      organizationId: ids.organization,
+      isolation: "serializable"
+    }, (client) => client.query(
+      `insert into ss.responder_native_voice_sessions (
+         id, organization_id, project_id, installation_id, customer_user_id,
+         command_id, request_digest, installation_revision, app_environment,
+         voip_registration_reference_digest, identity_digest, endpoint_digest,
+         credential_digest, jti_digest, token_digest, key_version, nonce,
+         authentication_tag, ciphertext, envelope_digest, issued_at,
+         expires_at, incoming_allowed, outgoing_allowed,
+         provider_authorization_effects, provider_effects,
+         push_delivery_effects, voice_call_effects, carrier_command_effects,
+         message_send_effects, created_at, client_platform, transport
+       )
+       select gen_random_uuid(), organization_id, project_id, installation_id,
+              customer_user_id, 'native.pg.android.voice.mismatch.0001',
+              request_digest, installation_revision, app_environment,
+              voip_registration_reference_digest, identity_digest,
+              endpoint_digest, credential_digest, jti_digest, token_digest,
+              key_version, nonce, authentication_tag, ciphertext,
+              envelope_digest, issued_at, expires_at, incoming_allowed,
+              outgoing_allowed, provider_authorization_effects,
+              provider_effects, push_delivery_effects, voice_call_effects,
+              carrier_command_effects, message_send_effects, created_at,
+              'ios', 'twilio_voice_android'
+         from ss.responder_native_voice_sessions where id = $1`,
+      [androidVoice.sessionId]
+    )),
+    (error) => error?.code === "23514"
+  );
+  assert.equal(Number((await pool.query(
+    "select count(*) from ss.responder_native_voice_sessions"
+  )).rows[0].count), voiceCountBeforeMismatch);
+  passed("direct-sql-platform-transport-mismatch-denied");
+
   const launchReadback = await repository.registerToken(customer, {
     ...notificationInput,
     commandId: "native.pg.notification.launch.0001",
@@ -810,6 +1343,9 @@ export async function verifyResponderNativeClientPostgres(pool) {
     tokenLookupCandidateDigests: tokenAuthority
       .tokenLookupCandidates(tokenScope, "notification", notificationToken)
       .map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests: tokenAuthority
+      .tokenLookupCandidates(tokenScope, "notification", notificationToken)
+      .map((entry) => entry.ownershipDigest),
     envelope: await tokenAuthority.sealToken(
       tokenScope, "notification", notificationToken
     ),
@@ -857,6 +1393,8 @@ export async function verifyResponderNativeClientPostgres(pool) {
     pushPurpose: "notification",
     tokenLookupCandidateDigests:
       secondProjectCandidates.map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests:
+      secondProjectCandidates.map((entry) => entry.ownershipDigest),
     envelope: await tokenAuthority.sealToken(
       secondTokenScope, "notification", notificationToken
     ),
@@ -886,6 +1424,8 @@ export async function verifyResponderNativeClientPostgres(pool) {
     expectedRevision: 3,
     tokenLookupCandidateDigests:
       rotatedCandidates.map((entry) => entry.digest),
+    tokenOwnershipCandidateDigests:
+      rotatedCandidates.map((entry) => entry.ownershipDigest),
     envelope: await tokenAuthority.sealToken(
       tokenScope, "notification", rotatedToken
     ),
@@ -953,6 +1493,9 @@ export async function verifyResponderNativeClientPostgres(pool) {
       tokenLookupCandidateDigests: tokenAuthority
         .tokenLookupCandidates(tokenScope, "notification", staleToken)
         .map((entry) => entry.digest),
+      tokenOwnershipCandidateDigests: tokenAuthority
+        .tokenLookupCandidates(tokenScope, "notification", staleToken)
+        .map((entry) => entry.ownershipDigest),
       envelope: await tokenAuthority.sealToken(
         tokenScope, "notification", staleToken
       ),
@@ -1105,6 +1648,9 @@ export async function verifyResponderNativeClientPostgres(pool) {
       tokenLookupCandidateDigests: tokenAuthority
         .tokenLookupCandidates(tokenScope, "notification", staleToken)
         .map((entry) => entry.digest),
+      tokenOwnershipCandidateDigests: tokenAuthority
+        .tokenLookupCandidates(tokenScope, "notification", staleToken)
+        .map((entry) => entry.ownershipDigest),
       envelope: await tokenAuthority.sealToken(
         tokenScope, "notification", staleToken
       ),
@@ -1214,6 +1760,9 @@ export async function verifyResponderNativeClientPostgres(pool) {
        (select bool_and(position($2::bytea in ciphertext) = 0)
           from ss.responder_native_push_token_registrations
          where organization_id = $1) as raw_tokens_absent,
+       (select bool_and(position($3::bytea in ciphertext) = 0)
+          from ss.responder_native_push_token_registrations
+         where organization_id = $1) as raw_fcm_absent,
        (select bool_and(not provider_effects)
           and bool_and(not push_delivery_effects)
           and bool_and(not voice_call_effects)
@@ -1229,23 +1778,28 @@ export async function verifyResponderNativeClientPostgres(pool) {
           and bool_and(not message_send_effects)
           from ss.responder_native_voice_sessions
          where organization_id = $1) as voice_authorization_only`,
-    [ids.organization, Buffer.from(notificationToken, "utf8")]
+    [
+      ids.organization,
+      Buffer.from(notificationToken, "utf8"),
+      Buffer.from(fcmToken, "utf8")
+    ]
   );
   assert.deepEqual(final.rows[0], {
-    commands: 10,
-    installations: 2,
-    tokens: 4,
+    commands: 13,
+    installations: 3,
+    tokens: 6,
     state_transitions: 3,
     token_retirements: 2,
-    voice_sessions: 2,
+    voice_sessions: 3,
     zero_effects: true,
     raw_tokens_absent: true,
+    raw_fcm_absent: true,
     retirement_zero_effects: true,
     voice_authorization_only: true
   });
   const tokenRow = await pool.query(
-    `select key_version, token_lookup_digest, nonce,
-            authentication_tag, ciphertext
+    `select key_version, token_lookup_digest, token_ownership_digest,
+            token_receipt_digest, nonce, authentication_tag, ciphertext
        from ss.responder_native_push_token_registrations
       where organization_id = $1 and command_id = $2`,
     [ids.organization, notificationInput.commandId]
@@ -1256,6 +1810,8 @@ export async function verifyResponderNativeClientPostgres(pool) {
     {
       keyVersion: tokenRow.rows[0].key_version,
       tokenLookupDigest: tokenRow.rows[0].token_lookup_digest,
+      tokenOwnershipDigest: tokenRow.rows[0].token_ownership_digest,
+      tokenReceiptDigest: tokenRow.rows[0].token_receipt_digest,
       nonce: tokenRow.rows[0].nonce,
       authenticationTag: tokenRow.rows[0].authentication_tag,
       ciphertext: tokenRow.rows[0].ciphertext

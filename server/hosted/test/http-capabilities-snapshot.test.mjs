@@ -153,6 +153,7 @@ const FULL_RESPONDER_NATIVE_VOICE_READINESS = Object.freeze({
   providerEffects: false,
   pushDeliveryEffects: false,
   voiceCallEffects: false,
+  transports: Object.freeze(["twilio_voice_ios", "twilio_voice_android"]),
   routingReady: false,
   operationalCalls: false
 });
@@ -167,6 +168,7 @@ const FULL_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
   clientArtifacts: Object.freeze({ ios: false, android: false }),
   tokenStorage: "sealed",
   voipSessionState: "held",
+  voipTransports: Object.freeze(["twilio_voice_ios", "twilio_voice_android"]),
   providerAuthorizationEffects: false,
   providerEffects: false,
   pushDeliveryEffects: false,
@@ -517,6 +519,7 @@ function apiFixture({
           voiceAccess: {
             kind: "twilio-responder-voice-access",
             mode: responderNativeVoiceReadiness.mode,
+            transports: ["twilio_voice_ios", "twilio_voice_android"],
             providerEffects: false,
             pushDeliveryEffects: false,
             voiceCallEffects: false,
@@ -722,6 +725,7 @@ test("capabilities do not claim complete Responder without native-client authori
       clientArtifacts: { ios: false, android: false },
       tokenStorage: "sealed",
       voipSessionState: "held",
+      voipTransports: [],
       providerAuthorizationEffects: false,
       providerEffects: false,
       pushDeliveryEffects: false,

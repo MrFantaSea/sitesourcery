@@ -21,6 +21,10 @@ export const TWILIO_RESPONDER_VOICE_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT =
   "SITESOURCERY_TWILIO_VOICE_SANDBOX_PUSH_CREDENTIAL_SID";
 export const TWILIO_RESPONDER_VOICE_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT =
   "SITESOURCERY_TWILIO_VOICE_PRODUCTION_PUSH_CREDENTIAL_SID";
+export const TWILIO_RESPONDER_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT =
+  "SITESOURCERY_TWILIO_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_SID";
+export const TWILIO_RESPONDER_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT =
+  "SITESOURCERY_TWILIO_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_SID";
 
 const ACCOUNT_SID_ENVIRONMENT = "SITESOURCERY_TWILIO_ACCOUNT_SID";
 const SESSION_TTL_SECONDS = 300;
@@ -33,6 +37,7 @@ const ACCOUNT_SID = /^AC[0-9a-fA-F]{32}$/u;
 const API_KEY_SID = /^SK[0-9a-fA-F]{32}$/u;
 const PUSH_CREDENTIAL_SID = /^CR[0-9a-fA-F]{32}$/u;
 const APP_ENVIRONMENTS = new Set(["sandbox", "production"]);
+const CLIENT_PLATFORMS = new Set(["ios", "android"]);
 const IDENTITY_PURPOSE =
   "sitesourcery.responder-twilio-voice-identity/v1";
 const ENDPOINT_PURPOSE =
@@ -122,7 +127,7 @@ function sessionAuthority(value) {
   exactObject(value, [
     "sessionId", "commandId", "requestDigest", "organizationId",
     "projectId", "userId", "installationId", "installationRevision",
-    "appEnvironment"
+    "clientPlatform", "transport", "appEnvironment"
   ], "TWILIO_RESPONDER_VOICE_ACCESS_INVALID",
   "Twilio Voice session authority is invalid.");
   invariant(
@@ -134,6 +139,8 @@ function sessionAuthority(value) {
       typeof value.requestDigest === "string" && SHA256.test(value.requestDigest) &&
       Number.isSafeInteger(value.installationRevision) &&
       value.installationRevision > 0 &&
+      CLIENT_PLATFORMS.has(value.clientPlatform) &&
+      value.transport === `twilio_voice_${value.clientPlatform}` &&
       APP_ENVIRONMENTS.has(value.appEnvironment),
     "TWILIO_RESPONDER_VOICE_ACCESS_INVALID",
     "Twilio Voice session authority is invalid.",
@@ -188,7 +195,7 @@ function defaultTokenFactory({
 
 function envelopeAad(authority, metadata, key) {
   return Buffer.from(canonicalJson({
-    schema: "sitesourcery.responder-native-voice-session-aad/v1",
+    schema: "sitesourcery.responder-native-voice-session-aad/v2",
     ...authority,
     ...metadata,
     keyVersion: key
@@ -266,7 +273,9 @@ export function createTwilioResponderVoiceAccess({
     TWILIO_RESPONDER_VOICE_API_KEY_SID_ENVIRONMENT,
     TWILIO_RESPONDER_VOICE_API_KEY_SECRET_ENVIRONMENT,
     TWILIO_RESPONDER_VOICE_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
-    TWILIO_RESPONDER_VOICE_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT
+    TWILIO_RESPONDER_VOICE_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT,
+    TWILIO_RESPONDER_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
+    TWILIO_RESPONDER_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT
   ];
   let provider = null;
   if (mode === "held") {
@@ -289,22 +298,38 @@ export function createTwilioResponderVoiceAccess({
         TWILIO_RESPONDER_VOICE_API_KEY_SECRET_ENVIRONMENT
       ),
       pushCredentials: Object.freeze({
-        sandbox: providerSid(
-          environment,
-          TWILIO_RESPONDER_VOICE_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
-          PUSH_CREDENTIAL_SID
-        ),
-        production: providerSid(
-          environment,
-          TWILIO_RESPONDER_VOICE_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT,
-          PUSH_CREDENTIAL_SID
-        )
+        ios: Object.freeze({
+          sandbox: providerSid(
+            environment,
+            TWILIO_RESPONDER_VOICE_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
+            PUSH_CREDENTIAL_SID
+          ),
+          production: providerSid(
+            environment,
+            TWILIO_RESPONDER_VOICE_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT,
+            PUSH_CREDENTIAL_SID
+          )
+        }),
+        android: Object.freeze({
+          sandbox: providerSid(
+            environment,
+            TWILIO_RESPONDER_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
+            PUSH_CREDENTIAL_SID
+          ),
+          production: providerSid(
+            environment,
+            TWILIO_RESPONDER_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT,
+            PUSH_CREDENTIAL_SID
+          )
+        })
       })
     });
     invariant(
-      provider.pushCredentials.sandbox !== provider.pushCredentials.production,
+      new Set(Object.values(provider.pushCredentials).flatMap(
+        (platform) => Object.values(platform)
+      )).size === 4,
       "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
-      "Twilio Voice sandbox and production Push Credentials must be distinct.",
+      "Twilio Voice platform Push Credentials must be distinct.",
       { status: 500 }
     );
   }
@@ -315,16 +340,21 @@ export function createTwilioResponderVoiceAccess({
       organizationId: selected.organizationId,
       projectId: selected.projectId,
       userId: selected.userId,
+      clientPlatform: selected.clientPlatform,
+      transport: selected.transport,
       appEnvironment: selected.appEnvironment
     });
     const endpointDigest = hmacHex(selectedKeys.endpoint, {
       schema: ENDPOINT_PURPOSE,
       installationId: selected.installationId,
+      clientPlatform: selected.clientPlatform,
+      transport: selected.transport,
       appEnvironment: selected.appEnvironment
     });
     return {
       identity: `ssr_${identityDigest.slice(0, 48)}`,
-      endpointId: `ssr_ios_${endpointDigest.slice(0, 48)}`,
+      endpointId:
+        `ssr_${selected.clientPlatform}_${endpointDigest.slice(0, 48)}`,
       identityDigest,
       endpointDigest
     };
@@ -364,6 +394,8 @@ export function createTwilioResponderVoiceAccess({
         accountSid: provider.accountSid,
         apiKeySid: provider.apiKeySid,
         pushCredentialSid,
+        clientPlatform: selected.clientPlatform,
+        transport: selected.transport,
         appEnvironment: selected.appEnvironment
       }),
       jtiDigest: digest(decoded.payload.jti)
@@ -457,7 +489,7 @@ export function createTwilioResponderVoiceAccess({
     kind: "twilio-responder-voice-access",
     mode,
     provider: "twilio",
-    transport: "twilio_voice_ios",
+    transports: Object.freeze(["twilio_voice_ios", "twilio_voice_android"]),
     ttlSeconds: SESSION_TTL_SECONDS,
     writerVersion: currentVersion,
     verifierVersions,
@@ -472,7 +504,9 @@ export function createTwilioResponderVoiceAccess({
         kind: "twilio-responder-voice-access",
         mode,
         provider: "twilio",
-        transport: "twilio_voice_ios",
+        transports: Object.freeze([
+          "twilio_voice_ios", "twilio_voice_android"
+        ]),
         signerReady: provider !== null,
         issuanceEnabled: mode === "verified",
         ttlSeconds: SESSION_TTL_SECONDS,
@@ -498,7 +532,8 @@ export function createTwilioResponderVoiceAccess({
       }
       const keys = keyring.get(currentVersion);
       const opaque = opaqueAuthority(selected, keys);
-      const pushCredentialSid = provider.pushCredentials[selected.appEnvironment];
+      const pushCredentialSid =
+        provider.pushCredentials[selected.clientPlatform][selected.appEnvironment];
       let accessToken;
       try {
         accessToken = tokenFactory({
