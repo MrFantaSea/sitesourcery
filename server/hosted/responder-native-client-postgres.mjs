@@ -6,6 +6,7 @@ import { HostedError, invariant } from "./errors.mjs";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
+const COMMAND_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/u;
 const VERSION = /^[a-z0-9][a-z0-9._-]{0,39}$/u;
 const BUNDLE_ID = /^[A-Za-z0-9][A-Za-z0-9.-]{2,199}$/u;
 const APP_VERSION = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/u;
@@ -35,6 +36,16 @@ function sha256(value, field) {
     typeof value === "string" && SHA256.test(value),
     "RESPONDER_NATIVE_CLIENT_INVALID",
     `${field} is invalid.`,
+    { status: 400 }
+  );
+  return value;
+}
+
+function commandId(value) {
+  invariant(
+    typeof value === "string" && COMMAND_ID.test(value),
+    "RESPONDER_NATIVE_CLIENT_INVALID",
+    "Command ID is invalid.",
     { status: 400 }
   );
   return value;
@@ -123,7 +134,72 @@ function iso(value) {
   return value instanceof Date ? value.toISOString() : String(value);
 }
 
-function projection(row, tokenRows = []) {
+function voiceSessionAuthority(row) {
+  return Object.freeze({
+    sessionId: row.id,
+    commandId: row.command_id,
+    requestDigest: row.request_digest,
+    organizationId: row.organization_id,
+    projectId: row.project_id,
+    userId: row.customer_user_id,
+    installationId: row.installation_id,
+    installationRevision: Number(row.installation_revision),
+    appEnvironment: row.app_environment
+  });
+}
+
+function voiceSessionMetadata(row) {
+  return Object.freeze({
+    issuedAt: iso(row.issued_at),
+    expiresAt: iso(row.expires_at),
+    identityDigest: row.identity_digest,
+    endpointDigest: row.endpoint_digest,
+    credentialDigest: row.credential_digest,
+    jtiDigest: row.jti_digest,
+    tokenDigest: row.token_digest
+  });
+}
+
+function voiceSessionEnvelope(row) {
+  return Object.freeze({
+    keyVersion: row.key_version,
+    nonce: row.nonce,
+    authenticationTag: row.authentication_tag,
+    ciphertext: row.ciphertext
+  });
+}
+
+function voiceSessionProjection(
+  row,
+  accessToken,
+  { replayed = false, semanticReplay = false } = {}
+) {
+  return deepFreeze({
+    schema: "sitesourcery.responder-native-voice-session/v1",
+    sessionId: row.id,
+    commandId: row.command_id,
+    requestDigest: row.request_digest,
+    replayed,
+    semanticReplay,
+    installationId: row.installation_id,
+    installationRevision: Number(row.installation_revision),
+    provider: "twilio",
+    transport: "twilio_voice_ios",
+    accessToken,
+    issuedAt: iso(row.issued_at),
+    expiresAt: iso(row.expires_at),
+    incomingAllowed: true,
+    outgoingAllowed: false,
+    providerAuthorizationEffects: true,
+    providerEffects: false,
+    pushDeliveryEffects: false,
+    voiceCallEffects: false,
+    carrierCommandEffects: false,
+    messageSendEffects: false
+  });
+}
+
+function projection(row, tokenRows = [], voipSessionState = "held") {
   const state = row.current_state;
   return deepFreeze({
     schema: "sitesourcery.responder-native-installation/v1",
@@ -160,7 +236,7 @@ function projection(row, tokenRows = []) {
       revision: Number(token.resulting_revision),
       active: state === "active"
     })),
-    voipSessionState: "held",
+    voipSessionState,
     providerEffects: false,
     pushDeliveryEffects: false,
     voiceCallEffects: false,
@@ -169,7 +245,14 @@ function projection(row, tokenRows = []) {
   });
 }
 
-async function loadInstallation(client, actor, organizationId, projectId, id) {
+async function loadInstallation(
+  client,
+  actor,
+  organizationId,
+  projectId,
+  id,
+  voipSessionState = "held"
+) {
   const result = await client.query(
     `select installation.*,
             current_command.resulting_revision as current_revision,
@@ -202,28 +285,42 @@ async function loadInstallation(client, actor, organizationId, projectId, id) {
     { status: 404 }
   );
   const tokens = await client.query(
-    `select distinct on (registration.push_purpose)
-            registration.push_purpose, registration.token_lookup_digest,
+    `select registration.push_purpose, registration.token_lookup_digest,
             registration.key_version, registration.created_at,
             command.resulting_revision
-       from ss.responder_native_push_token_registrations registration
-       join ss.responder_native_commands command
-         on command.organization_id = registration.organization_id
-        and command.command_id = registration.command_id
-      where registration.organization_id = $1
-        and registration.installation_id = $2
-      order by registration.push_purpose,
-               command.resulting_revision desc, registration.id desc`,
+       from (
+         select distinct on (native_command.push_purpose)
+                native_command.organization_id,
+                native_command.push_purpose,
+                native_command.operation,
+                native_command.token_registration_id,
+                native_command.resulting_revision
+           from ss.responder_native_commands native_command
+          where native_command.organization_id = $1
+            and native_command.installation_id = $2
+            and native_command.push_purpose is not null
+          order by native_command.push_purpose,
+                   native_command.resulting_revision desc
+       ) command
+       join ss.responder_native_push_token_registrations registration
+         on command.operation = 'register_token'
+        and registration.organization_id = command.organization_id
+        and registration.id = command.token_registration_id
+      order by registration.push_purpose`,
     [organizationId, id]
   );
-  return projection(result.rows[0], tokens.rows);
+  return projection(result.rows[0], tokens.rows, voipSessionState);
 }
 
 async function commandReceipt(
   client,
   actor,
   row,
-  { replayed = false, semanticReplay = false } = {}
+  {
+    replayed = false,
+    semanticReplay = false,
+    voipSessionState = "held"
+  } = {}
 ) {
   return deepFreeze({
     schema: "sitesourcery.responder-native-command-receipt/v1",
@@ -237,7 +334,8 @@ async function commandReceipt(
       actor,
       row.organization_id,
       row.project_id,
-      row.installation_id
+      row.installation_id,
+      voipSessionState
     ),
     providerEffects: false,
     pushDeliveryEffects: false,
@@ -247,7 +345,12 @@ async function commandReceipt(
   });
 }
 
-async function priorReceipt(client, actor, selected) {
+async function priorReceipt(
+  client,
+  actor,
+  selected,
+  voipSessionState = "held"
+) {
   const prior = await client.query(
     `select * from ss.responder_native_commands
       where organization_id = $1 and command_id = $2`,
@@ -260,7 +363,10 @@ async function priorReceipt(client, actor, selected) {
       "The native-client command was reused for different facts.",
       { status: 409 }
     );
-    return commandReceipt(client, actor, prior.rows[0], { replayed: true });
+    return commandReceipt(client, actor, prior.rows[0], {
+      replayed: true,
+      voipSessionState
+    });
   }
   const semantic = await client.query(
     `select * from ss.responder_native_commands where request_digest = $1`,
@@ -268,8 +374,9 @@ async function priorReceipt(client, actor, selected) {
   );
   return semantic.rowCount === 1
     ? commandReceipt(client, actor, semantic.rows[0], {
-        replayed: true,
-        semanticReplay: true
+      replayed: true,
+        semanticReplay: true,
+        voipSessionState
       })
     : null;
 }
@@ -277,6 +384,7 @@ async function priorReceipt(client, actor, selected) {
 export function createPostgresResponderNativeClientRepository({
   authority,
   verifierKeyVersions,
+  voiceAccess,
   randomUUID = systemRandomUUID
 } = {}) {
   invariant(
@@ -286,11 +394,21 @@ export function createPostgresResponderNativeClientRepository({
       verifierKeyVersions.length >= 1 && verifierKeyVersions.length <= 4 &&
       verifierKeyVersions.every(
         (entry) => typeof entry === "string" && VERSION.test(entry)
-      ),
+      ) &&
+      voiceAccess?.kind === "twilio-responder-voice-access" &&
+      (voiceAccess.mode === "held" || voiceAccess.mode === "verified") &&
+      voiceAccess.providerEffects === false &&
+      voiceAccess.pushDeliveryEffects === false &&
+      voiceAccess.voiceCallEffects === false &&
+      typeof voiceAccess.issueSession === "function" &&
+      typeof voiceAccess.openSession === "function" &&
+      Array.isArray(voiceAccess.verifierVersions) &&
+      voiceAccess.verifierVersions.length >= 1,
     "RESPONDER_NATIVE_CLIENT_CONFIGURATION_REQUIRED",
     "Canonical PostgreSQL native-client authority is required.",
     { status: 500 }
   );
+  const voipSessionState = voiceAccess.mode;
 
   function stateTransition(actor, input, {
     operation,
@@ -342,14 +460,17 @@ export function createPostgresResponderNativeClientRepository({
           ]
         );
         selected.requestDigest = request.rows[0].request_digest;
-        const prior = await priorReceipt(client, actor, selected);
+        const prior = await priorReceipt(
+          client, actor, selected, voipSessionState
+        );
         if (prior) return prior;
         const installed = await loadInstallation(
           client,
           actor,
           selected.organizationId,
           selected.projectId,
-          selected.installationId
+          selected.installationId,
+          voipSessionState
         );
         invariant(
           allowedPriorStates.has(installed.state) &&
@@ -394,7 +515,9 @@ export function createPostgresResponderNativeClientRepository({
             where organization_id = $1 and command_id = $2`,
           [selected.organizationId, selected.commandId]
         );
-        return commandReceipt(client, actor, row.rows[0]);
+        return commandReceipt(client, actor, row.rows[0], {
+          voipSessionState
+        });
       }
     ));
   }
@@ -418,8 +541,13 @@ export function createPostgresResponderNativeClientRepository({
               ) is not null
               and ss.hosted_responder_native_client_contract_v1() =
                 'canonical-responder-native-client-v1-held-sealed-token-authority'
+              and to_regprocedure(
+                'ss.hosted_responder_native_voice_session_contract_v1()'
+              ) is not null
+              and ss.hosted_responder_native_voice_session_contract_v1() =
+                'canonical-responder-native-voice-session-v1-sealed-replay-held'
                 as contract_ready,
-              (select count(*) = 4
+              (select count(*) = 6
                  and bool_and(
                    relation.relrowsecurity
                    and relation.relforcerowsecurity
@@ -444,6 +572,11 @@ export function createPostgresResponderNativeClientRepository({
                    and not has_table_privilege(
                      'service_role', relation.oid, 'TRIGGER'
                    )
+                   and coalesce((
+                     select role_record.rolbypassrls
+                       from pg_roles role_record
+                      where role_record.rolname = 'service_role'
+                   ), false)
                    and not has_table_privilege(
                      'anon', relation.oid, 'SELECT'
                    )
@@ -498,6 +631,23 @@ export function createPostgresResponderNativeClientRepository({
                           'REFERENCES', 'TRIGGER'
                         ])
                    )
+                   and not exists (
+                     select 1
+                       from aclexplode(coalesce(
+                         relation.relacl,
+                         acldefault('r', relation.relowner)
+                       )) relation_acl
+                      where relation_acl.grantee <> relation.relowner
+                        and relation_acl.grantee <> coalesce((
+                          select role_record.oid
+                            from pg_roles role_record
+                           where role_record.rolname = 'service_role'
+                        ), 0::oid)
+                        and relation_acl.privilege_type = any(array[
+                          'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE',
+                          'REFERENCES', 'TRIGGER'
+                        ])
+                   )
                  )
                 from pg_class relation
                 join pg_namespace namespace
@@ -509,22 +659,63 @@ export function createPostgresResponderNativeClientRepository({
                 select 1
                   from ss.responder_native_push_token_registrations token
                  where token.key_version <> all($2::text[])
-              ) as token_keys_covered
+              ) as token_keys_covered,
+              not exists (
+                select 1
+                  from ss.responder_native_voice_sessions voice_session
+                 where voice_session.expires_at > clock_timestamp()
+                   and voice_session.key_version <> all($3::text[])
+              ) as voice_keys_covered,
+              not exists (
+                select registration.token_lookup_digest
+                  from ss.responder_native_push_token_registrations registration
+                  join ss.responder_native_installations installation
+                    on installation.organization_id = registration.organization_id
+                   and installation.id = registration.installation_id
+                 group by registration.token_lookup_digest
+                having count(distinct installation.customer_user_id) > 1
+                    or count(distinct installation.platform) > 1
+                    or count(distinct installation.bundle_id) > 1
+                    or count(distinct installation.app_environment) > 1
+                    or count(distinct registration.push_purpose) > 1
+              ) as token_ownership_ready,
+              not exists (
+                select registration.organization_id,
+                       registration.installation_id,
+                       registration.push_purpose
+                  from ss.responder_native_push_token_registrations registration
+                  left join ss.responder_native_push_token_retirements retirement
+                    on retirement.organization_id = registration.organization_id
+                   and retirement.registration_id = registration.id
+                 where retirement.id is null
+                 group by registration.organization_id,
+                          registration.installation_id,
+                          registration.push_purpose
+                having count(*) > 1
+              ) as active_tokens_ready
           `, [[
             "responder_native_commands",
             "responder_native_installations",
             "responder_native_push_token_registrations",
-            "responder_native_state_transitions"
-          ], verifierKeyVersions])
+            "responder_native_state_transitions",
+            "responder_native_push_token_retirements",
+            "responder_native_voice_sessions"
+          ], verifierKeyVersions, voiceAccess.verifierVersions])
         );
         const row = result.rows[0] ?? {};
         const ready = row.contract_ready === true &&
-          row.tables_ready === true && row.token_keys_covered === true;
+          row.tables_ready === true && row.token_keys_covered === true &&
+          row.voice_keys_covered === true &&
+          row.token_ownership_ready === true &&
+          row.active_tokens_ready === true;
         return deepFreeze({
           ready,
           verified: ready,
           kind: "responder-native-client-postgres",
           mode: "held-local",
+          voipSessionState,
+          providerAuthorizationEffects:
+            voiceAccess.providerAuthorizationEffects,
           providerEffects: false,
           pushDeliveryEffects: false,
           voiceCallEffects: false,
@@ -538,6 +729,9 @@ export function createPostgresResponderNativeClientRepository({
           verified: false,
           kind: "responder-native-client-postgres",
           mode: "held-local",
+          voipSessionState,
+          providerAuthorizationEffects:
+            voiceAccess.providerAuthorizationEffects,
           providerEffects: false,
           pushDeliveryEffects: false,
           voiceCallEffects: false,
@@ -608,7 +802,9 @@ export function createPostgresResponderNativeClientRepository({
             ]
           );
           selected.requestDigest = request.rows[0].request_digest;
-          const prior = await priorReceipt(client, actor, selected);
+          const prior = await priorReceipt(
+            client, actor, selected, voipSessionState
+          );
           if (prior) return prior;
           await client.query(
             `insert into ss.responder_native_commands (
@@ -647,7 +843,9 @@ export function createPostgresResponderNativeClientRepository({
               where organization_id = $1 and command_id = $2`,
             [selected.organizationId, selected.commandId]
           );
-          return commandReceipt(client, actor, row.rows[0]);
+          return commandReceipt(client, actor, row.rows[0], {
+            voipSessionState
+          });
         }
       ));
     },
@@ -717,14 +915,17 @@ export function createPostgresResponderNativeClientRepository({
             ]
           );
           selected.requestDigest = request.rows[0].request_digest;
-          const prior = await priorReceipt(client, actor, selected);
+          const prior = await priorReceipt(
+            client, actor, selected, voipSessionState
+          );
           if (prior) return prior;
           const installed = await loadInstallation(
             client,
             actor,
             selected.organizationId,
             selected.projectId,
-            selected.installationId
+            selected.installationId,
+            voipSessionState
           );
           invariant(
             installed.state === "active" &&
@@ -736,38 +937,122 @@ export function createPostgresResponderNativeClientRepository({
             { status: 409 }
           );
           const collisions = await client.query(
-            `select registration.installation_id,
-                    registration.push_purpose, registration.key_version
+            `select registration.organization_id,
+                    registration.installation_id,
+                    registration.push_purpose, registration.key_version,
+                    registration.command_id,
+                    registration.token_lookup_digest,
+                    installation.customer_user_id,
+                    installation.platform, installation.bundle_id,
+                    installation.app_environment,
+                    retirement.id is null as unretired
                from ss.responder_native_push_token_registrations registration
+               join ss.responder_native_installations installation
+                 on installation.organization_id = registration.organization_id
+                and installation.id = registration.installation_id
+               left join ss.responder_native_push_token_retirements retirement
+                 on retirement.organization_id = registration.organization_id
+                and retirement.registration_id = registration.id
               where registration.token_lookup_digest = any($1::text[])
-              limit 1`,
+              order by registration.created_at desc, registration.id desc`,
             [selected.tokenLookupCandidateDigests]
           );
-          if (collisions.rowCount === 1) {
-            const collision = collisions.rows[0];
+          for (const collision of collisions.rows) {
             invariant(
-              collision.installation_id === selected.installationId &&
-                collision.push_purpose === selected.pushPurpose &&
-                collision.key_version !== selected.envelope.keyVersion,
+              collision.customer_user_id === actor.userId &&
+                collision.platform === installed.platform &&
+                collision.bundle_id === installed.bundleId &&
+                collision.app_environment === installed.appEnvironment &&
+                collision.push_purpose === selected.pushPurpose,
               "RESPONDER_NATIVE_CLIENT_CONFLICT",
               "The native push token is already bound elsewhere.",
               { status: 409 }
             );
           }
+          const exactCurrent = collisions.rows.find((collision) =>
+            collision.organization_id === selected.organizationId &&
+              collision.installation_id === selected.installationId &&
+              collision.push_purpose === selected.pushPurpose &&
+              collision.key_version === selected.envelope.keyVersion &&
+              collision.token_lookup_digest ===
+                selected.envelope.tokenLookupDigest &&
+              collision.unretired === true
+          );
+          if (exactCurrent) {
+              const receipt = await client.query(
+                `select * from ss.responder_native_commands
+                  where organization_id = $1 and command_id = $2`,
+                [exactCurrent.organization_id, exactCurrent.command_id]
+              );
+              invariant(
+                receipt.rowCount === 1,
+                "RESPONDER_NATIVE_CLIENT_CONFLICT",
+                "The native push token receipt is unavailable.",
+                { status: 409 }
+              );
+              return commandReceipt(client, actor, receipt.rows[0], {
+                replayed: true,
+                semanticReplay: true,
+                voipSessionState
+              });
+          }
+          const current = await client.query(
+            `select registration.*
+               from ss.responder_native_commands command
+               join ss.responder_native_push_token_registrations registration
+                 on registration.organization_id = command.organization_id
+                and registration.id = command.token_registration_id
+              where command.organization_id = $1
+                and command.installation_id = $2
+                and command.push_purpose = $3
+                and command.operation = 'register_token'
+                and not exists (
+                  select 1
+                    from ss.responder_native_push_token_retirements retirement
+                   where retirement.organization_id = registration.organization_id
+                     and retirement.registration_id = registration.id
+                )
+              order by command.resulting_revision desc
+              limit 1`,
+            [
+              selected.organizationId, selected.installationId,
+              selected.pushPurpose
+            ]
+          );
+          const retirementId = current.rowCount === 1 ? randomUUID() : null;
+          let retirementEvidenceDigest = null;
+          if (current.rowCount === 1) {
+            const evidence = await client.query(
+              `select ss.service_json_digest(jsonb_build_object(
+                 'newTokenReferenceDigest',$1::text,
+                 'oldTokenReferenceDigest',$2::text,
+                 'pushPurpose',$3::text,
+                 'schema','sitesourcery.responder-native-token-rotation-evidence/v1'
+               )) as evidence_digest`,
+              [
+                selected.envelope.tokenLookupDigest,
+                current.rows[0].token_lookup_digest,
+                selected.pushPurpose
+              ]
+            );
+            retirementEvidenceDigest = evidence.rows[0].evidence_digest;
+          }
           await client.query(
             `insert into ss.responder_native_commands (
                organization_id, command_id, request_digest, project_id,
-               installation_id, token_registration_id, actor_user_id,
-               operation,
+               installation_id, token_registration_id, token_retirement_id,
+               actor_user_id, operation,
                expected_revision, resulting_revision, resulting_state,
                push_purpose, payload_digest, created_at
              ) values (
-               $1,$2,$3,$4,$5,$6,$7,'register_token',$8,$9,'active',$10,$11,$12
+               $1,$2,$3,$4,$5,$6,$7,$8,'register_token',$9,$10,'active',
+               $11,$12,$13
              )`,
             [
               selected.organizationId, selected.commandId,
               selected.requestDigest, selected.projectId,
-              selected.installationId, selected.registrationId, actor.userId,
+              selected.installationId, selected.registrationId,
+              retirementId, actor.userId,
               selected.expectedRevision, selected.expectedRevision + 1,
               selected.pushPurpose, selected.payloadDigest,
               selected.recordedAt
@@ -790,12 +1075,212 @@ export function createPostgresResponderNativeClientRepository({
               selected.recordedAt
             ]
           );
+          if (current.rowCount === 1) {
+            await client.query(
+              `insert into ss.responder_native_push_token_retirements (
+                 id, organization_id, project_id, installation_id, command_id,
+                 registration_id, replacement_registration_id, actor_user_id,
+                 push_purpose, reason, expected_installation_revision,
+                 evidence_digest, created_at
+               ) values (
+                 $1,$2,$3,$4,$5,$6,$7,$8,$9,'token_replaced',$10,$11,$12
+               )`,
+              [
+                retirementId, selected.organizationId, selected.projectId,
+                selected.installationId, selected.commandId,
+                current.rows[0].id, selected.registrationId, actor.userId,
+                selected.pushPurpose, selected.expectedRevision,
+                retirementEvidenceDigest, selected.recordedAt
+              ]
+            );
+          }
           const row = await client.query(
             `select * from ss.responder_native_commands
               where organization_id = $1 and command_id = $2`,
             [selected.organizationId, selected.commandId]
           );
-          return commandReceipt(client, actor, row.rows[0]);
+          return commandReceipt(client, actor, row.rows[0], {
+            voipSessionState
+          });
+        }
+      ));
+    },
+
+    retireToken(actor, input) {
+      const selected = {
+        commandId: commandId(input.commandId),
+        retirementId: uuid(input.retirementId, "Token retirement ID"),
+        organizationId: uuid(input.organizationId, "Organization ID"),
+        projectId: uuid(input.projectId, "Project ID"),
+        installationId: uuid(input.installationId, "Installation ID"),
+        expectedRevision: input.expectedRevision,
+        pushPurpose: input.pushPurpose,
+        reason: input.reason,
+        evidenceDigest: sha256(input.evidenceDigest, "Evidence digest"),
+        recordedAt: instant(input.recordedAt, "Recorded time")
+      };
+      invariant(
+        Number.isSafeInteger(selected.expectedRevision) &&
+          selected.expectedRevision > 0 &&
+          PURPOSES.has(selected.pushPurpose) &&
+          selected.reason === "customer_request",
+        "RESPONDER_NATIVE_CLIENT_INVALID",
+        "The native push-token retirement is invalid.",
+        { status: 400 }
+      );
+      return translated(() => authority.service(
+        customerContext(actor),
+        async (client) => {
+          await client.query(
+            "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+            [`responder-native-installation:${selected.installationId}`]
+          );
+          const prior = await client.query(
+            `select command.*, retirement.reason,
+                    retirement.evidence_digest,
+                    retirement.push_purpose
+               from ss.responder_native_commands command
+               join ss.responder_native_push_token_retirements retirement
+                 on retirement.organization_id = command.organization_id
+                and retirement.command_id = command.command_id
+              where command.organization_id = $1 and command.command_id = $2`,
+            [selected.organizationId, selected.commandId]
+          );
+          if (prior.rowCount === 1) {
+            const row = prior.rows[0];
+            invariant(
+              row.operation === "retire_token" &&
+                row.project_id === selected.projectId &&
+                row.installation_id === selected.installationId &&
+                Number(row.expected_revision) === selected.expectedRevision &&
+                row.push_purpose === selected.pushPurpose &&
+                row.reason === selected.reason &&
+                row.evidence_digest === selected.evidenceDigest,
+              "RESPONDER_NATIVE_CLIENT_IDEMPOTENCY_CONFLICT",
+              "The native-client command was reused for different facts.",
+              { status: 409 }
+            );
+            return commandReceipt(client, actor, row, {
+              replayed: true,
+              voipSessionState
+            });
+          }
+          const installed = await loadInstallation(
+            client,
+            actor,
+            selected.organizationId,
+            selected.projectId,
+            selected.installationId,
+            voipSessionState
+          );
+          invariant(
+            installed.state === "active" &&
+              installed.revision === selected.expectedRevision &&
+              installed.pushRegistrations.some(
+                (entry) => entry.purpose === selected.pushPurpose &&
+                  entry.active
+              ),
+            "RESPONDER_NATIVE_CLIENT_UNAVAILABLE",
+            "Responder native push-token registration is unavailable.",
+            { status: 404 }
+          );
+          const current = await client.query(
+            `select registration.*
+               from ss.responder_native_commands command
+               join ss.responder_native_push_token_registrations registration
+                 on registration.organization_id = command.organization_id
+                and registration.id = command.token_registration_id
+              where command.organization_id = $1
+                and command.installation_id = $2
+                and command.push_purpose = $3
+                and command.operation = 'register_token'
+                and not exists (
+                  select 1
+                    from ss.responder_native_push_token_retirements retirement
+                   where retirement.organization_id = registration.organization_id
+                     and retirement.registration_id = registration.id
+                )
+              order by command.resulting_revision desc
+              limit 1`,
+            [
+              selected.organizationId, selected.installationId,
+              selected.pushPurpose
+            ]
+          );
+          invariant(
+            current.rowCount === 1,
+            "RESPONDER_NATIVE_CLIENT_UNAVAILABLE",
+            "Responder native push-token registration is unavailable.",
+            { status: 404 }
+          );
+          const payload = await client.query(
+            `select ss.responder_native_token_retirement_payload_digest_v1(
+               $1,$2,$3,$4,$5,$6,$7,null,$8,$9
+             ) as payload_digest`,
+            [
+              actor.userId, selected.organizationId, selected.projectId,
+              selected.installationId, selected.expectedRevision,
+              selected.pushPurpose, current.rows[0].id, selected.reason,
+              selected.evidenceDigest
+            ]
+          );
+          selected.payloadDigest = payload.rows[0].payload_digest;
+          const request = await client.query(
+            `select ss.responder_native_command_request_digest_v1(
+               $1,$2,$3,$4,'retire_token',$5,$6,$7,$8
+             ) as request_digest`,
+            [
+              actor.userId, selected.organizationId, selected.projectId,
+              selected.installationId, selected.expectedRevision,
+              selected.expectedRevision + 1, selected.pushPurpose,
+              selected.payloadDigest
+            ]
+          );
+          selected.requestDigest = request.rows[0].request_digest;
+          await client.query(
+            `insert into ss.responder_native_commands (
+               organization_id, command_id, request_digest, project_id,
+               installation_id, token_retirement_id, actor_user_id, operation,
+               expected_revision, resulting_revision, resulting_state,
+               push_purpose, payload_digest, created_at
+             ) values (
+               $1,$2,$3,$4,$5,$6,$7,'retire_token',$8,$9,'active',$10,$11,$12
+             )`,
+            [
+              selected.organizationId, selected.commandId,
+              selected.requestDigest, selected.projectId,
+              selected.installationId, selected.retirementId, actor.userId,
+              selected.expectedRevision, selected.expectedRevision + 1,
+              selected.pushPurpose, selected.payloadDigest,
+              selected.recordedAt
+            ]
+          );
+          await client.query(
+            `insert into ss.responder_native_push_token_retirements (
+               id, organization_id, project_id, installation_id, command_id,
+               registration_id, replacement_registration_id, actor_user_id,
+               push_purpose, reason, expected_installation_revision,
+               evidence_digest, created_at
+             ) values (
+               $1,$2,$3,$4,$5,$6,null,$7,$8,$9,$10,$11,$12
+             )`,
+            [
+              selected.retirementId, selected.organizationId,
+              selected.projectId, selected.installationId,
+              selected.commandId, current.rows[0].id, actor.userId,
+              selected.pushPurpose, selected.reason,
+              selected.expectedRevision, selected.evidenceDigest,
+              selected.recordedAt
+            ]
+          );
+          const row = await client.query(
+            `select * from ss.responder_native_commands
+              where organization_id = $1 and command_id = $2`,
+            [selected.organizationId, selected.commandId]
+          );
+          return commandReceipt(client, actor, row.rows[0], {
+            voipSessionState
+          });
         }
       ));
     },
@@ -848,7 +1333,8 @@ export function createPostgresResponderNativeClientRepository({
               actor,
               selectedOrganizationId,
               selectedProjectId,
-              row.id
+              row.id,
+              voipSessionState
             ));
           }
           return deepFreeze({
@@ -856,7 +1342,7 @@ export function createPostgresResponderNativeClientRepository({
             organizationId: selectedOrganizationId,
             projectId: selectedProjectId,
             installations,
-            voipSessionState: "held",
+            voipSessionState,
             providerEffects: false,
             pushDeliveryEffects: false,
             voiceCallEffects: false,
@@ -880,54 +1366,212 @@ export function createPostgresResponderNativeClientRepository({
           actor,
           selectedOrganizationId,
           selectedProjectId,
-          selectedInstallationId
+          selectedInstallationId,
+          voipSessionState
         )
       ));
     },
 
-    async requireHeldVoipSession(actor, input) {
-      const selectedOrganizationId = uuid(
-        input.organizationId, "Organization ID"
-      );
-      const selectedProjectId = uuid(input.projectId, "Project ID");
-      const selectedInstallationId = uuid(
-        input.installationId, "Installation ID"
-      );
+    issueVoipSession(actor, input) {
+      const selected = {
+        commandId: commandId(input.commandId),
+        sessionId: uuid(input.sessionId, "Voice session ID"),
+        organizationId: uuid(input.organizationId, "Organization ID"),
+        projectId: uuid(input.projectId, "Project ID"),
+        installationId: uuid(input.installationId, "Installation ID"),
+        expectedRevision: input.expectedRevision
+      };
       invariant(
-        Number.isSafeInteger(input.expectedRevision) &&
-          input.expectedRevision > 0,
+        Number.isSafeInteger(selected.expectedRevision) &&
+          selected.expectedRevision > 0 &&
+          selected.organizationId === actor?.organizationId,
         "RESPONDER_NATIVE_CLIENT_INVALID",
         "The native VoIP session request is invalid.",
         { status: 400 }
       );
-      await translated(() => authority.service(
-        customerContext(actor, true),
+      return translated(() => authority.service(
+        customerContext(actor),
         async (client) => {
+          const membership = await client.query(
+            `select exists (
+               select 1 from ss.organization_memberships membership
+                where membership.organization_id = $1
+                  and membership.user_id = $2
+                  and membership.state = 'active'
+             ) as active`,
+            [selected.organizationId, actor.userId]
+          );
+          invariant(
+            membership.rows[0]?.active === true,
+            "RESPONDER_NATIVE_CLIENT_UNAVAILABLE",
+            "Responder native-client authority is unavailable.",
+            { status: 404 }
+          );
+          await client.query(
+            "select pg_advisory_xact_lock(hashtextextended($1, 0))",
+            [`responder-native-installation:${selected.installationId}`]
+          );
           const installed = await loadInstallation(
             client,
             actor,
-            selectedOrganizationId,
-            selectedProjectId,
-            selectedInstallationId
+            selected.organizationId,
+            selected.projectId,
+            selected.installationId,
+            voipSessionState
+          );
+          const voipRegistration = installed.pushRegistrations.find(
+            (entry) => entry.purpose === "voip" && entry.active
           );
           invariant(
             installed.state === "active" &&
-              installed.revision === input.expectedRevision &&
+              installed.revision === selected.expectedRevision &&
               installed.platform === "ios" &&
-              installed.pushRegistrations.some(
-                (entry) => entry.purpose === "voip" && entry.active
-              ),
+              voipRegistration,
             "RESPONDER_NATIVE_CLIENT_UNAVAILABLE",
             "Responder native VoIP registration is unavailable.",
             { status: 404 }
           );
+          const request = await client.query(
+            `select ss.responder_native_voice_session_request_digest_v1(
+               $1,$2,$3,$4,$5,$6,$7
+             ) as request_digest`,
+            [
+              actor.userId, selected.organizationId, selected.projectId,
+              selected.installationId, selected.expectedRevision,
+              installed.appEnvironment,
+              voipRegistration.tokenReferenceDigest
+            ]
+          );
+          selected.requestDigest = request.rows[0].request_digest;
+          const authorityValue = Object.freeze({
+            sessionId: selected.sessionId,
+            commandId: selected.commandId,
+            requestDigest: selected.requestDigest,
+            organizationId: selected.organizationId,
+            projectId: selected.projectId,
+            userId: actor.userId,
+            installationId: selected.installationId,
+            installationRevision: selected.expectedRevision,
+            appEnvironment: installed.appEnvironment
+          });
+          if (voiceAccess.mode === "held") {
+            voiceAccess.issueSession(authorityValue);
+            throw new HostedError(
+              "RESPONDER_NATIVE_VOIP_HELD",
+              "Native VoIP access remains held pending explicit provider activation.",
+              { status: 409 }
+            );
+          }
+          const prior = await client.query(
+            `select voice_session.*,
+                    voice_session.expires_at > clock_timestamp() as active
+               from ss.responder_native_voice_sessions voice_session
+              where voice_session.organization_id = $1
+                and voice_session.command_id = $2`,
+            [selected.organizationId, selected.commandId]
+          );
+          if (prior.rowCount === 1) {
+            const row = prior.rows[0];
+            invariant(
+              row.request_digest === selected.requestDigest,
+              "RESPONDER_NATIVE_CLIENT_IDEMPOTENCY_CONFLICT",
+              "The native VoIP session command was reused for different facts.",
+              { status: 409 }
+            );
+            invariant(
+              row.active === true,
+              "RESPONDER_NATIVE_VOIP_SESSION_EXPIRED",
+              "The prior native VoIP session expired; use a new idempotency key.",
+              { status: 409 }
+            );
+            const accessToken = voiceAccess.openSession(
+              voiceSessionAuthority(row),
+              voiceSessionMetadata(row),
+              voiceSessionEnvelope(row)
+            );
+            return voiceSessionProjection(row, accessToken, {
+              replayed: true
+            });
+          }
+          const semantic = await client.query(
+            `select voice_session.*
+               from ss.responder_native_voice_sessions voice_session
+              where voice_session.request_digest = $1
+                and voice_session.expires_at > clock_timestamp()
+              order by voice_session.issued_at desc, voice_session.id desc
+              limit 1`,
+            [selected.requestDigest]
+          );
+          if (semantic.rowCount === 1) {
+            const row = semantic.rows[0];
+            const accessToken = voiceAccess.openSession(
+              voiceSessionAuthority(row),
+              voiceSessionMetadata(row),
+              voiceSessionEnvelope(row)
+            );
+            return voiceSessionProjection(row, accessToken, {
+              replayed: true,
+              semanticReplay: true
+            });
+          }
+          const issued = voiceAccess.issueSession(authorityValue);
+          const envelopeDigest = await client.query(
+            `select ss.responder_native_voice_session_envelope_digest_v1(
+               $1,$2,$3,$4,$5
+             ) as envelope_digest`,
+            [
+              issued.envelope.keyVersion, issued.envelope.nonce,
+              issued.envelope.authenticationTag, issued.envelope.ciphertext,
+              issued.tokenDigest
+            ]
+          );
+          await client.query(
+            `insert into ss.responder_native_voice_sessions (
+               id, organization_id, project_id, installation_id,
+               customer_user_id, command_id, request_digest,
+               installation_revision, app_environment,
+               voip_registration_reference_digest, identity_digest,
+               endpoint_digest, credential_digest, jti_digest, token_digest,
+               key_version, nonce, authentication_tag, ciphertext,
+               envelope_digest, issued_at, expires_at, created_at
+             ) values (
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+               $17,$18,$19,$20,$21,$22,$21
+             )`,
+            [
+              selected.sessionId, selected.organizationId,
+              selected.projectId, selected.installationId, actor.userId,
+              selected.commandId, selected.requestDigest,
+              selected.expectedRevision, installed.appEnvironment,
+              voipRegistration.tokenReferenceDigest,
+              issued.identityDigest, issued.endpointDigest,
+              issued.credentialDigest, issued.jtiDigest, issued.tokenDigest,
+              issued.envelope.keyVersion, issued.envelope.nonce,
+              issued.envelope.authenticationTag, issued.envelope.ciphertext,
+              envelopeDigest.rows[0].envelope_digest, issued.issuedAt,
+              issued.expiresAt
+            ]
+          );
+          const created = await client.query(
+            `select * from ss.responder_native_voice_sessions
+              where organization_id = $1 and command_id = $2`,
+            [selected.organizationId, selected.commandId]
+          );
+          invariant(
+            created.rowCount === 1,
+            "RESPONDER_NATIVE_CLIENT_CONFLICT",
+            "Responder native VoIP session evidence is unavailable.",
+            { status: 409 }
+          );
+          return voiceSessionProjection(
+            created.rows[0], issued.accessToken
+          );
         }
       ));
-      throw new HostedError(
-        "RESPONDER_NATIVE_VOIP_HELD",
-        "Native VoIP access remains held pending explicit provider activation.",
-        { status: 409 }
-      );
+    },
+
+    requireHeldVoipSession(actor, input) {
+      return this.issueVoipSession(actor, input);
     }
   });
 }

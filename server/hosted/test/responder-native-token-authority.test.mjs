@@ -89,8 +89,20 @@ test("native token authority binds ciphertext to tenant, purpose, and app", asyn
 
 test("native token authority enforces platform-specific token and PushKit rules", async () => {
   const selected = authority();
+  const variableLengthToken = "ab".repeat(17);
+  const variableEnvelope = await selected.sealToken(
+    AUTHORITY, "voip", variableLengthToken
+  );
+  assert.equal(
+    await selected.openToken(AUTHORITY, "voip", variableEnvelope),
+    variableLengthToken
+  );
   await assert.rejects(
     selected.sealToken(AUTHORITY, "voip", "not-an-apns-token"),
+    { code: "RESPONDER_NATIVE_TOKEN_INVALID" }
+  );
+  await assert.rejects(
+    selected.sealToken(AUTHORITY, "voip", "abc"),
     { code: "RESPONDER_NATIVE_TOKEN_INVALID" }
   );
   await assert.rejects(

@@ -62,7 +62,11 @@ import { verifyResponderCommercePostgres } from
   "./responder-commerce-postgres-proof.mjs";
 import { verifyResponderForwardingPostgres } from
   "./responder-forwarding-postgres-proof.mjs";
-import { verifyResponderNativeClientPostgres } from
+import {
+  seedResponderNativeE1UpgradeHistory,
+  verifyResponderNativeClientPostgres,
+  verifyResponderNativeE2UpgradeHistory
+} from
   "./responder-native-client-postgres-proof.mjs";
 import { verifyAdjacentIntegrationPostgres } from
   "./adjacent-integration-postgres-proof.mjs";
@@ -403,6 +407,8 @@ async function applyPostPrivacyMigrations(
   pool,
   postPrivacyNames
 ) {
+  let responderNativeE1Fixture = null;
+  let responderNativeE2UpgradeProof = null;
   for (const name of postPrivacyNames) {
     try {
       await pool.query(
@@ -412,7 +418,26 @@ async function applyPostPrivacyMigrations(
       error.message = `${name}: ${error.message}`;
       throw error;
     }
+    if (name === "202608140137_responder_native_client_authority.sql") {
+      responderNativeE1Fixture =
+        await seedResponderNativeE1UpgradeHistory(pool);
+    }
+    if (name === "202608160138_responder_native_voice_sessions.sql") {
+      assert.ok(
+        responderNativeE1Fixture,
+        "FIN-006E2 upgrade proof requires the exact FIN-006E1 fixture"
+      );
+      responderNativeE2UpgradeProof =
+        await verifyResponderNativeE2UpgradeHistory(
+          pool, responderNativeE1Fixture
+        );
+    }
   }
+  assert.ok(
+    responderNativeE2UpgradeProof,
+    "FIN-006E2 upgrade proof did not execute"
+  );
+  return responderNativeE2UpgradeProof;
 }
 
 async function verifyDurableMailLifecycle(pool) {
@@ -7440,7 +7465,7 @@ export async function runMigrationVerification({
     const v2Before = await v2AuthorityFingerprint(pool);
     const readinessBefore = await verifyProjectLegalReadiness(pool, false);
     await applyJointLegalV3Release(pool, releaseSql);
-    await applyPostPrivacyMigrations(
+    const responderNativeE2UpgradeProof = await applyPostPrivacyMigrations(
       pool,
       postPrivacyNames
     );
@@ -7539,13 +7564,26 @@ export async function runMigrationVerification({
       `messageSendEffects ${responderForwardingProof.messageSendEffects}\n`
     );
     writeOutput(
+      `responderNativeE1UpgradeProof ` +
+      `${responderNativeE2UpgradeProof.assertions}/` +
+      `${responderNativeE2UpgradeProof.expectedAssertions} ` +
+      `registrations ${responderNativeE2UpgradeProof.registrations} ` +
+      `retirements ${responderNativeE2UpgradeProof.retirements} ` +
+      `activeRegistrations ` +
+      `${responderNativeE2UpgradeProof.activeRegistrations}\n`
+    );
+    writeOutput(
       `responderNativeClientPostgresProof ` +
       `${responderNativeClientProof.assertions}/` +
       `${responderNativeClientProof.expectedAssertions} ` +
       `installations ${responderNativeClientProof.installations} ` +
       `tokens ${responderNativeClientProof.tokens} ` +
       `stateTransitions ${responderNativeClientProof.stateTransitions} ` +
+      `tokenRetirements ${responderNativeClientProof.tokenRetirements} ` +
+      `voiceSessions ${responderNativeClientProof.voiceSessions} ` +
       `commands ${responderNativeClientProof.commands} ` +
+      `providerAuthorizationEffects ` +
+      `${responderNativeClientProof.providerAuthorizationEffects} ` +
       `providerEffects ${responderNativeClientProof.providerEffects} ` +
       `pushDeliveryEffects ${responderNativeClientProof.pushDeliveryEffects} ` +
       `voiceCallEffects ${responderNativeClientProof.voiceCallEffects}\n`

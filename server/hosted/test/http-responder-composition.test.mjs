@@ -217,6 +217,10 @@ function responderNativeClient() {
         calls.push(["registerToken", ...args]);
         return { installation: { ...installation, revision: 2 } };
       },
+      async retireToken(...args) {
+        calls.push(["retireToken", ...args]);
+        return { installation: { ...installation, revision: 2 } };
+      },
       async suspendInstallation(...args) {
         calls.push(["suspendInstallation", ...args]);
         return { installation: { ...installation, state: "suspended" } };
@@ -229,12 +233,39 @@ function responderNativeClient() {
         calls.push(["revokeInstallation", ...args]);
         return { installation: { ...installation, state: "revoked" } };
       },
-      async requireHeldVoipSession(...args) {
-        calls.push(["requireHeldVoipSession", ...args]);
+      async issueVoipSession(...args) {
+        calls.push(["issueVoipSession", ...args]);
         const error = new Error("held");
         error.code = "RESPONDER_NATIVE_VOIP_HELD";
         error.status = 409;
         throw error;
+      }
+    },
+    voiceAccess: {
+      kind: "twilio-responder-voice-access",
+      mode: "held",
+      providerEffects: false,
+      pushDeliveryEffects: false,
+      voiceCallEffects: false,
+      issueSession() {
+        throw new Error("not reached");
+      },
+      openSession() {
+        throw new Error("not reached");
+      },
+      async readiness() {
+        return {
+          ready: true,
+          verified: true,
+          kind: "twilio-responder-voice-access",
+          mode: "held",
+          providerAuthorizationEffects: false,
+          providerEffects: false,
+          pushDeliveryEffects: false,
+          voiceCallEffects: false,
+          routingReady: false,
+          operationalCalls: false
+        };
       }
     },
     tokenAuthority: {

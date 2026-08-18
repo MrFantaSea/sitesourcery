@@ -1210,7 +1210,17 @@ export function createHostedApi(
           "responder-native-token-authority" &&
         responderNativeClient.tokenAuthority.providerEffects === false &&
         responderNativeClient.tokenAuthority.pushDeliveryEffects === false &&
-        typeof responderNativeClient.tokenAuthority.readiness === "function"
+        typeof responderNativeClient.tokenAuthority.readiness === "function" &&
+        responderNativeClient?.voiceAccess?.kind ===
+          "twilio-responder-voice-access" &&
+        (responderNativeClient.voiceAccess.mode === "held" ||
+          responderNativeClient.voiceAccess.mode === "verified") &&
+        responderNativeClient.voiceAccess.providerEffects === false &&
+        responderNativeClient.voiceAccess.pushDeliveryEffects === false &&
+        responderNativeClient.voiceAccess.voiceCallEffects === false &&
+        typeof responderNativeClient.voiceAccess.issueSession === "function" &&
+        typeof responderNativeClient.voiceAccess.openSession === "function" &&
+        typeof responderNativeClient.voiceAccess.readiness === "function"
       ),
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Responder native clients must use sealed held authority.",
@@ -1611,6 +1621,7 @@ export function createHostedApi(
           responderForwardingReadiness,
           responderNativeClientReadiness,
           responderNativeTokenReadiness,
+          responderNativeVoiceReadiness,
           adjacentIntegrationReadiness
         ] = await Promise.all([
           service.readiness(),
@@ -1713,6 +1724,20 @@ export function createHostedApi(
                 pushDeliveryEffects: false
               }
             : responderNativeClient.tokenAuthority.readiness(),
+          responderNativeClient === null
+            ? {
+                ready: false,
+                verified: false,
+                kind: "twilio-responder-voice-access",
+                mode: "held",
+                providerAuthorizationEffects: false,
+                providerEffects: false,
+                pushDeliveryEffects: false,
+                voiceCallEffects: false,
+                routingReady: false,
+                operationalCalls: false
+              }
+            : responderNativeClient.voiceAccess.readiness(),
           adjacentIntegration === null
             ? {
                 ready: false,
@@ -1742,7 +1767,18 @@ export function createHostedApi(
           responderNativeTokenReadiness?.ready === true &&
           responderNativeTokenReadiness?.verified === true &&
           responderNativeTokenReadiness?.providerEffects === false &&
-          responderNativeTokenReadiness?.pushDeliveryEffects === false;
+          responderNativeTokenReadiness?.pushDeliveryEffects === false &&
+          responderNativeVoiceReadiness?.ready === true &&
+          responderNativeVoiceReadiness?.verified === true &&
+          (responderNativeVoiceReadiness?.mode === "held" ||
+            responderNativeVoiceReadiness?.mode === "verified") &&
+          responderNativeVoiceReadiness?.providerAuthorizationEffects ===
+            (responderNativeVoiceReadiness?.mode === "verified") &&
+          responderNativeVoiceReadiness?.providerEffects === false &&
+          responderNativeVoiceReadiness?.pushDeliveryEffects === false &&
+          responderNativeVoiceReadiness?.voiceCallEffects === false &&
+          responderNativeVoiceReadiness?.routingReady === false &&
+          responderNativeVoiceReadiness?.operationalCalls === false;
         const responderNativeClientsReady = false;
         return Object.freeze({
           accountRegistration:
@@ -1889,7 +1925,11 @@ export function createHostedApi(
               android: false
             }),
             tokenStorage: "sealed",
-            voipSessionState: "held",
+            voipSessionState:
+              responderNativeVoiceReadiness?.mode ?? "held",
+            providerAuthorizationEffects:
+              responderNativeVoiceReadiness?.providerAuthorizationEffects ===
+                true,
             providerEffects: false,
             pushDeliveryEffects: false,
             voiceCallEffects: false,
