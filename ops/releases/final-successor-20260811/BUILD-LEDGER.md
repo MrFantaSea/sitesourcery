@@ -168,3 +168,15 @@ real-PostgreSQL journey, adversarial corrections, and clean cumulative proof is
 message, provider, app-distribution, public, and deployment effect remains
 held; FIN-006 remains pending until both native clients and the unified
 composition matrix are proved.
+
+FIN-006E2's first native iPhone source, exact hosted-cookie/CSRF client,
+Keychain/idempotency authority, carrier-preserving forwarding and Responder UI,
+official pinned Twilio Voice SDK, APNs/PushKit/CallKit lifecycle, serialized
+token and installation mutations, replay-safe short-lived Voice sessions,
+upgrade-safe migration 138, all-91-migration PostgreSQL journey, clean unsigned
+simulator/generic-iPhone builds, offline Mach-O/runpath inspection, real
+process-alive screenshot proof, adversarial corrections, and clean cumulative
+matrix is `FIN-006E2-RESPONDER-IOS-VOICE-PROVENANCE.md`. Provider use, real
+calls/pushes/messages, carrier commands, signing/distribution, public changes,
+and deployment remain held; Android and final unified composition remain under
+FIN-006.
