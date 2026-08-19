@@ -33,6 +33,8 @@ import {
 import {
   ROLLBACK_REHEARSAL_HOLDS,
   ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS,
+  ROLLBACK_PROCESS_MODE_COMBINED,
+  ROLLBACK_PROCESS_MODE_SPLIT,
   RollbackRehearsalFailure,
   createRollbackDatabaseCompatibility,
   createRollbackPagesFallback,
@@ -43,6 +45,8 @@ import {
   rollbackPagesFallbackDigest,
   rollbackRehearsalReceiptDigest,
   runHeldRollbackRehearsal,
+  validateRollbackProbeReceipt,
+  validateRollbackProcessState,
   validateRollbackRehearsalReceipt,
   validateRollbackRuntimeTopology
 } from "../rollback-rehearsal.mjs";
@@ -63,8 +67,10 @@ const layout = Object.freeze({
 });
 const SUCCESSOR_COMMIT = "a".repeat(40);
 const SUCCESSOR_TREE = "b".repeat(40);
-const PREDECESSOR_COMMIT = "c".repeat(40);
-const PREDECESSOR_TREE = "d".repeat(40);
+const PREDECESSOR_COMMIT =
+  "8e71a254e14cdc81fdf25990a7273b67f6179e4b";
+const PREDECESSOR_TREE =
+  "00ba7350e223a2069e5050ac5044ec58638455be";
 const PREDECESSOR_ARTIFACT = "e".repeat(64);
 const STARTED_AT = "2026-08-11T22:00:00.000Z";
 const COMPLETED_AT = "2026-08-11T22:00:01.000Z";
@@ -215,7 +221,16 @@ function createPredecessor(successor) {
       sourceCommitSha: successor.rollback.predecessorCommitSha,
       sourceTreeSha: successor.rollback.predecessorTreeSha,
       artifactManifestSha256:
-        successor.rollback.predecessorArtifactManifestSha256
+        successor.rollback.predecessorArtifactManifestSha256,
+      unitManifestSha256: digest("a"),
+      environmentSchemaManifestSha256: digest("b"),
+      environmentClassificationSha256: digest("c"),
+      workerManifestSha256: digest("d"),
+      workerContractSha256: digest("e"),
+      migrationCount: successor.identity.migrationCount - 1,
+      latestMigration:
+        "202608170139_responder_android_voice_authority.sql",
+      migrationManifestSha256: digest("f")
     },
     rollback: {
       predecessorCommitSha: "f".repeat(40),
@@ -309,11 +324,12 @@ function createFixture() {
   const predecessorTopology = createRollbackRuntimeTopology({
     epoch: predecessor,
     listeners: clone(ORIGIN_LOOPBACK_EXPECTATIONS),
-    workerContract: expectedOriginInstalledWorker(successor.seal)
+    processModel: ROLLBACK_PROCESS_MODE_COMBINED
   });
   const successorTopology = createRollbackRuntimeTopology({
     epoch: successor.epoch,
     listeners: clone(ORIGIN_LOOPBACK_EXPECTATIONS),
+    processModel: ROLLBACK_PROCESS_MODE_SPLIT,
     workerContract: expectedOriginInstalledWorker(successor.seal)
   });
   const backup = createBackupReceipt(successor);
@@ -355,9 +371,15 @@ function makeFakePorts(
   fixture,
   { failProcess = null, pagesObservation = fixture.pages } = {}
 ) {
+  const topologyByEpoch = new Map([
+    [fixture.predecessor.digest, fixture.predecessorTopology],
+    [fixture.successor.epoch.digest, fixture.successorTopology]
+  ]);
   const state = {
     selectedEpochDigest: fixture.successor.epoch.digest,
+    processModel: ROLLBACK_PROCESS_MODE_SPLIT,
     apiState: "running",
+    tenantState: "running",
     workerState: "running"
   };
   let processActionCount = 0;
@@ -382,31 +404,74 @@ function makeFakePorts(
     },
     async stop({ component }) {
       maybeFail("stop", component);
+      if (
+        state.processModel === ROLLBACK_PROCESS_MODE_COMBINED &&
+        component === "tenant"
+      ) {
+        throw new Error("embedded tenant has no separate process unit");
+      }
       state[`${component}State`] = "stopped";
     },
     async select({ epochDigest }) {
       maybeFail("select");
-      if (state.apiState !== "stopped" || state.workerState !== "stopped") {
+      const selectedTopology = topologyByEpoch.get(epochDigest);
+      if (!selectedTopology) {
+        throw new Error("unknown fixture epoch");
+      }
+      const currentTenantQuiescent =
+        state.processModel === ROLLBACK_PROCESS_MODE_COMBINED
+          ? state.tenantState === "embedded"
+          : state.tenantState === "stopped";
+      if (
+        state.apiState !== "stopped" ||
+        !currentTenantQuiescent ||
+        state.workerState !== "stopped"
+      ) {
         throw new Error("cannot select while a fixture process is running");
       }
       state.selectedEpochDigest = epochDigest;
+      state.processModel = selectedTopology.processModel;
+      state.apiState = "stopped";
+      state.tenantState = state.processModel ===
+        ROLLBACK_PROCESS_MODE_COMBINED
+        ? "embedded"
+        : "stopped";
+      state.workerState = "stopped";
     },
     async start({ component }) {
       maybeFail("start", component);
+      if (
+        state.processModel === ROLLBACK_PROCESS_MODE_COMBINED &&
+        component !== "api"
+      ) {
+        throw new Error("combined predecessor has no separate startable unit");
+      }
       state[`${component}State`] = "running";
     }
   };
-  const topologyByEpoch = new Map([
-    [fixture.predecessor.digest, fixture.predecessorTopology],
-    [fixture.successor.epoch.digest, fixture.successorTopology]
-  ]);
   const networkPort = {
     kind: "local_fake_network",
     externalEffects: false,
     async probe({ epochDigest, path: probePath, listener }) {
+      const tenantProbe = probePath.startsWith("/_sitesourcery/");
+      const selectedTopology = topologyByEpoch.get(epochDigest);
+      const componentReady = tenantProbe
+        ? (
+            state.processModel === ROLLBACK_PROCESS_MODE_COMBINED
+              ? state.apiState === "running" &&
+                state.tenantState === "embedded"
+              : state.tenantState === "running"
+          )
+        : state.apiState === "running";
       if (
         state.selectedEpochDigest !== epochDigest ||
-        state.apiState !== "running"
+        !componentReady ||
+        !selectedTopology ||
+        listener !== (
+          tenantProbe
+            ? selectedTopology.tenant.listener
+            : selectedTopology.api.listener
+        )
       ) {
         throw new Error("fixture listener is unavailable");
       }
@@ -414,7 +479,7 @@ function makeFakePorts(
         epochDigest,
         path: probePath,
         listener,
-        statusCode: 200,
+        statusCode: probePath === "/_sitesourcery/ready" ? 503 : 200,
         held: true,
         bodySha256: sha256Bytes(
           Buffer.from(`${epochDigest}:${probePath}:held`, "utf8")
@@ -422,10 +487,19 @@ function makeFakePorts(
       });
     },
     async observeTopology({ epochDigest }) {
+      const combinedReady =
+        state.processModel === ROLLBACK_PROCESS_MODE_COMBINED &&
+        state.apiState === "running" &&
+        state.tenantState === "embedded" &&
+        state.workerState === "stopped";
+      const splitReady =
+        state.processModel === ROLLBACK_PROCESS_MODE_SPLIT &&
+        state.apiState === "running" &&
+        state.tenantState === "running" &&
+        state.workerState === "running";
       if (
         state.selectedEpochDigest !== epochDigest ||
-        state.apiState !== "running" ||
-        state.workerState !== "running"
+        (!combinedReady && !splitReady)
       ) {
         throw new Error("fixture topology is unavailable");
       }
@@ -481,6 +555,135 @@ test("binds exact epochs, installed topology, database proof, backup, and Pages 
     ),
     fixture.successorTopology
   );
+  assert.equal(
+    fixture.predecessorTopology.processModel,
+    ROLLBACK_PROCESS_MODE_COMBINED
+  );
+  assert.equal(
+    fixture.predecessorTopology.api.tenantListener,
+    ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime
+  );
+  assert.deepEqual(fixture.predecessorTopology.tenant, {
+    component: "tenant",
+    unit: "sitesourcery-hosted.service",
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+    healthPath: "/_sitesourcery/health",
+    readyPath: "/_sitesourcery/ready",
+    mode: "embedded_read_only_serving",
+    publicationWriter: false
+  });
+  assert.deepEqual(fixture.predecessorTopology.worker, {
+    component: "worker",
+    unit: "sitesourcery-workers.service",
+    publicListener: null,
+    mode: "held_stopped",
+    contractSha256:
+      fixture.predecessor.identity.workerContractSha256,
+    contract: null
+  });
+  assert.equal(
+    fixture.predecessor.identity.sourceCommitSha,
+    PREDECESSOR_COMMIT
+  );
+  assert.equal(
+    fixture.predecessor.identity.sourceTreeSha,
+    PREDECESSOR_TREE
+  );
+  assert.notEqual(
+    fixture.predecessor.identity.workerContractSha256,
+    fixture.successor.epoch.identity.workerContractSha256
+  );
+  assert.equal(
+    fixture.successorTopology.processModel,
+    ROLLBACK_PROCESS_MODE_SPLIT
+  );
+  assert.equal(fixture.successorTopology.api.tenantListener, null);
+  assert.deepEqual(fixture.successorTopology.tenant, {
+    component: "tenant",
+    unit: "sitesourcery-tenant.service",
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+    healthPath: "/_sitesourcery/health",
+    readyPath: "/_sitesourcery/ready",
+    mode: "read_only_serving",
+    publicationWriter: false
+  });
+  assert.equal(
+    fixture.successorTopology.worker.contract.publicationCommand.path,
+    "/run/sitesourcery/publication-command-v1.sock"
+  );
+});
+
+test("models combined and split process states plus exact tenant held probes", () => {
+  const fixture = createFixture();
+  const combinedStopped = createRollbackProcessState({
+    selectedEpochDigest: fixture.predecessor.digest,
+    processModel: ROLLBACK_PROCESS_MODE_COMBINED,
+    apiState: "stopped",
+    tenantState: "embedded",
+    workerState: "stopped"
+  });
+  assert.deepEqual(
+    validateRollbackProcessState(combinedStopped),
+    combinedStopped
+  );
+  const unexpectedCombinedWorker = createRollbackProcessState({
+    selectedEpochDigest: fixture.predecessor.digest,
+    processModel: ROLLBACK_PROCESS_MODE_COMBINED,
+    apiState: "running",
+    tenantState: "embedded",
+    workerState: "running"
+  });
+  assert.equal(unexpectedCombinedWorker.worker.state, "running");
+  const splitPartialStart = createRollbackProcessState({
+    selectedEpochDigest: fixture.successor.epoch.digest,
+    processModel: ROLLBACK_PROCESS_MODE_SPLIT,
+    apiState: "running",
+    tenantState: "stopped",
+    workerState: "stopped"
+  });
+  assert.equal(splitPartialStart.tenant.state, "stopped");
+  assert.throws(
+    () => createRollbackProcessState({
+      selectedEpochDigest: fixture.predecessor.digest,
+      processModel: ROLLBACK_PROCESS_MODE_COMBINED,
+      apiState: "stopped",
+      tenantState: "stopped",
+      workerState: "stopped"
+    }),
+    (error) =>
+      error instanceof RollbackRehearsalFailure &&
+      error.code === "ROLLBACK_REHEARSAL_PROCESS_STATE_INVALID"
+  );
+
+  const tenantHeld = createRollbackProbeReceipt({
+    epochDigest: fixture.predecessor.digest,
+    path: "/_sitesourcery/ready",
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+    statusCode: 503,
+    held: true,
+    bodySha256: digest("7")
+  });
+  assert.deepEqual(validateRollbackProbeReceipt(tenantHeld), tenantHeld);
+  const wrongTenantStatus = clone(tenantHeld);
+  wrongTenantStatus.statusCode = 200;
+  assert.throws(
+    () => validateRollbackProbeReceipt(wrongTenantStatus),
+    (error) =>
+      error instanceof RollbackRehearsalFailure &&
+      error.code === "ROLLBACK_REHEARSAL_PROBE_FAILED"
+  );
+
+  const shapeSwapped = clone(fixture.predecessorTopology);
+  shapeSwapped.processModel = ROLLBACK_PROCESS_MODE_SPLIT;
+  assert.throws(
+    () => validateRollbackRuntimeTopology(
+      shapeSwapped,
+      fixture.predecessor
+    ),
+    (error) =>
+      error instanceof RollbackRehearsalFailure &&
+      error.code === "ROLLBACK_REHEARSAL_TOPOLOGY_INVALID"
+  );
 });
 
 test("runs the exact held rollback and successor restoration order", async () => {
@@ -500,6 +703,13 @@ test("runs the exact held rollback and successor restoration order", async () =>
     true
   );
   assert.equal(receipt.finalState.state, "successor_active");
+  assert.equal(receipt.operations.length, 24);
+  assert.equal(
+    receipt.operations.some(({ id }) =>
+      /(?:start|stop)\.predecessor\.(?:tenant|worker)/u.test(id)
+    ),
+    false
+  );
   assert.equal(Object.isFrozen(receipt), true);
 });
 
@@ -554,8 +764,8 @@ test("fails closed and restores the successor after a partial rollback", async (
     failProcess({ action, component, selectedEpochDigest }) {
       if (
         !failed &&
-        action === "start" &&
-        component === "worker" &&
+        action === "stop" &&
+        component === "api" &&
         selectedEpochDigest === fixture.predecessor.digest
       ) {
         failed = true;
@@ -575,7 +785,7 @@ test("fails closed and restores the successor after a partial rollback", async (
       assert.equal(error.receipt.outcome, "aborted_recovered");
       assert.equal(
         error.receipt.failure.operationId,
-        "start.predecessor.worker"
+        "stop.predecessor.api"
       );
       assert.equal(error.receipt.failure.recoverySucceeded, true);
       assert.equal(error.receipt.finalState.state, "successor_active");
@@ -585,9 +795,15 @@ test("fails closed and restores the successor after a partial rollback", async (
         ),
         true
       );
+      const failedIndex =
+        ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS.indexOf(
+          "stop.predecessor.api"
+        );
       assert.deepEqual(
-        error.receipt.operations.slice(0, 7).map(({ id }) => id),
-        ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS.slice(0, 7)
+        error.receipt.operations
+          .slice(0, failedIndex)
+          .map(({ id }) => id),
+        ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS.slice(0, failedIndex)
       );
       const reordered = clone(error.receipt);
       [reordered.operations[7], reordered.operations[8]] =

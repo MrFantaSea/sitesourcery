@@ -30,23 +30,102 @@ function opaque(character) {
   return character.repeat(64);
 }
 
-export async function verifyAdjacentIntegrationPostgres(pool) {
+export async function verifyAdjacentIntegrationPostgres(
+  pool,
+  expectedDirectTrace
+) {
   const gates = [];
   const passed = (name) => gates.push(name);
-  const direct = (await pool.query(`
+  assert.deepEqual(
+    Object.keys(expectedDirectTrace).sort(),
+    [
+      "acceptanceId",
+      "customerUserId",
+      "disclosureDigest",
+      "engagementId",
+      "invitationId",
+      "invoiceDigest",
+      "invoiceId",
+      "opportunityId",
+      "organizationId",
+      "projectId",
+      "quoteDigest",
+      "quoteId",
+      "quoteRevision"
+    ].sort()
+  );
+  const directResult = await pool.query(`
     select opportunity.id as opportunity_id,
            engagement.id as engagement_id,
-           engagement.organization_id, engagement.project_id
+           engagement.organization_id, engagement.project_id,
+           engagement.customer_user_id,
+           quote.id as quote_id,
+           acceptance.id as acceptance_id,
+           invoice.id as invoice_id,
+           invoice.invoice_digest
       from ss.service_custom_build_direct_opportunities opportunity
       join ss.customer_engagements engagement
         on engagement.id = opportunity.engagement_id
        and engagement.organization_id = opportunity.organization_id
        and engagement.project_id = opportunity.project_id
+      join ss.service_custom_build_quotes quote
+        on quote.direct_opportunity_id = opportunity.id
+       and quote.organization_id = opportunity.organization_id
+       and quote.project_id = opportunity.project_id
+       and quote.customer_user_id = opportunity.customer_user_id
+      join ss.service_custom_build_quote_acceptances acceptance
+        on acceptance.organization_id = quote.organization_id
+       and acceptance.quote_id = quote.id
+      join ss.service_custom_build_invoices invoice
+        on invoice.organization_id = acceptance.organization_id
+       and invoice.quote_acceptance_id = acceptance.id
      where engagement.provenance = 'direct_custom_inquiry'
-     order by engagement.created_at, engagement.id
-     limit 1
-  `)).rows[0];
-  assert.ok(direct, "adjacent proof requires one direct Engagement");
+       and engagement.customer_user_id = $1
+       and engagement.organization_id = $2
+       and engagement.project_id = $3
+       and engagement.id = $4
+       and opportunity.id = $5
+       and quote.id = $6
+       and acceptance.id = $7
+       and invoice.id = $8
+       and invoice.invoice_digest = $9
+  `, [
+    expectedDirectTrace.customerUserId,
+    expectedDirectTrace.organizationId,
+    expectedDirectTrace.projectId,
+    expectedDirectTrace.engagementId,
+    expectedDirectTrace.opportunityId,
+    expectedDirectTrace.quoteId,
+    expectedDirectTrace.acceptanceId,
+    expectedDirectTrace.invoiceId,
+    expectedDirectTrace.invoiceDigest
+  ]);
+  assert.equal(directResult.rowCount, 1);
+  const direct = directResult.rows[0];
+  assert.deepEqual(
+    {
+      customerUserId: direct.customer_user_id,
+      organizationId: direct.organization_id,
+      projectId: direct.project_id,
+      engagementId: direct.engagement_id,
+      opportunityId: direct.opportunity_id,
+      quoteId: direct.quote_id,
+      acceptanceId: direct.acceptance_id,
+      invoiceId: direct.invoice_id,
+      invoiceDigest: direct.invoice_digest
+    },
+    {
+      customerUserId: expectedDirectTrace.customerUserId,
+      organizationId: expectedDirectTrace.organizationId,
+      projectId: expectedDirectTrace.projectId,
+      engagementId: expectedDirectTrace.engagementId,
+      opportunityId: expectedDirectTrace.opportunityId,
+      quoteId: expectedDirectTrace.quoteId,
+      acceptanceId: expectedDirectTrace.acceptanceId,
+      invoiceId: expectedDirectTrace.invoiceId,
+      invoiceDigest: expectedDirectTrace.invoiceDigest
+    }
+  );
 
   const operatorId = randomUUID();
   const authorizerId = randomUUID();
@@ -671,6 +750,24 @@ export async function verifyAdjacentIntegrationPostgres(pool) {
     crosswalks: counts.crosswalks,
     observations: counts.observations,
     resolutions: counts.resolutions,
-    contractDigest: readiness.contractDigest
+    contractDigest: readiness.contractDigest,
+    trace: Object.freeze({
+      customerUserId: direct.customer_user_id,
+      organizationId: direct.organization_id,
+      projectId: direct.project_id,
+      engagementId: direct.engagement_id,
+      opportunityId: direct.opportunity_id,
+      quoteId: direct.quote_id,
+      acceptanceId: direct.acceptance_id,
+      invoiceId: direct.invoice_id,
+      invoiceDigest: direct.invoice_digest,
+      hubClientCrosswalkId: hubClient.id,
+      hubProjectCrosswalkId: hubProject.id,
+      dellScopeCrosswalkId: dell.id,
+      dellQuoteCrosswalkId: dellQuote.id,
+      remoteWrites: readiness.remoteWrites,
+      providerEffects: readiness.providerEffects,
+      automaticCommands: readiness.automaticCommands
+    })
   });
 }

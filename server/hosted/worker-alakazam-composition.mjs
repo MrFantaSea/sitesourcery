@@ -1,11 +1,3 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-import {
-  DEFAULT_PLATFORM_BASE_DOMAIN,
-  SelfHostRuntime
-} from "../selfhost/src/index.mjs";
 import {
   createAlakazam35Compiler
 } from "./alakazam-35-compiler.mjs";
@@ -16,9 +8,6 @@ import {
 import {
   createPostgresAlakazam35Repository
 } from "./alakazam-35-postgres.mjs";
-import {
-  createAlakazam35PublicationPort
-} from "./alakazam-35-publication-port.mjs";
 import {
   createAlakazam50Compiler
 } from "./alakazam-50-compiler.mjs";
@@ -55,9 +44,6 @@ import {
   createPostgresCommerceV2Adapter
 } from "./commerce-v2-postgres.mjs";
 import { createSparkCompilerPort } from "./spark-compiler-port.mjs";
-
-const moduleRoot = path.dirname(fileURLToPath(import.meta.url));
-const repositoryRoot = path.resolve(moduleRoot, "../..");
 
 export const ALAKAZAM_WORKER_POLICY_READINESS_SCHEMA =
   "sitesourcery.alakazam-worker-policy-readiness/v1";
@@ -100,6 +86,7 @@ function requiredEnvironment(environment, name) {
 
 export function createAlakazamWorkerFactories({
   authority,
+  publicationPort = null,
   environment = process.env,
   log = () => {},
   policyRepositoryFactory =
@@ -163,44 +150,23 @@ export function createAlakazamWorkerFactories({
             baseCompiler: tier35Compiler
           })
         });
-        const dataRoot = path.resolve(
-          environment.SITESOURCERY_DATA_ROOT ??
-            "/var/lib/sitesourcery"
-        );
-        const approvalPath =
-          environment.SITESOURCERY_PUBLICATION_APPROVAL_PATH ??
-          "/etc/sitesourcery/PUBLICATION_APPROVED";
-        const holdPaths = [
-          path.join(moduleRoot, "PUBLICATION_HOLD"),
-          path.join(
-            repositoryRoot,
-            "server",
-            "selfhost",
-            "PUBLICATION_HOLD"
-          ),
-          "/etc/sitesourcery/PUBLICATION_HOLD"
-        ];
-        const publicationHeld = () =>
-          !existsSync(approvalPath) ||
-          holdPaths.some((target) => existsSync(target));
-        const licensedBaseDomain =
-          environment.SITESOURCERY_LICENSED_BASE_DOMAIN ??
-          DEFAULT_PLATFORM_BASE_DOMAIN;
-        const runtime = await SelfHostRuntime.open({
-          root: path.join(dataRoot, "tenant-runtime"),
-          publicationHeld,
-          controlHost: "127.0.0.1",
-          platformBaseDomain: licensedBaseDomain
-        });
-        const publicationPort = createAlakazam35PublicationPort({
-          runtime,
-          assetRepository: tier35Repository,
-          clock: shared.commerce.clock
-        });
+        if (
+          !publicationPort ||
+          typeof publicationPort.readiness !== "function" ||
+          typeof publicationPort.request !== "function" ||
+          typeof publicationPort.unpublish !== "function"
+        ) {
+          const error = new Error(
+            "The private publication command client is required."
+          );
+          error.code = "WORKER_DEPENDENCY_NOT_READY";
+          throw error;
+        }
+        const publication = await publicationPort.readiness();
         const enabled =
           shared.release.mode === "approved" &&
           shared.workerPolicy.ready === true &&
-          publicationHeld() === false;
+          publication?.ready === true && publication?.held === false;
         return Object.freeze({
           worker: createAlakazamFulfillmentWorker({
             repository,
@@ -213,20 +179,29 @@ export function createAlakazamWorkerFactories({
             log
           }),
           async readiness() {
-            const [tier35, tier50] = await Promise.all([
+            const [tier35, tier50, currentPublication] = await Promise.all([
               tier35Repository.readiness(),
-              tier50Repository.readiness()
+              tier50Repository.readiness(),
+              publicationPort.readiness()
             ]);
             return Object.freeze({
               ready:
                 enabled &&
                 tier35?.ready === true &&
-                tier50?.ready === true,
+                tier50?.ready === true &&
+                currentPublication?.ready === true &&
+                currentPublication?.held === false,
               purpose: "alakazam-fulfillment",
               release: shared.release.mode,
               policy: shared.workerPolicy.state,
               policyCode: shared.workerPolicy.code,
-              publication: publicationHeld() ? "held" : "approved",
+              publication:
+                currentPublication?.ready === true &&
+                  currentPublication?.held === false
+                  ? "approved"
+                  : "held",
+              publicationTransportReady:
+                currentPublication?.ready === true,
               providerEffects:
                 enabled ? "owner-approved" : "held"
             });

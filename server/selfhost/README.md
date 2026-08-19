@@ -149,7 +149,8 @@ release checklist after real infrastructure proof.
 
 ## Backup and restore
 
-`bin/export-backup-manifest.mjs` is read-only. It emits:
+`bin/export-backup-manifest.mjs` opens the same read-through serving mode as the
+tenant process and is physically read-only. It emits:
 
 - the checksummed complete control state;
 - the committed control revision;

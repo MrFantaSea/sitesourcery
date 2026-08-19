@@ -92,13 +92,20 @@ function source(row) {
         id: row.commerce_reservation_id,
         digest: row.commerce_reservation_digest
       };
+  const purpose = row.purpose_reservation_id === null
+    ? null
+    : {
+        kind: "purpose",
+        id: row.purpose_reservation_id,
+        digest: row.purpose_reservation_digest
+      };
   invariant(
-    (support === null) !== (commerce === null),
+    [support, commerce, purpose].filter((value) => value !== null).length === 1,
     "NOTIFICATION_DISPATCH_SOURCE_UNAVAILABLE",
-    "The exact support or commerce reservation is unavailable.",
+    "The exact notification reservation is unavailable.",
     { status: 409 }
   );
-  return support ?? commerce;
+  return support ?? commerce ?? purpose;
 }
 
 function reservation(row) {
@@ -142,12 +149,16 @@ const RESERVATION_SQL = `
          support.id as support_reservation_id,
          support.reservation_digest as support_reservation_digest,
          commerce.id as commerce_reservation_id,
-         commerce.reservation_digest as commerce_reservation_digest
+         commerce.reservation_digest as commerce_reservation_digest,
+         purpose.id as purpose_reservation_id,
+         purpose.reservation_digest as purpose_reservation_digest
     from ss.hosted_mail_deliveries mail
     left join ss.hosted_support_case_mail_reservations support
       on support.mail_message_id = mail.id
     left join ss.commerce_transition_notification_outbox commerce
       on commerce.mail_message_id = mail.id
+    left join ss.mail_purpose_notification_outbox purpose
+      on purpose.mail_message_id = mail.id
    where mail.id = $1
    for update of mail`;
 
@@ -167,22 +178,109 @@ export function createPostgresNotificationMailDispatchSource({
           { actorKind: "system", readOnly: true },
           (client) => client.query(`
             select
-              to_regprocedure('ss.hosted_mail_dispatch_contract_v1()')
+              to_regprocedure('ss.hosted_mail_dispatch_contract_v2()')
                 is not null
-                and ss.hosted_mail_dispatch_contract_v1() =
-                  'canonical-mail-dispatch-v1-leased-digest-only-held'
+                and ss.hosted_mail_dispatch_contract_v2() =
+                  'canonical-mail-dispatch-v2-support-commerce-purpose-leased-held'
                 as contract_ready,
               to_regclass('ss.hosted_mail_dispatch_claims') is not null
                 as table_ready,
               relation.relrowsecurity and relation.relforcerowsecurity
-                as rls_ready
+                as rls_ready,
+              exists (
+                select 1
+                  from pg_constraint constraint_row
+                 where constraint_row.conrelid = relation.oid
+                   and constraint_row.conname =
+                     'hosted_mail_dispatch_claims_source_kind_check_v140'
+                   and constraint_row.convalidated
+                   and pg_get_constraintdef(constraint_row.oid) like
+                     '%purpose%'
+              ) as source_constraint_ready,
+              exists (
+                select 1
+                  from pg_trigger trigger_record
+                 where trigger_record.tgrelid = relation.oid
+                   and trigger_record.tgname =
+                     'hosted_mail_dispatch_claims_guard'
+                   and trigger_record.tgfoid =
+                     'ss.guard_hosted_mail_dispatch_claim()'::regprocedure
+                   and trigger_record.tgenabled = 'O'
+                   and not trigger_record.tgisinternal
+              ) as guard_ready,
+              has_table_privilege(
+                'service_role', relation.oid, 'SELECT'
+              ) and has_table_privilege(
+                'service_role', relation.oid, 'INSERT'
+              ) and has_table_privilege(
+                'service_role', relation.oid, 'UPDATE'
+              ) and not has_table_privilege(
+                'service_role', relation.oid, 'DELETE'
+              ) and not has_table_privilege(
+                'service_role', relation.oid, 'TRUNCATE'
+              ) and not has_table_privilege(
+                'service_role', relation.oid, 'REFERENCES'
+              ) and not has_table_privilege(
+                'service_role', relation.oid, 'TRIGGER'
+              ) and coalesce((
+                select role_record.rolbypassrls
+                  from pg_roles role_record
+                 where role_record.rolname = 'service_role'
+              ), false)
+              and not has_table_privilege(
+                'anon', relation.oid, 'SELECT'
+              ) and not has_table_privilege(
+                'anon', relation.oid, 'INSERT'
+              ) and not has_table_privilege(
+                'anon', relation.oid, 'UPDATE'
+              ) and not has_table_privilege(
+                'anon', relation.oid, 'DELETE'
+              ) and not has_table_privilege(
+                'anon', relation.oid, 'TRUNCATE'
+              ) and not has_table_privilege(
+                'anon', relation.oid, 'REFERENCES'
+              ) and not has_table_privilege(
+                'anon', relation.oid, 'TRIGGER'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'SELECT'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'INSERT'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'UPDATE'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'DELETE'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'TRUNCATE'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'REFERENCES'
+              ) and not has_table_privilege(
+                'authenticated', relation.oid, 'TRIGGER'
+              ) and not exists (
+                select 1
+                  from aclexplode(coalesce(
+                    relation.relacl,
+                    acldefault('r', relation.relowner)
+                  )) relation_acl
+                 where relation_acl.grantee <> relation.relowner
+                   and relation_acl.grantee <> coalesce((
+                     select role_record.oid
+                       from pg_roles role_record
+                      where role_record.rolname = 'service_role'
+                   ), 0::oid)
+                   and relation_acl.privilege_type = any(array[
+                     'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE',
+                     'REFERENCES', 'TRIGGER'
+                   ])
+              ) as acl_ready
             from pg_class relation
             where relation.oid = 'ss.hosted_mail_dispatch_claims'::regclass
           `)
         );
         const row = result.rows[0];
         const ready = row?.contract_ready === true &&
-          row?.table_ready === true && row?.rls_ready === true;
+          row?.table_ready === true && row?.rls_ready === true &&
+          row?.source_constraint_ready === true && row?.guard_ready === true &&
+          row?.acl_ready === true;
         return deepFreeze({
           ready,
           verified: ready,
@@ -232,6 +330,14 @@ export function createPostgresNotificationMailDispatchSource({
                        and commerce.state = 'held'
                        and not commerce.provider_effects_authorized
                        and not commerce.delivery_claimed
+                  )
+                  or exists (
+                    select 1
+                      from ss.mail_purpose_notification_outbox purpose
+                     where purpose.mail_message_id = mail.id
+                       and purpose.state = 'held'
+                       and not purpose.provider_effects_authorized
+                       and not purpose.delivery_claimed
                   )
                 )
                 and not exists (

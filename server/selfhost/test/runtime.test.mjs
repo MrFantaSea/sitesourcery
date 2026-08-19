@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import {
   chmod,
+  lstat,
+  mkdtemp,
+  readFile,
+  readdir,
   symlink,
   writeFile
 } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { SelfHostRuntime } from "../src/index.mjs";
+import { canonicalJson, jsonEnvelope } from "../src/canonical.mjs";
+import {
+  CONTROL_SCHEMA,
+  ControlStore
+} from "../src/control-store.mjs";
+import { readBoundedJson } from "../src/filesystem.mjs";
 import {
   controlRequest,
   files,
@@ -14,6 +24,19 @@ import {
   tenantRequest,
   testRuntime
 } from "./helpers.mjs";
+
+async function treeSnapshot(root) {
+  const names = (await readdir(root, { recursive: true })).sort();
+  return Promise.all(names.map(async (name) => {
+    const selected = await lstat(path.join(root, name), { bigint: true });
+    return {
+      name,
+      mode: selected.mode,
+      size: selected.size,
+      mtimeNs: selected.mtimeNs
+    };
+  }));
+}
 
 test("installs immutable multi-file release and serves exact host/path with integrity headers", async () => {
   const { runtime } = await testRuntime();
@@ -222,6 +245,199 @@ test("restart recovers the committed mapping and ignores an orphan future histor
   const response = await restarted.fetch(tenantRequest("customer.example"));
   assert.equal(response.status, 200);
   assert.match(await response.text(), /one/u);
+});
+
+test("read-through serving opens without writes and rejects every mutation", async () => {
+  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const { runtime: writer } = await testRuntime({ root });
+  await installAndActivate(writer);
+  const before = await treeSnapshot(root);
+  const serving = await SelfHostRuntime.openServing({
+    root,
+    publicationHeld: false,
+    platformBaseDomain: "sitesourcery.me"
+  });
+  assert.deepEqual(await treeSnapshot(root), before);
+  assert.equal(serving.mode, "serving");
+  for (const operation of [
+    () => serving.installRelease({
+      projectId: "project-one",
+      releaseId: "release-two",
+      files: files("two")
+    }),
+    () => serving.reserveHostname({
+      hostname: "other.example",
+      projectId: "project-one",
+      source: "custom",
+      tlsState: "approved"
+    }),
+    () => serving.setHostnameGate({
+      hostname: "customer.example",
+      expectedRevision: 1,
+      status: "dark"
+    }),
+    () => serving.activate({
+      hostname: "customer.example",
+      releaseId: "release-one",
+      expectedRevision: 1
+    }),
+    () => serving.rollback({
+      hostname: "customer.example",
+      expectedRevision: 1
+    })
+  ]) {
+    await assert.rejects(
+      operation(),
+      (error) => error.code === "READ_ONLY_RUNTIME"
+    );
+  }
+  const response = await serving.fetch(tenantRequest("customer.example"));
+  assert.equal(response.status, 200);
+  assert.match(await response.text(), /one/u);
+});
+
+test("read-through serving observes a whole new writer revision without restart", async () => {
+  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const { runtime: writer } = await testRuntime({ root });
+  await installAndActivate(writer);
+  const serving = await SelfHostRuntime.openServing({
+    root,
+    publicationHeld: false,
+    platformBaseDomain: "sitesourcery.me"
+  });
+  await writer.installRelease({
+    projectId: "project-one",
+    releaseId: "release-two",
+    files: files("two")
+  });
+  const binding = writer.control.lookup("customer.example");
+  await writer.activate({
+    hostname: binding.hostname,
+    releaseId: "release-two",
+    expectedRevision: binding.revision
+  });
+  const response = await serving.fetch(tenantRequest("customer.example"));
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /two/u);
+  assert.doesNotMatch(body, /one/u);
+});
+
+test("concurrent control refreshes serialize before reading and cannot regress", async () => {
+  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const { runtime: writer } = await testRuntime({ root });
+  await installAndActivate(writer);
+  const controlRoot = path.join(root, "control");
+  const initial = JSON.parse(
+    await readFile(path.join(controlRoot, "current.json"), "utf8")
+  );
+  const firstEnvelope = jsonEnvelope(CONTROL_SCHEMA, {
+    ...initial.payload,
+    revision: initial.payload.revision + 1,
+    updatedAt: "2026-07-28T20:00:01.000Z"
+  });
+  const secondEnvelope = jsonEnvelope(CONTROL_SCHEMA, {
+    ...initial.payload,
+    revision: initial.payload.revision + 2,
+    updatedAt: "2026-07-28T20:00:02.000Z"
+  });
+  let releaseFirst;
+  const delayedFirst = new Promise((resolve) => { releaseFirst = resolve; });
+  let reads = 0;
+  const store = await ControlStore.openReadOnly({
+    root: controlRoot,
+    async readCurrent(canonicalRoot, currentPath) {
+      reads += 1;
+      if (reads === 1) return readBoundedJson(canonicalRoot, currentPath);
+      if (reads === 2) return delayedFirst;
+      return secondEnvelope;
+    }
+  });
+  const first = store.refresh();
+  const second = store.refresh();
+  for (let index = 0; index < 100 && reads < 2; index += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(reads, 2);
+  releaseFirst(firstEnvelope);
+  await Promise.all([first, second]);
+  assert.equal(reads, 3);
+  assert.equal(store.snapshot().revision, initial.payload.revision + 2);
+});
+
+test("serving refuses a release change between binding checks", async () => {
+  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const { runtime: writer } = await testRuntime({ root });
+  await installAndActivate(writer);
+  await writer.installRelease({
+    projectId: "project-one",
+    releaseId: "release-two",
+    files: files("two")
+  });
+  const serving = await SelfHostRuntime.openServing({
+    root,
+    publicationHeld: false,
+    platformBaseDomain: "sitesourcery.me"
+  });
+  const originalRead = serving.releases.read.bind(serving.releases);
+  let switched = false;
+  serving.releases.read = async (...args) => {
+    const artifact = await originalRead(...args);
+    if (!switched) {
+      switched = true;
+      const binding = writer.control.lookup("customer.example");
+      await writer.activate({
+        hostname: binding.hostname,
+        releaseId: "release-two",
+        expectedRevision: binding.revision
+      });
+    }
+    return artifact;
+  };
+  const response = await serving.fetch(tenantRequest("customer.example"));
+  assert.equal(response.status, 404);
+  assert.doesNotMatch(await response.text(), /one|two/u);
+});
+
+test("serving fails closed on control corruption, regression, and same-revision change", async () => {
+  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const { runtime: writer } = await testRuntime({ root });
+  await installAndActivate(writer);
+  const currentPath = path.join(root, "control", "current.json");
+  const earlier = await readFile(currentPath, "utf8");
+  const serving = await SelfHostRuntime.openServing({
+    root,
+    publicationHeld: false,
+    platformBaseDomain: "sitesourcery.me"
+  });
+  const current = JSON.parse(earlier);
+  const changed = jsonEnvelope(CONTROL_SCHEMA, {
+    ...current.payload,
+    updatedAt: "2026-07-28T20:00:01.000Z"
+  });
+  await writeFile(currentPath, `${canonicalJson(changed)}\n`);
+  let readiness = await serving.readiness();
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.code, "CONTROL_REVISION_CONFLICT");
+
+  await writeFile(currentPath, earlier);
+  readiness = await serving.readiness();
+  assert.equal(readiness.ready, true);
+  await writer.installRelease({
+    projectId: "project-one",
+    releaseId: "release-two",
+    files: files("two")
+  });
+  readiness = await serving.readiness();
+  assert.equal(readiness.ready, true);
+  await writeFile(currentPath, earlier);
+  readiness = await serving.readiness();
+  assert.equal(readiness.ready, false);
+  assert.equal(readiness.code, "CONTROL_REVISION_REGRESSION");
+
+  await writeFile(currentPath, "{\"tampered\":true}\n");
+  const response = await serving.fetch(tenantRequest("customer.example"));
+  assert.equal(response.status, 503);
 });
 
 test("corrupt current control state reopens unready and serves nothing", async () => {

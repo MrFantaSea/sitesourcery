@@ -58,10 +58,17 @@ export const ORIGIN_LOOPBACK_EXPECTATIONS = deepFreeze({
 
 export const ORIGIN_WORKER_PATHS = deepFreeze({
   apiEntrypoint: "server/hosted/bin/server.mjs",
+  tenantEntrypoint: "server/selfhost/bin/server.mjs",
   workerEntrypoint: "server/hosted/bin/worker.mjs",
+  publicationCommandTransport:
+    "server/hosted/publication-command-transport.mjs",
   notificationMailPrivateRenderer:
     "ops/notification-mail-private-renderer.mjs",
+  hostedUnit: "ops/sitesourcery-hosted.service.held",
+  tenantUnit: "ops/sitesourcery-tenant.service.held",
   unit: "ops/sitesourcery-workers.service.held",
+  hostedEnvironmentSchema: "ops/hosted.env.example",
+  tenantEnvironmentSchema: "ops/tenant.env.example",
   environmentSchema: "ops/workers.env.example"
 });
 
@@ -409,9 +416,16 @@ export function validateOriginWorkerContract(value) {
       "schema",
       "activation",
       "apiEntrypoint",
+      "tenantEntrypoint",
       "workerEntrypoint",
+      "publicationCommandTransport",
+      "hostedUnit",
+      "tenantUnit",
       "unit",
+      "hostedEnvironmentSchema",
+      "tenantEnvironmentSchema",
       "environmentSchema",
+      "publicationCommand",
       "selectedPurposes",
       "postgresPool",
       "apiWorkerMode",
@@ -433,11 +447,40 @@ export function validateOriginWorkerContract(value) {
   }
   for (const field of [
     "apiEntrypoint",
+    "tenantEntrypoint",
     "workerEntrypoint",
+    "publicationCommandTransport",
+    "hostedUnit",
+    "tenantUnit",
     "unit",
+    "hostedEnvironmentSchema",
+    "tenantEnvironmentSchema",
     "environmentSchema"
   ]) {
     workerFileBinding(value[field], field);
+  }
+  exactObject(
+    value.publicationCommand,
+    [
+      "transport",
+      "path",
+      "serverProcess",
+      "clientProcess",
+      "tenantRole",
+      "publicListener"
+    ],
+    "Origin private publication command"
+  );
+  if (
+    value.publicationCommand.transport !== "unix" ||
+    value.publicationCommand.path !==
+      "/run/sitesourcery/publication-command-v1.sock" ||
+    value.publicationCommand.serverProcess !== "hosted_api" ||
+    value.publicationCommand.clientProcess !== "worker" ||
+    value.publicationCommand.tenantRole !== "none" ||
+    value.publicationCommand.publicListener !== false
+  ) {
+    fail("Origin private publication command contract drifted.");
   }
   selectedWorkerPurposes(value.selectedPurposes);
   workerPoolAllocation(value.postgresPool);
@@ -485,8 +528,14 @@ function validateOriginWorkerEvidence(value, label) {
   validateOriginWorkerContract(value.contract);
   for (const field of [
     "apiEntrypoint",
+    "tenantEntrypoint",
     "workerEntrypoint",
+    "publicationCommandTransport",
+    "hostedUnit",
+    "tenantUnit",
     "unit",
+    "hostedEnvironmentSchema",
+    "tenantEnvironmentSchema",
     "environmentSchema"
   ]) {
     const file = value.files.find(
@@ -1311,8 +1360,10 @@ export function createOriginInstallPlan(seal) {
     command("verify-worker-hold", ["test", "-e", "/etc/sitesourcery/WORKERS_HOLD"]),
     command("verify-tunnel-hold", ["test", "!", "-e", "/home/simtech/sitesourcery-production/run/CLOUDFLARE_TUNNEL_APPROVED"]),
     command("verify-private-environment", ["test", "-r", "/etc/sitesourcery/hosted.env"]),
+    command("verify-private-tenant-environment", ["test", "-r", "/etc/sitesourcery/tenant.env"]),
     command("verify-private-worker-environment", ["test", "-r", "/etc/sitesourcery/workers.env"]),
     command("install-hosted-unit", ["install", "-o", "root", "-g", "root", "-m", "0644", `${releaseRoot}/ops/sitesourcery-hosted.service.held`, "/etc/systemd/system/sitesourcery-hosted.service"]),
+    command("install-tenant-unit", ["install", "-o", "root", "-g", "root", "-m", "0644", `${releaseRoot}/ops/sitesourcery-tenant.service.held`, "/etc/systemd/system/sitesourcery-tenant.service"]),
     command("install-worker-unit", ["install", "-o", "root", "-g", "root", "-m", "0644", `${releaseRoot}/ops/sitesourcery-workers.service.held`, "/etc/systemd/system/sitesourcery-workers.service"]),
     command("install-origin-unit", ["install", "-o", "simtech", "-g", "simtech", "-m", "0644", `${releaseRoot}/ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service`, "/home/simtech/.config/systemd/user/sitesourcery-origin.service"]),
     command("install-tunnel-unit", ["install", "-o", "simtech", "-g", "simtech", "-m", "0644", `${releaseRoot}/ops/production-rehearsal/sitesourcery-cloudflared.user.service`, "/home/simtech/.config/systemd/user/sitesourcery-cloudflared.service"]),
@@ -1331,6 +1382,7 @@ export function createOriginInstallPlan(seal) {
       "owner_install_approval",
       "successor_release_epoch_verified",
       "private_environment_values_installed_out_of_band",
+      "private_tenant_environment_values_installed_out_of_band",
       "private_worker_environment_values_installed_out_of_band",
       "installed_readback_verified"
     ],
@@ -1358,6 +1410,7 @@ export function createOriginRollbackPlan(seal) {
     command("stop-tunnel", ["systemctl", "--user", "stop", "sitesourcery-cloudflared.service"]),
     command("stop-origin-gateway", ["systemctl", "--user", "stop", "sitesourcery-origin.service"]),
     command("stop-worker-runtime", ["systemctl", "stop", "sitesourcery-workers.service"]),
+    command("stop-tenant-runtime", ["systemctl", "stop", "sitesourcery-tenant.service"]),
     command("stop-hosted-runtime", ["systemctl", "stop", "sitesourcery-hosted.service"]),
     command("verify-predecessor-directory", ["test", "-d", predecessorRoot]),
     command("select-predecessor", ["ln", "-sfn", predecessorRoot, "/opt/sitesourcery/current"]),

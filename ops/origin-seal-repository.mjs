@@ -39,12 +39,14 @@ export const ORIGIN_UNIT_PATHS = Object.freeze([
   "ops/production-rehearsal/sitesourcery-cloudflared.user.service",
   "ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service",
   "ops/sitesourcery-hosted.service.held",
+  "ops/sitesourcery-tenant.service.held",
   ORIGIN_WORKER_PATHS.unit
 ]);
 
 export const ORIGIN_ENVIRONMENT_SCHEMA_PATHS = Object.freeze([
   "ops/caddy.env.example",
   "ops/hosted.env.example",
+  "ops/tenant.env.example",
   ORIGIN_WORKER_PATHS.environmentSchema
 ]);
 
@@ -415,10 +417,29 @@ export async function collectOriginWorkerRuntime(projectRoot) {
     domain: "origin-worker-runtime",
     relativePaths: [...ORIGIN_WORKER_RUNTIME_PATHS]
   });
-  const [apiSource, workerSource, workerUnit, workerEnvironment] =
+  const [
+    apiSource,
+    tenantSource,
+    workerSource,
+    transportSource,
+    hostedUnit,
+    tenantUnit,
+    workerUnit,
+    hostedEnvironment,
+    tenantEnvironment,
+    workerEnvironment
+  ] =
     await Promise.all([
       readFile(
         inside(projectRoot, ORIGIN_WORKER_PATHS.apiEntrypoint, "Origin API entrypoint"),
+        "utf8"
+      ),
+      readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.tenantEntrypoint,
+          "Origin tenant entrypoint"
+        ),
         "utf8"
       ),
       readFile(
@@ -426,7 +447,47 @@ export async function collectOriginWorkerRuntime(projectRoot) {
         "utf8"
       ),
       readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.publicationCommandTransport,
+          "Origin publication command transport"
+        ),
+        "utf8"
+      ),
+      readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.hostedUnit,
+          "Origin hosted unit"
+        ),
+        "utf8"
+      ),
+      readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.tenantUnit,
+          "Origin tenant unit"
+        ),
+        "utf8"
+      ),
+      readFile(
         inside(projectRoot, ORIGIN_WORKER_PATHS.unit, "Origin worker unit"),
+        "utf8"
+      ),
+      readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.hostedEnvironmentSchema,
+          "Origin hosted environment schema"
+        ),
+        "utf8"
+      ),
+      readFile(
+        inside(
+          projectRoot,
+          ORIGIN_WORKER_PATHS.tenantEnvironmentSchema,
+          "Origin tenant environment schema"
+        ),
         "utf8"
       ),
       readFile(
@@ -466,9 +527,47 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       fail("Origin worker unit lost its held entrypoint or environment fence.");
     }
   }
+  for (const [source, tokens, label] of [
+    [
+      hostedUnit,
+      [
+        "Description=Site Sourcery hosted API and sole publication writer",
+        "EnvironmentFile=/etc/sitesourcery/hosted.env",
+        "server/hosted/bin/server.mjs",
+        "ReadWritePaths=/var/lib/sitesourcery"
+      ],
+      "hosted"
+    ],
+    [
+      tenantUnit,
+      [
+        "Description=Site Sourcery read-only tenant serving runtime",
+        "Requires=sitesourcery-hosted.service",
+        "EnvironmentFile=/etc/sitesourcery/tenant.env",
+        "server/selfhost/bin/server.mjs",
+        "ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery/tenant-runtime"
+      ],
+      "tenant"
+    ],
+    [
+      workerUnit,
+      [
+        "Requires=sitesourcery-hosted.service",
+        "ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery/tenant-runtime",
+        "ReadWritePaths=/var/lib/sitesourcery/private-exports"
+      ],
+      "worker"
+    ]
+  ]) {
+    if (tokens.some((token) => !source.includes(token))) {
+      fail(`Origin ${label} unit lost its exact process authority.`);
+    }
+  }
   if (
     !apiSource.includes("postgresBudgetConfiguration.policy.pool.apiConnections") ||
     !apiSource.includes('backgroundWorkers: "external_process_required"') ||
+    !apiSource.includes("createPublicationCommandServer") ||
+    /createTenantNodeHandler|tenantServer|tenantPort/u.test(apiSource) ||
     /createWorkerSupervisor|createAlakazamWorkerFactories|createResponderWorkerFactories|createResponderFulfillmentWorker|workerConfigurationFromEnvironment|supervisor\.start\s*\(/u.test(
       apiSource
     )
@@ -476,14 +575,34 @@ export async function collectOriginWorkerRuntime(projectRoot) {
     fail("Origin API no longer proves zero in-process worker loops.");
   }
   if (
+    !tenantSource.includes("SelfHostRuntime.openServing") ||
+    !tenantSource.includes("SITESOURCERY_TENANT_PORT") ||
+    /createPostgresPool|SelfHostRuntime\.open\(|publication-command|worker/u.test(
+      tenantSource
+    )
+  ) {
+    fail("Origin tenant entrypoint lost its read-only process boundary.");
+  }
+  if (
     !workerSource.includes("postgres.policy.pool.workerReservedConnections") ||
     !workerSource.includes('workload: "worker"') ||
     !workerSource.includes("createWorkerSupervisor") ||
     !workerSource.includes("createResponderWorkerFactories") ||
+    !workerSource.includes("createPublicationCommandClient") ||
     !workerSource.includes("selected.configuration.activation === \"held\"") ||
     /createServer\s*\(|\.listen\s*\(/u.test(workerSource)
   ) {
     fail("Origin external worker entrypoint lost its isolated held boundary.");
+  }
+  if (
+    !transportSource.includes(
+      '"/run/sitesourcery/publication-command-v1.sock"'
+    ) ||
+    !transportSource.includes("createPublicationCommandServer") ||
+    !transportSource.includes("createPublicationCommandClient") ||
+    /server\.listen\([^c]/u.test(transportSource)
+  ) {
+    fail("Origin private publication command transport drifted.");
   }
   for (const line of [
     "SITESOURCERY_DATABASE_SSL=require",
@@ -495,13 +614,49 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       fail("Origin worker environment schema lost a held provider fence.");
     }
   }
+  const commandEnvironment = [
+    "SITESOURCERY_PUBLICATION_COMMAND_SOCKET=/run/sitesourcery/publication-command-v1.sock",
+    "SITESOURCERY_PUBLICATION_COMMAND_MAX_BODY_BYTES=16777216",
+    "SITESOURCERY_PUBLICATION_COMMAND_DEADLINE_MS=15000"
+  ];
+  if (
+    commandEnvironment.some((line) => !hostedEnvironment.includes(line)) ||
+    commandEnvironment.some((line) => !workerEnvironment.includes(line)) ||
+    !hostedEnvironment.includes("SITESOURCERY_PUBLICATION_COMMAND_TOKEN=") ||
+    !workerEnvironment.includes("SITESOURCERY_PUBLICATION_COMMAND_TOKEN=") ||
+    /SITESOURCERY_PUBLICATION_COMMAND_/u.test(tenantEnvironment) ||
+    !tenantEnvironment.includes("SITESOURCERY_TENANT_PORT=8080") ||
+    !tenantEnvironment.includes(
+      "SITESOURCERY_DATA_ROOT=/var/lib/sitesourcery/tenant-runtime"
+    ) ||
+    hostedEnvironment.includes("SITESOURCERY_TENANT_PORT=")
+  ) {
+    fail("Origin private command or tenant environment authority drifted.");
+  }
   const contract = Object.freeze({
     schema: ORIGIN_WORKER_CONTRACT_SCHEMA,
     activation: "held",
     apiEntrypoint: workerFileBinding(manifest, "apiEntrypoint"),
+    tenantEntrypoint: workerFileBinding(manifest, "tenantEntrypoint"),
     workerEntrypoint: workerFileBinding(manifest, "workerEntrypoint"),
+    publicationCommandTransport:
+      workerFileBinding(manifest, "publicationCommandTransport"),
+    hostedUnit: workerFileBinding(manifest, "hostedUnit"),
+    tenantUnit: workerFileBinding(manifest, "tenantUnit"),
     unit: workerFileBinding(manifest, "unit"),
+    hostedEnvironmentSchema:
+      workerFileBinding(manifest, "hostedEnvironmentSchema"),
+    tenantEnvironmentSchema:
+      workerFileBinding(manifest, "tenantEnvironmentSchema"),
     environmentSchema: workerFileBinding(manifest, "environmentSchema"),
+    publicationCommand: Object.freeze({
+      transport: "unix",
+      path: "/run/sitesourcery/publication-command-v1.sock",
+      serverProcess: "hosted_api",
+      clientProcess: "worker",
+      tenantRole: "none",
+      publicListener: false
+    }),
     selectedPurposes: Object.freeze([...worker.configuration.purposes]),
     postgresPool: Object.freeze({ ...postgres.policy.pool }),
     apiWorkerMode: "external_process_required",
@@ -525,6 +680,7 @@ async function verifyIngressAndHolds(projectRoot) {
     originUnit,
     tunnelUnit,
     hostedEnvironment,
+    tenantEnvironment,
     releaseControlSource,
     commercialControlSource
   ] = await Promise.all([
@@ -533,6 +689,7 @@ async function verifyIngressAndHolds(projectRoot) {
     read("ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service"),
     read("ops/production-rehearsal/sitesourcery-cloudflared.user.service"),
     read("ops/hosted.env.example"),
+    read("ops/tenant.env.example"),
     read("data/release-control.json"),
     read("data/abracadabra-commercial-control.json")
   ]);
@@ -573,7 +730,6 @@ async function verifyIngressAndHolds(projectRoot) {
   for (const line of [
     "SITESOURCERY_HOSTED_HOST=127.0.0.1",
     "SITESOURCERY_HOSTED_PORT=8788",
-    "SITESOURCERY_TENANT_PORT=8080",
     "SITESOURCERY_REGISTRATION_MAIL_MODE=held",
     "SITESOURCERY_RECOVERY_MAIL_MODE=held",
     "SITESOURCERY_STRIPE_MODE=held"
@@ -581,6 +737,21 @@ async function verifyIngressAndHolds(projectRoot) {
     if (!hostedEnvironment.includes(line)) {
       fail("Origin environment schema lost a loopback or held fence.");
     }
+  }
+  for (const line of [
+    "SITESOURCERY_TENANT_HOST=127.0.0.1",
+    "SITESOURCERY_TENANT_PORT=8080",
+    "SITESOURCERY_DATA_ROOT=/var/lib/sitesourcery/tenant-runtime"
+  ]) {
+    if (!tenantEnvironment.includes(line)) {
+      fail("Origin tenant environment schema lost its read-only boundary.");
+    }
+  }
+  if (
+    /SITESOURCERY_(?:DATABASE|STRIPE|RESEND|TWILIO|WORKER|PUBLICATION_COMMAND)_/u
+      .test(tenantEnvironment)
+  ) {
+    fail("Origin tenant environment gained a forbidden authority.");
   }
   const releaseControl = parseJsonObject(
     releaseControlSource,

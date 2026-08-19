@@ -29,7 +29,8 @@ export class SelfHostRuntime {
     publicationHeld,
     controlHost,
     platformBaseDomain,
-    reservedPlatformLabels
+    reservedPlatformLabels,
+    mode = "writer"
   }) {
     this.root = root;
     this.control = control;
@@ -38,6 +39,7 @@ export class SelfHostRuntime {
     this.controlHost = controlHost;
     this.platformBaseDomain = platformBaseDomain;
     this.reservedPlatformLabels = reservedPlatformLabels;
+    this.mode = mode;
   }
 
   static async open({
@@ -78,11 +80,56 @@ export class SelfHostRuntime {
         typeof publicationHeld === "function" ? publicationHeld : () => Boolean(publicationHeld),
       controlHost,
       platformBaseDomain: normalizedPlatform,
-      reservedPlatformLabels
+      reservedPlatformLabels,
+      mode: "writer"
+    });
+  }
+
+  static async openServing({
+    root,
+    publicationHeld = true,
+    controlHost = "127.0.0.1",
+    platformBaseDomain = DEFAULT_PLATFORM_BASE_DOMAIN,
+    reservedPlatformLabels = ["app", "api", "www", "admin"],
+    clock = () => new Date().toISOString(),
+    maximumFileBytes,
+    maximumReleaseBytes,
+    maximumFiles
+  }) {
+    const absoluteRoot = path.resolve(root);
+    const releases = await ReleaseStore.openReadOnly({
+      root: path.join(absoluteRoot, "releases"),
+      clock,
+      maximumFileBytes,
+      maximumReleaseBytes,
+      maximumFiles
+    });
+    const control = await ControlStore.openReadOnly({
+      root: path.join(absoluteRoot, "control"),
+      clock
+    });
+    const normalizedPlatform = normalizeHostname(platformBaseDomain);
+    invariant(normalizedPlatform, "INVALID_CONFIG", "platform base domain is invalid");
+    invariant(
+      typeof controlHost === "string" && controlHost.length >= 3,
+      "INVALID_CONFIG",
+      "control host is invalid"
+    );
+    return new SelfHostRuntime({
+      root: absoluteRoot,
+      control,
+      releases,
+      publicationHeld:
+        typeof publicationHeld === "function" ? publicationHeld : () => Boolean(publicationHeld),
+      controlHost,
+      platformBaseDomain: normalizedPlatform,
+      reservedPlatformLabels,
+      mode: "serving"
     });
   }
 
   async installRelease(input) {
+    this.#requireWriter();
     const manifest = await this.releases.install(input);
     await this.control.registerRelease({
       projectId: manifest.projectId,
@@ -95,6 +142,7 @@ export class SelfHostRuntime {
   }
 
   async reserveHostname(input) {
+    this.#requireWriter();
     const hostname = normalizeHostname(input.hostname);
     invariant(hostname, "INVALID_HOSTNAME", "hostname is invalid");
     if (input.source === "platform") {
@@ -119,10 +167,12 @@ export class SelfHostRuntime {
   }
 
   async setHostnameGate(input) {
+    this.#requireWriter();
     return this.control.setHostnameGate(input);
   }
 
   async activate(input) {
+    this.#requireWriter();
     const binding = this.control.lookup(input.hostname);
     invariant(binding, "HOSTNAME_NOT_FOUND", "hostname is not reserved");
     const registered = this.control.release(binding.projectId, input.releaseId);
@@ -137,6 +187,7 @@ export class SelfHostRuntime {
   }
 
   async rollback(input) {
+    this.#requireWriter();
     const binding = this.control.lookup(input.hostname);
     invariant(binding, "HOSTNAME_NOT_FOUND", "hostname is not reserved");
     const targetReleaseId = input.targetReleaseId ?? binding.previousReleaseId;
@@ -151,10 +202,26 @@ export class SelfHostRuntime {
     return this.control.rollback(input);
   }
 
-  async readiness() {
+  async readiness({ ignorePublicationHold = false } = {}) {
+    invariant(
+      typeof ignorePublicationHold === "boolean",
+      "INVALID_CONFIG",
+      "readiness hold policy is invalid"
+    );
     const held = await this.#held();
+    try {
+      await this.#refreshServing();
+    } catch (error) {
+      return {
+        ready: false,
+        publicationHeld: held,
+        control: this.control.readiness(),
+        checkedBindings: 0,
+        code: error?.code ?? "CONTROL_UNAVAILABLE"
+      };
+    }
     const control = this.control.readiness();
-    if (held || !control.ready) {
+    if ((held && !ignorePublicationHold) || !control.ready) {
       return {
         ready: false,
         publicationHeld: held,
@@ -182,7 +249,7 @@ export class SelfHostRuntime {
       }
       return {
         ready: true,
-        publicationHeld: false,
+        publicationHeld: held,
         control,
         checkedBindings
       };
@@ -287,6 +354,7 @@ export class SelfHostRuntime {
     const hostname = normalizeHostname(candidates[0]);
     if (!hostname) return empty(403);
     try {
+      await this.#refreshServing();
       const binding = this.control.lookup(hostname);
       if (
         !binding ||
@@ -319,6 +387,7 @@ export class SelfHostRuntime {
     const filePath = requestFilePath(url.pathname);
     if (!filePath) return notFound(head);
     try {
+      await this.#refreshServing();
       const first = this.control.lookup(hostname);
       if (!serveableBinding(first)) return notFound(head);
       const release = this.control.release(first.projectId, first.currentReleaseId);
@@ -330,6 +399,7 @@ export class SelfHostRuntime {
       );
       if (!artifact) return notFound(head);
       if (artifact.manifestDigest !== release.manifestDigest) return unavailable(head);
+      await this.#refreshServing();
       const second = this.control.lookup(hostname);
       if (!sameBinding(first, second) || !serveableBinding(second)) return notFound(head);
       return content(request, artifact);
@@ -345,6 +415,18 @@ export class SelfHostRuntime {
     } catch {
       return true;
     }
+  }
+
+  async #refreshServing() {
+    if (this.mode === "serving") await this.control.refresh();
+  }
+
+  #requireWriter() {
+    invariant(
+      this.mode === "writer",
+      "READ_ONLY_RUNTIME",
+      "the serving runtime cannot mutate publication state"
+    );
   }
 }
 

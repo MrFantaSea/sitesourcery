@@ -1,13 +1,11 @@
-# WORKERS_HOLD — candidate only. Do not install, enable, or start without the
-# completed owner gate in SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md.
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
 
 [Unit]
-Description=Site Sourcery bounded hosted workers
+Description=Site Sourcery read-only tenant serving runtime
 After=local-fs.target network-online.target sitesourcery-hosted.service
 Wants=network-online.target
 Requires=sitesourcery-hosted.service
-ConditionPathExists=/etc/sitesourcery/WORKERS_APPROVED
-ConditionPathExists=!/etc/sitesourcery/WORKERS_HOLD
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
 ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE
 
 [Service]
@@ -16,13 +14,14 @@ User=sitesourcery
 Group=sitesourcery
 WorkingDirectory=/opt/sitesourcery/current
 Environment=NODE_ENV=production
-EnvironmentFile=/etc/sitesourcery/workers.env
-ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/assert-runtime.mjs
-ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/hosted/bin/worker.mjs
+EnvironmentFile=/etc/sitesourcery/tenant.env
+ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/selfhost/bin/assert-runtime.mjs
+ExecStartPre=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/ops/verify-final-release-epoch-v2.mjs --epoch ${SITESOURCERY_RELEASE_EPOCH_FILE} --epoch-sha256 ${SITESOURCERY_RELEASE_EPOCH_SHA256} --origin-seal ${SITESOURCERY_ORIGIN_SEAL_FILE} --origin-seal-sha256 ${SITESOURCERY_ORIGIN_SEAL_FILE_SHA256} --installed-readback ${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE} --installed-readback-sha256 ${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE_SHA256}
+ExecStart=/opt/sitesourcery/node-24.18.0/bin/node /opt/sitesourcery/current/server/selfhost/bin/server.mjs
 Restart=on-failure
 RestartSec=5s
 TimeoutStartSec=30s
-TimeoutStopSec=25s
+TimeoutStopSec=20s
 KillSignal=SIGTERM
 UMask=0077
 
@@ -47,11 +46,8 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 
 ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery/tenant-runtime
-ReadWritePaths=/var/lib/sitesourcery/private-exports
-RuntimeDirectory=sitesourcery
-RuntimeDirectoryMode=0750
-LimitNOFILE=4096
-TasksMax=64
+LimitNOFILE=8192
+TasksMax=128
 
 [Install]
 WantedBy=multi-user.target

@@ -452,6 +452,29 @@ test("unpublish remains available during an emergency hold and stays dark afterw
   assert.equal(context.runtime.control.lookup("customer.example").status, "dark");
 });
 
+test("publication readiness separates storage health from the effect hold", async () => {
+  const context = await harness(true);
+  assert.deepEqual(await context.port.readiness(), {
+    ready: true,
+    kind: "private-in-process-selfhost",
+    held: true,
+    storageReady: true,
+    storageCode: null
+  });
+  context.runtime.readiness = async () => ({
+    ready: false,
+    publicationHeld: true,
+    code: "CONTROL_UNAVAILABLE"
+  });
+  assert.deepEqual(await context.port.readiness(), {
+    ready: false,
+    kind: "private-in-process-selfhost",
+    held: true,
+    storageReady: false,
+    storageCode: "CONTROL_UNAVAILABLE"
+  });
+});
+
 test("licensed addresses map only to the reserved platform namespace", async () => {
   const context = await harness();
   const released = await context.port.request(

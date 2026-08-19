@@ -126,6 +126,7 @@ test("multi-file publication adapter installs exact referenced photo bytes with 
   const installs = [];
   const runtime = {
     control: {},
+    async readiness() { return { ready: true }; },
     releases: {
       async getManifest() {
         return { manifestDigest: "m", files: [] };
@@ -204,6 +205,7 @@ test("multi-file publication adapter rejects substituted asset bytes before inst
     runtime: {
       control: {},
       releases: { async getManifest() {} },
+      async readiness() { return { ready: true }; },
       async installRelease() {}
     },
     assetRepository: {

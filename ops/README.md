@@ -3,8 +3,13 @@
 These files describe the smallest production shape that can run Site Sourcery
 without Vercel, Supabase hosting, or Cloudflare:
 
-- one reviewed Node 24.18.0 release starts the loopback hosted API on `8788` and
-  the customer-site runtime on `8080`;
+- one reviewed Node 24.18.0 release supplies three operationally separate
+  processes: the hosted API and sole publication writer on loopback `8788`,
+  the read-only customer-site runtime on loopback `8080`, and a listener-free
+  worker;
+- the worker reaches the API publication writer only through the authenticated
+  private Unix socket `/run/sitesourcery/publication-command-v1.sock`; the
+  tenant process has no command-socket authority;
 - one dedicated Caddy instance serves the exact `_hosted` artifact for the
   control host, sends only `/api` to `8788`, and sends verified customer domains
   to `8080`;
@@ -100,6 +105,8 @@ Caddy state and its admin socket in separately owned systemd directories.
   PUBLICATION_HOLD
   operations-state-approved.json
   hosted.env
+  tenant.env
+  workers.env
   caddy.env
   probe.env
   catalog.json
@@ -111,8 +118,10 @@ Caddy state and its admin socket in separately owned systemd directories.
   data/
 ```
 
-The `sitesourcery` account owns only `/var/lib/sitesourcery`. Release and
-configuration trees are root-owned and read-only to the process. Real
+The hosted API is the sole writer to `tenant-runtime/`. The tenant unit sees
+that tree read-only and the worker unit has no tenant-runtime write authority;
+its only writable production state is the private export root. Release and
+configuration trees are root-owned and read-only to every process. Real
 environment files are mode `0600`; examples contain no usable credential.
 
 `RUNTIME_APPROVED` permits a loopback-only rehearsal while every publication
@@ -128,7 +137,8 @@ cannot stop the production writer or invent a cross-store snapshot:
 
 1. An operator creates the short-lived, root-owned
    `/run/sitesourcery/BACKUP_QUIESCE` fence from the held example and stops the
-   hosted service. The hosted service candidate has a negative condition on
+   hosted API, because it is the sole filesystem publication writer. The
+   hosted service candidate has a negative condition on
    that fence, so systemd cannot restart it while capture is in progress.
 2. The backup checks that the exact hosted unit is `inactive` and that
    PostgreSQL has zero `sitesourcery-hosted` sessions. It checks both again
@@ -262,7 +272,9 @@ no alert destination or credential in these files.
    database. Run the repository, RLS, authenticated-role, payment, domain, and
    restore tests.
 3. Create `RUNTIME_APPROVED`, keep every publication/provider hold, and start
-   only `sitesourcery-hosted.service`. Both listeners must bind to loopback.
+   `sitesourcery-hosted.service`, then `sitesourcery-tenant.service`. The API
+   and tenant listeners must bind to their distinct loopback ports. The worker
+   remains independently held unless its exact purpose set is under test.
 4. Run `probe-runtime.mjs` with all six expected operations fields. With no
    approval they must all be `held`; a reviewed non-held state must use the
    same active approval document as backup and monitoring. A held tenant
@@ -286,11 +298,16 @@ no alert destination or credential in these files.
 
 ## Rollback
 
-Do not rebuild during rollback. Point `current` to the previous already-audited
-commit, restart the loopback runtime, run the exact-state probe, validate Caddy, and
-then reload the dedicated Caddy instance. Database rollback is not an automatic
-down-migration: restore the verified backup into an isolated database, prove it,
-and make a separate authority decision.
+Do not rebuild during rollback. Stop worker, tenant, then API; point `current`
+to the previous already-audited commit; start API, tenant, then worker; run the
+exact-state probe; validate Caddy; and only then reload the dedicated Caddy
+instance. Database rollback is not an automatic down-migration: restore the
+verified backup into an isolated database, prove it, and make a separate
+authority decision.
+
+The FIN-006 artifacts prove the candidate composition and all-held authority.
+They are not evidence that these units are installed, enabled, or running;
+immutable installation and process readback remain a later staging gate.
 
 If payment, registrar, DNS, email, backup, or monitoring evidence is ambiguous,
 keep the service held and reconcile the durable provider/object state. Never

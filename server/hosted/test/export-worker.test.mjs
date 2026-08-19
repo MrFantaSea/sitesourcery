@@ -175,8 +175,9 @@ test("export worker environment is exact, bounded, and held unless enabled", () 
 });
 
 test("API starts no export loop and the worker process owns the held narrow port", async () => {
-  const [apiSource, workerSource, runbook] = await Promise.all([
+  const [apiSource, httpSource, workerSource, runbook] = await Promise.all([
     readFile(new URL("../bin/server.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../http.mjs", import.meta.url), "utf8"),
     readFile(new URL("../bin/worker.mjs", import.meta.url), "utf8"),
     readFile(
       new URL("../../../ops/SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md", import.meta.url),
@@ -184,6 +185,7 @@ test("API starts no export loop and the worker process owns the held narrow port
     )
   ]);
   assert.doesNotMatch(apiSource, /createExportWorker|exportWorker\.start/u);
+  assert.doesNotMatch(httpSource, /processExport|queueMicrotask/u);
   assert.match(workerSource, /createCoreWorkerFactories/u);
   assert.match(
     runbook,

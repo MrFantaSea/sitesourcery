@@ -5,7 +5,7 @@
 On a stopped writer or a filesystem snapshot:
 
 ```sh
-SITESOURCERY_DATA_ROOT=/var/lib/sitesourcery/tenant \
+SITESOURCERY_DATA_ROOT=/var/lib/sitesourcery/tenant-runtime \
   node bin/export-backup-manifest.mjs > backup-manifest.json
 ```
 
@@ -31,13 +31,14 @@ require stricter access.
 2. Install the recorded Node version, without Caddy and without public DNS.
 3. Restore files preserving directory structure and restrictive permissions.
 4. Keep `PUBLICATION_HOLD` present.
-5. Open `SelfHostRuntime` against the restored data root.
+5. Open `SelfHostRuntime.openServing()` against the restored data root.
 6. Confirm readiness reports held, not corrupt.
 7. Generate a new backup manifest and compare control revision, release
    manifest digests, file paths, sizes, and file SHA-256 values.
 8. Exercise tenant reads through the in-process Fetch contract with an explicit
    test-only hold override.
-9. Rehearse activation and rollback on copied data.
+9. Only after preserving that read-only proof, open a writer runtime against a
+   second copied rehearsal and rehearse activation and rollback there.
 10. Destroy the disposable restore or secure it as a standby.
 
 Only a completed restore proves the backup. A successful copy command does not.

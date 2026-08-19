@@ -265,12 +265,23 @@ test("graceful stop fails closed at the exact configured deadline", async () => 
   assert.equal(supervisor.snapshot().state, "failed");
 });
 
-test("production entrypoints split pools and keep effect workers in the worker process", async () => {
-  const [api, worker, core, alakazam, responder, unit, example, runbook] = await Promise.all([
+test("production entrypoints split processes and keep effect workers outside the API", async () => {
+  const [
+    api, tenant, backup, selfhostEnvironment, http, worker, core, alakazam, lifecycle,
+    responder, unit, example, runbook
+  ] = await Promise.all([
     readFile(path.join(root, "server/hosted/bin/server.mjs"), "utf8"),
+    readFile(path.join(root, "server/selfhost/bin/server.mjs"), "utf8"),
+    readFile(path.join(
+      root,
+      "server/selfhost/bin/export-backup-manifest.mjs"
+    ), "utf8"),
+    readFile(path.join(root, "server/selfhost/.env.example"), "utf8"),
+    readFile(path.join(root, "server/hosted/http.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/bin/worker.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/worker-core-composition.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/worker-alakazam-composition.mjs"), "utf8"),
+    readFile(path.join(root, "server/hosted/worker-lifecycle-composition.mjs"), "utf8"),
     readFile(path.join(root, "server/hosted/worker-responder-composition.mjs"), "utf8"),
     readFile(path.join(root, "ops/sitesourcery-workers.service.held"), "utf8"),
     readFile(path.join(root, "ops/workers.env.example"), "utf8"),
@@ -278,18 +289,41 @@ test("production entrypoints split pools and keep effect workers in the worker p
   ]);
   assert.doesNotMatch(
     api,
-    /createExportWorker|createCancellationWorker|createAlakazamFulfillmentWorker|createResponderFulfillmentWorker|createResponderWorkerFactories|\.start\(\{\s*signal:\s*shutdownController/u
+    /createExportWorker|createCancellationWorker|createAlakazamFulfillmentWorker|createResponderFulfillmentWorker|createResponderWorkerFactories|createTenantNodeHandler|tenantServer|tenantPort|\.start\(\{\s*signal:\s*shutdownController/u
   );
+  assert.doesNotMatch(http, /processExport|queueMicrotask/u);
   assert.match(api, /pool\.apiConnections/u);
   assert.match(api, /backgroundWorkers: "external_process_required"/u);
+  assert.match(api, /createPublicationCommandServer/u);
+  assert.match(tenant, /SelfHostRuntime\.openServing/u);
+  assert.match(tenant, /SITESOURCERY_TENANT_PORT/u);
+  assert.doesNotMatch(tenant, /createPostgresPool|publication-command|worker/u);
+  assert.match(backup, /SelfHostRuntime\.openServing/u);
+  assert.doesNotMatch(backup, /SelfHostRuntime\.open\(/u);
+  assert.doesNotMatch(
+    `${tenant}\n${backup}\n${alakazam}\n${lifecycle}`,
+    /SelfHostRuntime\.open\(/u
+  );
+  assert.match(selfhostEnvironment, /SITESOURCERY_TENANT_HOST=127\.0\.0\.1/u);
+  assert.match(selfhostEnvironment, /SITESOURCERY_TENANT_PORT=8080/u);
+  assert.match(
+    selfhostEnvironment,
+    /SITESOURCERY_DATA_ROOT=\/var\/lib\/sitesourcery\/tenant-runtime/u
+  );
+  assert.doesNotMatch(selfhostEnvironment, /SITESOURCERY_(?:BIND|PORT)=/u);
   assert.match(worker, /pool\.workerReservedConnections/u);
   assert.match(worker, /workload: "worker"/u);
+  assert.match(worker, /createPublicationCommandClient/u);
   assert.match(worker, /createCoreWorkerFactories/u);
   assert.match(worker, /createNotificationMailWorkerFactories/u);
   assert.match(worker, /createResponderWorkerFactories/u);
   assert.doesNotMatch(
-    `${worker}\n${core}\n${alakazam}\n${responder}`,
+    `${worker}\n${core}\n${alakazam}\n${lifecycle}\n${responder}`,
     /identity-postgres|identity-pepper|registrationMail|recoveryMail/iu
+  );
+  assert.doesNotMatch(
+    `${alakazam}\n${lifecycle}`,
+    /SelfHostRuntime|createSelfHostPublicationPort|createAlakazam35PublicationPort/u
   );
   assert.match(unit, /ConditionPathExists=\/etc\/sitesourcery\/WORKERS_APPROVED/u);
   assert.match(unit, /ConditionPathExists=!\/etc\/sitesourcery\/WORKERS_HOLD/u);

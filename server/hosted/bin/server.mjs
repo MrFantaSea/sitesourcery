@@ -11,7 +11,6 @@ import {
   releaseIdentityFromFinalEpochV2
 } from "../../../ops/final-release-epoch-v2.mjs";
 import {
-  createNodeHandler as createTenantNodeHandler,
   DEFAULT_PLATFORM_BASE_DOMAIN,
   SelfHostRuntime
 } from "../../selfhost/src/index.mjs";
@@ -56,6 +55,10 @@ import {
 import {
   createAlakazam35PublicationPort
 } from "../alakazam-35-publication-port.mjs";
+import {
+  createPublicationCommandServer,
+  publicationCommandConfigurationFromEnvironment
+} from "../publication-command-transport.mjs";
 import {
   createAlakazam50Composition
 } from "../alakazam-50-composition.mjs";
@@ -171,12 +174,14 @@ import {
   createProductionEngagementBootstrap
 } from "../engagement-production-composition.mjs";
 import {
-  createProfessionalLifecycleProductionComposition
+  createProfessionalLifecycleProductionComposition,
+  isExactProfessionalLifecycleReadiness
 } from "../professional-lifecycle-production-composition.mjs";
 import {
   createPostgresProviderReconciliationOperator
 } from "../provider-reconciliation-operator-postgres.mjs";
 import {
+  ADJACENT_INTEGRATION_SYSTEM_KEYS,
   createAdjacentIntegrationService
 } from "../adjacent-integration.mjs";
 import {
@@ -254,6 +259,9 @@ import {
   createPublicationControlComposition
 } from "../publication-control-composition.mjs";
 import { createHostedApi } from "../http.mjs";
+import {
+  createCapabilityProcessMatrix
+} from "../capability-process-matrix.mjs";
 import { ingressPolicyFromEnvironment } from "../ingress-policy.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import {
@@ -268,6 +276,12 @@ import { createMailLifecycle } from "../mail-lifecycle.mjs";
 import {
   createPostgresMailLifecycleRepository
 } from "../mail-lifecycle-postgres.mjs";
+import {
+  createMailPurposeNotifications
+} from "../mail-purpose-notifications.mjs";
+import {
+  createPostgresMailPurposeNotificationRepository
+} from "../mail-purpose-notifications-postgres.mjs";
 import {
   createConfiguredResendMailEventHttp
 } from "../resend-mail-events-config.mjs";
@@ -307,9 +321,6 @@ const repositoryRoot = path.resolve(moduleRoot, "../..");
 const host = process.env.SITESOURCERY_HOSTED_HOST ?? "127.0.0.1";
 const apiPort = Number(
   process.env.SITESOURCERY_HOSTED_PORT ?? "8788"
-);
-const tenantPort = Number(
-  process.env.SITESOURCERY_TENANT_PORT ?? "8080"
 );
 const dataRoot = path.resolve(
   process.env.SITESOURCERY_DATA_ROOT ??
@@ -355,12 +366,16 @@ function secret(name, minimumBytes = 32) {
 
 if (host !== "127.0.0.1") {
   throw new Error(
-    "Hosted and tenant services must bind to loopback behind the reviewed reverse proxy."
+    "The hosted API must bind to loopback behind the reviewed reverse proxy."
+  );
+}
+if (apiPort !== 8788) {
+  throw new Error(
+    "SITESOURCERY_HOSTED_PORT must remain the reviewed 127.0.0.1:8788 boundary."
   );
 }
 for (const [name, value] of [
-  ["SITESOURCERY_HOSTED_PORT", apiPort],
-  ["SITESOURCERY_TENANT_PORT", tenantPort]
+  ["SITESOURCERY_HOSTED_PORT", apiPort]
 ]) {
   if (
     !Number.isSafeInteger(value) ||
@@ -369,11 +384,6 @@ for (const [name, value] of [
   ) {
     throw new Error(`${name} must be an unprivileged TCP port.`);
   }
-}
-if (apiPort === tenantPort) {
-  throw new Error(
-    "Hosted API and tenant serving ports must be different."
-  );
 }
 
 const postgresBudgetConfiguration =
@@ -401,7 +411,7 @@ const authority = createCanonicalPostgresAuthority({
   budgetPolicy: postgresBudgetConfiguration.policy
 });
 let apiServer = null;
-let tenantServer = null;
+let publicationCommandServer = null;
 let shutdownPromise = null;
 
 function closeServer(server) {
@@ -417,10 +427,10 @@ function closeServer(server) {
 function shutdown() {
   if (!shutdownPromise) {
     shutdownPromise = (async () => {
-      await Promise.all([
-        closeServer(apiServer),
-        closeServer(tenantServer)
-      ]);
+      await closeServer(apiServer);
+      if (publicationCommandServer) {
+        await publicationCommandServer.stop();
+      }
       await authority.close();
     })();
   }
@@ -775,6 +785,36 @@ async function start() {
     }),
     clock: commerceV2.clock
   });
+  const mailLifecycleReadiness = await mailLifecycle.readiness();
+  if (
+    mailLifecycleReadiness.ready !== true ||
+    mailLifecycleReadiness.verified !== true ||
+    mailLifecycleReadiness.kind !==
+      "durable-mail-lifecycle-postgres" ||
+    mailLifecycleReadiness.providerEffects !== false
+  ) {
+    throw new Error(
+      "Canonical durable mail lifecycle is not ready."
+    );
+  }
+  const mailPurposeNotifications = createMailPurposeNotifications({
+    repository: createPostgresMailPurposeNotificationRepository({ authority }),
+    clock: commerceV2.clock
+  });
+  const mailPurposeReadiness = await mailPurposeNotifications.readiness();
+  if (
+    mailPurposeReadiness.ready !== true ||
+    mailPurposeReadiness.verified !== true ||
+    mailPurposeReadiness.fiveFamilyReservationReady !== true ||
+    mailPurposeReadiness.purposeCount !== 5 ||
+    mailPurposeReadiness.sourceCount !== 14 ||
+    mailPurposeReadiness.providerEffects !== false ||
+    mailPurposeReadiness.deliveryClaimed !== false
+  ) {
+    throw new Error(
+      "Canonical five-family held mail-purpose authority is not ready."
+    );
+  }
   const resendMailEvents = createConfiguredResendMailEventHttp({
     environment: process.env,
     lifecycle: mailLifecycle,
@@ -856,6 +896,14 @@ async function start() {
     assetRepository: alakazam35Repository,
     clock: commerceV2.clock
   });
+  publicationCommandServer = createPublicationCommandServer({
+    publicationPort,
+    configuration:
+      publicationCommandConfigurationFromEnvironment(process.env),
+    log(entry) {
+      process.stdout.write(`${JSON.stringify(entry)}\n`);
+    }
+  });
   const configuredRecoveryMailPort =
     await createConfiguredRecoveryMailPort();
   const recoveryMailPort =
@@ -894,6 +942,13 @@ async function start() {
     });
   const professionalLifecycleReadiness =
     await professionalLifecycle.readiness();
+  if (!isExactProfessionalLifecycleReadiness(
+    professionalLifecycleReadiness
+  )) {
+    throw new Error(
+      "Canonical held professional lifecycle is not ready."
+    );
+  }
   const operatorProviderReconciliation =
     createPostgresProviderReconciliationOperator({
       authority,
@@ -922,7 +977,8 @@ async function start() {
   if (
     adjacentIntegrationReadiness.ready !== true ||
     adjacentIntegrationReadiness.verified !== true ||
-    adjacentIntegrationReadiness.systems.length !== 6 ||
+    JSON.stringify(adjacentIntegrationReadiness.systems) !==
+      JSON.stringify(ADJACENT_INTEGRATION_SYSTEM_KEYS) ||
     adjacentIntegrationReadiness.mode !== "manual-read-only" ||
     adjacentIntegrationReadiness.remoteWrites !== false ||
     adjacentIntegrationReadiness.providerEffects !== false ||
@@ -938,7 +994,13 @@ async function start() {
     clock: commerceV2.clock
   });
   const supportCaseReadiness = await supportCases.readiness();
-  if (supportCaseReadiness.ready !== true) {
+  if (
+    supportCaseReadiness.ready !== true ||
+    supportCaseReadiness.verified !== true ||
+    supportCaseReadiness.providerEffects !== false ||
+    supportCaseReadiness.deletionExecution !== false ||
+    supportCaseReadiness.exportExecution !== false
+  ) {
     throw new Error(
       "Canonical auditable support and privacy case storage is not ready."
     );
@@ -950,7 +1012,7 @@ async function start() {
       coreRepository: careCoreRepository
     }),
     mailReservations: createCareMailReservationInterface({
-      lifecycle: mailLifecycle,
+      notifications: mailPurposeNotifications,
       clock: commerceV2.clock
     }),
     clock: commerceV2.clock
@@ -974,7 +1036,7 @@ async function start() {
     ids: commerceV2.ids,
     clock: commerceV2.clock,
     mailReservations: createCareCommerceMailReservationInterface({
-      lifecycle: mailLifecycle,
+      notifications: mailPurposeNotifications,
       clock: commerceV2.clock
     })
   });
@@ -1182,6 +1244,19 @@ async function start() {
     lookupDigests: responderLookupDigests,
     clock: commerceV2.clock
   };
+  const responderNumberBindingReadiness =
+    await responderNumberBindings.repository.readiness();
+  if (
+    responderNumberBindingReadiness.ready !== true ||
+    responderNumberBindingReadiness.verified !== true ||
+    responderNumberBindingReadiness.kind !==
+      "responder-number-bindings-postgres" ||
+    responderNumberBindingReadiness.providerEffects !== false
+  ) {
+    throw new Error(
+      "Canonical held Responder number-binding authority is not ready."
+    );
+  }
   const service = createCanonicalPostgresService({
     authority,
     identity,
@@ -1255,14 +1330,50 @@ async function start() {
     await customBuildFinalPayment.readiness(),
     professionalLifecycleReadiness
   );
-  await customServicesCustomBuildWork.readiness();
-  await customServicesCustomBuildProgress.readiness();
-  await customServicesCustomBuildChangeCompletion.readiness();
-  await customBuildHandoff.readiness();
-  await alakazamPublication.readiness();
-  await alakazam35.readiness();
-  await alakazam50.readiness();
-  await alakazamRetainedPremium.readiness();
+  const [
+    customBuildWorkReadiness,
+    customBuildProgressReadiness,
+    customBuildChangeCompletionReadiness,
+    customBuildHandoffReadiness,
+    alakazamPublicationReadiness,
+    alakazam35Readiness,
+    alakazam50Readiness,
+    alakazamRetainedPremiumReadiness
+  ] = await Promise.all([
+    customServicesCustomBuildWork.readiness(),
+    customServicesCustomBuildProgress.readiness(),
+    customServicesCustomBuildChangeCompletion.readiness(),
+    customBuildHandoff.readiness(),
+    alakazamPublication.readiness(),
+    alakazam35.readiness(),
+    alakazam50.readiness(),
+    alakazamRetainedPremium.readiness()
+  ]);
+  if (
+    [
+      customBuildWorkReadiness,
+      customBuildProgressReadiness,
+      customBuildChangeCompletionReadiness,
+      customBuildHandoffReadiness
+    ].some((entry) =>
+      entry?.ready !== true || entry?.state !== "ready"
+    ) ||
+    [
+      alakazamPublicationReadiness,
+      alakazam35Readiness,
+      alakazam50Readiness,
+      alakazamRetainedPremiumReadiness
+    ].some((entry) =>
+      entry?.ready !== true ||
+      entry?.authorization !== true ||
+      entry?.providerEffects !== false ||
+      entry?.state !== "held"
+    )
+  ) {
+    throw new Error(
+      "Canonical held Custom and Alakazam runtime boundaries are not ready."
+    );
+  }
   const alakazamPolicyReadiness =
     await alakazamPolicyAuthorityRepository.readiness();
   if (alakazamPolicyReadiness.ready !== true) {
@@ -1284,6 +1395,108 @@ async function start() {
     readiness.payments,
     stripeComposition
   );
+  const heldRow = (ready, code = "local_dependency_not_ready") =>
+    Object.freeze({
+      engineeringState: ready ? "ready" : "not_ready",
+      effectState: "held",
+      code: ready ? "verified_all_held" : code
+    });
+  const candidateRow = (effectState = "held") => Object.freeze({
+    engineeringState: "candidate",
+    effectState,
+    code: "candidate_not_installed"
+  });
+  const responderLocalReady =
+    responderCoreReadiness.ready === true &&
+    responderReadiness.ready === true &&
+    responderCommerceReadiness.ready === true &&
+    responderForwardingReadiness.ready === true &&
+    responderNativeClientReadiness.ready === true &&
+    responderNativeTokenReadiness.ready === true &&
+    responderNativeVoiceReadiness.ready === true &&
+    responderNumberBindingReadiness.ready === true;
+  const customLocalReady = [
+    customBuildWorkReadiness,
+    customBuildProgressReadiness,
+    customBuildChangeCompletionReadiness,
+    customBuildHandoffReadiness
+  ].every((entry) => entry?.ready === true);
+  const alakazamLocalReady = [
+    alakazamPublicationReadiness,
+    alakazam35Readiness,
+    alakazam50Readiness,
+    alakazamRetainedPremiumReadiness
+  ].every((entry) => entry?.ready === true);
+  const adjacentLocalReady =
+    adjacentIntegrationReadiness.ready === true &&
+    adjacentIntegrationReadiness.verified === true &&
+    adjacentIntegrationReadiness.systems?.length === 6;
+  const transactionalMailLocalReady =
+    mailLifecycleReadiness.ready === true &&
+    mailLifecycleReadiness.verified === true &&
+    mailPurposeReadiness.ready === true &&
+    mailPurposeReadiness.verified === true &&
+    mailPurposeReadiness.fiveFamilyReservationReady === true &&
+    supportCaseReadiness.ready === true &&
+    careReadiness.mailReservation?.deliveryEffects === false &&
+    careCommerceReadiness.mailReservationReady === true;
+  const capabilityProcessMatrix = createCapabilityProcessMatrix({
+    processes: {
+      public_static: candidateRow("static"),
+      hosted_api: candidateRow(),
+      tenant_runtime: candidateRow(),
+      postgresql: candidateRow("internal"),
+      worker: candidateRow(),
+      monitoring_deadman: candidateRow()
+    },
+    async loadRows() {
+      const publicationStorageReadiness = await publicationPort.readiness();
+      const publicationCommandState = publicationCommandServer.snapshot();
+      const publicationLocalReady =
+        publicationStorageReadiness?.ready === true &&
+        publicationCommandState.state === "listening" &&
+        alakazamPublicationReadiness.ready === true;
+      return {
+        public_successor: candidateRow("static"),
+        hosted_browser: candidateRow("static"),
+        accounts_recovery: heldRow(
+          readiness.registration?.ready === true &&
+          readiness.registration?.verified === true &&
+          readiness.recovery?.ready === true &&
+          readiness.recovery?.verified === true &&
+          mailLifecycleReadiness.ready === true
+        ),
+        organizations_tenancy: heldRow(readiness.ready === true),
+        projects_downloads: heldRow(
+          readiness.ready === true && publicationLocalReady
+        ),
+        publication: heldRow(publicationLocalReady),
+        assessment_custom: heldRow(
+          professionalLifecycleReadiness.ready === true && customLocalReady
+        ),
+        alakazam: heldRow(alakazamLocalReady),
+        domains: heldRow(domainRuntimeReadiness.ready === true),
+        care: heldRow(
+          careReadiness.ready === true && careCommerceReadiness.ready === true
+        ),
+        responder: heldRow(responderLocalReady),
+        operator_support: heldRow(
+          supportCaseReadiness.ready === true &&
+          operatorProviderReconciliationReadiness.ready === true
+        ),
+        transactional_mail: heldRow(transactionalMailLocalReady),
+        provider_reconciliation: heldRow(
+          operatorProviderReconciliationReadiness.ready === true
+        ),
+        backup_restore: candidateRow(),
+        monitoring_deadman: candidateRow(),
+        client_profile_hub: heldRow(adjacentLocalReady),
+        dell_commercial_engine: heldRow(adjacentLocalReady),
+        marketing_desk: heldRow(adjacentLocalReady),
+        messenger_command_phone: heldRow(adjacentLocalReady)
+      };
+    }
+  });
   apiServer = createServer(
     createApiNodeHandler(
       createHostedApi(service, {
@@ -1318,6 +1531,7 @@ async function start() {
         operatorWorkQueue: professionalLifecycle.operatorQueue,
         operatorProviderReconciliation,
         adjacentIntegration,
+        mailPurposeNotifications,
         supportCases,
         resendMailEvents,
         twilioResponderEvents,
@@ -1340,32 +1554,35 @@ async function start() {
             customBuildFinalPayment
         }),
         releaseIdentity,
-        ingressPolicy
+        ingressPolicy,
+        capabilityProcessMatrix,
+        strictCapabilityProcessMatrix: true
       }),
       ingressPolicy
     )
   );
-  tenantServer = createServer(
-    createTenantNodeHandler(tenantRuntime)
-  );
   apiServer.requestTimeout =
     ingressPolicy.node.requestDeadlineMs;
-  tenantServer.requestTimeout = 15_000;
-  for (const server of [apiServer, tenantServer]) {
+  for (const server of [apiServer]) {
     server.headersTimeout = 10_000;
     server.keepAliveTimeout = 5_000;
     server.maxHeadersCount = 100;
   }
 
+  await publicationCommandServer.start();
+  await capabilityProcessMatrix.assertStartup(
+    await capabilityProcessMatrix.snapshot()
+  );
   await listen(apiServer, apiPort);
-  await listen(tenantServer, tenantPort);
 
   process.stdout.write(
     `${JSON.stringify({
       event: "sitesourcery.hosted.started",
       host,
       apiPort,
-      tenantPort,
+      tenantProcess: "external_process_required",
+      publicationCommand:
+        publicationCommandServer.snapshot(),
       publicationHeld: readiness.publication.held,
       recoveryMode: readiness.recovery.mode,
       recoveryProvider:

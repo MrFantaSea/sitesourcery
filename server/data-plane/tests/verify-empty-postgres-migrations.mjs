@@ -71,6 +71,8 @@ import {
   "./responder-native-client-postgres-proof.mjs";
 import { verifyAdjacentIntegrationPostgres } from
   "./adjacent-integration-postgres-proof.mjs";
+import { verifyMailPurposeNotificationsPostgres } from
+  "./mail-purpose-notifications-postgres-proof.mjs";
 
 const { Pool } = pg;
 export const MIGRATION_TEST_URL_ENV =
@@ -2146,6 +2148,34 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
     purpose_tax_boundary: true,
     line_count: 1
   }]);
+  const directIdentityResult = await pool.query(
+    `select acceptance.id as acceptance_id,
+            invoice.id as invoice_id,
+            invoice.invoice_digest
+       from ss.service_custom_build_quotes quote
+       join ss.service_custom_build_quote_acceptances acceptance
+         on acceptance.organization_id = quote.organization_id
+        and acceptance.quote_id = quote.id
+       join ss.service_custom_build_invoices invoice
+         on invoice.organization_id = acceptance.organization_id
+        and invoice.quote_acceptance_id = acceptance.id
+      where quote.id = $1
+        and quote.organization_id = $2
+        and quote.project_id = $3
+        and quote.customer_user_id = $4
+        and quote.direct_opportunity_id = $5
+        and acceptance.accepted_by_user_id = $4`,
+    [
+      directQuote.quote.quoteId,
+      claim.organization.id,
+      claim.project.id,
+      claim.user.id,
+      directQuote.directOpportunityId
+    ]
+  );
+  assert.equal(directIdentityResult.rowCount, 1);
+  const directIdentity = directIdentityResult.rows[0];
+  assert.match(directIdentity.invoice_digest, /^[a-f0-9]{64}$/u);
 
   currentTime = new Date(
     invitationStart + 2 * 60 * 60 * 1000
@@ -2270,6 +2300,21 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
     ),
     /permission denied/iu
   );
+  return Object.freeze({
+    customerUserId: claim.user.id,
+    organizationId: claim.organization.id,
+    projectId: claim.project.id,
+    invitationId: invitation.invitationId,
+    engagementId: claim.engagementId,
+    opportunityId: directQuote.directOpportunityId,
+    quoteId: directQuote.quote.quoteId,
+    quoteRevision: directQuote.quote.quoteRevision,
+    quoteDigest: directQuote.quote.quoteDigest,
+    disclosureDigest: directQuote.quote.disclosureDigest,
+    acceptanceId: directIdentity.acceptance_id,
+    invoiceId: directIdentity.invoice_id,
+    invoiceDigest: directIdentity.invoice_digest
+  });
 }
 
 async function v2AuthorityFingerprint(pool) {
@@ -7553,9 +7598,13 @@ export async function runMigrationVerification({
     } = await applyPostPrivacyMigrations(pool, postPrivacyNames);
     await verifyJointLegalV4ReleaseState(pool);
     await verifyCustomerEngagementBootstrapState(pool);
-    await verifyCustomerEngagementBootstrapJourney(pool);
+    const customerEngagementProof =
+      await verifyCustomerEngagementBootstrapJourney(pool);
     const adjacentIntegrationProof =
-      await verifyAdjacentIntegrationPostgres(pool);
+      await verifyAdjacentIntegrationPostgres(
+        pool,
+        customerEngagementProof
+      );
     await verifyPlatformSchema(pool);
     await verifyAlakazamPolicyAuthority(pool);
     await verifyProfessionalServicesReversalState(pool);
@@ -7578,6 +7627,10 @@ export async function runMigrationVerification({
       await verifyResponderForwardingPostgres(pool);
     const responderNativeClientProof =
       await verifyResponderNativeClientPostgres(pool);
+    const mailPurposeNotificationsProof =
+      await verifyMailPurposeNotificationsPostgres(pool, {
+        connectionString: plan.databaseUrl
+      });
     const v2After = await v2AuthorityFingerprint(pool);
     assert.deepEqual(v2After, v2Before);
     writeOutput(
@@ -7688,6 +7741,18 @@ export async function runMigrationVerification({
       `resolutions ${adjacentIntegrationProof.resolutions} ` +
       `contractDigest ${adjacentIntegrationProof.contractDigest} ` +
       "remoteWrites false providerEffects false automaticCommands false\n"
+    );
+    writeOutput(
+      `mailPurposeNotificationsPostgresProof ` +
+      `${mailPurposeNotificationsProof.assertions}/` +
+      `${mailPurposeNotificationsProof.expectedAssertions} ` +
+      `sourceArms ${mailPurposeNotificationsProof.sourceArms} ` +
+      `reservations ${mailPurposeNotificationsProof.reservations} ` +
+      `purposeMail ${mailPurposeNotificationsProof.purposeMail} ` +
+      `dispatchClaims ${mailPurposeNotificationsProof.dispatchClaims} ` +
+      `providerEffects ${mailPurposeNotificationsProof.providerEffects} ` +
+      `deliveryEffects ${mailPurposeNotificationsProof.deliveryEffects} ` +
+      `orphanRows ${mailPurposeNotificationsProof.orphanRows}\n`
     );
     proof = Object.freeze({
       ownership: plan.ownership,

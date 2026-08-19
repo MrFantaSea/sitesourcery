@@ -8,6 +8,7 @@ import {
   ensureDirectory,
   exists,
   makeTreeReadOnly,
+  openExistingDirectory,
   readBoundedJson,
   readRegularFileNoFollow,
   syncDirectory,
@@ -30,7 +31,8 @@ export class ReleaseStore {
     clock = () => new Date().toISOString(),
     maximumFileBytes = 10 * 1024 * 1024,
     maximumReleaseBytes = 100 * 1024 * 1024,
-    maximumFiles = 2_000
+    maximumFiles = 2_000,
+    readOnly = false
   }) {
     this.root = root;
     this.clock = clock;
@@ -40,11 +42,17 @@ export class ReleaseStore {
       "maximumReleaseBytes"
     );
     this.maximumFiles = nonNegativeInteger(maximumFiles, "maximumFiles");
+    this.readOnly = readOnly === true;
   }
 
   static async open(options) {
     const root = await ensureDirectory(path.resolve(options.root), 0o750);
-    return new ReleaseStore({ ...options, root });
+    return new ReleaseStore({ ...options, root, readOnly: false });
+  }
+
+  static async openReadOnly(options) {
+    const root = await openExistingDirectory(path.resolve(options.root));
+    return new ReleaseStore({ ...options, root, readOnly: true });
   }
 
   releaseDirectory(projectId, releaseId) {
@@ -52,6 +60,11 @@ export class ReleaseStore {
   }
 
   async install({ projectId, releaseId, files }) {
+    invariant(
+      !this.readOnly,
+      "READ_ONLY_RUNTIME",
+      "the serving runtime cannot install releases"
+    );
     safeId(projectId, "projectId");
     safeId(releaseId, "releaseId");
     invariant(

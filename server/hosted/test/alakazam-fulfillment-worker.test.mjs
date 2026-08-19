@@ -239,10 +239,19 @@ function fixture({
       }
     },
     workerId: "worker-one",
+    enabled: true,
     ...workerOptions
   });
   return { calls, worker };
 }
+
+test("held fulfillment runOnce performs no claim or publication effect", async () => {
+  const { calls, worker } = fixture({ workerOptions: { enabled: false } });
+  assert.deepEqual(await worker.runOnce(), { status: "held" });
+  assert.deepEqual(calls.claims, []);
+  assert.deepEqual(calls.publishes, []);
+  assert.deepEqual(calls.unpublishes, []);
+});
 
 test("the fulfillment worker compiles, binds, publishes, and finalizes one exact operation", async () => {
   const { calls, worker } = fixture();

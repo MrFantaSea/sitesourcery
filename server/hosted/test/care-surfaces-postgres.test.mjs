@@ -113,7 +113,10 @@ function harness({ denied = [], mutateRows = () => {} } = {}) {
               rowCount: 1,
               rows: [{
                 project_id: IDS.project,
-                customer_user_id: IDS.customer
+                customer_user_id: IDS.customer,
+                source_id: IDS.finding,
+                source_digest: BASIS,
+                source_state: "ticket_start"
               }]
             };
           }
@@ -256,11 +259,19 @@ test("mail scope is fenced by both management and support capabilities", async (
   const fixture = harness();
   const scope = await fixture.repository.resolveTicketMailScope({
     ...actor,
-    ticketId: IDS.ticket
+    ticketId: IDS.ticket,
+    notificationKind: "care_ticket_update"
   });
   assert.deepEqual(scope, {
     projectId: IDS.project,
-    customerUserId: IDS.customer
+    customerUserId: IDS.customer,
+    source: {
+      table: "ss.care_commands",
+      id: IDS.finding,
+      revision: 1,
+      digest: BASIS,
+      state: "ticket_start"
+    }
   });
   assert.deepEqual(
     fixture.queries.slice(0, 2).map(({ values }) => values),
@@ -269,11 +280,19 @@ test("mail scope is fenced by both management and support capabilities", async (
       [IDS.actor, CARE_OPERATOR_CAPABILITY]
     ]
   );
-  assert.deepEqual(fixture.queries[2].values, [IDS.organization, IDS.ticket]);
+  assert.deepEqual(fixture.queries[2].values, [
+    IDS.organization,
+    IDS.ticket,
+    "care_ticket_update"
+  ]);
 
   const denied = harness({ denied: [CARE_MAIL_CAPABILITY] });
   await assert.rejects(
-    denied.repository.resolveTicketMailScope({ ...actor, ticketId: IDS.ticket }),
+    denied.repository.resolveTicketMailScope({
+      ...actor,
+      ticketId: IDS.ticket,
+      notificationKind: "care_ticket_update"
+    }),
     (error) => error.code === "CARE_SURFACE_UNAVAILABLE"
   );
   assert.equal(denied.queries.length, 1);

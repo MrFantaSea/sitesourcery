@@ -2,9 +2,9 @@
 
 [Unit]
 Description=Dedicated Site Sourcery Caddy edge
-After=network-online.target sitesourcery-hosted.service
+After=network-online.target sitesourcery-hosted.service sitesourcery-tenant.service
 Wants=network-online.target
-Requires=sitesourcery-hosted.service
+Requires=sitesourcery-hosted.service sitesourcery-tenant.service
 ConditionPathExists=/etc/sitesourcery/PUBLICATION_APPROVED
 ConditionPathExists=!/etc/sitesourcery/PUBLICATION_HOLD
 

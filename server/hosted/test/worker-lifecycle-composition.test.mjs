@@ -45,6 +45,14 @@ function executor(purpose, ready = true) {
 function dependencies(overrides = {}) {
   return {
     authority,
+    publicationPort: {
+      async readiness() {
+        return { ready: true, held: true };
+      },
+      async unpublish() {
+        return { published: false, status: "unpublished" };
+      }
+    },
     projectRepositoryFactory: () => repository("project-lifecycle"),
     domainRepositoryFactory: () => repository("domain-lifecycle"),
     careRepositoryFactory: () => repository("care-lifecycle"),
@@ -70,7 +78,6 @@ test("held lifecycle composition constructs no filesystem runtime", async () => 
   let effects = 0;
   const factories = createLifecycleWorkerFactories({
     ...dependencies({
-      runtimeOpen: async () => { effects += 1; },
       exportStoreFactory: async () => { effects += 1; }
     }),
     purposes: [...WORKER_PURPOSES]
@@ -107,14 +114,10 @@ test("project lifecycle refuses activation while external replicas lack a delete
         externalReplicas: 1
       }),
       exportStoreFactory: async () => ({ delete() {} }),
-      runtimeOpen: async () => ({
-        control: {}, releases: {}, publicationHeld: async () => true,
-        installRelease() {}, reserveHostname() {}, activate() {}, rollback() {},
-        setHostnameGate() {}
-      }),
-      publicationFactory: () => ({
+      publicationPort: {
+        async readiness() { return { ready: true, held: true }; },
         async unpublish() { return { published: false }; }
-      })
+      }
     }),
     purposes: ["project-lifecycle"],
     environment: {

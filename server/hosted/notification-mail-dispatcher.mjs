@@ -12,7 +12,8 @@ const SAFE_WORKER = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/u;
 const DISPATCHABLE_TYPES = new Set([
   "support_notification",
   "commerce_customer_notification",
-  "commerce_operator_notification"
+  "commerce_operator_notification",
+  "purpose_customer_notification"
 ]);
 const NON_DISPATCHABLE_STATES = new Set([
   "provider_accepted",
@@ -185,7 +186,7 @@ function claimedReservation(value) {
       value.state === "pending" &&
       value.status === "claimed" &&
       value.providerEffects === false &&
-      ["support", "commerce"].includes(value.sourceKind) &&
+      ["support", "commerce", "purpose"].includes(value.sourceKind) &&
       UUID.test(value.sourceReservationId) &&
       SHA256.test(value.sourceReservationDigest) &&
       SAFE_WORKER.test(value.workerId) &&
@@ -252,7 +253,7 @@ async function ready(value) {
 function heldError() {
   return new HostedError(
     "NOTIFICATION_MAIL_DISPATCH_HELD",
-    "Support and commerce notification dispatch is held.",
+    "Notification dispatch is held.",
     { status: 503, details: { providerEffects: false } }
   );
 }

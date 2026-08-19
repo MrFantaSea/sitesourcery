@@ -20,17 +20,21 @@ import {
 } from "./origin-seal-runtime.mjs";
 
 export const ROLLBACK_REHEARSAL_SCHEMA =
-  "sitesourcery.rollback-rehearsal-held/v1";
+  "sitesourcery.rollback-rehearsal-held/v2";
 export const ROLLBACK_RUNTIME_TOPOLOGY_SCHEMA =
-  "sitesourcery.rollback-runtime-topology/v1";
+  "sitesourcery.rollback-runtime-topology/v2";
 export const ROLLBACK_DATABASE_COMPATIBILITY_SCHEMA =
   "sitesourcery.rollback-database-compatibility/v1";
 export const ROLLBACK_PAGES_FALLBACK_SCHEMA =
   "sitesourcery.rollback-pages-fallback/v1";
 export const ROLLBACK_PROCESS_STATE_SCHEMA =
-  "sitesourcery.rollback-process-state/v1";
+  "sitesourcery.rollback-process-state/v2";
 export const ROLLBACK_PROBE_RECEIPT_SCHEMA =
-  "sitesourcery.rollback-probe-receipt/v1";
+  "sitesourcery.rollback-probe-receipt/v2";
+export const ROLLBACK_PROCESS_MODE_COMBINED =
+  "combined_api_tenant_worker_held";
+export const ROLLBACK_PROCESS_MODE_SPLIT =
+  "split_api_tenant_worker";
 
 export const ROLLBACK_REHEARSAL_HOLDS = freeze({
   state: "held",
@@ -50,45 +54,72 @@ export const ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS =
     "observe.successor.initial",
     "observe.pages.initial",
     "stop.successor.worker",
+    "stop.successor.tenant",
     "stop.successor.api",
     "observe.pages.rollback",
     "select.predecessor",
     "start.predecessor.api",
-    "start.predecessor.worker",
     "check.predecessor.live",
     "check.predecessor.ready",
+    "check.predecessor.tenant-health",
+    "check.predecessor.tenant-ready-held",
     "check.predecessor.topology",
-    "stop.predecessor.worker",
     "stop.predecessor.api",
     "select.successor",
     "start.successor.api",
+    "start.successor.tenant",
     "start.successor.worker",
     "check.successor.live",
     "check.successor.ready",
+    "check.successor.tenant-health",
+    "check.successor.tenant-ready-held",
     "check.successor.topology",
     "observe.successor.final"
   ]);
 
 const RECOVERY_OPERATIONS = Object.freeze([
-  "recovery.stop.worker",
+  "recovery.ensure.worker.stopped",
+  "recovery.ensure.tenant.stopped",
   "recovery.stop.api",
   "recovery.select.successor",
   "recovery.start.successor.api",
+  "recovery.start.successor.tenant",
   "recovery.start.successor.worker",
   "recovery.check.successor.live",
   "recovery.check.successor.ready",
+  "recovery.check.successor.tenant-health",
+  "recovery.check.successor.tenant-ready-held",
   "recovery.check.successor.topology",
   "recovery.observe.successor.final"
 ]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const COMMIT_SHA = /^[a-f0-9]{40}$/u;
 const DECIMAL = /^(?:0|[1-9][0-9]*)$/u;
-const PROBE_PATHS = new Set([
-  "/api/v1/live",
-  "/api/v1/ready"
+const PROBE_EXPECTATIONS = new Map([
+  ["/api/v1/live", Object.freeze({
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.hostedApi,
+    statusCode: 200
+  })],
+  ["/api/v1/ready", Object.freeze({
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.hostedApi,
+    statusCode: 200
+  })],
+  ["/_sitesourcery/health", Object.freeze({
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+    statusCode: 200
+  })],
+  ["/_sitesourcery/ready", Object.freeze({
+    listener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+    statusCode: 503
+  })]
+]);
+const PROCESS_MODELS = new Set([
+  ROLLBACK_PROCESS_MODE_COMBINED,
+  ROLLBACK_PROCESS_MODE_SPLIT
 ]);
 const PROCESS_COMPONENTS = Object.freeze([
   "api",
+  "tenant",
   "worker"
 ]);
 
@@ -197,8 +228,10 @@ function topologyPayload(value) {
   return {
     schema: value.schema,
     epochDigest: value.epochDigest,
+    processModel: value.processModel,
     listeners: value.listeners,
     api: value.api,
+    tenant: value.tenant,
     worker: value.worker
   };
 }
@@ -210,27 +243,53 @@ export function rollbackRuntimeTopologyDigest(value) {
 export function createRollbackRuntimeTopology({
   epoch,
   listeners,
-  workerContract
+  workerContract = null,
+  processModel = ROLLBACK_PROCESS_MODE_SPLIT
 }) {
   const selectedEpoch = validateFinalReleaseEpochV2(epoch);
+  if (!PROCESS_MODELS.has(processModel)) {
+    fail(
+      "ROLLBACK_REHEARSAL_TOPOLOGY_INVALID",
+      "Rollback runtime process model is invalid."
+    );
+  }
+  const combined = processModel === ROLLBACK_PROCESS_MODE_COMBINED;
   const value = {
     schema: ROLLBACK_RUNTIME_TOPOLOGY_SCHEMA,
     epochDigest: selectedEpoch.digest,
+    processModel,
     listeners,
     api: {
       component: "api",
       unit: "sitesourcery-hosted.service",
       listener: listeners?.hostedApi,
-      tenantListener: listeners?.tenantRuntime,
+      tenantListener: combined ? listeners?.tenantRuntime : null,
       livePath: "/api/v1/live",
       readyPath: "/api/v1/ready",
       workerLoopCount: 0
+    },
+    tenant: {
+      component: "tenant",
+      unit: combined
+        ? "sitesourcery-hosted.service"
+        : "sitesourcery-tenant.service",
+      listener: listeners?.tenantRuntime,
+      mode: combined
+        ? "embedded_read_only_serving"
+        : "read_only_serving",
+      healthPath: "/_sitesourcery/health",
+      readyPath: "/_sitesourcery/ready",
+      publicationWriter: false
     },
     worker: {
       component: "worker",
       unit: "sitesourcery-workers.service",
       publicListener: null,
-      contract: workerContract
+      mode: combined ? "held_stopped" : "external_listener_free",
+      contractSha256: combined
+        ? selectedEpoch.identity.workerContractSha256
+        : originWorkerContractSha256(workerContract),
+      contract: combined ? null : workerContract
     }
   };
   return validateRollbackRuntimeTopology({
@@ -248,8 +307,10 @@ export function validateRollbackRuntimeTopology(
     [
       "schema",
       "epochDigest",
+      "processModel",
       "listeners",
       "api",
+      "tenant",
       "worker",
       "digest"
     ],
@@ -261,6 +322,13 @@ export function validateRollbackRuntimeTopology(
       "Rollback runtime topology schema is invalid."
     );
   }
+  if (!PROCESS_MODELS.has(value.processModel)) {
+    fail(
+      "ROLLBACK_REHEARSAL_TOPOLOGY_INVALID",
+      "Rollback runtime process model is invalid."
+    );
+  }
+  const combined = value.processModel === ROLLBACK_PROCESS_MODE_COMBINED;
   digest(value.epochDigest, "Rollback topology epoch");
   exactExpected(
     value.listeners,
@@ -287,7 +355,9 @@ export function validateRollbackRuntimeTopology(
       component: "api",
       unit: "sitesourcery-hosted.service",
       listener: ORIGIN_LOOPBACK_EXPECTATIONS.hostedApi,
-      tenantListener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+      tenantListener: combined
+        ? ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime
+        : null,
       livePath: "/api/v1/live",
       readyPath: "/api/v1/ready",
       workerLoopCount: 0
@@ -296,23 +366,75 @@ export function validateRollbackRuntimeTopology(
     "Rollback API topology drifted from the exact held listener contract."
   );
   exactObject(
+    value.tenant,
+    [
+      "component",
+      "unit",
+      "listener",
+      "mode",
+      "healthPath",
+      "readyPath",
+      "publicationWriter"
+    ],
+    "Rollback tenant topology"
+  );
+  exactExpected(
+    value.tenant,
+    {
+      component: "tenant",
+      unit: combined
+        ? "sitesourcery-hosted.service"
+        : "sitesourcery-tenant.service",
+      listener: ORIGIN_LOOPBACK_EXPECTATIONS.tenantRuntime,
+      mode: combined
+        ? "embedded_read_only_serving"
+        : "read_only_serving",
+      healthPath: "/_sitesourcery/health",
+      readyPath: "/_sitesourcery/ready",
+      publicationWriter: false
+    },
+    "ROLLBACK_REHEARSAL_TOPOLOGY_INVALID",
+    "Rollback tenant topology drifted from the exact read-only listener contract."
+  );
+  exactObject(
     value.worker,
-    ["component", "unit", "publicListener", "contract"],
+    [
+      "component",
+      "unit",
+      "publicListener",
+      "mode",
+      "contractSha256",
+      "contract"
+    ],
     "Rollback worker topology"
   );
   if (
     value.worker.component !== "worker" ||
     value.worker.unit !== "sitesourcery-workers.service" ||
-    value.worker.publicListener !== null
+    value.worker.publicListener !== null ||
+    value.worker.mode !== (
+      combined ? "held_stopped" : "external_listener_free"
+    )
   ) {
     fail(
       "ROLLBACK_REHEARSAL_TOPOLOGY_INVALID",
       "Rollback worker topology must remain external and listener-free."
     );
   }
-  const workerContract = validateOriginWorkerContract(
-    value.worker.contract
-  );
+  digest(value.worker.contractSha256, "Rollback worker contract");
+  const workerContract = combined
+    ? null
+    : validateOriginWorkerContract(value.worker.contract);
+  if (
+    (combined && value.worker.contract !== null) ||
+    (!combined && value.worker.contractSha256 !==
+      originWorkerContractSha256(workerContract))
+  ) {
+    fail(
+      "ROLLBACK_REHEARSAL_TOPOLOGY_INVALID",
+      "Rollback worker contract does not match the selected process model."
+    );
+  }
   const epoch = epochValue === null
     ? null
     : validateFinalReleaseEpochV2(epochValue);
@@ -320,7 +442,7 @@ export function validateRollbackRuntimeTopology(
     epoch &&
     (
       value.epochDigest !== epoch.digest ||
-      originWorkerContractSha256(workerContract) !==
+      value.worker.contractSha256 !==
         epoch.identity.workerContractSha256
     )
   ) {
@@ -340,7 +462,9 @@ export function validateRollbackRuntimeTopology(
     ...structuredClone(value),
     worker: {
       ...structuredClone(value.worker),
-      contract: structuredClone(workerContract)
+      contract: workerContract === null
+        ? null
+        : structuredClone(workerContract)
     }
   });
 }
@@ -553,7 +677,9 @@ function processStatePayload(value) {
   return {
     schema: value.schema,
     selectedEpochDigest: value.selectedEpochDigest,
+    processModel: value.processModel,
     api: value.api,
+    tenant: value.tenant,
     worker: value.worker,
     externalEffects: value.externalEffects
   };
@@ -565,15 +691,24 @@ export function rollbackProcessStateDigest(value) {
 
 export function createRollbackProcessState({
   selectedEpochDigest,
+  processModel = ROLLBACK_PROCESS_MODE_SPLIT,
   apiState,
+  tenantState,
   workerState
 }) {
   const value = {
     schema: ROLLBACK_PROCESS_STATE_SCHEMA,
     selectedEpochDigest,
+    processModel,
     api: {
       state: apiState,
       epochDigest: apiState === "running"
+        ? selectedEpochDigest
+        : null
+    },
+    tenant: {
+      state: tenantState,
+      epochDigest: tenantState === "running"
         ? selectedEpochDigest
         : null
     },
@@ -597,7 +732,9 @@ export function validateRollbackProcessState(value) {
     [
       "schema",
       "selectedEpochDigest",
+      "processModel",
       "api",
+      "tenant",
       "worker",
       "externalEffects",
       "digest"
@@ -614,6 +751,12 @@ export function validateRollbackProcessState(value) {
     );
   }
   digest(value.selectedEpochDigest, "Selected rollback epoch");
+  if (!PROCESS_MODELS.has(value.processModel)) {
+    fail(
+      "ROLLBACK_REHEARSAL_PROCESS_STATE_INVALID",
+      "Rollback process model is invalid."
+    );
+  }
   for (const component of PROCESS_COMPONENTS) {
     exactObject(
       value[component],
@@ -621,13 +764,22 @@ export function validateRollbackProcessState(value) {
       `Rollback ${component} process state`
     );
     if (
-      !["running", "stopped"].includes(value[component].state) ||
+      !(
+        component === "tenant" &&
+        value.processModel === ROLLBACK_PROCESS_MODE_COMBINED
+          ? value[component].state === "embedded"
+          : ["running", "stopped"].includes(value[component].state)
+      ) ||
       (
         value[component].state === "running" &&
         value[component].epochDigest !== value.selectedEpochDigest
       ) ||
       (
         value[component].state === "stopped" &&
+        value[component].epochDigest !== null
+      ) ||
+      (
+        value[component].state === "embedded" &&
         value[component].epochDigest !== null
       )
     ) {
@@ -704,11 +856,12 @@ export function validateRollbackProbeReceipt(value) {
     ],
     "Rollback probe receipt"
   );
+  const expectation = PROBE_EXPECTATIONS.get(value.path);
   if (
     value.schema !== ROLLBACK_PROBE_RECEIPT_SCHEMA ||
-    !PROBE_PATHS.has(value.path) ||
-    value.listener !== ORIGIN_LOOPBACK_EXPECTATIONS.hostedApi ||
-    value.statusCode !== 200 ||
+    !expectation ||
+    value.listener !== expectation.listener ||
+    value.statusCode !== expectation.statusCode ||
     value.held !== true ||
     value.externalEffects !== false
   ) {
@@ -1139,6 +1292,16 @@ function validateContext({
     successorTopology,
     successor
   );
+  if (
+    predecessorRuntime.processModel !==
+      ROLLBACK_PROCESS_MODE_COMBINED ||
+    successorRuntime.processModel !== ROLLBACK_PROCESS_MODE_SPLIT
+  ) {
+    fail(
+      "ROLLBACK_REHEARSAL_TOPOLOGY_MISMATCH",
+      "Rollback requires the sealed combined predecessor and split successor process models."
+    );
+  }
   exactExpected(
     successorRuntime.listeners,
     readback.listeners,
@@ -1321,10 +1484,17 @@ function operationRecorder(operations) {
   };
 }
 
-function expectedState(epochDigest, apiState, workerState) {
+function expectedState(
+  topology,
+  apiState,
+  tenantState,
+  workerState
+) {
   return createRollbackProcessState({
-    selectedEpochDigest: epochDigest,
+    selectedEpochDigest: topology.epochDigest,
+    processModel: topology.processModel,
     apiState,
+    tenantState,
     workerState
   });
 }
@@ -1361,10 +1531,17 @@ function expectTopology(actual, expected) {
 
 function expectProbe(actual, epoch, topology, probePath) {
   const selected = validateRollbackProbeReceipt(actual);
+  const expected = PROBE_EXPECTATIONS.get(probePath);
   if (
     selected.epochDigest !== epoch.digest ||
     selected.path !== probePath ||
-    selected.listener !== topology.api.listener
+    !expected ||
+    selected.listener !== expected.listener ||
+    selected.listener !== (
+      probePath.startsWith("/_sitesourcery/")
+        ? topology.tenant.listener
+        : topology.api.listener
+    )
   ) {
     fail(
       "ROLLBACK_REHEARSAL_PROBE_FAILED",
@@ -1459,11 +1636,14 @@ export async function runHeldRollbackRehearsal({
   };
   const probe = async (id, epoch, topology, probePath) => {
     currentOperation = id;
+    const listener = probePath.startsWith("/_sitesourcery/")
+      ? topology.tenant.listener
+      : topology.api.listener;
     const receipt = expectProbe(
       await ports.networkPort.probe({
         epochDigest: epoch.digest,
         path: probePath,
-        listener: topology.api.listener
+        listener
       }),
       epoch,
       topology,
@@ -1484,84 +1664,143 @@ export async function runHeldRollbackRehearsal({
 
   const recover = async () => {
     currentOperation = RECOVERY_OPERATIONS[0];
-    await ports.processPort.stop({ component: "worker" });
     let selected = validateRollbackProcessState(
       await ports.processPort.observe()
     );
+    if (selected.worker.state === "running") {
+      await ports.processPort.stop({ component: "worker" });
+      selected = validateRollbackProcessState(
+        await ports.processPort.observe()
+      );
+    }
     if (selected.worker.state !== "stopped") {
       fail(
         "ROLLBACK_REHEARSAL_AMBIGUOUS",
-        "Recovery could not stop the selected worker."
+        "Recovery could not prove the selected worker stopped."
       );
     }
     record(RECOVERY_OPERATIONS[0], selected.digest);
 
     currentOperation = RECOVERY_OPERATIONS[1];
-    await ports.processPort.stop({ component: "api" });
-    selected = validateRollbackProcessState(
-      await ports.processPort.observe()
-    );
     if (
-      selected.api.state !== "stopped" ||
+      selected.processModel === ROLLBACK_PROCESS_MODE_SPLIT &&
+      selected.tenant.state === "running"
+    ) {
+      await ports.processPort.stop({ component: "tenant" });
+      selected = validateRollbackProcessState(
+        await ports.processPort.observe()
+      );
+    }
+    const expectedTenantState = selected.processModel ===
+      ROLLBACK_PROCESS_MODE_COMBINED
+      ? "embedded"
+      : "stopped";
+    if (
+      selected.tenant.state !== expectedTenantState ||
       selected.worker.state !== "stopped"
     ) {
       fail(
         "ROLLBACK_REHEARSAL_AMBIGUOUS",
-        "Recovery could not reach a fully stopped process state."
+        "Recovery could not prove the selected tenant and worker quiescent."
       );
     }
     record(RECOVERY_OPERATIONS[1], selected.digest);
 
+    currentOperation = RECOVERY_OPERATIONS[2];
+    if (selected.api.state === "running") {
+      await ports.processPort.stop({ component: "api" });
+      selected = validateRollbackProcessState(
+        await ports.processPort.observe()
+      );
+    }
+    if (
+      selected.api.state !== "stopped" ||
+      selected.tenant.state !== expectedTenantState ||
+      selected.worker.state !== "stopped"
+    ) {
+      fail(
+        "ROLLBACK_REHEARSAL_AMBIGUOUS",
+        "Recovery could not reach the exact quiescent process state."
+      );
+    }
+    record(RECOVERY_OPERATIONS[2], selected.digest);
+
     await processAction({
-      id: RECOVERY_OPERATIONS[2],
+      id: RECOVERY_OPERATIONS[3],
       action: () => ports.processPort.select({
         epochDigest: context.successor.digest
       }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "stopped",
         "stopped",
         "stopped"
       )
     });
     await processAction({
-      id: RECOVERY_OPERATIONS[3],
+      id: RECOVERY_OPERATIONS[4],
       action: () => ports.processPort.start({ component: "api" }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
+        "stopped",
+        "stopped"
+      )
+    });
+    await processAction({
+      id: RECOVERY_OPERATIONS[5],
+      action: () => ports.processPort.start({ component: "tenant" }),
+      expected: expectedState(
+        context.successorTopology,
+        "running",
         "running",
         "stopped"
       )
     });
     const finalState = await processAction({
-      id: RECOVERY_OPERATIONS[4],
+      id: RECOVERY_OPERATIONS[6],
       action: () => ports.processPort.start({ component: "worker" }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "running",
         "running"
       )
     });
     await probe(
-      RECOVERY_OPERATIONS[5],
+      RECOVERY_OPERATIONS[7],
       context.successor,
       context.successorTopology,
       "/api/v1/live"
     );
     await probe(
-      RECOVERY_OPERATIONS[6],
+      RECOVERY_OPERATIONS[8],
       context.successor,
       context.successorTopology,
       "/api/v1/ready"
     );
+    await probe(
+      RECOVERY_OPERATIONS[9],
+      context.successor,
+      context.successorTopology,
+      "/_sitesourcery/health"
+    );
+    await probe(
+      RECOVERY_OPERATIONS[10],
+      context.successor,
+      context.successorTopology,
+      "/_sitesourcery/ready"
+    );
     await topologyCheck(
-      RECOVERY_OPERATIONS[7],
+      RECOVERY_OPERATIONS[11],
       context.successor,
       context.successorTopology
     );
     await observeState(
-      RECOVERY_OPERATIONS[8],
+      RECOVERY_OPERATIONS[12],
       expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "running",
         "running"
       )
@@ -1573,7 +1812,8 @@ export async function runHeldRollbackRehearsal({
     await observeState(
       ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[0],
       expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "running",
         "running"
       )
@@ -1583,48 +1823,53 @@ export async function runHeldRollbackRehearsal({
       id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[2],
       action: () => ports.processPort.stop({ component: "worker" }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "running",
         "stopped"
       )
     });
     await processAction({
       id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[3],
-      action: () => ports.processPort.stop({ component: "api" }),
+      action: () => ports.processPort.stop({ component: "tenant" }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "stopped",
         "stopped"
       )
     });
-    await pagesCheck(ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[4]);
     await processAction({
-      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[5],
+      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[4],
+      action: () => ports.processPort.stop({ component: "api" }),
+      expected: expectedState(
+        context.successorTopology,
+        "stopped",
+        "stopped",
+        "stopped"
+      )
+    });
+    await pagesCheck(ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[5]);
+    await processAction({
+      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[6],
       action: () => ports.processPort.select({
         epochDigest: context.predecessor.digest
       }),
       expected: expectedState(
-        context.predecessor.digest,
+        context.predecessorTopology,
         "stopped",
-        "stopped"
-      )
-    });
-    await processAction({
-      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[6],
-      action: () => ports.processPort.start({ component: "api" }),
-      expected: expectedState(
-        context.predecessor.digest,
-        "running",
+        "embedded",
         "stopped"
       )
     });
     await processAction({
       id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[7],
-      action: () => ports.processPort.start({ component: "worker" }),
+      action: () => ports.processPort.start({ component: "api" }),
       expected: expectedState(
-        context.predecessor.digest,
+        context.predecessorTopology,
         "running",
-        "running"
+        "embedded",
+        "stopped"
       )
     });
     await probe(
@@ -1639,79 +1884,109 @@ export async function runHeldRollbackRehearsal({
       context.predecessorTopology,
       "/api/v1/ready"
     );
-    await topologyCheck(
+    await probe(
       ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[10],
+      context.predecessor,
+      context.predecessorTopology,
+      "/_sitesourcery/health"
+    );
+    await probe(
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[11],
+      context.predecessor,
+      context.predecessorTopology,
+      "/_sitesourcery/ready"
+    );
+    await topologyCheck(
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[12],
       context.predecessor,
       context.predecessorTopology
     );
     await processAction({
-      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[11],
-      action: () => ports.processPort.stop({ component: "worker" }),
-      expected: expectedState(
-        context.predecessor.digest,
-        "running",
-        "stopped"
-      )
-    });
-    await processAction({
-      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[12],
+      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[13],
       action: () => ports.processPort.stop({ component: "api" }),
       expected: expectedState(
-        context.predecessor.digest,
+        context.predecessorTopology,
         "stopped",
-        "stopped"
-      )
-    });
-    await processAction({
-      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[13],
-      action: () => ports.processPort.select({
-        epochDigest: context.successor.digest
-      }),
-      expected: expectedState(
-        context.successor.digest,
-        "stopped",
+        "embedded",
         "stopped"
       )
     });
     await processAction({
       id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[14],
+      action: () => ports.processPort.select({
+        epochDigest: context.successor.digest
+      }),
+      expected: expectedState(
+        context.successorTopology,
+        "stopped",
+        "stopped",
+        "stopped"
+      )
+    });
+    await processAction({
+      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[15],
       action: () => ports.processPort.start({ component: "api" }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
+        "stopped",
+        "stopped"
+      )
+    });
+    await processAction({
+      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[16],
+      action: () => ports.processPort.start({ component: "tenant" }),
+      expected: expectedState(
+        context.successorTopology,
+        "running",
         "running",
         "stopped"
       )
     });
     const finalState = await processAction({
-      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[15],
+      id: ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[17],
       action: () => ports.processPort.start({ component: "worker" }),
       expected: expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "running",
         "running"
       )
     });
     await probe(
-      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[16],
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[18],
       context.successor,
       context.successorTopology,
       "/api/v1/live"
     );
     await probe(
-      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[17],
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[19],
       context.successor,
       context.successorTopology,
       "/api/v1/ready"
     );
+    await probe(
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[20],
+      context.successor,
+      context.successorTopology,
+      "/_sitesourcery/health"
+    );
+    await probe(
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[21],
+      context.successor,
+      context.successorTopology,
+      "/_sitesourcery/ready"
+    );
     await topologyCheck(
-      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[18],
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[22],
       context.successor,
       context.successorTopology
     );
     await observeState(
-      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[19],
+      ROLLBACK_REHEARSAL_SUCCESS_OPERATIONS[23],
       expectedState(
-        context.successor.digest,
+        context.successorTopology,
+        "running",
         "running",
         "running"
       )

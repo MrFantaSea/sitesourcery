@@ -82,6 +82,9 @@ import {
   createAdjacentIntegrationHttpBoundary
 } from "./adjacent-integration-http.mjs";
 import {
+  createMailPurposeNotificationHttpBoundary
+} from "./mail-purpose-notifications-http.mjs";
+import {
   createHeldProviderReconciliationOperatorHttp,
   createProviderReconciliationOperatorHttpBoundary
 } from "./provider-reconciliation-operator-http.mjs";
@@ -905,6 +908,7 @@ export function createHostedApi(
     operatorWorkQueue = null,
     operatorProviderReconciliation = null,
     adjacentIntegration = null,
+    mailPurposeNotifications = null,
     supportCases = null,
     resendMailEvents = null,
     twilioResponderEvents = null,
@@ -915,11 +919,30 @@ export function createHostedApi(
     stripeWebhook = null,
     capabilitiesPolicy = undefined,
     readinessPolicy = undefined,
+    capabilityProcessMatrix = null,
+    strictCapabilityProcessMatrix = false,
     releaseIdentity = null,
     ingressPolicy = DEFAULT_INGRESS_POLICY
   } = {}
 ) {
   const ingress = validateIngressPolicy(ingressPolicy);
+  invariant(
+    typeof strictCapabilityProcessMatrix === "boolean" &&
+      (
+        capabilityProcessMatrix === null ||
+        (
+          typeof capabilityProcessMatrix?.snapshot === "function" &&
+          typeof capabilityProcessMatrix?.assertStartup === "function"
+        )
+      ) &&
+      (
+        strictCapabilityProcessMatrix === false ||
+        capabilityProcessMatrix !== null
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted capability-process matrix configuration is invalid.",
+    { status: 500 }
+  );
   invariant(service && typeof service.authenticate === "function", "RUNTIME_CONFIGURATION_ERROR", "Hosted service is required.", {
     status: 500
   });
@@ -1271,6 +1294,12 @@ export function createHostedApi(
   const adjacentIntegrationHttpBoundary = adjacentIntegration === null
     ? null
     : createAdjacentIntegrationHttpBoundary({ service: adjacentIntegration });
+  const mailPurposeNotificationHttpBoundary =
+    mailPurposeNotifications === null
+      ? null
+      : createMailPurposeNotificationHttpBoundary({
+          service: mailPurposeNotifications
+        });
   const supportCaseHttpBoundary = supportCases === null
     ? createHeldSupportCaseHttpBoundary()
     : createSupportCaseHttpBoundary({ supportCases });
@@ -1629,7 +1658,8 @@ export function createHostedApi(
           responderNativeClientReadiness,
           responderNativeTokenReadiness,
           responderNativeVoiceReadiness,
-          adjacentIntegrationReadiness
+          adjacentIntegrationReadiness,
+          capabilityProcessMatrixSnapshot
         ] = await Promise.all([
           service.readiness(),
           typeof downloadBoundary.readiness === "function"
@@ -1755,7 +1785,10 @@ export function createHostedApi(
                 providerEffects: false,
                 automaticCommands: false
               }
-            : adjacentIntegration.readiness()
+            : adjacentIntegration.readiness(),
+          capabilityProcessMatrix === null
+            ? null
+            : capabilityProcessMatrix.snapshot()
         ]);
         const registration =
           readiness?.registration ?? {};
@@ -2013,7 +2046,13 @@ export function createHostedApi(
             domains.purchaseReady === true,
           publishing:
             readiness?.publication?.ready === true &&
-            readiness?.publication?.held === false
+            readiness?.publication?.held === false,
+          ...(capabilityProcessMatrixSnapshot === null
+            ? {}
+            : {
+                capabilityProcessMatrix:
+                  capabilityProcessMatrixSnapshot
+              })
         });
       },
       ...(capabilitiesPolicy ?? {})
@@ -2098,21 +2137,42 @@ export function createHostedApi(
           method === "GET" &&
           pathname === "/api/v1/ready"
         ) {
-          const readiness =
-            await readinessBoundary.read();
+          const [readiness, capabilities] = await Promise.all([
+            readinessBoundary.read(),
+            strictCapabilityProcessMatrix
+              ? capabilitiesBoundary.read()
+              : null
+          ]);
+          const capabilityMatrix = strictCapabilityProcessMatrix
+            ? capabilities?.ok === true
+              ? capabilities.value?.capabilityProcessMatrix ?? null
+              : null
+            : null;
+          const matrixReady = strictCapabilityProcessMatrix
+            ? capabilityMatrix?.startupReady === true
+            : true;
+          const ready = readiness.ready && matrixReady;
           return json(
             {
               schema: HOSTED_READINESS_SCHEMA,
-              ready: readiness.ready,
+              ready,
               service: HOSTED_RUNTIME_SERVICE,
               release,
               ageMs: readiness.ageMs,
-              state: readiness.state,
-              code: readiness.code,
+              state: ready ? readiness.state : "not_ready",
+              code:
+                readiness.ready !== true
+                  ? readiness.code
+                  : matrixReady
+                    ? readiness.code
+                    : "CAPABILITY_PROCESS_STARTUP_NOT_READY",
               latencyBucket:
-                readiness.latencyBucket
+                readiness.latencyBucket,
+              ...(strictCapabilityProcessMatrix
+                ? { capabilityProcessMatrix: capabilityMatrix }
+                : {})
             },
-            readiness.ready ? 200 : 503,
+            ready ? 200 : 503,
             { "X-Request-Id": requestId }
           );
         }
@@ -2376,18 +2436,33 @@ export function createHostedApi(
                 commandId: write.commandId
               })
             : null;
-        const supportCaseResponse = operatorWorkQueueResponse === null &&
+        const mailPurposeNotificationResponse =
+          operatorWorkQueueResponse === null &&
           operatorProviderReconciliationResponse === null &&
-          adjacentIntegrationResponse === null
-          ? await supportCaseHttpBoundary.dispatch({
-              method,
-              pathname,
-              actor,
-              query: url.searchParams,
-              body,
-              commandId: write.commandId
-            })
-          : null;
+          adjacentIntegrationResponse === null &&
+          mailPurposeNotificationHttpBoundary !== null
+            ? await mailPurposeNotificationHttpBoundary.dispatch({
+                method,
+                pathname,
+                actor,
+                body,
+                commandId: write.commandId
+              })
+            : null;
+        const supportCaseResponse =
+          operatorWorkQueueResponse === null &&
+          operatorProviderReconciliationResponse === null &&
+          adjacentIntegrationResponse === null &&
+          mailPurposeNotificationResponse === null
+            ? await supportCaseHttpBoundary.dispatch({
+                method,
+                pathname,
+                actor,
+                query: url.searchParams,
+                body,
+                commandId: write.commandId
+              })
+            : null;
 
         if (operatorWorkQueueResponse !== null) {
           result = operatorWorkQueueResponse.result;
@@ -2398,6 +2473,9 @@ export function createHostedApi(
         } else if (adjacentIntegrationResponse !== null) {
           result = adjacentIntegrationResponse.result;
           status = adjacentIntegrationResponse.status;
+        } else if (mailPurposeNotificationResponse !== null) {
+          result = mailPurposeNotificationResponse.result;
+          status = mailPurposeNotificationResponse.status;
         } else if (supportCaseResponse !== null) {
           result = supportCaseResponse.result;
           status = supportCaseResponse.status;
@@ -4736,10 +4814,6 @@ export function createHostedApi(
         ) {
           result = await service.requestExport(actor, route[0], write);
           status = 202;
-          const exportId = result.export.exportId;
-          queueMicrotask(() => {
-            service.processExport(exportId).catch(() => {});
-          });
         } else if (
           method === "GET" &&
           (route = match(
@@ -4757,10 +4831,6 @@ export function createHostedApi(
         ) {
           result = await service.retryExport(actor, route[0], route[1], write);
           status = 202;
-          const exportId = result.export.exportId;
-          queueMicrotask(() => {
-            service.processExport(exportId).catch(() => {});
-          });
         } else if (
           method === "GET" &&
           (route = match(

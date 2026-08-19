@@ -278,12 +278,30 @@ test("Caddy routes the exact control API and hosted artifact before tenant domai
 test("runtime can rehearse while held but public Caddy activation cannot", async () => {
   const [
     runtimeService,
+    tenantService,
+    workerService,
     caddyGate,
-    hostedEnvironment
+    probeGate,
+    hostedEnvironment,
+    tenantEnvironment
   ] = await Promise.all([
     readFile(
       new URL(
         "sitesourcery-hosted.service.held",
+        opsRoot
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "sitesourcery-tenant.service.held",
+        opsRoot
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "sitesourcery-workers.service.held",
         opsRoot
       ),
       "utf8"
@@ -297,7 +315,21 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
     ),
     readFile(
       new URL(
+        "sitesourcery-probe.service.held",
+        opsRoot
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
         "hosted.env.example",
+        opsRoot
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "tenant.env.example",
         opsRoot
       ),
       "utf8"
@@ -315,6 +347,37 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
     runtimeService,
     /server\/hosted\/bin\/server\.mjs/u
   );
+  assert.match(runtimeService, /sole publication writer/u);
+  assert.match(runtimeService, /^ReadWritePaths=\/var\/lib\/sitesourcery$/mu);
+  assert.match(
+    tenantService,
+    /^Requires=sitesourcery-hosted\.service$/mu
+  );
+  assert.match(
+    tenantService,
+    /^EnvironmentFile=\/etc\/sitesourcery\/tenant\.env$/mu
+  );
+  assert.match(
+    tenantService,
+    /server\/selfhost\/bin\/server\.mjs/u
+  );
+  assert.match(
+    tenantService,
+    /^ReadOnlyPaths=.*\/var\/lib\/sitesourcery\/tenant-runtime$/mu
+  );
+  assert.doesNotMatch(tenantService, /^ReadWritePaths=/mu);
+  assert.match(
+    workerService,
+    /^ReadOnlyPaths=.*\/var\/lib\/sitesourcery\/tenant-runtime$/mu
+  );
+  assert.match(
+    workerService,
+    /^ReadWritePaths=\/var\/lib\/sitesourcery\/private-exports$/mu
+  );
+  assert.doesNotMatch(
+    workerService,
+    /^ReadWritePaths=\/var\/lib\/sitesourcery$/mu
+  );
   assert.match(
     caddyGate,
     /ConditionPathExists=\/etc\/sitesourcery\/PUBLICATION_APPROVED/u
@@ -322,6 +385,14 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
   assert.match(
     caddyGate,
     /ConditionPathExists=!\/etc\/sitesourcery\/PUBLICATION_HOLD/u
+  );
+  assert.match(
+    caddyGate,
+    /^Requires=sitesourcery-hosted\.service sitesourcery-tenant\.service$/mu
+  );
+  assert.match(
+    probeGate,
+    /^Requires=sitesourcery-hosted\.service sitesourcery-tenant\.service$/mu
   );
   assert.match(
     caddyGate,
@@ -362,6 +433,15 @@ test("runtime can rehearse while held but public Caddy activation cannot", async
   assert.match(
     hostedEnvironment,
     /^SITESOURCERY_RECOVERY_MAIL_MODE=held$/mu
+  );
+  assert.match(tenantEnvironment, /^SITESOURCERY_TENANT_PORT=8080$/mu);
+  assert.match(
+    tenantEnvironment,
+    /^SITESOURCERY_DATA_ROOT=\/var\/lib\/sitesourcery\/tenant-runtime$/mu
+  );
+  assert.doesNotMatch(
+    tenantEnvironment,
+    /SITESOURCERY_PUBLICATION_COMMAND_/u
   );
   assert.match(
     hostedEnvironment,

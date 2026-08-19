@@ -14,11 +14,14 @@ const holdPaths = [
 ];
 const approvalPath = "/etc/sitesourcery/PUBLICATION_APPROVED";
 const dataRoot = path.resolve(
-  process.env.SITESOURCERY_DATA_ROOT ?? "/var/lib/sitesourcery/tenant"
+  process.env.SITESOURCERY_DATA_ROOT ?? "/var/lib/sitesourcery/tenant-runtime"
 );
-const bind = process.env.SITESOURCERY_BIND ?? "127.0.0.1";
-const port = Number(process.env.SITESOURCERY_PORT ?? "8080");
+const bind = process.env.SITESOURCERY_TENANT_HOST ?? "127.0.0.1";
+const port = Number(process.env.SITESOURCERY_TENANT_PORT ?? "8080");
 const controlHost = process.env.SITESOURCERY_CONTROL_HOST ?? "127.0.0.1";
+const licensedBaseDomain =
+  process.env.SITESOURCERY_LICENSED_BASE_DOMAIN ??
+  "sites.example.invalid";
 const maximumFileBytes = Number(
   process.env.SITESOURCERY_MAX_FILE_BYTES ?? String(10 * 1024 * 1024)
 );
@@ -29,15 +32,16 @@ const maximumReleaseBytes = Number(
 if (!["127.0.0.1", "::1"].includes(bind)) {
   throw new Error("The Node tenant runtime may bind only to loopback behind Caddy.");
 }
-if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) {
-  throw new Error("SITESOURCERY_PORT must be an unprivileged TCP port.");
+if (port !== 8080) {
+  throw new Error("SITESOURCERY_TENANT_PORT must remain the reviewed loopback port 8080.");
 }
 
-const runtime = await SelfHostRuntime.open({
+const runtime = await SelfHostRuntime.openServing({
   root: dataRoot,
   publicationHeld: () =>
     !existsSync(approvalPath) || holdPaths.some((target) => existsSync(target)),
   controlHost,
+  platformBaseDomain: licensedBaseDomain,
   maximumFileBytes,
   maximumReleaseBytes
 });

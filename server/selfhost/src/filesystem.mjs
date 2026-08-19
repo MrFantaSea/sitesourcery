@@ -22,6 +22,27 @@ export async function ensureDirectory(directory, mode = 0o750) {
   return realpath(directory);
 }
 
+export async function openExistingDirectory(directory) {
+  invariant(
+    path.isAbsolute(directory) && path.normalize(directory) === directory,
+    "INVALID_ROOT",
+    "existing data root must be an absolute normalized path"
+  );
+  const info = await lstat(directory);
+  invariant(
+    info.isDirectory() && !info.isSymbolicLink(),
+    "UNSAFE_ROOT",
+    "existing directory is unsafe"
+  );
+  const resolved = await realpath(directory);
+  invariant(
+    resolved === directory,
+    "UNSAFE_ROOT",
+    "existing directory resolves to a different path"
+  );
+  return resolved;
+}
+
 export async function assertNoSymlinkPath(root, target, { finalType = "file" } = {}) {
   const canonicalRoot = await realpath(root);
   const relative = path.relative(canonicalRoot, target);

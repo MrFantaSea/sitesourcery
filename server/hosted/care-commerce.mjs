@@ -33,6 +33,13 @@ const MAIL_TEMPLATES = new Set([
   "care-commerce-reservation-held.v1",
   "care-commerce-reservation-cancelled.v1"
 ]);
+const MAIL_NOTIFICATION_KINDS = Object.freeze({
+  "care-commerce-quote-held.v1": "care_commerce_quote_held",
+  "care-commerce-reservation-held.v1":
+    "care_commerce_reservation_held",
+  "care-commerce-reservation-cancelled.v1":
+    "care_commerce_reservation_cancelled"
+});
 
 function clone(value) {
   return structuredClone(value);
@@ -431,12 +438,16 @@ export function projectCareCommerceRecord(record, audience) {
   });
 }
 
-export function createCareCommerceMailReservationInterface({ lifecycle, clock } = {}) {
+export function createCareCommerceMailReservationInterface({
+  notifications,
+  clock
+} = {}) {
   invariant(
-    lifecycle &&
-      typeof lifecycle.readiness === "function" &&
-      typeof lifecycle.reserve === "function" &&
-      lifecycle.providerEffects === false,
+    notifications &&
+      typeof notifications.readiness === "function" &&
+      typeof notifications.reserveOperator === "function" &&
+      notifications.providerEffects === false &&
+      notifications.deliveryClaimed === false,
     "CARE_COMMERCE_CONFIGURATION_REQUIRED",
     "A durable provider-held mail lifecycle is required.",
     { status: 500 }
@@ -445,14 +456,14 @@ export function createCareCommerceMailReservationInterface({ lifecycle, clock } 
     kind: "care-commerce-mail-reservation",
     deliveryEffects: false,
     providerEffects: false,
-    readiness: () => lifecycle.readiness(),
+    readiness: () => notifications.readiness(),
     async reserve(input) {
       exactObject(
         input,
         [
-          "commandId", "contentDigest", "customerUserId", "expiresAt",
+          "actorId", "commandId", "contentDigest", "customerUserId", "expiresAt",
           "organizationId", "projectId", "recipientDigest",
-          "resourceDigest", "templateVersion"
+          "resourceDigest", "source", "templateVersion"
         ],
         "Care commerce mail reservation"
       );
@@ -467,15 +478,22 @@ export function createCareCommerceMailReservationInterface({ lifecycle, clock } 
         { status: 400 }
       );
       const resourceDigest = sha256(input.resourceDigest, "Care resource digest");
-      const receipt = await lifecycle.reserve({
-        commandId: `care.commerce.mail.${digest({
-          commandId: safeId(input.commandId, "Care mail idempotency key"),
-          resourceDigest
-        })}`,
-        messageType: "commerce_customer_notification",
-        organizationId: uuid(input.organizationId, "Care organization ID"),
-        projectId: uuid(input.projectId, "Care project ID"),
-        customerUserId: uuid(input.customerUserId, "Care customer ID"),
+      invariant(
+        input.source?.digest === resourceDigest,
+        "CARE_COMMERCE_INVALID",
+        "Care commerce source evidence is invalid.",
+        { status: 400 }
+      );
+      const receipt = await notifications.reserveOperator({
+        actorId: uuid(input.actorId, "Care operator ID"),
+        commandId: safeId(input.commandId, "Care mail idempotency key"),
+        operatorOrganizationId: uuid(
+          input.organizationId,
+          "Care organization ID"
+        ),
+        purposeKind: "care",
+        notificationKind: MAIL_NOTIFICATION_KINDS[input.templateVersion],
+        source: input.source,
         recipientDigest: sha256(input.recipientDigest, "Recipient digest"),
         subjectReferenceDigest: resourceDigest,
         contentDigest: sha256(input.contentDigest, "Content digest"),
@@ -483,26 +501,31 @@ export function createCareCommerceMailReservationInterface({ lifecycle, clock } 
         expiresAt
       });
       invariant(
-        receipt?.schema === "sitesourcery.hosted-mail-delivery-receipt/v1" &&
-          UUID.test(receipt.messageId) &&
-          receipt.messageType === "commerce_customer_notification" &&
+        receipt?.schema ===
+          "sitesourcery.mail-purpose-notification-read/v1" &&
+          UUID.test(receipt.mail?.messageId) &&
           receipt.organizationId === input.organizationId &&
           receipt.projectId === input.projectId &&
-          receipt.customerUserId === input.customerUserId &&
-          ["pending", "reserved"].includes(receipt.state) &&
-          receipt.provider === null &&
-          receipt.expiresAt === expiresAt,
+          receipt.sourceCustomerUserId === input.customerUserId &&
+          receipt.source.digest === resourceDigest &&
+          receipt.reservation?.state === "held" &&
+          receipt.reservation.expiresAt === expiresAt &&
+          receipt.providerEffectsAuthorized === false &&
+          receipt.deliveryClaimed === false,
         "CARE_COMMERCE_MAIL_CONFLICT",
         "The held Care mail reservation returned inconsistent evidence.",
         { status: 500 }
       );
       return deepFreeze({
         schema: CARE_COMMERCE_MAIL_RESERVATION_SCHEMA,
-        messageId: receipt.messageId,
+        messageId: receipt.mail.messageId,
         resourceDigest,
         state: "reserved",
-        requestedAt: instant(receipt.requestedAt ?? requestedAt, "Mail request time"),
-        expiresAt: instant(receipt.expiresAt, "Mail expiry"),
+        requestedAt: instant(
+          receipt.reservation.reservedAt,
+          "Mail request time"
+        ),
+        expiresAt: instant(receipt.reservation.expiresAt, "Mail expiry"),
         deliveryEffects: false,
         providerEffects: false
       });

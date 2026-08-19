@@ -9,7 +9,11 @@ import {
 const WORKER_ID = "responder-retention-test-worker-0001";
 const NOW = "2026-08-13T12:00:00.000Z";
 
-function repository({ claims = [], destroyError = null } = {}) {
+function repository({
+  claims = [],
+  destroyError = null,
+  destroy = null
+} = {}) {
   const calls = [];
   return {
     calls,
@@ -30,6 +34,7 @@ function repository({ claims = [], destroyError = null } = {}) {
     async destroyClaim(input) {
       calls.push(["destroy", input]);
       if (destroyError !== null) throw destroyError;
+      if (destroy !== null) return destroy(input);
       return { primaryCiphertextZeroed: true };
     },
     async releaseClaim(input) {
@@ -118,6 +123,37 @@ test("a failed destruction releases its own lease with a safe bounded retry", as
     retryAt: "2026-08-13T12:00:05.000Z"
   });
   assert.equal(JSON.stringify(port.calls).includes("private"), false);
+});
+
+test("stop closes the retention loop and drains one active destruction", async () => {
+  let entered;
+  let release;
+  const started = new Promise((resolve) => { entered = resolve; });
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const port = repository({
+    claims: [claim()],
+    destroy: async () => {
+      entered();
+      await blocked;
+      return { primaryCiphertextZeroed: true };
+    }
+  });
+  const worker = createResponderPrivateMaterialRetentionWorker({
+    repository: port,
+    clock: { now: () => NOW },
+    enabled: true,
+    workerId: WORKER_ID
+  });
+  assert.equal(worker.start(), true);
+  await started;
+  let stopped = false;
+  const stopping = worker.stop().then(() => { stopped = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stopped, false);
+  release();
+  await stopping;
+  assert.equal(worker.snapshot().state, "stopped");
+  assert.equal(port.calls.filter(([kind]) => kind === "destroy").length, 1);
 });
 
 test("worker configuration remains exact and bounded", () => {
