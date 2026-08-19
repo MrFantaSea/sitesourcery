@@ -29,7 +29,7 @@ test("production root composes durable, verified, effect-held Care surfaces and 
   );
   assert.match(
     source,
-    /mailReservations: createCareMailReservationInterface\(\{\s*lifecycle: mailLifecycle,\s*clock: commerceV2[.]clock\s*\}\)/u
+    /mailReservations: createCareMailReservationInterface\(\{\s*notifications: mailPurposeNotifications,\s*clock: commerceV2[.]clock\s*\}\)/u
   );
   assert.match(source, /const careReadiness = await careSurfaces[.]readiness\(\)/u);
   assert.match(
@@ -38,7 +38,7 @@ test("production root composes durable, verified, effect-held Care surfaces and 
   );
   assert.match(
     source,
-    /const careCommerce = createHeldCareCommerceService\(\{\s*eligibility: createPostgresCareCommerceEligibility\(\{ authority \}\),\s*repository: createPostgresCareCommerceRepository\(\{ authority \}\),\s*ids: commerceV2[.]ids,\s*clock: commerceV2[.]clock,\s*mailReservations: createCareCommerceMailReservationInterface\(\{\s*lifecycle: mailLifecycle,\s*clock: commerceV2[.]clock\s*\}\)\s*\}\)/u
+    /const careCommerce = createHeldCareCommerceService\(\{\s*eligibility: createPostgresCareCommerceEligibility\(\{ authority \}\),\s*repository: createPostgresCareCommerceRepository\(\{ authority \}\),\s*ids: commerceV2[.]ids,\s*clock: commerceV2[.]clock,\s*mailReservations: createCareCommerceMailReservationInterface\(\{\s*notifications: mailPurposeNotifications,\s*clock: commerceV2[.]clock\s*\}\)\s*\}\)/u
   );
   assert.match(
     source,

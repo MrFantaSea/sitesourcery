@@ -1796,7 +1796,7 @@ test("production composes PostgreSQL owner quote, assessment, and paid-build bou
   );
   assert.match(
     source,
-    /await customServicesCustomBuildWork\.readiness\(\)/u
+    /customServicesCustomBuildWork\.readiness\(\),/u
   );
   assert.match(
     source,
@@ -1808,7 +1808,7 @@ test("production composes PostgreSQL owner quote, assessment, and paid-build bou
   );
   assert.match(
     source,
-    /await customServicesCustomBuildProgress\.readiness\(\)/u
+    /customServicesCustomBuildProgress\.readiness\(\),/u
   );
   assert.match(
     source,

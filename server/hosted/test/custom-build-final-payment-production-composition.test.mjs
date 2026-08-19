@@ -42,7 +42,7 @@ test("production composes v47 completion, final payment, and handoff as separate
   );
   assert.match(
     source,
-    /await customServicesCustomBuildChangeCompletion\.readiness\(\);\s*await customBuildHandoff\.readiness\(\);/u
+    /const \[[\s\S]*?customBuildChangeCompletionReadiness,\s*customBuildHandoffReadiness[\s\S]*?\] = await Promise\.all\(\[[\s\S]*?customServicesCustomBuildChangeCompletion\.readiness\(\),\s*customBuildHandoff\.readiness\(\),/u
   );
   assert.match(
     source,
