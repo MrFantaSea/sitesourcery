@@ -24,7 +24,7 @@ test("production releases change and completion only through the PostgreSQL auth
   );
   assert.match(
     source,
-    /await customServicesCustomBuildChangeCompletion\.readiness\(\);/u
+    /const \[[\s\S]*?customBuildChangeCompletionReadiness[\s\S]*?\] = await Promise\.all\(\[[\s\S]*?customServicesCustomBuildChangeCompletion\.readiness\(\),/u
   );
   assert.match(
     source,

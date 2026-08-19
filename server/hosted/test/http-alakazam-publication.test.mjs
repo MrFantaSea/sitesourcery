@@ -413,7 +413,10 @@ test("the production executable composes publication authorization without a pro
     source,
     /createPublicationControlComposition\(\{\s*authority,\s*resolveSession:\s*commerceV2\.resolveSession,\s*clock:\s*commerceV2\.clock\s*\}\)/u
   );
-  assert.match(source, /await alakazamPublication\.readiness\(\)/u);
+  assert.match(
+    source,
+    /const \[[\s\S]*?alakazamPublicationReadiness[\s\S]*?\] = await Promise\.all\(\[[\s\S]*?alakazamPublication\.readiness\(\),/u
+  );
   assert.match(
     source,
     /createHostedApi\(service,\s*\{[\s\S]*?alakazamPublication,/u

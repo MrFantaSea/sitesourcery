@@ -1423,7 +1423,7 @@ test("production composes custom-services account from canonical project and Pos
   );
   assert.match(
     source,
-    /await customServicesCustomBuildProgress\.readiness\(\)/u
+    /customServicesCustomBuildProgress\.readiness\(\),/u
   );
   assert.match(
     source,

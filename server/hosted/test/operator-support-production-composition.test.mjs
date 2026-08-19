@@ -11,10 +11,17 @@ test("production root composes canonical queue, reconciliation, and support life
     /const supportCases = createSupportCaseService\(\{\s*repository: createPostgresSupportCaseRepository\(\{ authority \}\),\s*mailLifecycle,\s*clock: commerceV2[.]clock\s*\}\)/u
   );
   assert.match(source, /const supportCaseReadiness = await supportCases[.]readiness\(\)/u);
-  assert.match(source, /if \(supportCaseReadiness[.]ready !== true\)/u);
   assert.match(
     source,
-    /operatorWorkQueue: professionalLifecycle[.]operatorQueue,\s*operatorProviderReconciliation,\s*adjacentIntegration,\s*supportCases,/u
+    /if \(\s*supportCaseReadiness[.]ready !== true \|\|\s*supportCaseReadiness[.]verified !== true/u
+  );
+  assert.match(
+    source,
+    /operator_support: heldRow\(\s*supportCaseReadiness[.]ready === true &&\s*operatorProviderReconciliationReadiness[.]ready === true\s*\)/u
+  );
+  assert.match(
+    source,
+    /operatorWorkQueue: professionalLifecycle[.]operatorQueue,\s*operatorProviderReconciliation,\s*adjacentIntegration,\s*mailPurposeNotifications,\s*supportCases,/u
   );
   assert.match(source, /createPostgresAdjacentIntegrationRepository/u);
   assert.match(source, /const adjacentIntegrationReadiness = await adjacentIntegration[.]readiness\(\)/u);
