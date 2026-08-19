@@ -1,7 +1,5 @@
-import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { SelfHostRuntime } from "../selfhost/src/index.mjs";
 import {
   createCareLifecycleExecutor,
   createPostgresCareLifecycleWorkerRepository
@@ -23,7 +21,6 @@ import {
   createPostgresProjectLifecycleRepository,
   createProjectLifecycleExecutor
 } from "./project-lifecycle-postgres.mjs";
-import { createSelfHostPublicationPort } from "./selfhost-publication-port.mjs";
 import { WORKER_PURPOSES } from "./worker-config.mjs";
 
 const PURPOSES = Object.freeze([
@@ -69,6 +66,7 @@ function heldExecutor(purpose) {
 
 export function createLifecycleWorkerFactories({
   authority,
+  publicationPort = null,
   purposes,
   environment = process.env,
   log = () => {},
@@ -78,9 +76,7 @@ export function createLifecycleWorkerFactories({
   careRepositoryFactory = createPostgresCareLifecycleWorkerRepository,
   careCoreRepositoryFactory = createPostgresCareCoreRepository,
   domainExecutorFactory = createConfiguredDomainLifecycleExecutor,
-  exportStoreFactory = createPrivateExportObjectStore,
-  runtimeOpen = (options) => SelfHostRuntime.open(options),
-  publicationFactory = createSelfHostPublicationPort
+  exportStoreFactory = createPrivateExportObjectStore
 } = {}) {
   const selected = selectedPurposes(purposes);
   invariant(
@@ -108,6 +104,14 @@ export function createLifecycleWorkerFactories({
           if (purpose === "project-lifecycle") {
             repository = projectRepositoryFactory({ authority });
             if (options.enabled) {
+              invariant(
+                publicationPort &&
+                  typeof publicationPort.readiness === "function" &&
+                  typeof publicationPort.unpublish === "function",
+                "WORKER_DEPENDENCY_NOT_READY",
+                "The private publication command client is required.",
+                { status: 503 }
+              );
               const dataRoot = path.resolve(
                 environment.SITESOURCERY_DATA_ROOT ?? "/var/lib/sitesourcery"
               );
@@ -117,20 +121,9 @@ export function createLifecycleWorkerFactories({
                     path.join(dataRoot, "private-exports")
                 )
               });
-              const approvalPath =
-                environment.SITESOURCERY_PUBLICATION_APPROVAL_PATH ??
-                "/etc/sitesourcery/PUBLICATION_APPROVED";
-              const runtime = await runtimeOpen({
-                root: path.join(dataRoot, "tenant-runtime"),
-                publicationHeld: () => !existsSync(approvalPath),
-                controlHost: "127.0.0.1",
-                platformBaseDomain:
-                  environment.SITESOURCERY_LICENSED_BASE_DOMAIN ??
-                  "sites.example.invalid"
-              });
               executor = createProjectLifecycleExecutor({
                 objectStore,
-                publicationPort: publicationFactory({ runtime, clock })
+                publicationPort
               });
             } else {
               executor = heldExecutor(purpose);
@@ -166,16 +159,23 @@ export function createLifecycleWorkerFactories({
           return Object.freeze({
             worker,
             async readiness() {
-              const [storage, dependency] = await Promise.all([
+              const [storage, dependency, publication] = await Promise.all([
                 repository.readiness(),
-                executor.readiness()
+                executor.readiness(),
+                purpose === "project-lifecycle" && options.enabled
+                  ? publicationPort.readiness()
+                  : Promise.resolve(null)
               ]);
               const externalReplicaReady =
                 purpose !== "project-lifecycle" ||
                 Number(storage?.externalReplicas ?? 0) === 0;
+              const publicationTransportReady =
+                purpose !== "project-lifecycle" ||
+                options.enabled !== true || publication?.ready === true;
               const ready = options.enabled && storage?.ready === true &&
                 storage?.verified === true && dependency?.ready === true &&
-                dependency?.verified === true && externalReplicaReady;
+                dependency?.verified === true && externalReplicaReady &&
+                publicationTransportReady;
               return Object.freeze({
                 schema: "sitesourcery.lifecycle-worker-composition-readiness/v1",
                 ready,
@@ -185,6 +185,7 @@ export function createLifecycleWorkerFactories({
                 storageReady: storage?.ready === true,
                 dependencyReady: dependency?.ready === true,
                 externalReplicaReady,
+                publicationTransportReady,
                 providerEffects: false,
                 code: ready ? null : `${purpose.toUpperCase().replaceAll("-", "_")}_HELD`
               });

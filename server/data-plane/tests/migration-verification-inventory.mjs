@@ -44,7 +44,8 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608140136_responder_forwarding_onboarding.sql",
   "202608140137_responder_native_client_authority.sql",
   "202608160138_responder_native_voice_sessions.sql",
-  "202608170139_responder_android_voice_authority.sql"
+  "202608170139_responder_android_voice_authority.sql",
+  "202608180140_hosted_mail_purpose_notifications.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(

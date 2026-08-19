@@ -165,6 +165,7 @@ export function createAlakazamFulfillmentWorker({
   }
 
   async function runOnce() {
+    if (!enabled) return Object.freeze({ status: "held" });
     const claimedAt = now();
     const claimed = await ports.repository.claimNextFulfillment({
       workerId,

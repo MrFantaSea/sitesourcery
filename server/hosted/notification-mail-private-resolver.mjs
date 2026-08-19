@@ -11,7 +11,8 @@ const TEMPLATE = /^[a-z0-9][a-z0-9._:-]{1,79}$/u;
 const MESSAGE_TYPES = new Set([
   "support_notification",
   "commerce_customer_notification",
-  "commerce_operator_notification"
+  "commerce_operator_notification",
+  "purpose_customer_notification"
 ]);
 
 function exactObject(value, keys, field) {
@@ -154,7 +155,7 @@ export function createPrivateNotificationMailRenderer({
         SHA256.test(input.recipientDigest) &&
         SHA256.test(input.subjectReferenceDigest) &&
         SHA256.test(input.contentDigest) &&
-        ["support", "commerce"].includes(input.sourceKind) &&
+        ["support", "commerce", "purpose"].includes(input.sourceKind) &&
         UUID.test(input.sourceReservationId) &&
         SHA256.test(input.sourceReservationDigest) &&
         TEMPLATE.test(input.templateVersion),

@@ -35,6 +35,10 @@ import {
   workerConfigurationFromEnvironment
 } from "../worker-config.mjs";
 import { createWorkerSupervisor } from "../worker-supervisor.mjs";
+import {
+  createPublicationCommandClient,
+  publicationCommandConfigurationFromEnvironment
+} from "../publication-command-transport.mjs";
 
 function write(entry) {
   process.stdout.write(`${JSON.stringify(entry)}\n`);
@@ -94,6 +98,17 @@ if (selected.configuration.activation === "held") {
       workload: "worker"
     });
     await authority.assertReady();
+    const publicationPort = selected.configuration.purposes.some(
+      (purpose) => [
+        "alakazam-fulfillment",
+        "project-lifecycle"
+      ].includes(purpose)
+    )
+      ? createPublicationCommandClient({
+          configuration:
+            publicationCommandConfigurationFromEnvironment(process.env)
+        })
+      : null;
     const factories = Object.freeze({
       ...createCoreWorkerFactories({
         authority,
@@ -109,6 +124,7 @@ if (selected.configuration.activation === "held") {
       }),
       ...createAlakazamWorkerFactories({
         authority,
+        publicationPort,
         environment: process.env,
         log: write
       }),
@@ -132,6 +148,7 @@ if (selected.configuration.activation === "held") {
       }),
       ...createLifecycleWorkerFactories({
         authority,
+        publicationPort,
         purposes: selected.configuration.purposes,
         environment: process.env,
         log: write

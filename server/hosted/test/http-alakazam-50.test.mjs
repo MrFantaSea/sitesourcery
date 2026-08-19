@@ -242,7 +242,11 @@ test("production F04 composition wraps F03 and preserves the commercial enable p
   );
   assert.match(
     workerSource,
-    /const enabled =\s*shared\.release\.mode === "approved" &&\s*shared\.workerPolicy\.ready === true &&\s*publicationHeld\(\) === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
+    /const publication = await publicationPort\.readiness\(\);[\s\S]*?const enabled =\s*shared\.release\.mode === "approved" &&\s*shared\.workerPolicy\.ready === true &&\s*publication\?\.ready === true && publication\?\.held === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
+  );
+  assert.doesNotMatch(
+    workerSource,
+    /SelfHostRuntime|createAlakazam35PublicationPort/u
   );
   assert.match(workerSource, /tier35Repository\.readiness\(\)[\s\S]*?tier50Repository\.readiness\(\)/u);
   assert.doesNotMatch(

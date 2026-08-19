@@ -6,6 +6,9 @@ import {
   COMMERCE_NOTIFICATION_AUTHORITIES
 } from "../commerce-transition-notifications.mjs";
 import {
+  MAIL_PURPOSE_NOTIFICATION_AUTHORITIES
+} from "../mail-purpose-notifications.mjs";
+import {
   CALCULATED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
   REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS,
   REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
@@ -33,7 +36,7 @@ function configuration(overrides = {}) {
 }
 
 function variables(definition, overrides = {}) {
-  return definition.family === "commerce"
+  return ["commerce", "purpose"].includes(definition.family)
     ? {
         reference: REFERENCE_ID,
         revision: 1,
@@ -84,7 +87,8 @@ function fakeAuthority({
           }
           if (
             sql.includes("notification-private-renderer:support-source") ||
-            sql.includes("notification-private-renderer:commerce-source")
+            sql.includes("notification-private-renderer:commerce-source") ||
+            sql.includes("notification-private-renderer:purpose-source")
           ) {
             if (!sourceAvailable) return { rowCount: 0, rows: [] };
             const base = {
@@ -100,7 +104,7 @@ function fakeAuthority({
               event_kind: definition.eventKind,
               reference_id: REFERENCE_ID,
               recipient_email: definition.audience === "operator" ? null : to,
-              ...(definition.family === "commerce"
+              ...(["commerce", "purpose"].includes(definition.family)
                 ? {
                     audience_kind: definition.audience,
                     source_revision: "1",
@@ -134,9 +138,9 @@ function renderInput(definition, selectedPreview, overrides = {}) {
   };
 }
 
-test("reviewed registry pins every current support, commerce, and Care template", () => {
-  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.length, 29);
-  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_VERSIONS.length, 29);
+test("reviewed registry pins every current support, commerce, and purpose template", () => {
+  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.length, 40);
+  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_VERSIONS.length, 40);
   assert.equal(
     CALCULATED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
     REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256
@@ -151,7 +155,13 @@ test("reviewed registry pins every current support, commerce, and Care template"
     REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.filter(
       (definition) => definition.family === "care"
     ).length,
-    3
+    0
+  );
+  assert.equal(
+    REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.filter(
+      (definition) => definition.family === "purpose"
+    ).length,
+    14
   );
   assert.equal(
     REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.filter(
@@ -173,6 +183,28 @@ test("reviewed registry pins every current support, commerce, and Care template"
         ([eventKind, authority]) => [eventKind, {
           audience: authority.audience,
           states: authority.states
+        }]
+      )
+    )
+  );
+  assert.deepEqual(
+    Object.fromEntries(
+      REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS
+        .filter((definition) => definition.family === "purpose")
+        .map((definition) => [definition.eventKind, {
+          purposeKind:
+            MAIL_PURPOSE_NOTIFICATION_AUTHORITIES[definition.eventKind]
+              .purposeKind,
+          states: definition.states,
+          templateVersion: definition.version
+        }])
+    ),
+    Object.fromEntries(
+      Object.entries(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).map(
+        ([eventKind, authority]) => [eventKind, {
+          purposeKind: authority.purposeKind,
+          states: authority.states,
+          templateVersion: authority.templateVersion
         }]
       )
     )
@@ -349,7 +381,7 @@ test("renderer rejects version, source, recipient, and output digest drift befor
   }
 });
 
-test("Care template previews are exact but the current reservation-only source cannot enter dispatch", async () => {
+test("Care purpose templates render exact source evidence and reject the old support lane", async () => {
   const definition = REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.find(
     (item) => item.version === "care-ticket-update.v1"
   );
@@ -359,6 +391,11 @@ test("Care template previews are exact but the current reservation-only source c
     authority: fakeAuthority({ definition }),
     configuration: configuration()
   });
+  const rendered = await renderer.render(renderInput(
+    definition,
+    selectedPreview
+  ));
+  assert.equal(rendered.templateVersion, definition.version);
   await assert.rejects(
     renderer.render(renderInput(definition, selectedPreview, {
       sourceKind: "support"

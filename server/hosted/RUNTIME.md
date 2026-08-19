@@ -139,7 +139,7 @@ bytes, and an exact declared length when present. It returns 200 only after the
 signature-verifying lifecycle boundary durably accepts the event or recognizes
 its durable replay. Raw bodies and signature headers are never logged.
 
-Support/commerce notification dispatch runs only in the separate worker
+Support/commerce/purpose notification dispatch runs only in the separate worker
 process under the `notification-mail` purpose. Its dedicated mode defaults to
 `held`; `approved_live` additionally requires verified Resend credentials and
 a bounded regular private-renderer module under `/etc/sitesourcery/mail/`
@@ -147,12 +147,15 @@ whose exact SHA-256 is configured. The module bytes are opened without
 following a final symlink, bounded, hashed, and loaded from the verified bytes.
 The reviewed source is `ops/notification-mail-private-renderer.mjs`. It is
 independently held unless its mode is `reviewed`, the configured registry digest
-is exactly `7d9d2c440484930d30fc0440c8976f5447463c0c2d81bae332832924498e4b57`,
+is exactly `f16c963c1cdd7dfb7801eddac0eb92d559e520bda7ee2a0d54bd723597b9cd14`,
 and a private operator recipient resolves to one currently authorized payment-
-reconciliation operator. The registry pins five support, 21 commerce, and three
-Care template versions with typed variables and fixed text/HTML. Care previews
-are implemented, but Care delivery stays reservation-only until a separately
-reviewed durable dispatch source exists.
+reconciliation operator. The registry pins five support, 21 commerce, and 14
+purpose template versions with typed variables and fixed text/HTML. The purpose
+family includes three Care ticket templates plus project-progress,
+publication/domain, Care commerce, Responder, and bounded existing-customer
+follow-up sources. Its dispatch source is the v2 digest-only purpose outbox;
+provider delivery remains independently held until its worker purpose is
+approved.
 Claims remain 30 seconds through five minutes, batches are at most 25, retries
 reuse one provider idempotency key, and shutdown drains the active batch within
 the supervisor deadline.

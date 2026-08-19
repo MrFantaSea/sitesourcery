@@ -6,6 +6,7 @@ import {
   atomicWriteFile,
   ensureDirectory,
   exists,
+  openExistingDirectory,
   readBoundedJson,
   writeExclusiveFile
 } from "./filesystem.mjs";
@@ -17,13 +18,28 @@ export const CONTROL_SCHEMA = "sitesourcery.selfhost-control/v1";
 export class ControlStore {
   #tail = Promise.resolve();
 
-  constructor({ root, currentPath, revisionsPath, clock, state, error = null }) {
+  constructor({
+    root,
+    currentPath,
+    revisionsPath,
+    clock,
+    state,
+    checksum = null,
+    error = null,
+    readOnly = false,
+    readCurrent = readBoundedJson
+  }) {
     this.root = root;
     this.currentPath = currentPath;
     this.revisionsPath = revisionsPath;
     this.clock = clock;
     this.state = state;
+    this.checksum = checksum;
+    this.lastRevision = state?.revision ?? null;
+    this.lastChecksum = checksum;
     this.error = error;
+    this.readOnly = readOnly === true;
+    this.readCurrent = readCurrent;
   }
 
   static async open({ root, clock = () => new Date().toISOString() }) {
@@ -51,7 +67,8 @@ export class ControlStore {
         currentPath,
         revisionsPath,
         clock,
-        state
+        state,
+        checksum: envelope.checksum
       });
     } catch (error) {
       return new ControlStore({
@@ -62,6 +79,104 @@ export class ControlStore {
         state: null,
         error
       });
+    }
+  }
+
+  static async openReadOnly({
+    root,
+    clock = () => new Date().toISOString(),
+    readCurrent = readBoundedJson
+  }) {
+    invariant(
+      typeof readCurrent === "function",
+      "INVALID_CONFIG",
+      "control read-through source is invalid"
+    );
+    const absoluteRoot = path.resolve(root);
+    const currentPath = path.join(absoluteRoot, "current.json");
+    const revisionsPath = path.join(absoluteRoot, "revisions");
+    try {
+      const canonicalRoot = await openExistingDirectory(absoluteRoot);
+      await openExistingDirectory(revisionsPath);
+      const envelope = await readCurrent(canonicalRoot, currentPath);
+      invariant(
+        verifyEnvelope(envelope, CONTROL_SCHEMA),
+        "CONTROL_CORRUPT",
+        "control state checksum is invalid"
+      );
+      return new ControlStore({
+        root: canonicalRoot,
+        currentPath,
+        revisionsPath,
+        clock,
+        state: validateState(envelope.payload),
+        checksum: envelope.checksum,
+        readOnly: true,
+        readCurrent
+      });
+    } catch (error) {
+      return new ControlStore({
+        root: absoluteRoot,
+        currentPath,
+        revisionsPath,
+        clock,
+        state: null,
+        error,
+        readOnly: true,
+        readCurrent
+      });
+    }
+  }
+
+  async refresh() {
+    invariant(
+      this.readOnly,
+      "CONTROL_REFRESH_INVALID",
+      "only a read-through control store may refresh"
+    );
+    const operation = this.#tail.then(() => this.#refreshFromDisk());
+    this.#tail = operation.catch(() => {});
+    return operation;
+  }
+
+  async #refreshFromDisk() {
+    try {
+      const canonicalRoot = await openExistingDirectory(this.root);
+      const envelope = await this.readCurrent(
+        canonicalRoot,
+        this.currentPath
+      );
+      invariant(
+        verifyEnvelope(envelope, CONTROL_SCHEMA),
+        "CONTROL_CORRUPT",
+        "control state checksum is invalid"
+      );
+      const state = validateState(envelope.payload);
+      if (this.lastRevision !== null) {
+        invariant(
+          state.revision >= this.lastRevision,
+          "CONTROL_REVISION_REGRESSION",
+          "control state revision regressed"
+        );
+        invariant(
+          state.revision !== this.lastRevision ||
+            envelope.checksum === this.lastChecksum,
+          "CONTROL_REVISION_CONFLICT",
+          "control state changed without advancing its revision"
+        );
+      }
+      this.root = canonicalRoot;
+      this.state = state;
+      this.checksum = envelope.checksum;
+      this.lastRevision = state.revision;
+      this.lastChecksum = envelope.checksum;
+      this.error = null;
+      return this.snapshot();
+    } catch (error) {
+      this.state = null;
+      this.checksum = null;
+      this.error = error;
+      throw error;
     }
   }
 
@@ -257,6 +372,11 @@ export class ControlStore {
   }
 
   async #mutate(mutator) {
+    invariant(
+      !this.readOnly,
+      "READ_ONLY_RUNTIME",
+      "the serving runtime cannot mutate control state"
+    );
     const job = this.#tail.then(async () => {
       invariant(this.isReady(), "CONTROL_UNAVAILABLE", "control store is not ready");
       const next = structuredClone(this.state);

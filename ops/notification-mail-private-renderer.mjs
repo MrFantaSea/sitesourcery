@@ -15,7 +15,7 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u;
 // This value is updated only with the canonical registry manifest below. The
 // root-owned worker configuration must repeat it independently.
 export const REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256 =
-  "7d9d2c440484930d30fc0440c8976f5447463c0c2d81bae332832924498e4b57";
+  "f16c963c1cdd7dfb7801eddac0eb92d559e520bda7ee2a0d54bd723597b9cd14";
 
 function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -111,24 +111,92 @@ const SUPPORT_TEMPLATES = Object.freeze([
   ]
 ]);
 
-const CARE_TEMPLATES = Object.freeze([
+const PURPOSE_TEMPLATES = Object.freeze([
+  [
+    "custom-build-progress-updated.v1", "custom_progress_updated",
+    ["preparing", "building", "checking"],
+    "Your Site Sourcery Custom project has an update",
+    "Your current Custom project progress is available in your account."
+  ],
+  [
+    "publication-state-changed.v1", "publication_state_changed",
+    ["publish", "rollback", "unpublish"],
+    "Your Site Sourcery publication request has an update",
+    "Your publication request is recorded and remains held in your account."
+  ],
+  [
+    "domain-lifecycle-updated.v1", "domain_lifecycle_updated",
+    ["active", "grace", "redemption", "expired", "transferred_out"],
+    "Your domain lifecycle has an update",
+    "Your current domain lifecycle record is available in your account."
+  ],
   [
     "care-ticket-acknowledgment.v1",
     "care_ticket_acknowledgment",
+    ["ticket_open"],
     "We received your Site Sourcery Care ticket",
     "Your Care ticket was received and is available in your account."
   ],
   [
     "care-ticket-update.v1",
     "care_ticket_update",
+    ["ticket_start", "ticket_wait", "ticket_resume", "ticket_reopen"],
     "Your Site Sourcery Care ticket has an update",
     "A reviewed Care update is available in your account."
   ],
   [
     "care-ticket-resolved.v1",
     "care_ticket_resolved",
+    ["ticket_resolve", "ticket_close"],
     "Your Site Sourcery Care ticket was resolved",
     "The current Care resolution is available in your account."
+  ],
+  [
+    "care-commerce-quote-held.v1", "care_commerce_quote_held", ["held"],
+    "Your Site Sourcery Care quote is ready",
+    "Your held Care quote is available in your account."
+  ],
+  [
+    "care-commerce-reservation-held.v1",
+    "care_commerce_reservation_held", ["held"],
+    "Your Site Sourcery Care reservation is recorded",
+    "Your held Care reservation is available in your account."
+  ],
+  [
+    "care-commerce-reservation-cancelled.v1",
+    "care_commerce_reservation_cancelled", ["cancelled"],
+    "Your Site Sourcery Care reservation was cancelled",
+    "Your Care reservation cancellation is available in your account."
+  ],
+  [
+    "responder-commerce-quote-held.v1",
+    "responder_commerce_quote_held", ["held"],
+    "Your Site Sourcery Responder quote is ready",
+    "Your held Responder quote is available in your account."
+  ],
+  [
+    "responder-commerce-reservation-held.v1",
+    "responder_commerce_reservation_held", ["held"],
+    "Your Site Sourcery Responder reservation is recorded",
+    "Your held Responder reservation is available in your account."
+  ],
+  [
+    "responder-commerce-reservation-cancelled.v1",
+    "responder_commerce_reservation_cancelled", ["cancelled"],
+    "Your Site Sourcery Responder reservation was cancelled",
+    "Your Responder reservation cancellation is available in your account."
+  ],
+  [
+    "responder-forwarding-state-changed.v1",
+    "responder_forwarding_updated",
+    ["setup_pending", "ready_held", "manual_review", "retired"],
+    "Your Site Sourcery Responder forwarding has an update",
+    "Your current held forwarding status is available in your account."
+  ],
+  [
+    "engagement-followup-ready.v1", "engagement_followup_ready", ["claimed"],
+    "Your Site Sourcery project has a follow-up",
+    "A service follow-up for your existing project is available in your account."
   ]
 ]);
 
@@ -272,7 +340,7 @@ function descriptor({
   subject,
   lead
 }) {
-  const variables = family === "commerce"
+  const variables = ["commerce", "purpose"].includes(family)
     ? Object.freeze({
         reference: "safe-reference:1..200",
         revision: "safe-integer:0..9007199254740991",
@@ -311,15 +379,15 @@ const DESCRIPTORS = [
       lead
     })
   ),
-  ...CARE_TEMPLATES.map(([version, eventKind, subject, lead]) =>
+  ...PURPOSE_TEMPLATES.map(([version, eventKind, states, subject, lead]) =>
     descriptor({
       version,
-      family: "care",
-      messageType: "support_notification",
-      sourceKind: "care",
+      family: "purpose",
+      messageType: "purpose_customer_notification",
+      sourceKind: "purpose",
       eventKind,
       audience: "customer",
-      states: [],
+      states,
       subject,
       lead
     })
@@ -342,7 +410,7 @@ const DESCRIPTORS = [
 ].sort((left, right) => left.version.localeCompare(right.version));
 
 if (
-  DESCRIPTORS.length !== 29 ||
+  DESCRIPTORS.length !== 40 ||
   new Set(DESCRIPTORS.map((item) => item.version)).size !== DESCRIPTORS.length ||
   DESCRIPTORS.some((item) => !TEMPLATE_VERSION.test(item.version))
 ) {
@@ -383,14 +451,15 @@ function assertRegistryIdentity() {
 }
 
 function normalizedVariables(template, input) {
-  const expected = template.family === "commerce"
+  const stateful = ["commerce", "purpose"].includes(template.family);
+  const expected = stateful
     ? ["reference", "revision", "state"]
     : ["reference"];
   exactObject(input, expected, "Template variables");
   if (
     typeof input.reference !== "string" ||
     (
-      template.family === "commerce"
+      stateful
         ? !SAFE_REFERENCE.test(input.reference)
         : !UUID.test(input.reference)
     )
@@ -400,7 +469,7 @@ function normalizedVariables(template, input) {
       "The template reference is invalid."
     );
   }
-  if (template.family !== "commerce") {
+  if (!stateful) {
     return deepFreeze({ reference: input.reference });
   }
   if (
@@ -410,7 +479,7 @@ function normalizedVariables(template, input) {
   ) {
     throw mailError(
       "NOTIFICATION_PRIVATE_RENDERER_VARIABLE_INVALID",
-      "The commerce template state or revision is invalid."
+      "The notification template state or revision is invalid."
     );
   }
   return deepFreeze({
@@ -431,7 +500,7 @@ function escapeHtml(value) {
 
 function renderedTemplate(template, variables) {
   const referenceLine = `Reference: ${variables.reference}`;
-  const stateLine = template.family === "commerce"
+  const stateLine = ["commerce", "purpose"].includes(template.family)
     ? `Recorded state: ${variables.state}. Revision: ${variables.revision}.`
     : null;
   const footer = template.footer;
@@ -524,8 +593,9 @@ function validateRenderInput(input) {
   if (
     !UUID.test(input.messageId) ||
     !["support_notification", "commerce_customer_notification",
-      "commerce_operator_notification"].includes(input.messageType) ||
-    !["support", "commerce"].includes(input.sourceKind) ||
+      "commerce_operator_notification", "purpose_customer_notification"]
+      .includes(input.messageType) ||
+    !["support", "commerce", "purpose"].includes(input.sourceKind) ||
     !UUID.test(input.sourceReservationId) ||
     !SHA256.test(input.sourceReservationDigest) ||
     !SHA256.test(input.recipientDigest) ||
@@ -600,6 +670,28 @@ const COMMERCE_SOURCE_SQL = `
      and not reservation.delivery_claimed
    limit 2`;
 
+const PURPOSE_SOURCE_SQL = `
+  /* notification-private-renderer:purpose-source */
+  select mail.id as message_id, mail.message_type, mail.template_version,
+         mail.recipient_digest, reservation.id as source_reservation_id,
+         reservation.reservation_digest as source_reservation_digest,
+         reservation.notification_kind as event_kind,
+         'customer'::text as audience_kind,
+         reservation.reference_id, reservation.source_revision,
+         reservation.source_state, account_user.email as recipient_email
+    from ss.mail_purpose_notification_outbox reservation
+    join ss.hosted_mail_deliveries mail
+      on mail.id = reservation.mail_message_id
+    join auth.users account_user
+      on account_user.id = reservation.source_customer_user_id
+     and account_user.disabled_at is null
+   where mail.id = $1 and reservation.id = $2
+     and reservation.reservation_digest = $3
+     and reservation.state = 'held'
+     and not reservation.provider_effects_authorized
+     and not reservation.delivery_claimed
+   limit 2`;
+
 export function createPrivateNotificationRecipientResolver({
   authority,
   operatorRecipient
@@ -621,12 +713,15 @@ export function createPrivateNotificationRecipientResolver({
              and to_regclass(
                'ss.commerce_transition_notification_outbox'
              ) is not null
+             and to_regclass(
+               'ss.mail_purpose_notification_outbox'
+             ) is not null
              and to_regclass('auth.users') is not null
                as relations_ready,
-             to_regprocedure('ss.hosted_mail_dispatch_contract_v1()')
+             to_regprocedure('ss.hosted_mail_dispatch_contract_v2()')
                is not null
-             and ss.hosted_mail_dispatch_contract_v1() =
-               'canonical-mail-dispatch-v1-leased-digest-only-held'
+             and ss.hosted_mail_dispatch_contract_v2() =
+               'canonical-mail-dispatch-v2-support-commerce-purpose-leased-held'
                as contract_ready,
              (
                select count(*) = 1
@@ -672,8 +767,7 @@ export function createPrivateNotificationRecipientResolver({
     const template = BY_VERSION.get(input.templateVersion);
     if (
       !template || template.sourceKind !== input.sourceKind ||
-      template.messageType !== input.messageType ||
-      template.family === "care"
+      template.messageType !== input.messageType
     ) {
       throw mailError(
         "NOTIFICATION_PRIVATE_RENDERER_TEMPLATE_UNAVAILABLE",
@@ -682,7 +776,9 @@ export function createPrivateNotificationRecipientResolver({
     }
     const query = input.sourceKind === "support"
       ? SUPPORT_SOURCE_SQL
-      : COMMERCE_SOURCE_SQL;
+      : input.sourceKind === "commerce"
+        ? COMMERCE_SOURCE_SQL
+        : PURPOSE_SOURCE_SQL;
     const result = await database.service(
       { actorKind: "system", readOnly: true },
       (client) => client.query(query, [
@@ -736,7 +832,7 @@ export function createPrivateNotificationRecipientResolver({
       ) {
         throw mailError(
           "NOTIFICATION_PRIVATE_RENDERER_SOURCE_CONFLICT",
-          "The commerce notification source is invalid.",
+          "The notification source is invalid.",
           409
         );
       }

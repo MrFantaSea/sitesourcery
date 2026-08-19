@@ -15,7 +15,8 @@ const UUID =
 const NOTIFICATION_TYPES = new Set([
   "support_notification",
   "commerce_customer_notification",
-  "commerce_operator_notification"
+  "commerce_operator_notification",
+  "purpose_customer_notification"
 ]);
 
 function configurationError(message) {

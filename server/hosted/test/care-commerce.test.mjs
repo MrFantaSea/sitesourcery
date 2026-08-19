@@ -437,37 +437,54 @@ test("customer and operator catalog reads use authenticated scoped eligibility",
 
 test("held mail interface reserves digest-only lifecycle work and never sends", async () => {
   const calls = [];
-  const lifecycle = {
+  const notifications = {
     providerEffects: false,
+    deliveryClaimed: false,
     async readiness() {
       return { ready: true, verified: true };
     },
-    async reserve(input) {
+    async reserveOperator(input) {
       calls.push(input);
       return {
-        schema: "sitesourcery.hosted-mail-delivery-receipt/v1",
-        messageId: IDS.message,
-        messageType: "commerce_customer_notification",
-        organizationId: input.organizationId,
-        projectId: input.projectId,
-        customerUserId: input.customerUserId,
-        state: "pending",
-        provider: null,
-        requestedAt: NOW,
-        expiresAt: input.expiresAt
+        schema: "sitesourcery.mail-purpose-notification-read/v1",
+        organizationId: input.operatorOrganizationId,
+        projectId: IDS.project,
+        sourceCustomerUserId: IDS.customer,
+        source: { ...input.source, occurredAt: NOW },
+        reservation: {
+          state: "held",
+          digest: DIGESTS.acceptance,
+          reservedAt: NOW,
+          expiresAt: input.expiresAt
+        },
+        mail: {
+          messageId: IDS.message,
+          lifecycleState: "pending",
+          deliveryConfirmed: false
+        },
+        providerEffectsAuthorized: false,
+        deliveryClaimed: false
       };
     }
   };
   const mail = createCareCommerceMailReservationInterface({
-    lifecycle,
+    notifications,
     clock: { now: () => NOW }
   });
   const receipt = await mail.reserve({
+    actorId: IDS.operator,
     commandId: "care.commerce.mail.0001",
     organizationId: IDS.organization,
     projectId: IDS.project,
     customerUserId: IDS.customer,
     resourceDigest: DIGESTS.acceptance,
+    source: {
+      table: "ss.care_commerce_quotes",
+      id: IDS.quote,
+      revision: 1,
+      digest: DIGESTS.acceptance,
+      state: "held"
+    },
     recipientDigest: DIGESTS.recipient,
     contentDigest: DIGESTS.content,
     templateVersion: "care-commerce-quote-held.v1",
@@ -477,7 +494,8 @@ test("held mail interface reserves digest-only lifecycle work and never sends", 
   assert.equal(receipt.deliveryEffects, false);
   assert.equal(receipt.providerEffects, false);
   assert.equal(calls.length, 1);
-  assert.equal(calls[0].messageType, "commerce_customer_notification");
+  assert.equal(calls[0].purposeKind, "care");
+  assert.equal(calls[0].notificationKind, "care_commerce_quote_held");
   assert.equal(calls[0].subjectReferenceDigest, DIGESTS.acceptance);
   assert.equal("recipient" in calls[0], false);
   assert.equal("send" in mail, false);

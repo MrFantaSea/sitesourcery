@@ -74,7 +74,17 @@ function repository() {
     },
     async resolveTicketMailScope(input) {
       calls.push(["mail-scope", input]);
-      return { projectId: IDS.project, customerUserId: IDS.customer };
+      return {
+        projectId: IDS.project,
+        customerUserId: IDS.customer,
+        source: {
+          table: "ss.care_commands",
+          id: IDS.entry,
+          revision: 1,
+          digest: DIGEST.work,
+          state: "ticket_start"
+        }
+      };
     }
   };
   for (const method of [
@@ -89,28 +99,44 @@ function repository() {
   return selected;
 }
 
-function lifecycle() {
+function notifications() {
   const calls = [];
   return {
     calls,
     providerEffects: false,
+    deliveryClaimed: false,
     async readiness() {
       return { ready: true, verified: true };
     },
-    async reserve(input) {
+    async reserveOperator(input) {
       calls.push(input);
       return {
-        schema: "sitesourcery.hosted-mail-delivery-receipt/v1",
-        messageId: IDS.message,
-        messageType: "support_notification",
-        organizationId: input.organizationId,
-        projectId: input.projectId,
-        customerUserId: input.customerUserId,
-        state: "pending",
-        provider: null,
+        schema: "sitesourcery.mail-purpose-notification-read/v1",
+        purposeKind: input.purposeKind,
+        notificationKind: input.notificationKind,
+        templateVersion: input.templateVersion,
+        organizationId: input.operatorOrganizationId,
+        projectId: IDS.project,
+        sourceCustomerUserId: IDS.customer,
+        referenceId: IDS.ticket,
+        source: {
+          ...input.source,
+          occurredAt: NOW
+        },
+        reservation: {
+          state: "held",
+          digest: DIGEST.provider,
+          reservedAt: NOW,
+          expiresAt: input.expiresAt
+        },
+        mail: {
+          messageId: IDS.message,
+          lifecycleState: "pending",
+          deliveryConfirmed: false
+        },
+        providerEffectsAuthorized: false,
+        deliveryClaimed: false,
         revision: 1,
-        requestedAt: NOW,
-        expiresAt: input.expiresAt
       };
     }
   };
@@ -118,14 +144,14 @@ function lifecycle() {
 
 function fixture() {
   const care = repository();
-  const mailLifecycle = lifecycle();
+  const mailNotifications = notifications();
   const mailReservations = createCareMailReservationInterface({
-    lifecycle: mailLifecycle,
+    notifications: mailNotifications,
     clock: { now: () => NOW }
   });
   return {
     care,
-    mailLifecycle,
+    mailNotifications,
     service: createCareSurfacesService({
       repository: care,
       mailReservations,
@@ -287,7 +313,7 @@ test("assessment findings cross the surface as one digest and resolve internally
 });
 
 test("Care mail reserves digest-only durable state and never accepts or sends content", async () => {
-  const { care, mailLifecycle, service } = fixture();
+  const { care, mailNotifications, service } = fixture();
   const result = await service.reserveTicketMail(
     actor,
     IDS.ticket,
@@ -306,13 +332,16 @@ test("Care mail reserves digest-only durable state and never accepts or sends co
   assert.equal(result.state, "reserved");
   assert.equal(result.deliveryEffects, false);
   assert.equal(result.providerEffects, false);
-  assert.equal(mailLifecycle.calls.length, 1);
-  const reserved = mailLifecycle.calls[0];
-  assert.equal(reserved.messageType, "support_notification");
-  assert.equal(reserved.organizationId, IDS.organization);
-  assert.equal(reserved.projectId, IDS.project);
-  assert.equal(reserved.customerUserId, IDS.customer);
-  assert.match(reserved.commandId, /^care[.]mail[.][0-9a-f]{64}$/u);
+  assert.equal(mailNotifications.calls.length, 1);
+  const reserved = mailNotifications.calls[0];
+  assert.equal(reserved.actorId, IDS.actor);
+  assert.equal(reserved.commandId, "care.command.0001");
+  assert.equal(reserved.operatorOrganizationId, IDS.organization);
+  assert.equal(reserved.purposeKind, "care");
+  assert.equal(reserved.notificationKind, "care_ticket_update");
+  assert.equal(reserved.source.table, "ss.care_commands");
+  assert.equal(reserved.source.id, IDS.entry);
+  assert.equal(reserved.source.digest, DIGEST.work);
   assert.equal("recipient" in reserved, false);
   assert.equal("subject" in reserved, false);
   assert.equal("body" in reserved, false);

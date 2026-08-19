@@ -1,7 +1,7 @@
 # PUBLICATION_HOLD — template only. Do not copy, enable, or start.
 
 [Unit]
-Description=Site Sourcery hosted API and tenant runtime
+Description=Site Sourcery hosted API and sole publication writer
 After=local-fs.target network-online.target
 Wants=network-online.target
 ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED

@@ -37,9 +37,9 @@ function fixture({ enabled = true, execute = async () => ({
   const executor = {
     kind: `${PURPOSE}-executor`,
     async readiness() { return { ready: true, verified: true }; },
-    async execute(claim) {
+    async execute(claim, context) {
       calls.push(["execute", claim]);
-      return execute(claim);
+      return execute(claim, context);
     }
   };
   const worker = createLeasedLifecycleWorker({
@@ -87,6 +87,35 @@ test("failed execution releases only its fenced claim with a safe retry", async 
   const release = selected.calls.find(([kind]) => kind === "release")[1];
   assert.equal(release.failureCode, "PROJECT_OBJECT_DELETE_RETRY");
   assert.equal(release.retryAt, "2026-08-13T12:00:00.100Z");
+});
+
+test("stop aborts an enabled lifecycle loop and drains its active execution", async () => {
+  let entered;
+  let release;
+  const started = new Promise((resolve) => { entered = resolve; });
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const selected = fixture({
+    execute: async (_claim, { signal }) => {
+      assert.equal(signal.aborted, false);
+      entered();
+      await blocked;
+      assert.equal(signal.aborted, true);
+      return { receiptKind: "blob_deleted" };
+    }
+  });
+  assert.equal(selected.worker.start(), true);
+  await started;
+  let stopped = false;
+  const stopping = selected.worker.stop().then(() => { stopped = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(stopped, false);
+  release();
+  await stopping;
+  assert.equal(selected.worker.snapshot().state, "stopped");
+  assert.equal(
+    selected.calls.filter(([kind]) => kind === "complete").length,
+    1
+  );
 });
 
 test("lifecycle environment options are held, exact, and bounded", () => {

@@ -5,7 +5,8 @@ import { existsSync } from "node:fs";
 import { canonicalJson, SelfHostRuntime } from "../src/index.mjs";
 
 const dataRoot = path.resolve(
-  process.env.SITESOURCERY_DATA_ROOT ?? "/var/lib/sitesourcery/tenant"
+  process.env.SITESOURCERY_DATA_ROOT ??
+    "/var/lib/sitesourcery/tenant-runtime"
 );
 if (
   !existsSync(path.join(dataRoot, "control", "current.json")) ||
@@ -13,7 +14,7 @@ if (
 ) {
   throw new Error("Existing control state and release storage are required for export.");
 }
-const runtime = await SelfHostRuntime.open({
+const runtime = await SelfHostRuntime.openServing({
   root: dataRoot,
   publicationHeld: true
 });

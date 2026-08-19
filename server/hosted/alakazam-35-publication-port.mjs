@@ -48,6 +48,7 @@ export function createAlakazam35PublicationPort({
   invariant(
     runtime &&
       typeof runtime.installRelease === "function" &&
+      typeof runtime.readiness === "function" &&
       runtime.control &&
       runtime.releases &&
       assetRepository &&
@@ -97,6 +98,9 @@ export function createAlakazam35PublicationPort({
       });
     }
   };
+  if (typeof runtime.readiness === "function") {
+    proxyRuntime.readiness = runtime.readiness.bind(runtime);
+  }
   for (const method of [
     "activate",
     "publicationHeld",

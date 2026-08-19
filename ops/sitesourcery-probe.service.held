@@ -2,8 +2,8 @@
 
 [Unit]
 Description=Probe Site Sourcery loopback runtime
-After=sitesourcery-hosted.service
-Requires=sitesourcery-hosted.service
+After=sitesourcery-hosted.service sitesourcery-tenant.service
+Requires=sitesourcery-hosted.service sitesourcery-tenant.service
 ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
 
 [Service]

@@ -65,10 +65,10 @@ import {
   createHeldCustomServicesAssessmentWork
 } from "../custom-services-assessment-work-postgres.mjs";
 import {
-  createHeldCustomServicesCustomBuild
+  createPostgresCustomServicesCustomBuild
 } from "../custom-services-custom-build-postgres.mjs";
 import {
-  createHeldCustomServicesCustomBuildPayment
+  createPostgresCustomServicesCustomBuildPayment
 } from "../custom-services-custom-build-payment-postgres.mjs";
 import {
   createHeldCustomServicesCustomBuildProgress
@@ -108,6 +108,12 @@ import {
   createProductionRegistrationMailPort
 } from "../registration-mail-port.mjs";
 import { createCanonicalPostgresAuthority } from "../repository-postgres.mjs";
+import {
+  createAdjacentIntegrationService
+} from "../adjacent-integration.mjs";
+import {
+  createPostgresAdjacentIntegrationRepository
+} from "../adjacent-integration-postgres.mjs";
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
 import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
@@ -1468,14 +1474,41 @@ test(
         release: assessmentPaymentRelease,
         reconciliation: assessmentSettlement
       });
+    const customServicesCustomBuild =
+      createPostgresCustomServicesCustomBuild({ authority });
+    const customBuildProviderCalls = [];
+    const customServicesCustomBuildPayment =
+      createPostgresCustomServicesCustomBuildPayment({
+        authority,
+        provider: {
+          async createCustomBuildStartCheckout(...args) {
+            customBuildProviderCalls.push(["create", args]);
+            throw new Error("held Custom provider must not be reached");
+          },
+          async retrieveCustomBuildStartPayment(...args) {
+            customBuildProviderCalls.push(["payment-readback", args]);
+            throw new Error("held Custom provider must not be reached");
+          },
+          async retrieveCustomBuildStartCheckoutLifecycle(...args) {
+            customBuildProviderCalls.push(["lifecycle-readback", args]);
+            throw new Error("held Custom provider must not be reached");
+          }
+        },
+        release: {
+          approved: false,
+          currency: "USD",
+          paymentWindowDays: 7,
+          taxMode: "disabled_by_owner"
+        },
+        clock: commerceV2.clock,
+        ids: commerceV2.ids
+      });
     const customServicesAccount =
       createHostedCustomServicesAccount({
         assessmentWork:
           createHeldCustomServicesAssessmentWork(),
-        customBuild:
-          createHeldCustomServicesCustomBuild(),
-        customBuildPayment:
-          createHeldCustomServicesCustomBuildPayment(),
+        customBuild: customServicesCustomBuild,
+        customBuildPayment: customServicesCustomBuildPayment,
         customBuildProgress:
           createHeldCustomServicesCustomBuildProgress(),
         invoiceRepository:
@@ -5152,6 +5185,552 @@ test(
           }
           await browserServer.close();
         }
+      }
+    );
+    await t.test(
+      "FIN-006-COMPOSED-TRACE-01 binds 15 exact all-held account, Custom, and adjacent gates",
+      async () => {
+        const EXPECTED_GATES = Object.freeze([
+          "activated-registration-possession",
+          "active-profile-identity",
+          "owner-membership",
+          "engagement-project-opportunity-identity",
+          "customer-operator-route-denial",
+          "foreign-tenant-denial",
+          "direct-quote-created",
+          "exact-scope-price-digests",
+          "customer-read-acceptance-replay",
+          "durable-acceptance-invoice-readback",
+          "payment-held-projection",
+          "checkout-rejected-before-provider",
+          "zero-provider-payment-effects",
+          "zero-fulfillment-publication-effects",
+          "hub-dell-same-project-held-readback"
+        ]);
+        const gates = [];
+        const passed = (gate) => gates.push(gate);
+        const origin = "https://app.sitesourcery.test";
+        const csrf = "f".repeat(32);
+        const requestAs = async (sessionToken, {
+          body,
+          commandId,
+          method = "GET",
+          pathname
+        }) => {
+          const headers = {};
+          if (sessionToken) {
+            headers.Cookie = `ss_session=${sessionToken}`;
+          }
+          if (method !== "GET") {
+            headers.Cookie =
+              `${headers.Cookie ? `${headers.Cookie}; ` : ""}` +
+              `ss_csrf=${csrf}`;
+            headers.Origin = origin;
+            headers["X-CSRF-Token"] = csrf;
+            headers["Idempotency-Key"] = commandId;
+            headers["Content-Type"] = "application/json";
+          }
+          const response = await createTraceApi.fetch(new Request(
+            `${origin}${pathname}`,
+            {
+              method,
+              headers,
+              body: body === undefined ? undefined : JSON.stringify(body)
+            }
+          ));
+          let selectedBody = null;
+          if (response.headers.get("content-type")?.includes("application/json")) {
+            selectedBody = await response.json();
+          }
+          return { response, body: selectedBody };
+        };
+
+        await pool.query(
+          `insert into ss.operator_permissions (
+             operator_user_id, capability, state,
+             granted_by_user_id, granted_at
+           ) values
+             ($1, 'service_quote_author', 'held', $1, clock_timestamp()),
+             ($1, 'service_management_manage', 'held', $1, clock_timestamp())`,
+          [otherActor.userId]
+        );
+        await pool.query(
+          `insert into ss.service_operator_authority_events (
+             operator_user_id, capability, event_sequence,
+             event_kind, predecessor_event_id, recorded_by_kind,
+             effective_at, expires_at, created_at
+           ) values
+             ($1, 'service_quote_author', 99, 'grant', null,
+              'deployment_control', clock_timestamp(),
+              clock_timestamp() + interval '1 day', clock_timestamp()),
+             ($1, 'service_management_manage', 99, 'grant', null,
+              'deployment_control', clock_timestamp(),
+              clock_timestamp() + interval '1 day', clock_timestamp())`,
+          [otherActor.userId]
+        );
+        engagementClockNow = new Date(Date.now() + 5_000).toISOString();
+        const adjacentIntegration = createAdjacentIntegrationService({
+          repository: createPostgresAdjacentIntegrationRepository({
+            authority
+          }),
+          clock: { now: () => new Date().toISOString() },
+          ids: { next: () => randomUUID() }
+        });
+        const createTraceApi = createHostedApi(service, {
+          customServicesAccount,
+          customServicesCustomBuild,
+          engagementBootstrap
+        });
+
+        const registration = (await pool.query(
+          `select state, activated_user_id, activated_organization_id,
+                  possession_evidence_digest, possession_proven_at
+             from ss.hosted_registration_requests
+            where command_id = 'registration-owner-001'`
+        )).rows[0];
+        assert.equal(registration.state, "activated");
+        assert.equal(registration.activated_user_id, registered.user.id);
+        assert.equal(
+          registration.activated_organization_id,
+          registered.organization.id
+        );
+        assert.match(registration.possession_evidence_digest, /^[a-f0-9]{64}$/u);
+        assert.ok(registration.possession_proven_at);
+        passed("activated-registration-possession");
+
+        const identityState = (await pool.query(
+          `select users.id as user_id, profile.state
+             from auth.users users
+             join ss.hosted_account_profiles profile
+               on profile.user_id = users.id
+            where users.id = $1`,
+          [registered.user.id]
+        )).rows[0];
+        assert.deepEqual(identityState, {
+          user_id: registered.user.id,
+          state: "active"
+        });
+        passed("active-profile-identity");
+
+        const ownerMembership = (await pool.query(
+          `select role, state
+             from ss.organization_memberships
+            where organization_id = $1 and user_id = $2`,
+          [registered.organization.id, registered.user.id]
+        )).rows[0];
+        assert.deepEqual(ownerMembership, { role: "owner", state: "active" });
+        passed("owner-membership");
+
+        const invitationResult = await requestAs(
+          otherRegistered.sessionToken,
+          {
+            method: "POST",
+            pathname: "/api/v1/operator/engagement-invitations",
+            commandId: "fin006-composed-invitation-001",
+            body: {
+              customerEmail: ownerEmail,
+              customerName: "Test Owner",
+              organizationId: registered.organization.id,
+              organizationName: null,
+              projectName: "FIN-006 Held Custom Trace",
+              provenance: "direct_custom_inquiry",
+              site: { kind: "new_site" },
+              sourceAssessmentReportId: null
+            }
+          }
+        );
+        assert.equal(
+          invitationResult.response.status,
+          201,
+          JSON.stringify(invitationResult.body)
+        );
+        const claimResult = await requestAs(null, {
+          method: "POST",
+          pathname: "/api/v1/auth/engagement-claim",
+          commandId: "fin006-composed-claim-001",
+          body: {
+            legalAcceptance: projectLegalAcceptance,
+            password: "rotated correct horse battery staple",
+            token: invitationResult.body.claimToken
+          }
+        });
+        assert.equal(
+          claimResult.response.status,
+          201,
+          JSON.stringify(claimResult.body)
+        );
+        const claim = claimResult.body;
+        const claimSessionCookie =
+          claimResult.response.headers.get("set-cookie");
+        assert.match(
+          claimSessionCookie,
+          /^ss_session=[A-Za-z0-9_-]{43};/u
+        );
+        const claimSessionToken =
+          claimSessionCookie.slice("ss_session=".length).split(";", 1)[0];
+        assert.equal(claim.user.id, registered.user.id);
+        assert.equal(claim.organization.id, registered.organization.id);
+        assert.equal(claim.project.id, invitationResult.body.project.id);
+        const opportunity = (await pool.query(
+          `select opportunity.id, opportunity.engagement_id,
+                  opportunity.organization_id, opportunity.project_id,
+                  opportunity.customer_user_id, opportunity.state,
+                  engagement.provenance
+             from ss.service_custom_build_direct_opportunities opportunity
+             join ss.customer_engagements engagement
+               on engagement.id = opportunity.engagement_id
+              and engagement.organization_id = opportunity.organization_id
+              and engagement.project_id = opportunity.project_id
+            where opportunity.engagement_id = $1`,
+          [claim.engagementId]
+        )).rows[0];
+        assert.deepEqual(
+          {
+            engagementId: opportunity.engagement_id,
+            organizationId: opportunity.organization_id,
+            projectId: opportunity.project_id,
+            customerUserId: opportunity.customer_user_id,
+            state: opportunity.state,
+            provenance: opportunity.provenance
+          },
+          {
+            engagementId: claim.engagementId,
+            organizationId: claim.organization.id,
+            projectId: claim.project.id,
+            customerUserId: claim.user.id,
+            state: "available",
+            provenance: "direct_custom_inquiry"
+          }
+        );
+        passed("engagement-project-opportunity-identity");
+
+        const quoteBody = {
+          contentWords: 1600,
+          craftedPages: 4,
+          creditSelection: "no_credit",
+          expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+          organizationId: claim.organization.id,
+          scopeStatement:
+            "Build the four-page FIN-006 direct Custom site without releasing any external effect.",
+          sections: 14,
+          suppliedMedia: 10,
+          targetCompletionDate: new Date(Date.now() + 45 * 86400000)
+            .toISOString().slice(0, 10),
+          tierId: "site",
+          uniqueLayouts: 4
+        };
+        const customerOperatorDenial = await requestAs(
+          claimSessionToken,
+          {
+            method: "POST",
+            pathname:
+              `/api/v1/operator/custom-services/custom-build-opportunities/` +
+              `${claim.project.id}/quote`,
+            commandId: "fin006-customer-operator-denial-001",
+            body: quoteBody
+          }
+        );
+        assert.equal(customerOperatorDenial.response.status, 403);
+        assert.equal(
+          customerOperatorDenial.body.error.code,
+          "OPERATOR_ACCESS_REQUIRED"
+        );
+        passed("customer-operator-route-denial");
+
+        const foreignRead = await requestAs(otherRegistered.sessionToken, {
+          pathname:
+            `/api/v1/projects/${claim.project.id}` +
+            "/custom-services/custom-build-quote"
+        });
+        assert.equal(foreignRead.response.status, 404);
+        passed("foreign-tenant-denial");
+
+        const quoteResult = await requestAs(otherRegistered.sessionToken, {
+          method: "POST",
+          pathname:
+            `/api/v1/operator/custom-services/custom-build-opportunities/` +
+            `${claim.project.id}/quote`,
+          commandId: "fin006-composed-quote-001",
+          body: quoteBody
+        });
+        assert.equal(
+          quoteResult.response.status,
+          201,
+          JSON.stringify(quoteResult.body)
+        );
+        const issuedQuote = quoteResult.body.quote;
+        const scopeEvidenceDigest = commerceDigest({
+          schema: "sitesourcery.fin006-composed-scope-evidence/v1",
+          scopeStatement: issuedQuote.scopeStatement,
+          targetCompletionDate: issuedQuote.targetCompletionDate,
+          tier: issuedQuote.tier
+        });
+        assert.equal(quoteResult.body.origin, "direct");
+        assert.equal(issuedQuote.origin, "direct");
+        passed("direct-quote-created");
+        assert.equal(issuedQuote.pricing.serviceAmountMinor, 120000);
+        assert.equal(issuedQuote.pricing.creditAmountMinor, 0);
+        assert.equal(issuedQuote.pricing.startDueMinor, 60000);
+        assert.equal(issuedQuote.creditSelection, "no_credit");
+        assert.match(issuedQuote.quoteDigest, /^[a-f0-9]{64}$/u);
+        assert.match(issuedQuote.disclosureDigest, /^[a-f0-9]{64}$/u);
+        assert.match(scopeEvidenceDigest, /^[a-f0-9]{64}$/u);
+        passed("exact-scope-price-digests");
+
+        const quotePath =
+          `/api/v1/projects/${claim.project.id}` +
+          "/custom-services/custom-build-quote";
+        const customerQuote = await requestAs(claimSessionToken, {
+          pathname: quotePath
+        });
+        assert.equal(customerQuote.response.status, 200);
+        assert.equal(customerQuote.body.quote.quoteId, issuedQuote.quoteId);
+        const acceptanceBody = {
+          acceptanceStatement: "accepted_exact_custom_build_quote",
+          acceptedDisclosureDigest: issuedQuote.disclosureDigest,
+          acceptedQuoteDigest: issuedQuote.quoteDigest,
+          quoteId: issuedQuote.quoteId,
+          quoteRevision: issuedQuote.quoteRevision
+        };
+        const accepted = await requestAs(claimSessionToken, {
+          method: "POST",
+          pathname: `${quotePath}/acceptance`,
+          commandId: "fin006-composed-accept-001",
+          body: acceptanceBody
+        });
+        const acceptedReplay = await requestAs(claimSessionToken, {
+          method: "POST",
+          pathname: `${quotePath}/acceptance`,
+          commandId: "fin006-composed-accept-001",
+          body: acceptanceBody
+        });
+        assert.equal(accepted.response.status, 200);
+        assert.equal(acceptedReplay.response.status, 200);
+        assert.equal(accepted.body.state, "accepted");
+        assert.deepEqual(acceptedReplay.body, accepted.body);
+        assert.equal(
+          accepted.body.quote.acceptance.acceptedQuoteDigest,
+          issuedQuote.quoteDigest
+        );
+        passed("customer-read-acceptance-replay");
+
+        const invoiceResult = await requestAs(claimSessionToken, {
+          pathname:
+            `/api/v1/projects/${claim.project.id}` +
+            "/custom-services/custom-build-invoice"
+        });
+        assert.equal(invoiceResult.response.status, 200);
+        const durableIdentity = (await pool.query(
+          `select quote.id as quote_id,
+                  quote.direct_opportunity_id,
+                  acceptance.id as acceptance_id,
+                  invoice.id as invoice_id,
+                  invoice.invoice_digest,
+                  invoice.state as invoice_state
+             from ss.service_custom_build_quotes quote
+             join ss.service_custom_build_quote_acceptances acceptance
+               on acceptance.organization_id = quote.organization_id
+              and acceptance.quote_id = quote.id
+             join ss.service_custom_build_invoices invoice
+               on invoice.organization_id = acceptance.organization_id
+              and invoice.quote_acceptance_id = acceptance.id
+            where quote.organization_id = $1
+              and quote.project_id = $2
+              and quote.customer_user_id = $3
+              and quote.id = $4
+              and quote.direct_opportunity_id = $5`,
+          [
+            claim.organization.id,
+            claim.project.id,
+            claim.user.id,
+            issuedQuote.quoteId,
+            opportunity.id
+          ]
+        )).rows[0];
+        assert.match(
+          durableIdentity.acceptance_id,
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+        );
+        assert.equal(
+          durableIdentity.invoice_id,
+          invoiceResult.body.invoice.invoiceId
+        );
+        assert.equal(
+          durableIdentity.invoice_digest,
+          invoiceResult.body.invoice.invoiceDigest
+        );
+        passed("durable-acceptance-invoice-readback");
+
+        assert.equal(invoiceResult.body.state, "payment_held");
+        assert.deepEqual(invoiceResult.body.action, {
+          available: false,
+          reason: "payment_held"
+        });
+        passed("payment-held-projection");
+        const checkout = await requestAs(claimSessionToken, {
+          method: "POST",
+          pathname:
+            `/api/v1/projects/${claim.project.id}` +
+            "/custom-services/custom-build-invoices/" +
+            `${invoiceResult.body.invoice.invoiceId}/checkout-command`,
+          commandId: "fin006-composed-checkout-held-001",
+          body: { invoiceDigest: invoiceResult.body.invoice.invoiceDigest }
+        });
+        assert.equal(checkout.response.status, 503);
+        assert.equal(
+          checkout.body.error.code,
+          "CUSTOM_BUILD_PAYMENT_HELD"
+        );
+        assert.equal(customBuildProviderCalls.length, 0);
+        passed("checkout-rejected-before-provider");
+
+        const zeroEffects = (await pool.query(
+          `select
+             (select count(*)::integer
+                from ss.service_custom_build_checkout_attempts
+               where organization_id = $1 and project_id = $2) as attempts,
+             (select count(*)::integer
+                from ss.service_custom_build_stripe_events
+               where organization_id = $1 and project_id = $2) as events,
+             (select count(*)::integer
+                from ss.service_custom_build_payment_receipts
+               where organization_id = $1 and project_id = $2) as receipts,
+             (select count(*)::integer
+                from ss.service_custom_build_jobs
+               where organization_id = $1 and project_id = $2) as jobs,
+             (select count(*)::integer
+                from ss.service_custom_build_work_requests
+               where organization_id = $1 and project_id = $2) as work_requests,
+             (select count(*)::integer
+                from ss.publication_control_commands
+               where organization_id = $1 and project_id = $2) as publication_commands`,
+          [claim.organization.id, claim.project.id]
+        )).rows[0];
+        assert.deepEqual(
+          {
+            attempts: zeroEffects.attempts,
+            events: zeroEffects.events,
+            receipts: zeroEffects.receipts
+          },
+          { attempts: 0, events: 0, receipts: 0 }
+        );
+        assert.equal(customBuildProviderCalls.length, 0);
+        passed("zero-provider-payment-effects");
+        assert.deepEqual(
+          {
+            jobs: zeroEffects.jobs,
+            work_requests: zeroEffects.work_requests,
+            publication_commands: zeroEffects.publication_commands
+          },
+          { jobs: 0, work_requests: 0, publication_commands: 0 }
+        );
+        passed("zero-fulfillment-publication-effects");
+
+        await pool.query(
+          `insert into ss.organization_memberships (
+             organization_id, user_id, role, state, accepted_at
+           ) values ($1, $2, 'viewer', 'active', clock_timestamp())`,
+          [claim.organization.id, otherActor.userId]
+        );
+        const adjacentScope = {
+          actorId: otherActor.userId,
+          operatorOrganizationId: claim.organization.id
+        };
+        const observedAt = new Date().toISOString();
+        const hubRevision = `sha256:${"6".repeat(64)}`;
+        const dellRevision = `sha256:${"7".repeat(64)}`;
+        const hubSnapshot = await adjacentIntegration.recordGlobalSnapshot({
+          ...adjacentScope,
+          commandId: "fin006-composed-hub-snapshot-001",
+          systemKey: "client_profile_hub",
+          remoteEntityKind: "service",
+          remoteReference: `sha256:${"8".repeat(64)}`,
+          observationKind: "registry_revision",
+          observationState: "available",
+          sourceRevision: hubRevision,
+          sourcePayloadDigest: "6".repeat(64),
+          sourceObservedAt: observedAt
+        });
+        const dellSnapshot = await adjacentIntegration.recordGlobalSnapshot({
+          ...adjacentScope,
+          commandId: "fin006-composed-dell-snapshot-001",
+          systemKey: "dell_commercial_engine",
+          remoteEntityKind: "catalog",
+          remoteReference: `sha256:${"9".repeat(64)}`,
+          observationKind: "catalog_readback",
+          observationState: "available",
+          sourceRevision: dellRevision,
+          sourcePayloadDigest: "7".repeat(64),
+          sourceObservedAt: observedAt
+        });
+        const recordCrosswalk = (input) =>
+          adjacentIntegration.recordCrosswalk({
+            ...adjacentScope,
+            projectId: claim.project.id,
+            localEntityKind: "project",
+            localEntityId: claim.project.id,
+            referencePolicy: input.referencePolicy,
+            remoteEntityKind: input.remoteEntityKind,
+            remoteReference: input.remoteReference,
+            sourceEvidenceDigest: input.sourcePayloadDigest,
+            sourceRevision: input.sourceRevision,
+            sourceSnapshotId: input.sourceSnapshotId,
+            state: "manual_review",
+            supersedesCrosswalkId: null,
+            systemKey: input.systemKey,
+            commandId: input.commandId
+          });
+        const hubCrosswalk = await recordCrosswalk({
+          commandId: "fin006-composed-hub-project-001",
+          systemKey: "client_profile_hub",
+          sourceSnapshotId: hubSnapshot.id,
+          sourceRevision: hubRevision,
+          sourcePayloadDigest: "6".repeat(64),
+          remoteEntityKind: "project",
+          referencePolicy: "hub_project_id",
+          remoteReference: "SS-2026-6001"
+        });
+        const dellScope = await recordCrosswalk({
+          commandId: "fin006-composed-dell-scope-001",
+          systemKey: "dell_commercial_engine",
+          sourceSnapshotId: dellSnapshot.id,
+          sourceRevision: dellRevision,
+          sourcePayloadDigest: "7".repeat(64),
+          remoteEntityKind: "scope",
+          referencePolicy: "digest_only",
+          remoteReference: `sha256:${scopeEvidenceDigest}`
+        });
+        const dellQuote = await recordCrosswalk({
+          commandId: "fin006-composed-dell-quote-001",
+          systemKey: "dell_commercial_engine",
+          sourceSnapshotId: dellSnapshot.id,
+          sourceRevision: dellRevision,
+          sourcePayloadDigest: "7".repeat(64),
+          remoteEntityKind: "quote",
+          referencePolicy: "digest_only",
+          remoteReference: `sha256:${issuedQuote.quoteDigest}`
+        });
+        const adjacentTrace = await adjacentIntegration.listTrace({
+          ...adjacentScope,
+          projectId: claim.project.id,
+          systemKey: null,
+          crosswalkId: null
+        });
+        assert.equal(
+          [hubCrosswalk.id, dellScope.id, dellQuote.id].every((id) =>
+            adjacentTrace.crosswalks.some((entry) =>
+              entry.id === id && entry.projectId === claim.project.id
+            )
+          ),
+          true
+        );
+        assert.equal(adjacentTrace.remoteWrites, false);
+        assert.equal(adjacentTrace.providerEffects, false);
+        assert.equal(adjacentTrace.automaticCommands, false);
+        passed("hub-dell-same-project-held-readback");
+
+        assert.deepEqual(gates, EXPECTED_GATES);
+        assert.equal(gates.length, 15);
       }
     );
     await t.test(

@@ -258,9 +258,10 @@ test("production F03 composition remains the base of F04 without changing the co
     workerSource,
     /createAlakazam35TierCompiler\(\{\s*baseCompiler: compiler,\s*alakazam35Compiler: createAlakazam35Compiler\(\{\s*baseCompiler: compiler\s*\}\)\s*\}\)/u
   );
-  assert.match(
+  assert.match(workerSource, /publicationPort = null/u);
+  assert.doesNotMatch(
     workerSource,
-    /createAlakazam35PublicationPort\(\{\s*runtime,\s*assetRepository: tier35Repository,\s*clock: shared\.commerce\.clock\s*\}\)/u
+    /SelfHostRuntime|createAlakazam35PublicationPort/u
   );
   assert.match(
     workerSource,
@@ -272,7 +273,7 @@ test("production F03 composition remains the base of F04 without changing the co
   );
   assert.match(
     workerSource,
-    /const enabled =\s*shared\.release\.mode === "approved" &&\s*shared\.workerPolicy\.ready === true &&\s*publicationHeld\(\) === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
+    /const publication = await publicationPort\.readiness\(\);[\s\S]*?const enabled =\s*shared\.release\.mode === "approved" &&\s*shared\.workerPolicy\.ready === true &&\s*publication\?\.ready === true && publication\?\.held === false;[\s\S]*?createAlakazamFulfillmentWorker\(\{\s*repository,\s*compiler: tier50Compiler,\s*publicationPort,[\s\S]*?enabled,/u
   );
   assert.match(workerSource, /tier35Repository\.readiness\(\)/u);
   assert.doesNotMatch(

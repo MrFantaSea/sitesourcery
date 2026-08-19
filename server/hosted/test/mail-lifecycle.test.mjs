@@ -64,7 +64,7 @@ test("held mail lifecycle is explicit and performs no provider effects", async (
   );
 });
 
-test("account, support, and commerce reservations carry digests and exact scope only", async () => {
+test("account, support, commerce, and purpose reservations carry digests and exact scope only", async () => {
   const repository = fakeRepository();
   const lifecycle = createMailLifecycle({
     repository,
@@ -100,6 +100,12 @@ test("account, support, and commerce reservations carry digests and exact scope 
       organizationId: null,
       projectId: null,
       customerUserId: null
+    },
+    {
+      messageType: "purpose_customer_notification",
+      organizationId: IDS.organizationId,
+      projectId: IDS.projectId,
+      customerUserId: IDS.actorId
     }
   ];
   for (const [index, scope] of messages.entries()) {
@@ -113,7 +119,7 @@ test("account, support, and commerce reservations carry digests and exact scope 
       expiresAt: "2026-08-10T15:00:00.000Z"
     });
   }
-  assert.equal(repository.calls.length, 5);
+  assert.equal(repository.calls.length, 6);
   for (const [, command] of repository.calls) {
     assert.equal(command.requestedAt, NOW);
     assert.match(command.requestDigest, /^[0-9a-f]{64}$/u);

@@ -7,7 +7,7 @@ import {
   createCareTicketOpen,
   createCareTicketTransition
 } from "./care-core.mjs";
-import { canonicalJson, digest } from "./security.mjs";
+import { canonicalJson } from "./security.mjs";
 
 export const CARE_SURFACE_DASHBOARD_SCHEMA =
   "sitesourcery.care-surface-dashboard/v1";
@@ -25,6 +25,11 @@ const CARE_MAIL_TEMPLATES = new Set([
   "care-ticket-resolved.v1",
   "care-ticket-update.v1"
 ]);
+const CARE_MAIL_NOTIFICATION_KINDS = Object.freeze({
+  "care-ticket-acknowledgment.v1": "care_ticket_acknowledgment",
+  "care-ticket-resolved.v1": "care_ticket_resolved",
+  "care-ticket-update.v1": "care_ticket_update"
+});
 const MAXIMUM_MAIL_RESERVATION_MS = 7 * 24 * 60 * 60 * 1000;
 
 function exactObject(value, keys, field) {
@@ -197,14 +202,15 @@ function heldCustomerEffect() {
 }
 
 export function createCareMailReservationInterface({
-  lifecycle,
+  notifications,
   clock
 } = {}) {
   invariant(
-    lifecycle &&
-      typeof lifecycle.readiness === "function" &&
-      typeof lifecycle.reserve === "function" &&
-      lifecycle.providerEffects === false,
+    notifications &&
+      typeof notifications.readiness === "function" &&
+      typeof notifications.reserveOperator === "function" &&
+      notifications.providerEffects === false &&
+      notifications.deliveryClaimed === false,
     "CARE_SURFACE_CONFIGURATION_REQUIRED",
     "A durable provider-held mail lifecycle is required.",
     { status: 500 }
@@ -214,14 +220,14 @@ export function createCareMailReservationInterface({
     mode: "reservation-only",
     deliveryEffects: false,
     providerEffects: false,
-    readiness: () => lifecycle.readiness(),
+    readiness: () => notifications.readiness(),
     async reserve(input) {
       exactObject(
         input,
         [
-          "commandId", "contentDigest", "customerUserId", "expiresAt",
+          "actorId", "commandId", "contentDigest", "customerUserId", "expiresAt",
           "organizationId", "projectId", "recipientDigest",
-          "subjectReferenceDigest", "templateVersion", "ticketId"
+          "source", "subjectReferenceDigest", "templateVersion", "ticketId"
         ],
         "Care mail reservation"
       );
@@ -238,15 +244,17 @@ export function createCareMailReservationInterface({
         "Care mail template or expiry is invalid.",
         { status: 400 }
       );
-      const reservation = await lifecycle.reserve({
-        commandId: `care.mail.${digest({
-          commandId: safeId(input.commandId, "Care mail idempotency key"),
-          ticketId
-        })}`,
-        messageType: "support_notification",
-        organizationId: uuid(input.organizationId, "Care organization ID"),
-        projectId: uuid(input.projectId, "Care project ID"),
-        customerUserId: uuid(input.customerUserId, "Care customer ID"),
+      const reservation = await notifications.reserveOperator({
+        actorId: uuid(input.actorId, "Care operator ID"),
+        commandId: safeId(input.commandId, "Care mail idempotency key"),
+        operatorOrganizationId: uuid(
+          input.organizationId,
+          "Care organization ID"
+        ),
+        purposeKind: "care",
+        notificationKind:
+          CARE_MAIL_NOTIFICATION_KINDS[input.templateVersion],
+        source: input.source,
         recipientDigest: sha256(input.recipientDigest, "Recipient digest"),
         subjectReferenceDigest: sha256(
           input.subjectReferenceDigest,
@@ -259,16 +267,15 @@ export function createCareMailReservationInterface({
       invariant(
         reservation &&
           reservation.schema ===
-            "sitesourcery.hosted-mail-delivery-receipt/v1" &&
-          UUID.test(reservation.messageId) &&
-          reservation.messageType === "support_notification" &&
+            "sitesourcery.mail-purpose-notification-read/v1" &&
+          reservation.referenceId === ticketId &&
           reservation.organizationId === input.organizationId &&
           reservation.projectId === input.projectId &&
-          reservation.customerUserId === input.customerUserId &&
-          ["pending", "reserved"].includes(reservation.state) &&
-          reservation.provider === null &&
-          Number.isSafeInteger(reservation.revision) &&
-          reservation.revision >= 1,
+          reservation.sourceCustomerUserId === input.customerUserId &&
+          UUID.test(reservation.mail?.messageId) &&
+          reservation.reservation?.state === "held" &&
+          reservation.providerEffectsAuthorized === false &&
+          reservation.deliveryClaimed === false,
         "CARE_MAIL_RESERVATION_CONFLICT",
         "The durable Care mail reservation returned inconsistent evidence.",
         { status: 500 }
@@ -276,13 +283,16 @@ export function createCareMailReservationInterface({
       return deepFreeze({
         schema: CARE_MAIL_RESERVATION_SCHEMA,
         ticketId,
-        messageId: reservation.messageId,
+        messageId: reservation.mail.messageId,
         state: "reserved",
         requestedAt: instant(
-          reservation.requestedAt ?? requestedAt,
+          reservation.reservation.reservedAt,
           "Care mail reservation time"
         ),
-        expiresAt: instant(reservation.expiresAt, "Care mail expiry"),
+        expiresAt: instant(
+          reservation.reservation.expiresAt,
+          "Care mail expiry"
+        ),
         deliveryEffects: false,
         providerEffects: false
       });
@@ -503,14 +513,18 @@ export function createCareSurfacesService({
       const scope = await care.resolveTicketMailScope({
         actorId: selected.actor.actorId,
         organizationId: selected.actor.organizationId,
-        ticketId: selectedTicketId
+        ticketId: selectedTicketId,
+        notificationKind:
+          CARE_MAIL_NOTIFICATION_KINDS[selected.body.templateVersion]
       });
       return mail.reserve({
+        actorId: selected.actor.actorId,
         commandId: selected.commandId,
         ticketId: selectedTicketId,
         organizationId: selected.actor.organizationId,
         projectId: scope.projectId,
         customerUserId: scope.customerUserId,
+        source: scope.source,
         ...selected.body
       });
     }

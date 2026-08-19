@@ -523,8 +523,14 @@ test("held install and rollback plans contain exact commands but no activation",
       installIds.indexOf("install-worker-unit")
   );
   assert.ok(
+    installIds.indexOf("verify-private-tenant-environment") <
+      installIds.indexOf("install-tenant-unit")
+  );
+  assert.ok(
     installIds.indexOf("install-hosted-unit") <
-      installIds.indexOf("install-worker-unit") &&
+      installIds.indexOf("install-tenant-unit") &&
+      installIds.indexOf("install-tenant-unit") <
+        installIds.indexOf("install-worker-unit") &&
       installIds.indexOf("install-worker-unit") <
         installIds.indexOf("install-origin-unit") &&
       installIds.indexOf("install-origin-unit") <
@@ -550,6 +556,8 @@ test("held install and rollback plans contain exact commands but no activation",
       rollbackIds.indexOf("stop-origin-gateway") <
         rollbackIds.indexOf("stop-worker-runtime") &&
       rollbackIds.indexOf("stop-worker-runtime") <
+        rollbackIds.indexOf("stop-tenant-runtime") &&
+      rollbackIds.indexOf("stop-tenant-runtime") <
         rollbackIds.indexOf("stop-hosted-runtime") &&
       rollbackIds.indexOf("stop-hosted-runtime") <
         rollbackIds.indexOf("select-predecessor")

@@ -384,6 +384,7 @@ export function createSelfHostPublicationPort({
       typeof runtime.activate === "function" &&
       typeof runtime.rollback === "function" &&
       typeof runtime.setHostnameGate === "function" &&
+      typeof runtime.readiness === "function" &&
       runtime.control &&
       runtime.releases,
     "PUBLICATION_CONFIGURATION_ERROR",
@@ -691,10 +692,15 @@ export function createSelfHostPublicationPort({
   return Object.freeze({
     kind: "private-in-process-selfhost",
     async readiness() {
+      const storage = await runtime.readiness({
+        ignorePublicationHold: true
+      });
       return {
-        ready: true,
+        ready: storage?.ready === true,
         kind: "private-in-process-selfhost",
-        held: await held()
+        held: await held(),
+        storageReady: storage?.ready === true,
+        storageCode: storage?.code ?? null
       };
     },
     request: publish,

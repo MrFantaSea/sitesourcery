@@ -447,7 +447,12 @@ export function createPostgresCareSurfaceRepository({
     async resolveTicketMailScope(input) {
       validScope(input);
       invariant(
-        UUID.test(input.ticketId),
+        UUID.test(input.ticketId) &&
+          [
+            "care_ticket_acknowledgment",
+            "care_ticket_update",
+            "care_ticket_resolved"
+          ].includes(input.notificationKind),
         "CARE_SURFACE_INVALID",
         "Care ticket ID is invalid.",
         { status: 400 }
@@ -461,25 +466,61 @@ export function createPostgresCareSurfaceRepository({
           ]);
           const selected = await client.query(
             `/* care-surfaces:mail-scope */
-             select ticket.project_id, contract.customer_user_id
+             select ticket.project_id, contract.customer_user_id,
+                    source.id::text as source_id,
+                    source.result_digest as source_digest,
+                    source.action as source_state
                from ss.care_tickets ticket
                join ss.care_customer_contracts contract
                  on contract.organization_id = ticket.organization_id
+                and contract.project_id = ticket.project_id
                 and contract.id = ticket.contract_id
+               join lateral (
+                 select command.id, command.result_digest, command.action
+                   from ss.care_commands command
+                  where command.organization_id = ticket.organization_id
+                    and command.project_id = ticket.project_id
+                    and command.resource_kind = 'ticket'
+                    and command.resource_id = ticket.id
+                    and (
+                      ($3 = 'care_ticket_acknowledgment'
+                        and command.action = 'ticket_open')
+                      or ($3 = 'care_ticket_update'
+                        and command.action in (
+                          'ticket_start', 'ticket_wait',
+                          'ticket_resume', 'ticket_reopen'
+                        ))
+                      or ($3 = 'care_ticket_resolved'
+                        and command.action in (
+                          'ticket_resolve', 'ticket_close'
+                        ))
+                    )
+                  order by command.recorded_at desc, command.id desc
+                  limit 1
+               ) source on true
               where ticket.organization_id = $1 and ticket.id = $2`,
-            [input.organizationId, input.ticketId]
+            [input.organizationId, input.ticketId, input.notificationKind]
           );
           invariant(
             selected.rowCount === 1 &&
               UUID.test(selected.rows[0].project_id) &&
-              UUID.test(selected.rows[0].customer_user_id),
+              UUID.test(selected.rows[0].customer_user_id) &&
+              UUID.test(selected.rows[0].source_id) &&
+              SHA256.test(selected.rows[0].source_digest),
             "CARE_SURFACE_UNAVAILABLE",
             "The Care ticket is unavailable.",
             { status: 404 }
           );
           return deepFreeze({
             projectId: selected.rows[0].project_id,
-            customerUserId: selected.rows[0].customer_user_id
+            customerUserId: selected.rows[0].customer_user_id,
+            source: deepFreeze({
+              table: "ss.care_commands",
+              id: selected.rows[0].source_id,
+              revision: 1,
+              digest: selected.rows[0].source_digest,
+              state: selected.rows[0].source_state
+            })
           });
         }
       ));

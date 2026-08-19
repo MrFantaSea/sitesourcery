@@ -20,7 +20,8 @@ const MESSAGE_TYPES = new Set([
   "account_recovery",
   "support_notification",
   "commerce_customer_notification",
-  "commerce_operator_notification"
+  "commerce_operator_notification",
+  "purpose_customer_notification"
 ]);
 const PROVIDER_EVENTS = new Set([
   "delivered",
@@ -164,6 +165,10 @@ export function normalizeMailReservation(input, requestedAt) {
       selected.projectId !== null &&
       selected.customerUserId !== null) ||
     (selected.messageType === "commerce_customer_notification" &&
+      selected.organizationId !== null &&
+      selected.projectId !== null &&
+      selected.customerUserId !== null) ||
+    (selected.messageType === "purpose_customer_notification" &&
       selected.organizationId !== null &&
       selected.projectId !== null &&
       selected.customerUserId !== null) ||
