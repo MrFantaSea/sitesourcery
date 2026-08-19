@@ -3,7 +3,7 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-005 proved; FIN-006A/B/C/D/E1/E2/E3 subcohorts proved; FIN-006 active
+Status: FIN-006 proved; FIN-007 pending and unopened
 
 ## Governing inputs
 
@@ -24,7 +24,7 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-003 | proved | `a81d1438…` migrations 118–124 | Schema foundation and static contracts | Empty PostgreSQL 16 migration, direct contract, cleanup, and cumulative proofs |
 | FIN-004 | proved | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations, adjacent systems | FIN-004A through FIN-004V proved; every adjacent effect remains held |
 | FIN-005 | proved | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition and bounded Assessment/Custom proof adaptation | No unclassified preserved lane; 87-migration joined proof and cumulative matrix passed |
-| FIN-006 | pending | Integrated source | Root composition and cross-system contracts | Capability/readiness/negative-auth matrix |
+| FIN-006 | proved | Integrated source | Root composition and cross-system contracts | Exact 20-row/six-process matrix, all-93-migration proof, and 15-gate all-held trace |
 | FIN-007 | pending | Canonical commercial source | Catalog/public/legal/artifact closure | One new version/digest and deterministic artifacts |
 | FIN-008 | pending | Candidate migration epoch | Empty and 201-table upgrade rehearsals | Convergent schema/data/restore invariants |
 | FIN-009 | pending | Clean candidate SHA | Private immutable staging | Installed readback and complete owner acceptance |
@@ -192,3 +192,14 @@ and clean cumulative matrix is
 calls/pushes/messages, carrier commands, signing/distribution, public changes,
 and deployment remain held; the final unified composition matrix remains under
 FIN-006.
+
+FIN-006's exact 20-row/six-process startup matrix, physically separate
+API/tenant/worker boundaries, one publication writer, purpose-complete held
+transactional-mail authority, exact worker shutdown/process proof, six-system
+readback, all-93-migration PostgreSQL proof, 15-gate all-held composed trace,
+adversarial corrections, and clean cumulative ladder are recorded in
+`FIN-006-UNIFIED-COMPOSITION-PROVENANCE.md`. The proved candidate is
+`bd88d45630212dc6f0a954be246389ea92788834`, tree
+`c286be2eb9f6e56da29075a7baaed4100833a434`. All processes remain
+candidate/not-installed, and every new provider/public/deployment effect is
+held. FIN-007 is pending and was not started by FIN-006.
