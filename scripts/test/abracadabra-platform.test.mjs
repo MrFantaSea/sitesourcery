@@ -193,6 +193,20 @@ function viewerBrowserHarness({
   storageContext,
   storageGetterBlocked = false,
 }) {
+  let pendingViewerDigests = 0;
+  const viewerCrypto = {
+    subtle: {
+      async digest(...args) {
+        pendingViewerDigests += 1;
+        try {
+          return await webcrypto.subtle.digest(...args);
+        } finally {
+          pendingViewerDigests -= 1;
+        }
+      },
+    },
+  };
+
   class FakeElement {
     constructor(id, { hidden = false } = {}) {
       this.attributes = new Map();
@@ -319,7 +333,7 @@ function viewerBrowserHarness({
   };
   const windowObject = {
     SiteSourceryAbracadabraPlatform: lifecycleModule,
-    crypto: webcrypto,
+    crypto: viewerCrypto,
     location: { search: `?project=${encodeURIComponent(projectId)}` },
     requestAnimationFrame(callback) {
       callback();
@@ -351,7 +365,7 @@ function viewerBrowserHarness({
     TextEncoder,
     URL,
     URLSearchParams,
-    crypto: webcrypto,
+    crypto: viewerCrypto,
     document,
     window: windowObject,
   });
@@ -359,35 +373,53 @@ function viewerBrowserHarness({
     filename: "abracadabra/site/viewer.js",
   }).runInContext(context);
 
+  function readOutput() {
+    return {
+      accessFormHidden: elements["access-form"].hidden,
+      chip: elements["state-chip"].textContent,
+      copy: elements["status-copy"].textContent,
+      exportButtons: exportButtons.map((button) => ({
+        disabled: button.disabled,
+        hidden: button.hidden,
+      })),
+      frameHasSource: elements["published-site"].hasAttribute("srcdoc"),
+      frameSource: elements["published-site"].getAttribute("srcdoc"),
+      projectName: elements["project-name"].textContent,
+      siteHidden: elements["site-stage"].hidden,
+      siteTitle: elements["site-stage-title"].textContent,
+      state: body.dataset.viewerState,
+      statusHidden: elements["status-stage"].hidden,
+      title: elements["status-title"].textContent,
+    };
+  }
+
   return {
     async settle() {
-      for (let index = 0; index < 8; index += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
+      const deadline = Date.now() + 5000;
+      let previous = "";
+      let quietTurns = 0;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        const current = JSON.stringify(readOutput());
+        if (
+          pendingViewerDigests === 0
+          && body.dataset.viewerState !== "loading"
+          && current === previous
+        ) {
+          quietTurns += 1;
+          if (quietTurns >= 2) return;
+        } else {
+          quietTurns = 0;
+        }
+        previous = current;
       }
+      throw new Error("viewer did not settle within the bounded test deadline");
     },
     submitPassphrase(value) {
       elements["site-passphrase"].value = value;
       return openAccess.click();
     },
-    output() {
-      return {
-        accessFormHidden: elements["access-form"].hidden,
-        chip: elements["state-chip"].textContent,
-        copy: elements["status-copy"].textContent,
-        exportButtons: exportButtons.map((button) => ({
-          disabled: button.disabled,
-          hidden: button.hidden,
-        })),
-        frameHasSource: elements["published-site"].hasAttribute("srcdoc"),
-        frameSource: elements["published-site"].getAttribute("srcdoc"),
-        projectName: elements["project-name"].textContent,
-        siteHidden: elements["site-stage"].hidden,
-        siteTitle: elements["site-stage-title"].textContent,
-        state: body.dataset.viewerState,
-        statusHidden: elements["status-stage"].hidden,
-        title: elements["status-title"].textContent,
-      };
-    },
+    output: readOutput,
   };
 }
 
