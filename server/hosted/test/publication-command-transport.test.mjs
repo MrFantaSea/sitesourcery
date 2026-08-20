@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, lstat, mkdtemp, rm } from "node:fs/promises";
+import { access, lstat, mkdtemp, realpath, rm } from "node:fs/promises";
 import { request as rawHttpRequest } from "node:http";
 import path from "node:path";
 import test from "node:test";
@@ -35,9 +35,8 @@ function proof(label = "one") {
 }
 
 async function fixture(portOverrides = {}) {
-  const root = await mkdtemp(
-    "/private/tmp/ss-pub-"
-  );
+  const canonicalTemporaryRoot = await realpath("/tmp");
+  const root = await mkdtemp(path.join(canonicalTemporaryRoot, "ss-pub-"));
   const configuration = createPublicationCommandConfiguration({
     allowedSocketRoot: root,
     socketPath: path.join(root, "publication.sock"),
