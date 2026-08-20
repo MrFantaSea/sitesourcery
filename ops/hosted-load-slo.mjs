@@ -164,7 +164,22 @@ async function probeIngress(profile) {
       }
     }
   );
-  await deadlineHandler(incoming(), deadlineOutput);
+  let proofGuardTimer = null;
+  try {
+    await Promise.race([
+      deadlineHandler(incoming(), deadlineOutput),
+      new Promise((_, reject) => {
+        proofGuardTimer = setTimeout(
+          () => reject(new Error(
+            "Ingress deadline proof exceeded its referenced guard."
+          )),
+          profile.requestDeadlineMs * 2
+        );
+      })
+    ]);
+  } finally {
+    if (proofGuardTimer !== null) clearTimeout(proofGuardTimer);
+  }
 
   return Object.freeze({
     attemptedRequests:
@@ -542,7 +557,7 @@ export async function main({
 
 if (
   process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href
 ) {
   main().catch((error) => {
     process.stderr.write(`${canonicalJson({
