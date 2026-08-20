@@ -5,9 +5,11 @@ import {
   mkdtemp,
   readFile,
   readdir,
+  realpath,
   symlink,
   writeFile
 } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { SelfHostRuntime } from "../src/index.mjs";
@@ -36,6 +38,11 @@ async function treeSnapshot(root) {
       mtimeNs: selected.mtimeNs
     };
   }));
+}
+
+async function temporaryServingRoot() {
+  const canonicalTemporaryRoot = await realpath(tmpdir());
+  return mkdtemp(path.join(canonicalTemporaryRoot, "ss-serving-"));
 }
 
 test("installs immutable multi-file release and serves exact host/path with integrity headers", async () => {
@@ -248,7 +255,7 @@ test("restart recovers the committed mapping and ignores an orphan future histor
 });
 
 test("read-through serving opens without writes and rejects every mutation", async () => {
-  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const root = await temporaryServingRoot();
   const { runtime: writer } = await testRuntime({ root });
   await installAndActivate(writer);
   const before = await treeSnapshot(root);
@@ -297,7 +304,7 @@ test("read-through serving opens without writes and rejects every mutation", asy
 });
 
 test("read-through serving observes a whole new writer revision without restart", async () => {
-  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const root = await temporaryServingRoot();
   const { runtime: writer } = await testRuntime({ root });
   await installAndActivate(writer);
   const serving = await SelfHostRuntime.openServing({
@@ -324,7 +331,7 @@ test("read-through serving observes a whole new writer revision without restart"
 });
 
 test("concurrent control refreshes serialize before reading and cannot regress", async () => {
-  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const root = await temporaryServingRoot();
   const { runtime: writer } = await testRuntime({ root });
   await installAndActivate(writer);
   const controlRoot = path.join(root, "control");
@@ -366,7 +373,7 @@ test("concurrent control refreshes serialize before reading and cannot regress",
 });
 
 test("serving refuses a release change between binding checks", async () => {
-  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const root = await temporaryServingRoot();
   const { runtime: writer } = await testRuntime({ root });
   await installAndActivate(writer);
   await writer.installRelease({
@@ -400,7 +407,7 @@ test("serving refuses a release change between binding checks", async () => {
 });
 
 test("serving fails closed on control corruption, regression, and same-revision change", async () => {
-  const root = await mkdtemp("/private/tmp/ss-serving-");
+  const root = await temporaryServingRoot();
   const { runtime: writer } = await testRuntime({ root });
   await installAndActivate(writer);
   const currentPath = path.join(root, "control", "current.json");
