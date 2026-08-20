@@ -37,6 +37,7 @@ const ARTIFACT_ROOT = ARTIFACT_PLAN.hostedRoot;
 const EXPECTED_BROWSER =
   "Google Chrome for Testing 149.0.7827.55";
 const CDP_COMMAND_TIMEOUT_MS = 10000;
+const CDP_NAVIGATION_TIMEOUT_MS = 30000;
 const BROWSER_CANDIDATES = Object.freeze([
   process.env.SITESOURCERY_CHROMIUM,
   "/private/tmp/sitesourcery-chrome-149.0.7827.55-mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell",
@@ -2229,13 +2230,16 @@ class Cdp {
   async send(method, params = {}) {
     await this.ready;
     const id = ++this.sequence;
+    const timeoutMs = method === "Page.navigate"
+      ? CDP_NAVIGATION_TIMEOUT_MS
+      : CDP_COMMAND_TIMEOUT_MS;
     const result = new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         if (!this.pending.delete(id)) return;
         reject(new Error(
-          `${method}: timed out after ${CDP_COMMAND_TIMEOUT_MS}ms`,
+          `${method}: timed out after ${timeoutMs}ms`,
         ));
-      }, CDP_COMMAND_TIMEOUT_MS);
+      }, timeoutMs);
       this.pending.set(id, {
         method,
         reject(error) {
