@@ -1,0 +1,73 @@
+{
+  "schema": "sitesourcery.hosted-joint-legal-v5-content-seal/v1",
+  "state": "content-approved-release-held",
+  "published": false,
+  "deployable": false,
+  "releaseFinalizationRequired": true,
+  "approval": {
+    "schema": "sitesourcery.hosted-joint-legal-v5-content-approval/v1",
+    "statement": "owner_approved_exact_joint_legal_v5_review_artifacts",
+    "approvedAt": "2026-08-20T11:13:48.703Z",
+    "approvalReference": "owner-chat-approved-all-b94bec35-2026-08-20",
+    "artifacts": {
+      "center": {
+        "sha256": "f37164a83492bcaa72472d83c775239eb8c430d6b73632cf593a82879c1b1702",
+        "byteCount": 5489
+      },
+      "privacy": {
+        "sha256": "aefdfbb5d734090fffd26dcd32767ba7f08fabf19c231cb9586fe783a367b572",
+        "byteCount": 31478
+      },
+      "websiteTerms": {
+        "sha256": "42d8d9cb767fcd2b6b01edc69dd55b00ba63f2e03288ad4d3ed66f1d1005942e",
+        "byteCount": 31984
+      }
+    }
+  },
+  "approvalSha256": "8ecce4fa01325e3a0e926fed359c34167f58a4a4cc57d257d913be1d8db55e7e",
+  "artifacts": {
+    "center": {
+      "review": {
+        "sha256": "f37164a83492bcaa72472d83c775239eb8c430d6b73632cf593a82879c1b1702",
+        "byteCount": 5489
+      },
+      "template": {
+        "sha256": "d968e865e73cf56232dd532f9c1a201dc1b0890f323073794c4dd80fa3971380",
+        "byteCount": 5322
+      }
+    },
+    "privacy": {
+      "review": {
+        "sha256": "aefdfbb5d734090fffd26dcd32767ba7f08fabf19c231cb9586fe783a367b572",
+        "byteCount": 31478
+      },
+      "template": {
+        "sha256": "fec8daa5a7115d843e925ae2afc7a266c76f3be4b7b9dc4a520db92e2d6211c2",
+        "byteCount": 31353
+      }
+    },
+    "websiteTerms": {
+      "review": {
+        "sha256": "42d8d9cb767fcd2b6b01edc69dd55b00ba63f2e03288ad4d3ed66f1d1005942e",
+        "byteCount": 31984
+      },
+      "template": {
+        "sha256": "ad6af15bfbe641ac37b560ba5341085390e71d804babb1b846b492ad2e9485e2",
+        "byteCount": 31801
+      }
+    }
+  },
+  "release": {
+    "privacyVersion": null,
+    "privacySha256": null,
+    "privacyByteCount": null,
+    "privacyArtifactUri": null,
+    "websiteTermsVersion": null,
+    "websiteTermsSha256": null,
+    "websiteTermsByteCount": null,
+    "websiteTermsArtifactUri": null,
+    "effectiveAt": null,
+    "authorityDigest": null
+  },
+  "contentSealSha256": "2b6047d5ee93f5b59032e63c977cecb8e662abcc92cc5a02aba795493e0bfe2e"
+}

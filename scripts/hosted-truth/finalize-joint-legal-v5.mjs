@@ -33,9 +33,11 @@ export const JOINT_LEGAL_V5_AUTHORITY_SCHEMA =
 export const JOINT_LEGAL_V5_ACCEPTANCE_SCHEMA =
   "sitesourcery.project-legal-acceptance/v5";
 export const JOINT_LEGAL_V5_PRIVACY_VERSION =
-  "SS-HOSTED-PRIVACY-2026-08-19-V5";
+  "SS-HOSTED-PRIVACY-2026-08-20-V5";
 export const JOINT_LEGAL_V5_WEBSITE_TERMS_VERSION =
-  "SS-HOSTED-WEBSITE-TERMS-2026-08-19-V5";
+  "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5";
+export const JOINT_LEGAL_V5_EFFECTIVE_AT =
+  "2026-08-21T04:00:00.000Z";
 
 const ACCEPTANCE_STATEMENT =
   "accepted_exact_project_terms_and_acknowledged_privacy";
@@ -93,8 +95,7 @@ export async function finalizeJointLegalV5({
   if (
     privacyVersion !== JOINT_LEGAL_V5_PRIVACY_VERSION
     || websiteTermsVersion !== JOINT_LEGAL_V5_WEBSITE_TERMS_VERSION
-    || typeof effectiveAt !== "string"
-    || !effectiveAt.startsWith("2026-08-19T")
+    || effectiveAt !== JOINT_LEGAL_V5_EFFECTIVE_AT
   ) throw new Error("joint legal V5 finalization values do not match the frozen release paths");
   const absoluteRoot = path.resolve(root);
   const expectedOutput = path.join(
