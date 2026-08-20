@@ -2730,7 +2730,7 @@ function snapshotFailures(
   if (snapshot.h1.length !== 1 || !snapshot.h1[0]) {
     failures.push(`${label}: expected one nonempty h1, found ${snapshot.h1.length}`);
   }
-  if (snapshot.scrollWidth !== snapshot.viewportWidth) {
+  if (snapshot.scrollWidth > snapshot.viewportWidth) {
     failures.push(
       `${label}: horizontal overflow ${snapshot.scrollWidth}px > ${snapshot.viewportWidth}px `
       + JSON.stringify({
@@ -4988,7 +4988,7 @@ try {
       .sort();
     if (
       publication.initial.viewportWidth !== viewport.width
-      || publication.initial.scrollWidth !==
+      || publication.initial.scrollWidth >
         publication.initial.viewportWidth
       || publication.initial.historyCount !== 2
       || shortControls.length
@@ -5112,7 +5112,7 @@ try {
         "select the unchecked box again"
       )
       || legal.retained.viewportWidth !== viewport.width
-      || legal.retained.scrollWidth !==
+      || legal.retained.scrollWidth >
         legal.retained.viewportWidth
       || !legal.retained.privacyText.includes(
         "Accepted privacy V2"
@@ -5156,7 +5156,7 @@ try {
       || !paid.initial.detailsOpen
       || paid.initial.summaryHeight < 44
       || shortControls.length
-      || paid.initial.scrollWidth !== paid.initial.viewportWidth
+      || paid.initial.scrollWidth > paid.initial.viewportWidth
       || !paid.initial.ownerText.includes(PAID_JOB_ID)
       || paid.initial.customerText.includes(PAID_JOB_ID)
       || !paid.initial.customerText.includes("USD before Checkout tax")
@@ -5304,7 +5304,7 @@ try {
         "payment-customer-uncertain",
       ].includes(mode);
       if (
-        initial.scrollWidth !== initial.viewportWidth
+        initial.scrollWidth > initial.viewportWidth
         || shortControls.length
         || initial.moneyOrMarkPaidFields.length
         || initial.firstPaymentCount !== 1
@@ -5479,7 +5479,7 @@ try {
       if (
         !initialOwner.formVisible
         || initialOwner.viewportWidth !== viewport.width
-        || initialOwner.scrollWidth !== initialOwner.viewportWidth
+        || initialOwner.scrollWidth > initialOwner.viewportWidth
         || initialOwner.paymentProjectionVisible
         || !initialOwner.text.includes(
           "Verified financial clearance is ready for immutable handoff"
@@ -5543,7 +5543,7 @@ try {
           ].join(" "));
       if (
         customer.viewportWidth !== viewport.width
-        || customer.scrollWidth !== customer.viewportWidth
+        || customer.scrollWidth > customer.viewportWidth
         || customer.progressAuthority !== "terminal"
         || customer.changeAuthority !== "terminal"
         || customer.responseFormCount !== 0
@@ -5670,7 +5670,7 @@ try {
       || !race.terminal.ownerHistoryVisible
       || race.terminal.ownerRefreshCount < 2
       || !race.terminal.changeReadOnlyCopy
-      || race.terminal.scrollWidth !== race.terminal.viewportWidth
+      || race.terminal.scrollWidth > race.terminal.viewportWidth
       || race.terminal.viewportWidth !== viewport.width
       || race.mutationWrites !== 0
       || race.unexpectedMutationWrites !== 0

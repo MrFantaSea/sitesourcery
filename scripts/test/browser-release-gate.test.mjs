@@ -86,6 +86,7 @@ const [
   packageLockSource,
   pinnedNodeSource,
   auditSource,
+  currentAuditSource,
   installerSource,
   vnextScriptSource,
   vnextStyleSource,
@@ -94,6 +95,7 @@ const [
   readFile(path.join(SITE_ROOT, "package-lock.json"), "utf8"),
   readFile(path.join(SITE_ROOT, ".nvmrc"), "utf8"),
   readFile(path.join(SITE_ROOT, "scripts/browser-audit-vnext.mjs"), "utf8"),
+  readFile(path.join(SITE_ROOT, "scripts/browser-audit-current.mjs"), "utf8"),
   readFile(path.join(SITE_ROOT, "scripts/install-reviewed-chromium.sh"), "utf8"),
   readFile(path.join(SITE_ROOT, "vnext.js"), "utf8"),
   readFile(path.join(SITE_ROOT, "vnext.css"), "utf8"),
@@ -1144,6 +1146,17 @@ test("npm test builds and verifies the exact artifact before the mandatory brows
   );
   assert.match(auditSource, /SITESOURCERY_ARTIFACT_ROOT/u);
   assert.doesNotMatch(auditSource, /origin = "http:\/\/127\.0\.0\.1:4173"/u);
+});
+
+test("current browser overflow checks permit a classic scrollbar gutter", () => {
+  assert.match(
+    currentAuditSource,
+    /if \(snapshot\.scrollWidth > snapshot\.viewportWidth\)/u,
+  );
+  assert.doesNotMatch(
+    currentAuditSource,
+    /\bscrollWidth\s*!==\s*[A-Za-z][A-Za-z0-9_.]*viewportWidth/u,
+  );
 });
 
 test("test commands are executable by the exact pinned Node runtime", () => {
