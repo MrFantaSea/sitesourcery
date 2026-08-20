@@ -8,8 +8,10 @@ unsealed review state.
 The candidate binds the seller, brand, contact routes, catalog
 `SS-COMMERCIAL-2026.6` / `3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0`, the $350
 assessment and non-cash credit, credit-only $0 Card settlement, tax-exclusive
-`disabled_by_owner` state, Custom payment and ownership rules, exact
-retention schedule, provider disclosures, and held product/effect matrix.
+`disabled_by_owner` state, all-sales-final and product-specific earned-payment
+boundaries, capped liability, customer-supplied-content responsibility, New
+Jersey law and venue, exact retention schedule, provider disclosures, and held
+product/effect matrix.
 
 Review `manifest.json` for exact artifact identities and remaining gates.
 Do not copy these files to a hosted or public root. Finalization requires a new

@@ -43,7 +43,7 @@ const ROUTES = Object.freeze([
     label: "website-terms-v5-review",
     path: "/legal/website-terms/",
     canonical: "https://sitesourcery.com/legal/website-terms/",
-    phrases: ["$0 customer subtotal", "Card and Card Plus require full payment"],
+    phrases: ["all sales are final", "total aggregate liability"],
   }),
 ]);
 const CONTENT_TYPES = Object.freeze({

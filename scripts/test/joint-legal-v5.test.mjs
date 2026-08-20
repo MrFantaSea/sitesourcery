@@ -106,6 +106,15 @@ test("V5 binds the selected catalog and complete held/effect truth", () => {
   assert.match(terms, /no Checkout, PaymentIntent, Charge, or payment receipt/u);
   assert.match(terms, /disabled_by_owner/u);
   assert.match(terms, /Ownership of agreed client deliverables transfers only after final payment/u);
+  assert.match(terms, /all sales are final and all payments are non-refundable/u);
+  assert.match(terms, /no refund, return, cancellation, cash redemption, or replacement credit/u);
+  assert.match(terms, /assessment payment is final and non-refundable once assessment work begins/u);
+  assert.match(terms, /Each Custom payment is final and non-refundable once the work/u);
+  assert.match(terms, /defend, indemnify, and hold harmless Desiderata Labs LLC/u);
+  assert.match(terms, /total aggregate liability for all claims arising from or related to a specific affected purchase/u);
+  assert.match(terms, /governed by New Jersey law/u);
+  assert.match(terms, /state court located in Gloucester County/u);
+  assert.match(terms, /Nothing in these terms excludes liability or a right that applicable law does not permit/u);
 });
 
 test("content templates are exact but contain no release values", () => {

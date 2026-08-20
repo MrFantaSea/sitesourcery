@@ -14,11 +14,11 @@ export const JOINT_LEGAL_V5_CONTENT = Object.freeze({
     "3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0",
   center: Object.freeze({
     reviewSha256:
-      "12cc8da033dac98c25eb78989736bdbdbaf1a8407c173f7863ff2b211ee03cae",
-    reviewByteCount: 5_450,
+      "f37164a83492bcaa72472d83c775239eb8c430d6b73632cf593a82879c1b1702",
+    reviewByteCount: 5_489,
     templateSha256:
-      "935ca6b746c5ab178cf4a5db5e16a7be65203e5972c63aa948cbb2ef1a5ee97c",
-    templateByteCount: 5_283,
+      "d968e865e73cf56232dd532f9c1a201dc1b0890f323073794c4dd80fa3971380",
+    templateByteCount: 5_322,
   }),
   privacy: Object.freeze({
     reviewSha256:
@@ -30,11 +30,11 @@ export const JOINT_LEGAL_V5_CONTENT = Object.freeze({
   }),
   websiteTerms: Object.freeze({
     reviewSha256:
-      "31a1d3b057e09a883fa0ae46cedc63c9a01b32604fbfe199c7a33724b856a22b",
-    reviewByteCount: 28_804,
+      "42d8d9cb767fcd2b6b01edc69dd55b00ba63f2e03288ad4d3ed66f1d1005942e",
+    reviewByteCount: 31_984,
     templateSha256:
-      "c39c7df815508c09b19c9449a25e9895ea82cb07e100e54883a9da790cd05f65",
-    templateByteCount: 28_621,
+      "ad6af15bfbe641ac37b560ba5341085390e71d804babb1b846b492ad2e9485e2",
+    templateByteCount: 31_801,
   }),
 });
 

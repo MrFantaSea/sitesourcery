@@ -22,8 +22,8 @@
   "artifacts": {
     "center": {
       "file": "legal/index.html",
-      "sha256": "12cc8da033dac98c25eb78989736bdbdbaf1a8407c173f7863ff2b211ee03cae",
-      "byteCount": 5450
+      "sha256": "f37164a83492bcaa72472d83c775239eb8c430d6b73632cf593a82879c1b1702",
+      "byteCount": 5489
     },
     "privacy": {
       "file": "legal/privacy/index.html",
@@ -32,8 +32,8 @@
     },
     "websiteTerms": {
       "file": "legal/website-terms/index.html",
-      "sha256": "31a1d3b057e09a883fa0ae46cedc63c9a01b32604fbfe199c7a33724b856a22b",
-      "byteCount": 28804
+      "sha256": "42d8d9cb767fcd2b6b01edc69dd55b00ba63f2e03288ad4d3ed66f1d1005942e",
+      "byteCount": 31984
     }
   },
   "frozenSources": {
