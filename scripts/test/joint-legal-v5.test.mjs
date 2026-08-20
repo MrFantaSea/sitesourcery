@@ -46,7 +46,7 @@ test("Joint Legal V5 release authority remains entirely unsealed", () => {
   assert.throws(
     () => assertJointLegalV5Held({
       ...JOINT_LEGAL_V5_RELEASE,
-      privacyVersion: "SS-HOSTED-PRIVACY-2026-08-19-V5",
+      privacyVersion: "SS-HOSTED-PRIVACY-2026-08-20-V5",
     }),
     /must remain unsealed/u,
   );
@@ -143,24 +143,35 @@ test("final rendering requires exact owner values and normalizes to the sealed t
   assert.throws(
     () => createPrivacyV5RenderPlan({
       mode: "final",
-      version: "SS-HOSTED-PRIVACY-2026-08-19-V5",
-      effectiveAt: "2026-08-19T20:00:00.000Z",
+      version: "SS-HOSTED-PRIVACY-2026-08-20-V5",
+      effectiveAt: "2026-08-21T04:00:00.000Z",
       ownerApproval: "not-approved",
     }),
     /exact owner-approved release values/u,
   );
   const privacyPlan = createPrivacyV5RenderPlan({
     mode: "final",
-    version: "SS-HOSTED-PRIVACY-2026-08-19-V5",
-    effectiveAt: "2026-08-19T20:00:00.000Z",
+    version: "SS-HOSTED-PRIVACY-2026-08-20-V5",
+    effectiveAt: "2026-08-21T04:00:00.000Z",
     ownerApproval: JOINT_LEGAL_V5_OWNER_APPROVAL,
   });
   const termsPlan = createWebsiteTermsV5RenderPlan({
     mode: "final",
-    version: "SS-HOSTED-WEBSITE-TERMS-2026-08-19-V5",
-    effectiveAt: "2026-08-19T20:00:00.000Z",
+    version: "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+    effectiveAt: "2026-08-21T04:00:00.000Z",
     ownerApproval: JOINT_LEGAL_V5_OWNER_APPROVAL,
   });
+  assert.equal(privacyPlan.effectiveLabel, "Effective August 21, 2026");
+  assert.equal(termsPlan.effectiveLabel, "Effective August 21, 2026");
+  assert.throws(
+    () => createPrivacyV5RenderPlan({
+      mode: "final",
+      version: "SS-HOSTED-PRIVACY-2026-08-20-V5",
+      effectiveAt: "2026-08-22T04:00:00.000Z",
+      ownerApproval: JOINT_LEGAL_V5_OWNER_APPROVAL,
+    }),
+    /exact owner-approved release values/u,
+  );
   const privacy = renderPrivacyV5({ root: ROOT, plan: privacyPlan });
   const terms = renderWebsiteTermsV5({ root: ROOT, plan: termsPlan });
   const privacyTemplate = Buffer.from(normalizePrivacyV5Final(

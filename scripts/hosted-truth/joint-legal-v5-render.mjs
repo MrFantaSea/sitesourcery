@@ -119,6 +119,25 @@ function canonicalUtc(value) {
     && new Date(Date.parse(value)).toISOString() === value;
 }
 
+function newJerseyDate(value) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date(value));
+  const values = Object.fromEntries(
+    parts.map(({ type, value: part }) => [type, part]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function nextDate(date) {
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  parsed.setUTCDate(parsed.getUTCDate() + 1);
+  return parsed.toISOString().slice(0, 10);
+}
+
 function effectiveLabel(date) {
   const parsed = new Date(`${date}T00:00:00.000Z`);
   if (
@@ -154,12 +173,15 @@ function createPlan(options, { kind, pattern, reviewVersion, versionToken }) {
     });
   }
   const match = String(options?.version ?? "").match(pattern);
+  const effectiveDate = canonicalUtc(options?.effectiveAt)
+    ? newJerseyDate(options.effectiveAt)
+    : null;
   if (
     options?.mode !== "final"
     || options.ownerApproval !== JOINT_LEGAL_V5_OWNER_APPROVAL
     || !match
-    || !canonicalUtc(options.effectiveAt)
-    || options.effectiveAt.slice(0, 10) !== match[1]
+    || !effectiveDate
+    || ![match[1], nextDate(match[1])].includes(effectiveDate)
     || JSON.stringify(Object.keys(options).sort())
       !== JSON.stringify(["effectiveAt", "mode", "ownerApproval", "version"])
   ) {
@@ -172,7 +194,7 @@ function createPlan(options, { kind, pattern, reviewVersion, versionToken }) {
     version: options.version,
     effectiveAt: options.effectiveAt,
     displayVersion: options.version,
-    effectiveLabel: effectiveLabel(match[1]),
+    effectiveLabel: effectiveLabel(effectiveDate),
   });
 }
 

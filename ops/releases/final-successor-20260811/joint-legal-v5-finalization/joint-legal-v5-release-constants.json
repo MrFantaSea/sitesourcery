@@ -1,0 +1,105 @@
+{
+  "schema": "sitesourcery.hosted-joint-legal-v5-finalization/v1",
+  "state": "owner-approved-finalization",
+  "sealable": true,
+  "published": false,
+  "deploymentAuthorized": false,
+  "integrationRequired": true,
+  "effectiveAt": "2026-08-21T04:00:00.000Z",
+  "authoritySchema": "sitesourcery.project-legal-authority/v5",
+  "acceptanceSchema": "sitesourcery.project-legal-acceptance/v5",
+  "acceptanceStatement": "accepted_exact_project_terms_and_acknowledged_privacy",
+  "authorityDigest": "6bcd6a4bad033cfb6bdfa131afa02ec950b9ddd22d2bc2a5fed0834605bc0934",
+  "documentBindings": [
+    {
+      "kind": "privacy",
+      "id": "00000000-0000-4000-8000-000000000149"
+    },
+    {
+      "kind": "product",
+      "id": "00000000-0000-4000-8000-000000000150"
+    },
+    {
+      "kind": "website",
+      "id": "00000000-0000-4000-8000-000000000151"
+    }
+  ],
+  "documents": [
+    {
+      "kind": "privacy",
+      "version": "SS-HOSTED-PRIVACY-2026-08-20-V5",
+      "contentDigest": "5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5",
+      "contentUri": "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-20-V5/",
+      "effectiveAt": "2026-08-21T04:00:00.000Z"
+    },
+    {
+      "kind": "product",
+      "version": "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+      "contentDigest": "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a",
+      "contentUri": "https://sitesourcery.com/legal/website-terms/#self-service",
+      "effectiveAt": "2026-08-21T04:00:00.000Z"
+    },
+    {
+      "kind": "website",
+      "version": "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+      "contentDigest": "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a",
+      "contentUri": "https://sitesourcery.com/legal/website-terms/",
+      "effectiveAt": "2026-08-21T04:00:00.000Z"
+    }
+  ],
+  "contentSeal": {
+    "schema": "sitesourcery.hosted-joint-legal-v5-content-seal/v1",
+    "contentSealSha256": "2b6047d5ee93f5b59032e63c977cecb8e662abcc92cc5a02aba795493e0bfe2e",
+    "approvalSha256": "8ecce4fa01325e3a0e926fed359c34167f58a4a4cc57d257d913be1d8db55e7e"
+  },
+  "artifacts": [
+    {
+      "role": "privacy-current",
+      "file": "hosted/legal/privacy/index.html",
+      "sha256": "5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5",
+      "byteCount": 31316
+    },
+    {
+      "role": "privacy-versioned",
+      "file": "hosted/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-20-V5/index.html",
+      "sha256": "5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5",
+      "byteCount": 31316
+    },
+    {
+      "role": "website-terms-current",
+      "file": "hosted/legal/website-terms/index.html",
+      "sha256": "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a",
+      "byteCount": 31764
+    },
+    {
+      "role": "website-terms-versioned",
+      "file": "hosted/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5/index.html",
+      "sha256": "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a",
+      "byteCount": 31764
+    },
+    {
+      "role": "legal-center-current",
+      "file": "hosted/legal/index.html",
+      "sha256": "f4084453a45ad8f78c812f7bb4763b5af7076e18e562fb781b6482d07ea31929",
+      "byteCount": 5261
+    }
+  ],
+  "release": {
+    "privacyVersion": "SS-HOSTED-PRIVACY-2026-08-20-V5",
+    "privacySha256": "5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5",
+    "privacyByteCount": 31316,
+    "privacyArtifactUri": "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-20-V5/",
+    "websiteTermsVersion": "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+    "websiteTermsSha256": "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a",
+    "websiteTermsByteCount": 31764,
+    "websiteTermsArtifactUri": "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5/",
+    "effectiveAt": "2026-08-21T04:00:00.000Z",
+    "authorityDigest": "6bcd6a4bad033cfb6bdfa131afa02ec950b9ddd22d2bc2a5fed0834605bc0934"
+  },
+  "cutoverPolicy": {
+    "retainedV2V3V4EvidencePreserved": true,
+    "exactJointV5AcceptanceRequiredForNewProjects": true,
+    "heldProductsRemainHeldUntilSeparateRelease": true,
+    "deploymentAndPublicCutoverRequireSeparateOwnerApproval": true
+  }
+}
