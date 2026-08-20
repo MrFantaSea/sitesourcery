@@ -29,6 +29,10 @@ const ROLES = Object.freeze([
   "legal-center-current",
 ]);
 
+function lexical(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
 function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -151,7 +155,7 @@ export function createPagesJointLegalV5Plan({ root = process.cwd() } = {}) {
   const publishedArtifacts = Object.freeze([
     ...retainedVersioned,
     ...v5Published,
-  ].sort((left, right) => left.file.localeCompare(right.file)));
+  ].sort((left, right) => lexical(left.file, right.file)));
   return Object.freeze({
     publishedArtifacts,
     sourceByFile: new Map(
@@ -166,7 +170,7 @@ export function pagesLegalV5Files(publicFiles, plan) {
   return Object.freeze([...new Set([
     ...publicFiles,
     ...plan.publishedArtifacts.map(({ file }) => file),
-  ])].sort((left, right) => left.localeCompare(right)));
+  ])].sort(lexical));
 }
 
 export function assertPagesJointLegalV5Artifact(output, plan) {
