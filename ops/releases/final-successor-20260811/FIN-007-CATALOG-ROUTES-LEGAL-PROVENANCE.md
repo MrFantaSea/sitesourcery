@@ -1,7 +1,7 @@
 # FIN-007 catalog, routes, artifacts, and held legal provenance
 
 Date: 2026-08-20
-State: implementation proved; exact owner Legal V5 approval/finalization held
+State: proved; exact owner-approved Legal V5 finalization sealed and held
 Candidate branch: `integration/final-successor-20260811`
 
 Input checkpoint:
@@ -18,6 +18,12 @@ Owner-directed Legal V5 correction implementation:
 
 Owner-directed Legal V5 correction tree:
 `5c642f42feb6eb858ed9ffad9a94455ad3a8384a`
+
+Owner-approved held Legal V5 finalization implementation:
+`9a8eb2abaf898a83dc83c355de4210c5d403eafe`
+
+Owner-approved held Legal V5 finalization tree:
+`8049ab926cb69b2adc88aed144a94d86032921c1`
 
 ## Frozen commercial identity
 
@@ -80,7 +86,7 @@ The clean build produced and verified:
 
 Those directories are generated proof artifacts, not deployment authority.
 
-## Joint Legal V5 review-only closure
+## Joint Legal V5 held finalization closure
 
 Joint Legal V4 remains retained evidence. The deterministic Joint Legal V5
 review bundle binds the selected seller/brand/contact, catalog, $350 assessment
@@ -103,16 +109,41 @@ unpublished, nondeployable, and explicitly unapproved. Legal tests passed
 13/13. Chrome for Testing 149.0.7827.55 passed 18/18 review views using only a
 loopback origin, with zero missing files or response failures.
 
-No Joint Legal V5 finalization file exists. Finalization still requires the
-owner to approve these exact review bytes, choose exact V5 Privacy and Website
-Terms versions, approve one exact effective UTC instant, and provide the exact
-content/release approval consumed by the fail-closed seal and finalizer.
+The owner approved the exact corrected manifest and review bytes, Privacy
+version `SS-HOSTED-PRIVACY-2026-08-20-V5`, Website Terms version
+`SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5`, and effective instant
+`2026-08-21T04:00:00.000Z` (midnight EDT on August 21). The approval evidence
+digest is
+`8ecce4fa01325e3a0e926fed359c34167f58a4a4cc57d257d913be1d8db55e7e`;
+the content-seal digest is
+`2b6047d5ee93f5b59032e63c977cecb8e662abcc92cc5a02aba795493e0bfe2e`.
+
+The exact release receipt is
+`joint-legal-v5-finalization/joint-legal-v5-release-constants.json`, file
+SHA-256
+`5e51f126f19f635f712944ebbf80b7232c700df3e7b94c9a5396b9f66b5af82f`.
+It binds legal center SHA-256
+`f4084453a45ad8f78c812f7bb4763b5af7076e18e562fb781b6482d07ea31929`
+(5,261 bytes), Privacy SHA-256
+`5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5`
+(31,316 bytes), and Website Terms SHA-256
+`8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a`
+(31,764 bytes). Current and versioned bytes are identical for both documents.
+
+The receipt remains fail-closed: `published=false`,
+`deploymentAuthorized=false`, `integrationRequired=true`. The deterministic
+Pages and hosted builds integrated these bytes locally while preserving the
+93-file and 112-file denominators. Their sorted canonical JSON
+`{file,sha256,byteCount}` ledger digests are respectively
+`29aa628bc153277736e26f48be8b8a83d15107226d5dbd8c3edf2c8a4077ab79`
+and `a26a00aa5d6788ab46ba1f434d46f28de5ecfea04533ad1fb6173415508276c7`.
 Deployment and public cutover remain separate later gates.
 
 ## Proof ladder
 
 - Focused catalog/migration/runtime/UI proof: 138/138.
-- Corrected Legal V5 unit/integration proof: 13/13; review-browser proof: 18/18.
+- Finalized Legal V5 unit/integration proof: 13/13; unchanged approved review
+  browser proof: 18/18.
 - Canonical Node/product proof: 883/883.
 - Retained public-truth proof: V2 retirement 29/29, legacy 77/77, V3 18/18.
 - Complete clean `npm test`: exit 0, including hosted/service 1,077 passed,
@@ -131,10 +162,11 @@ Deployment and public cutover remain separate later gates.
 ## Effect, residue, and remaining-gate posture
 
 No public placeholder, deployment, Pages release, DNS record, provider
-configuration, HQ, Dell, protected database, or cutover state changed. No V5
-legal release values were invented. Every new payment/provider/public effect
-remains held. The implementation was committed before the clean cumulative
-proof so the exact clean-tree operations gates could pass.
+configuration, HQ, Dell, protected database, or cutover state changed. The V5
+legal release values came from the owner's exact approval. Every new
+payment/provider/public effect remains held. The implementation was committed
+before the clean cumulative proof so the exact clean-tree operations gates
+could pass.
 
 The owner-directed legal correction was likewise committed before its clean
 cumulative proof. Exact correction `383ac38...` passed canonical Node 883/883,
@@ -143,7 +175,14 @@ operations 206/206, deterministic 93-file Pages and hosted artifacts, and the
 complete 24-route/six-width browser audit. The corrected legal-focused proof
 then re-passed 13/13 and 18/18 on the exact clean implementation commit.
 
-FIN-007 engineering implementation and review-only evidence are sealed by this
-record. Full FIN-007 completion credit remains withheld until the owner closes
-the exact Legal V5 content/version/effective-time gate; this provenance file
-does not convert review evidence into legal or deployment authority.
+The owner-approved finalization commit `9a8eb2a...` passed the focused 13/13
+legal/integration proof, unchanged 18/18 review-browser proof, complete clean
+`npm test`, 206/206 operations proof, deterministic 93-file Pages and 112-file
+hosted builds, and the 24-route/six-width browser audit. Final residue readback
+found a clean worktree, no matching disposable database, and no remaining
+proof/browser process. The live placeholder stayed byte-identical at SHA-256
+`672d8ea082208c32c545d1bc7f01a077327a045eac236027531083e382584f9d`.
+
+FIN-007 is complete and earns its seven evidence-weighted points. This record
+seals local legal authority and deterministic integration only; it grants no
+deployment, public replacement, DNS, provider, HQ, Dell, or cutover authority.
