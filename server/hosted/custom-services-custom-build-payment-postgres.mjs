@@ -128,6 +128,9 @@ function paidJobProjection(row) {
       row.receipt_linkage_valid === true &&
       row.job_linkage_valid === true &&
       row.job_state === "open" &&
+      ["provider_payment", "credit_only"].includes(
+        row.job_start_settlement_kind
+      ) &&
       CUSTOM_BUILD_TIERS.has(row.job_tier_id) &&
       row.job_tier_id === row.tier_id &&
       typeof row.job_scope_statement === "string" &&
@@ -135,7 +138,7 @@ function paidJobProjection(row) {
       row.job_scope_statement.length <= 2000 &&
       ["not_required", "unpaid"].includes(row.final_payment_state) &&
       row.job_currency === "USD" &&
-      [0, 20_000].includes(Number(row.job_start_credit_minor)) &&
+      [0, 20_000, 35_000].includes(Number(row.job_start_credit_minor)) &&
       Number(row.job_start_paid_subtotal_minor) ===
         Number(row.job_start_gross_minor) -
           Number(row.job_start_credit_minor) &&
@@ -144,6 +147,11 @@ function paidJobProjection(row) {
       Number(row.job_start_credit_minor) === Number(row.credit_minor) &&
       Number(row.job_start_paid_subtotal_minor) ===
         Number(row.subtotal_minor) &&
+      (row.job_start_settlement_kind === "credit_only"
+        ? row.receipt_id === null &&
+          Number(row.job_start_paid_subtotal_minor) === 0
+        : row.receipt_id !== null &&
+          Number(row.job_start_paid_subtotal_minor) > 0) &&
       Number(row.job_final_due_minor) === Number(row.final_due_minor) &&
       row.job_currency === row.currency &&
       (
@@ -197,7 +205,8 @@ function paidJobProjection(row) {
       ),
       paidSubtotalMinor: integer(
         row.job_start_paid_subtotal_minor,
-        "Job paid subtotal"
+        "Job paid subtotal",
+        { zero: true }
       ),
       currency: row.job_currency
     },
@@ -529,9 +538,12 @@ function invoiceProjection(row, release) {
       action: { available: false, reason: "invoice_not_available" }
     });
   }
-  const paid = row.receipt_id !== null;
+  const charged = row.receipt_id !== null;
+  const settled = row.job_id !== null;
   invariant(
-    (paid && row.job_id !== null) || (!paid && row.job_id === null),
+    (settled && row.receipt_linkage_valid === true &&
+      row.job_linkage_valid === true) ||
+      (!settled && !charged),
     "CUSTOM_BUILD_PAYMENT_CONFLICT",
     "Custom build payment and job state are inconsistent.",
     { status: 500 }
@@ -543,7 +555,7 @@ function invoiceProjection(row, release) {
   const ready = row.checkout_state === "ready" &&
     Date.parse(iso(row.checkout_expires_at, "Checkout expiration")) > Date.now();
   const deadlinePassed = Date.parse(iso(row.payment_deadline, "Payment deadline")) <= Date.now();
-  const state = paid
+  const state = settled
     ? "paid"
     : reconciliation
       ? "reconciliation_required"
@@ -588,7 +600,9 @@ function invoiceProjection(row, release) {
         currency: "USD"
       })),
       subtotal: {
-        amountMinor: integer(row.subtotal_minor, "Invoice subtotal"),
+        amountMinor: integer(row.subtotal_minor, "Invoice subtotal", {
+          zero: true
+        }),
         currency: "USD"
       },
       tax: { amountMinor: null, state: "calculated_at_checkout" },
@@ -606,7 +620,7 @@ function invoiceProjection(row, release) {
         state: Number(row.final_due_minor) === 0 ? "not_required" : "due_before_handoff"
       },
       payment: {
-        chargeOccurred: paid,
+        chargeOccurred: charged,
         checkoutUrl: ready ? row.checkout_url : null,
         checkoutExpiresAt: ready
           ? iso(row.checkout_expires_at, "Checkout expiration")
@@ -617,7 +631,7 @@ function invoiceProjection(row, release) {
       available: state === "checkout_available",
       reason: state === "checkout_available" ? null : state
     },
-    job: paidJobProjection(row)
+    job: settled ? paidJobProjection(row) : null
   });
 }
 
@@ -644,6 +658,7 @@ const INVOICE_SELECT = `
     invoice.subtotal_minor,
     invoice.final_due_minor,
     invoice.currency,
+    invoice.state as invoice_state,
     invoice.invoice_digest,
     invoice.issued_at,
     invoice.payment_deadline,
@@ -656,24 +671,37 @@ const INVOICE_SELECT = `
     event.state as event_state,
     receipt.id as receipt_id,
     (
-      receipt.id is not null
-      and receipt.project_id = invoice.project_id
-      and receipt.case_id = invoice.case_id
-      and receipt.customer_user_id = invoice.customer_user_id
-      and receipt.invoice_id = invoice.id
-      and receipt.checkout_attempt_id = attempt.id
-      and receipt.credit_application_id is not distinct from
-        invoice.credit_application_id
-      and receipt.provider = 'stripe'
-      and receipt.checkout_session_id = attempt.checkout_session_id
-      and receipt.payment_status = 'paid'
-      and receipt.subtotal_minor = invoice.subtotal_minor
-      and receipt.currency = invoice.currency
-      and receipt.purpose_digest = attempt.purpose_digest
-      and receipt.invoice_digest = invoice.invoice_digest
-      and receipt.accepted_quote_digest = invoice.accepted_quote_digest
-      and receipt.accepted_disclosure_digest =
-        invoice.accepted_disclosure_digest
+      (job.start_settlement_kind = 'provider_payment'
+        and receipt.id is not null
+        and receipt.project_id = invoice.project_id
+        and receipt.case_id = invoice.case_id
+        and receipt.customer_user_id = invoice.customer_user_id
+        and receipt.invoice_id = invoice.id
+        and receipt.checkout_attempt_id = attempt.id
+        and receipt.credit_application_id is not distinct from
+          invoice.credit_application_id
+        and receipt.provider = 'stripe'
+        and receipt.checkout_session_id = attempt.checkout_session_id
+        and receipt.payment_status = 'paid'
+        and receipt.subtotal_minor = invoice.subtotal_minor
+        and receipt.currency = invoice.currency
+        and receipt.purpose_digest = attempt.purpose_digest
+        and receipt.invoice_digest = invoice.invoice_digest
+        and receipt.accepted_quote_digest = invoice.accepted_quote_digest
+        and receipt.accepted_disclosure_digest =
+          invoice.accepted_disclosure_digest)
+      or
+      (job.start_settlement_kind = 'credit_only'
+        and receipt.id is null
+        and attempt.id is null
+        and event.state is null
+        and invoice.state = 'credit_settled'
+        and invoice.tier_id = 'card'
+        and invoice.gross_start_minor = 35000
+        and invoice.credit_minor = 35000
+        and invoice.subtotal_minor = 0
+        and invoice.charge_occurred = false
+        and application.state = 'settled')
     ) as receipt_linkage_valid,
     job.id as job_id,
     (
@@ -682,7 +710,14 @@ const INVOICE_SELECT = `
       and job.case_id = invoice.case_id
       and job.customer_user_id = invoice.customer_user_id
       and job.invoice_id = invoice.id
-      and job.payment_receipt_id = receipt.id
+      and (
+        (job.start_settlement_kind = 'provider_payment'
+          and job.payment_receipt_id = receipt.id)
+        or
+        (job.start_settlement_kind = 'credit_only'
+          and job.payment_receipt_id is null
+          and receipt.id is null)
+      )
       and job.quote_id = invoice.quote_id
       and job.quote_revision = invoice.quote_revision
       and job.quote_revision_id = invoice.quote_revision_id
@@ -729,6 +764,7 @@ const INVOICE_SELECT = `
     job.start_gross_minor as job_start_gross_minor,
     job.start_credit_minor as job_start_credit_minor,
     job.start_paid_subtotal_minor as job_start_paid_subtotal_minor,
+    job.start_settlement_kind as job_start_settlement_kind,
     job.final_due_minor as job_final_due_minor,
     job.currency as job_currency,
     job.final_payment_state,
@@ -1751,7 +1787,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
               (row.credit_application_id === null
                 ? row.credit_state === null && Number(row.credit_minor) === 0
                 : row.credit_state === "reserved" &&
-                  Number(row.credit_minor) === 20_000),
+                  [20_000, 35_000].includes(Number(row.credit_minor))),
             "CUSTOM_BUILD_PAYMENT_CONFLICT",
             "The Custom build settlement state is inconsistent.",
             { status: 409 }

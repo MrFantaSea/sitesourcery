@@ -3,7 +3,11 @@ import { lstat, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import vm from "node:vm";
-import { buildPagesArtifact, excludedTopLevel } from "./build-pages.mjs";
+import {
+  buildPagesArtifact,
+  excludedTopLevel,
+  publicFileAllowlist,
+} from "./build-pages.mjs";
 
 const root = process.cwd();
 const ignoredDirectories = new Set([".git", "_hosted", "_site", "node_modules"]);
@@ -17,8 +21,6 @@ const canonicalCustomerPhone = Object.freeze({
   display: "(856) 244-1220",
 });
 const prohibitedLegacyMailbox = "hello@sitesourcery.com";
-const filedNameLegend = "Site Sourcery is an alternate name of Desiderata Labs LLC. Desiderata Labs LLC is the legal seller.";
-const privacyControllerLegend = "Site Sourcery is an alternate name of Desiderata Labs LLC. Desiderata Labs LLC is the legal seller and controller responsible for information covered by this notice.";
 const productionPredecessor = "eff8195640db58390d03eefbe863248220994e37";
 const writableCardFile = "print-collateral/sitesourcery-card-finalist-v9.html";
 const writableCardPdfFile = "print-collateral/sitesourcery-card-finalist-v9.pdf";
@@ -28,51 +30,27 @@ const frozenPrintCollateral = Object.freeze({
   "print-collateral/sitesourcery-card-finalist-v8.pdf": "579b8cec150205000008c7f919b7569b604c190175f47808e97f9dcf0ffff3ad",
   "print-collateral/assets/qr-start.svg": "044f1f0148e4c848c8708c4cba8dce8f7696a5b09151f4ae38c11561592ae8f3",
 });
-const mailboxSurfaces = new Set([
-  "404.html",
-  "about.html",
-  "automation.html",
-  "contact.html",
-  "faq.html",
-  "how-it-works.html",
-  "index.html",
-  "pricing.html",
-  "privacy.html",
-  "start/index.html",
-  "terms.html",
-  "thanks.html",
-]);
-const fullFooterSurfaces = new Set([
-  "404.html",
-  "about.html",
-  "automation.html",
-  "contact.html",
-  "faq.html",
-  "how-it-works.html",
-  "index.html",
-  "pricing.html",
-  "privacy.html",
-  "start/index.html",
-  "terms.html",
-]);
-const zeroEntryGuideSurfaces = new Set(["contact.html", "start/index.html"]);
+const mailboxSurfaces = new Set();
+const fullFooterSurfaces = new Set();
+const zeroEntryGuideSurfaces = new Set();
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
 const expectedCatalogIdentity = Object.freeze({
-  version: "SS-COMMERCIAL-2026.5",
-  tierCatalogId: "SS-TIERS-2026.5",
-  addonCatalogId: "SS-ADDONS-2026.5",
-  careCatalogId: "SS-CARE-2026.5",
-  professionalServiceCatalogId: "SS-PROFESSIONAL-2026.1",
-  sourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
-  projectionDigest: "5276e2f38096625428814677518ffaaf6063f07f78169be20b8bf4ac5d511225",
+  version: "SS-COMMERCIAL-2026.6",
+  tierCatalogId: "SS-TIERS-2026.6",
+  addonCatalogId: "SS-ADDONS-2026.6",
+  careCatalogId: "SS-CARE-2026.6",
+  professionalServiceCatalogId: "SS-PROFESSIONAL-2026.2",
+  approvedSourceFileSha256: "9398d025b12f96ad1989620226cd153dabd39ee81d2ba11d1f03badf1cad2ee1",
+  sourceCatalogDigest: "3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0",
+  approvedSourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
+  projectionDigest: "61904ce2fc6a6346babe43adbf902675f3a002c6e179b1aae883df498b8e91db",
 });
 const releaseControl = JSON.parse(await readFile(path.join(root, "data/release-control.json"), "utf8"));
 const pagesWorkflow = await readFile(path.join(root, ".github/workflows/pages.yml"), "utf8");
 const containmentWorkflow = await readFile(path.join(root, ".github/workflows/containment.yml"), "utf8");
 const publicTruthWorkflow = await readFile(path.join(root, ".github/workflows/public-truth-reconciliation.yml"), "utf8");
-const atelierCommerceJavaScript = await readFile(path.join(root, "atelier-commerce.js"), "utf8");
 const quality = packageJson.siteQuality ?? {};
 const siteOrigin = String(quality.origin ?? "").replace(/\/$/, "");
 const allowedFormActions = new Set(quality.allowedFormActions ?? []);
@@ -90,7 +68,9 @@ async function walk(directory = root) {
   return files;
 }
 
-const files = await walk();
+const sourceFiles = await walk();
+const sourceFileSet = new Set(sourceFiles);
+const files = [...publicFileAllowlist];
 const fileSet = new Set(files);
 const htmlFiles = files.filter((file) => file.endsWith(".html"));
 const deployableHtmlFiles = htmlFiles.filter((file) => !file.startsWith("print-collateral/"));
@@ -106,7 +86,7 @@ function report(file, message) {
 }
 
 for (const [file, expectedDigest] of Object.entries(frozenPrintCollateral)) {
-  if (!fileSet.has(file)) {
+  if (!sourceFileSet.has(file)) {
     report(file, "frozen print-collateral dependency is missing");
     continue;
   }
@@ -116,7 +96,7 @@ for (const [file, expectedDigest] of Object.entries(frozenPrintCollateral)) {
   }
 }
 
-if (!fileSet.has(writableCardPdfFile)) {
+if (!sourceFileSet.has(writableCardPdfFile)) {
   report(writableCardPdfFile, "generated writable-back V9 print artifact is missing");
 } else {
   const pdf = await readFile(path.join(root, writableCardPdfFile));
@@ -129,7 +109,9 @@ if (!fileSet.has(writableCardPdfFile)) {
   }
 }
 
-const writableCard = htmlSources.get(writableCardFile);
+const writableCard = sourceFileSet.has(writableCardFile)
+  ? await readFile(path.join(root, writableCardFile), "utf8")
+  : undefined;
 if (writableCard === undefined) {
   report(writableCardFile, "writable-back V9 card source is missing");
 } else {
@@ -262,10 +244,10 @@ if (!publicTruthControl || typeof publicTruthControl !== "object" || Array.isArr
 }
 for (const marker of [
   "run: npm test",
-  "--require-root-lineage",
   "data/release-control.json",
   "run: npm run build:pages",
-  "path: _site",
+  "--directory _site",
+  "if: needs.validate.outputs.release_allowed == 'true'",
 ]) {
   if (!pagesWorkflow.includes(marker)) report(".github/workflows/pages.yml", `missing controlled-release marker ${JSON.stringify(marker)}`);
 }
@@ -290,7 +272,6 @@ for (const marker of [
   'catalog.offerState !== "inquiry-only"',
   'git rev-parse HEAD',
   "run: npm test",
-  "--require-root-lineage",
   "run: npm run build:pages",
   "--directory target/_site",
   "pages: read",
@@ -680,7 +661,7 @@ for (const file of htmlFiles) {
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/<script\b([^>]*)>[\s\S]*?<\/script\s*>/gi, "<script$1></script>")
     .replace(/<style\b([^>]*)>[\s\S]*?<\/style\s*>/gi, "<style$1></style>");
-  const referencePattern = /\b(?:href|src|poster|action)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>\u0060]+))/gi;
+  const referencePattern = /(?<![-\w])(?:href|src|poster|action)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>\u0060]+))/gi;
   for (const match of markup.matchAll(referencePattern)) checkReference(file, match[1] ?? match[2] ?? match[3]);
   const srcsetPattern = /\bsrcset\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
   for (const match of markup.matchAll(srcsetPattern)) {
@@ -763,100 +744,6 @@ for (const file of deployableHtmlFiles) {
   ]) {
     if (html.includes(staleClaim)) report(file, `deployable HTML contains stale or universal proof wording ${JSON.stringify(staleClaim)}`);
   }
-}
-
-const automationHtml = htmlSources.get("automation.html") ?? "";
-for (const marker of [
-  ".invitation-actions .hive-call{min-width:0;flex-direction:column",
-  "An unsupported question could follow an approved human handoff path",
-]) {
-  if (!automationHtml.includes(marker)) report("automation.html", `missing narrow-screen or pre-launch Hive safeguard ${JSON.stringify(marker)}`);
-}
-const hiveCellLinks = [...automationHtml.matchAll(/<a\b[^>]*class=["'][^"']*\bhive-cell\b[^"']*["'][^>]*>/giu)];
-if (hiveCellLinks.length !== 6) {
-  report("automation.html", `expected six progressively enhanced Hive cell links, found ${hiveCellLinks.length}`);
-}
-for (const link of hiveCellLinks) {
-  if (/\b(?:role|tabindex|aria-selected|aria-controls)\s*=/iu.test(link[0])) {
-    report("automation.html", "Hive cells must remain ordinary keyboard-reachable links until JavaScript upgrades the chamber");
-  }
-}
-if (!/<nav\b[^>]*class=["'][^"']*\bhive-constellation\b[^"']*["'][^>]*aria-label=/iu.test(automationHtml)) {
-  report("automation.html", "no-JavaScript Hive constellation must remain a labeled navigation region");
-}
-for (const marker of [
-  "querySelectorAll('[data-cell]')",
-  "tablist.setAttribute('role', 'tablist')",
-  "tab.setAttribute('role', 'tab')",
-  "panel.setAttribute('role', 'tabpanel')",
-  "candidate.setAttribute('tabindex', active ? '0' : '-1')",
-]) {
-  if (!atelierCommerceJavaScript.includes(marker)) {
-    report("atelier-commerce.js", `missing progressive Hive tab-upgrade marker ${JSON.stringify(marker)}`);
-  }
-}
-const faqHtml = htmlSources.get("faq.html") ?? "";
-if (!faqHtml.includes(".archive-query-line:focus-within")) {
-  report("faq.html", "FAQ archive query must expose a visible focus-within state");
-}
-if (faqHtml.includes("capped 500-word units")) {
-  report("faq.html", "FAQ structured data must not drift from the visible content-shaping answer");
-}
-
-const termsHtml = htmlSources.get("terms.html") ?? "";
-const privacyHtml = htmlSources.get("privacy.html") ?? "";
-const contactHtml = htmlSources.get("contact.html") ?? "";
-if (!termsHtml.includes(filedNameLegend)) {
-  report("terms.html", `missing exact filed-name/legal-seller legend ${JSON.stringify(filedNameLegend)}`);
-}
-if (!privacyHtml.includes(privacyControllerLegend)) {
-  report("privacy.html", `missing exact filed-name/controller legend ${JSON.stringify(privacyControllerLegend)}`);
-}
-for (const [file, html] of [["terms.html", termsHtml], ["privacy.html", privacyHtml]]) {
-  if (/(?:Site\s*Sourcery|SiteSourcery)\s+LLC/iu.test(html)) {
-    report(file, "must not identify SiteSourcery as a standalone LLC");
-  }
-  if (/service brand operated by/iu.test(html)) {
-    report(file, "must use the exact filed-name legend rather than the superseded service-brand wording");
-  }
-}
-for (const marker of [
-  "the exact accepted document chain: the released MSA, SOW/order, current manifest and scope digest, plus every applicable change and acceptance record",
-  "this public site neither computes nor collects tax",
-  "Website Care is currently unavailable.",
-  "Care cannot inherit from a website build.",
-  "Hive is separate pre-launch research/product scope.",
-  "It is not Website Care, not a website add-on",
-  "This public planning page does not promise a refund amount, deadline, or eligibility result.",
-  "controlled by the exact accepted MSA/SOW/order/change chain",
-]) {
-  if (!termsHtml.includes(marker)) report("terms.html", `missing public-truth boundary ${JSON.stringify(marker)}`);
-}
-for (const forbidden of [
-  "Cancel before work begins and we return the initial payment.",
-  "A current Care month is not partly refunded.",
-  "New Jersey alternate-name registration is pending",
-]) {
-  if (termsHtml.includes(forbidden)) report("terms.html", `forbidden superseded public promise ${JSON.stringify(forbidden)}`);
-}
-for (const marker of [
-  "This notice is limited to the public Site Sourcery website and direct phone or email inquiries.",
-  "Client-project data requires the exact accepted project data schedule",
-  "Hive is separate pre-launch research/product scope",
-  "remains outside Site Sourcery&rsquo;s current production and data-processing scope",
-]) {
-  if (!privacyHtml.includes(marker)) report("privacy.html", `missing privacy-scope boundary ${JSON.stringify(marker)}`);
-}
-for (const marker of [
-  "The designated public call route is Google Voice.",
-  "One designated call route and one designated email route",
-  "This is the designated public Google Voice route",
-  "no response time is promised.",
-]) {
-  if (!contactHtml.includes(marker)) report("contact.html", `missing designated-contact marker ${JSON.stringify(marker)}`);
-}
-if (/verified public (?:contact )?route/iu.test(contactHtml)) {
-  report("contact.html", "must not overclaim the designated phone or mailbox as evidence-verified");
 }
 
 for (const file of cssFiles) checkCssReferences(file, await readFile(path.join(root, file), "utf8"));

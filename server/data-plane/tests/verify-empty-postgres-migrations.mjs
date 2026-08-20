@@ -1908,6 +1908,9 @@ async function verifyCustomerEngagementBootstrapState(pool) {
 async function verifyCustomerEngagementBootstrapJourney(pool) {
   const operatorUserId = randomUUID();
   const authorizerUserId = randomUUID();
+  const operatorGrantExpiresAt = new Date(
+    Date.now() + 10 * 86_400_000
+  ).toISOString();
   await pool.query(
     `insert into auth.users (id, email) values
        ($1, $2), ($3, $4)`,
@@ -1955,7 +1958,7 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
     [
       operatorUserId,
       "2026-08-10T00:00:00.000Z",
-      "2026-08-20T00:00:00.000Z"
+      operatorGrantExpiresAt
     ]
   );
 
@@ -2106,9 +2109,9 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
   assert.equal(directQuote.credit, null);
   assert.equal(directQuote.quote.origin, "direct");
   assert.equal(directQuote.quote.creditSelection, "no_credit");
-  assert.equal(directQuote.quote.pricing.serviceAmountMinor, 120000);
+  assert.equal(directQuote.quote.pricing.serviceAmountMinor, 100000);
   assert.equal(directQuote.quote.pricing.creditAmountMinor, 0);
-  assert.equal(directQuote.quote.pricing.startDueMinor, 60000);
+  assert.equal(directQuote.quote.pricing.startDueMinor, 50000);
 
   const directScope = {
     actorId: claim.user.id,
@@ -2132,7 +2135,7 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
        invoice.credit_application_id is null as no_credit_application,
        invoice.credit_minor = 0 as zero_credit,
        invoice.subtotal_minor = invoice.gross_start_minor as full_start_due,
-       invoice.tax_state = 'calculation_required' as purpose_tax_boundary,
+       invoice.tax_state = 'disabled_by_owner' as purpose_tax_boundary,
        count(line.id)::integer as line_count
      from ss.service_custom_build_invoices invoice
      join ss.service_custom_build_invoice_lines line
@@ -3597,13 +3600,21 @@ async function verifyPlatformSchema(pool) {
       (
         select
           constraint_contract.definitions ~
-            'service_amount_minor = 20000'
+            'service_amount_minor = ANY.*20000.*35000'
           and constraint_contract.definitions ~
-            'subtotal_minor = 20000'
+            'subtotal_minor = ANY.*20000.*35000'
           and constraint_contract.definitions ~
             'currency = ''USD'''
           and constraint_contract.definitions ~
-            'tax_state = ''calculation_required'''
+            'tax_state = ANY.*calculation_required.*disabled_by_owner'
+          and constraint_contract.definitions ~
+            'SS-CUSTOM-SERVICES-2026-08-05.1'
+          and constraint_contract.definitions ~
+            'SS-CUSTOM-SERVICES-2026-08-19.2'
+          and constraint_contract.definitions ~
+            'service_amount_minor = 20000'
+          and constraint_contract.definitions ~
+            'service_amount_minor = 35000'
           and constraint_contract.definitions ~
             'payment_schedule = ''full_before_work'''
           and constraint_contract.definitions ~
@@ -3622,12 +3633,12 @@ async function verifyPlatformSchema(pool) {
             pg_get_functiondef(
               'ss.prepare_service_quote_revision()'::regprocedure
             )
-          ) like '%new.service_amount_minor := 20000%'
+          ) like '%new.service_amount_minor := 35000%'
           and lower(
             pg_get_functiondef(
               'ss.prepare_service_quote_revision()'::regprocedure
             )
-          ) like '%new.tax_state := ''calculation_required''%'
+          ) like '%new.tax_state := ''disabled_by_owner''%'
           and lower(
             pg_get_functiondef(
               'ss.prepare_service_quote_revision()'::regprocedure
@@ -4100,16 +4111,29 @@ async function verifyPlatformSchema(pool) {
       maximum_sections,
       maximum_layouts,
       maximum_words,
-      maximum_media
+      maximum_media,
+      catalog_version,
+      credit_amount_minor,
+      commercial_contract_id,
+      commercial_contract_digest,
+      catalog_digest_key,
+      catalog_digest
     ) as (
       values
-        ('00000000-0000-4000-8000-000000000411'::uuid, 'card', 'Card Custom website build', 'fixed', 40000::bigint, 1, 5, 1, 500, 2),
-        ('00000000-0000-4000-8000-000000000412'::uuid, 'card-plus', 'Card Plus Custom website build', 'fixed', 65000::bigint, 1, 8, 1, 900, 8),
-        ('00000000-0000-4000-8000-000000000413'::uuid, 'site', 'Site Custom website build', 'fixed', 120000::bigint, 4, 16, 4, 1800, 12),
-        ('00000000-0000-4000-8000-000000000414'::uuid, 'site-plus', 'Site Plus Custom website build', 'fixed', 180000::bigint, 7, 28, 7, 3000, 24),
-        ('00000000-0000-4000-8000-000000000415'::uuid, 'signature', 'Signature Custom website build', 'fixed', 280000::bigint, 10, 40, 10, 4500, 36),
-        ('00000000-0000-4000-8000-000000000416'::uuid, 'flagship', 'Flagship Custom website build', 'fixed', 400000::bigint, 15, 60, 15, 7000, 60),
-        ('00000000-0000-4000-8000-000000000417'::uuid, 'scale', 'Scale Custom website build', 'banded', null::bigint, 30, 120, 30, 14500, 120)
+        ('00000000-0000-4000-8000-000000000411'::uuid, 'card', 'Card Custom website build', 'fixed', 40000::bigint, 1, 5, 1, 500, 2, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000000412'::uuid, 'card-plus', 'Card Plus Custom website build', 'fixed', 65000::bigint, 1, 8, 1, 900, 8, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000000413'::uuid, 'site', 'Site Custom website build', 'fixed', 120000::bigint, 4, 16, 4, 1800, 12, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000000414'::uuid, 'site-plus', 'Site Plus Custom website build', 'fixed', 180000::bigint, 7, 28, 7, 3000, 24, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000000415'::uuid, 'signature', 'Signature Custom website build', 'fixed', 280000::bigint, 10, 40, 10, 4500, 36, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000000416'::uuid, 'flagship', 'Flagship Custom website build', 'fixed', 400000::bigint, 15, 60, 15, 7000, 60, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000000417'::uuid, 'scale', 'Scale Custom website build', 'banded', null::bigint, 30, 120, 30, 14500, 120, 'SS-PROFESSIONAL-2026.2', 20000::bigint, 'SS-CUSTOM-SERVICES-2026-08-05.1', '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8', 'publicCatalogDigest', 'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'),
+        ('00000000-0000-4000-8000-000000001412'::uuid, 'card', 'Card Custom website build', 'fixed', 35000::bigint, 1, 5, 1, 500, 2, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0'),
+        ('00000000-0000-4000-8000-000000001413'::uuid, 'card-plus', 'Card Plus Custom website build', 'fixed', 60000::bigint, 1, 8, 1, 900, 8, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0'),
+        ('00000000-0000-4000-8000-000000001414'::uuid, 'site', 'Site Custom website build', 'fixed', 100000::bigint, 4, 16, 4, 1800, 12, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0'),
+        ('00000000-0000-4000-8000-000000001415'::uuid, 'site-plus', 'Site Plus Custom website build', 'fixed', 160000::bigint, 7, 28, 7, 3000, 24, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0'),
+        ('00000000-0000-4000-8000-000000001416'::uuid, 'signature', 'Signature Custom website build', 'fixed', 240000::bigint, 10, 40, 10, 4500, 36, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0'),
+        ('00000000-0000-4000-8000-000000001417'::uuid, 'flagship', 'Flagship Custom website build', 'fixed', 360000::bigint, 15, 60, 15, 7000, 60, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0'),
+        ('00000000-0000-4000-8000-000000001418'::uuid, 'scale', 'Scale Custom website build', 'banded', null::bigint, 30, 120, 30, 14500, 120, 'SS-TIERS-2026.6', 35000::bigint, 'SS-CUSTOM-SERVICES-2026-08-19.2', '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d', 'catalogDigest', '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0')
     )
     select
       ss.hosted_runtime_contract_v40() =
@@ -4219,8 +4243,8 @@ async function verifyPlatformSchema(pool) {
              to_regprocedure(expected.function_signature)
       ) as exact_trigger_boundary,
       (
-        select count(*) = 7
-          and bool_and(policy.catalog_version = 'SS-PROFESSIONAL-2026.2')
+        select count(*) = 14
+          and bool_and(policy.catalog_version = expected.catalog_version)
           and bool_and(
             policy.service_key =
               'custom_build_' || replace(expected.tier_id, '-', '_')
@@ -4276,7 +4300,7 @@ async function verifyPlatformSchema(pool) {
           and bool_and(
             policy.scope_boundary -> 'assessmentCredit' =
               jsonb_build_object(
-                'amountMinor', 20000,
+                'amountMinor', expected.credit_amount_minor,
                 'applicationScope', 'custom_base_build',
                 'currency', 'USD',
                 'maximumApplications', 1,
@@ -4285,19 +4309,19 @@ async function verifyPlatformSchema(pool) {
               )
           )
           and bool_and(
-            policy.scope_boundary ->> 'publicCatalogDigest' =
-              'c1259ad9efe9fd0909bf431e2f008feb8e6f1fc1e53acd0b34304312358fe1a1'
+            policy.scope_boundary ->> expected.catalog_digest_key =
+              expected.catalog_digest
           )
           and bool_and(
             (policy.scope_boundary ->> 'workmanshipCorrectionDays')::integer = 30
           )
           and bool_and(
             policy.commercial_contract_id =
-              'SS-CUSTOM-SERVICES-2026-08-05.1'
+              expected.commercial_contract_id
           )
           and bool_and(
             policy.commercial_contract_digest =
-              '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8'
+              expected.commercial_contract_digest
           )
           and bool_and((
             select count(*) = 4
@@ -4308,7 +4332,7 @@ async function verifyPlatformSchema(pool) {
                and coverage.scope_identity_kind = 'project'
           ))
           and (
-            select count(*) = 8
+            select count(*) = 15
               from ss.service_catalog_policies custom_policy
              where custom_policy.service_key like 'custom_build_%'
           )
@@ -4316,14 +4340,14 @@ async function verifyPlatformSchema(pool) {
           join ss.service_catalog_policies policy
             on policy.id = expected.policy_id
       ) as exact_held_catalog,
-      ss.custom_build_amount_minor('card', null) = 40000
-        and ss.custom_build_amount_minor('card-plus', null) = 65000
-        and ss.custom_build_amount_minor('site', null) = 120000
-        and ss.custom_build_amount_minor('site-plus', null) = 180000
-        and ss.custom_build_amount_minor('signature', null) = 280000
-        and ss.custom_build_amount_minor('flagship', null) = 400000
-        and ss.custom_build_amount_minor('scale', 1) = 427000
-        and ss.custom_build_amount_minor('scale', 15) = 805000
+      ss.custom_build_amount_minor('card', null) = 35000
+        and ss.custom_build_amount_minor('card-plus', null) = 60000
+        and ss.custom_build_amount_minor('site', null) = 100000
+        and ss.custom_build_amount_minor('site-plus', null) = 160000
+        and ss.custom_build_amount_minor('signature', null) = 240000
+        and ss.custom_build_amount_minor('flagship', null) = 360000
+        and ss.custom_build_amount_minor('scale', 1) = 384000
+        and ss.custom_build_amount_minor('scale', 15) = 720000
         and ss.custom_build_amount_minor('scale', 0) is null
         and ss.custom_build_amount_minor('scale', 16) is null
         as exact_database_pricing,
@@ -4448,7 +4472,7 @@ async function verifyPlatformSchema(pool) {
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
             '%insert into ss.service_credit_applications%'
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
-            '%if revision_record.credit_amount_minor = 20000%'
+            '%if revision_record.credit_amount_minor = 35000%'
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
             '%''reserved''%'
           and lower(pg_get_functiondef(acceptance_materializer.oid)) like
@@ -4527,6 +4551,8 @@ async function verifyPlatformSchema(pool) {
              and constraint_record.contype = 'c'
              and pg_get_constraintdef(constraint_record.oid) like
                '%tax_state%calculation_required%'
+             and pg_get_constraintdef(constraint_record.oid) like
+               '%disabled_by_owner%'
         )
         and not exists (
           select 1

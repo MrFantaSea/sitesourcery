@@ -45,9 +45,9 @@ function foundationSnapshot() {
       projectState: "active"
     },
     policy: {
-      catalogVersion: "SS-PROFESSIONAL-2026.1",
+      catalogVersion: "SS-PROFESSIONAL-2026.2",
       serviceKey: "website_assessment_standard",
-      legalVersion: "SS-CUSTOM-SERVICES-2026-08-05.1",
+      legalVersion: "SS-CUSTOM-SERVICES-2026-08-19.2",
       publicationState: "held"
     },
     profile: null,

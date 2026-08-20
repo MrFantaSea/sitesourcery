@@ -1,18 +1,20 @@
 {
-  "version": "SS-COMMERCIAL-2026.5",
+  "version": "SS-COMMERCIAL-2026.6",
   "currency": "USD",
   "offerState": "inquiry-only",
   "notice": "Non-binding pricing preview. Verified scope and written acceptance are required; inquiry does not authorize work or billing.",
-  "sourceCatalogDigest": "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
-  "tierCatalogId": "SS-TIERS-2026.5",
-  "addonCatalogId": "SS-ADDONS-2026.5",
-  "careCatalogId": "SS-CARE-2026.5",
-  "professionalServiceCatalogId": "SS-PROFESSIONAL-2026.1",
+  "sourceCatalogDigest": "3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0",
+  "approvedSourceCatalogDigest": "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
+  "approvedSourceFileSha256": "9398d025b12f96ad1989620226cd153dabd39ee81d2ba11d1f03badf1cad2ee1",
+  "tierCatalogId": "SS-TIERS-2026.6",
+  "addonCatalogId": "SS-ADDONS-2026.6",
+  "careCatalogId": "SS-CARE-2026.6",
+  "professionalServiceCatalogId": "SS-PROFESSIONAL-2026.2",
   "buildTiers": [
     {
       "id": "card",
       "label": "Card",
-      "priceCents": 40000,
+      "priceCents": 35000,
       "limits": {
         "craftedPages": 1,
         "sections": 5,
@@ -27,7 +29,7 @@
     {
       "id": "card-plus",
       "label": "Card Plus",
-      "priceCents": 65000,
+      "priceCents": 60000,
       "limits": {
         "craftedPages": 1,
         "sections": 8,
@@ -42,7 +44,7 @@
     {
       "id": "site",
       "label": "Site",
-      "priceCents": 120000,
+      "priceCents": 100000,
       "limits": {
         "craftedPages": 4,
         "sections": 16,
@@ -57,7 +59,7 @@
     {
       "id": "site-plus",
       "label": "Site Plus",
-      "priceCents": 180000,
+      "priceCents": 160000,
       "limits": {
         "craftedPages": 7,
         "sections": 28,
@@ -72,7 +74,7 @@
     {
       "id": "signature",
       "label": "Signature",
-      "priceCents": 280000,
+      "priceCents": 240000,
       "limits": {
         "craftedPages": 10,
         "sections": 40,
@@ -87,7 +89,7 @@
     {
       "id": "flagship",
       "label": "Flagship",
-      "priceCents": 400000,
+      "priceCents": 360000,
       "limits": {
         "craftedPages": 15,
         "sections": 60,
@@ -131,7 +133,7 @@
     "minimumCapacityUnits": 1,
     "maximumCapacityUnits": 15,
     "maximumCraftedPages": 30,
-    "unitPriceCents": 27000,
+    "unitPriceCents": 24000,
     "allowancePerUnit": {
       "craftedPages": 1,
       "sections": 4,
@@ -270,7 +272,7 @@
     {
       "min": 3,
       "max": 5,
-      "priceCents": 20000
+      "priceCents": 35000
     },
     {
       "min": 6,
@@ -285,7 +287,7 @@
   ],
   "migration": {
     "firstRecords": 100,
-    "firstPriceCents": 20000,
+    "firstPriceCents": 35000,
     "nextRecords": 100,
     "nextPriceCents": 20000,
     "maxRecords": 1000
@@ -342,31 +344,14 @@
       "id": "website-assessment",
       "mechanismId": "DL-02",
       "label": "Website assessment",
-      "priceCents": 20000,
-      "contractId": "SS-CUSTOM-SERVICES-2026-08-05.1",
-      "contractDigest": "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8",
-      "deliverable": "A written assessment of the customer\u2019s existing website with screenshot evidence and real findings ranked by severity.",
+      "priceCents": 35000,
+      "deliverable": "A written assessment of the customer’s existing website with screenshot evidence and real findings ranked by severity.",
       "scopeState": "must_be_stated_before_sale",
       "turnaroundState": "must_be_stated_before_sale",
-      "standardScope": {
-        "maximumWebsites": 1,
-        "maximumRepresentativePagesOrTypes": 5,
-        "requiredViewports": [
-          "desktop",
-          "phone"
-        ],
-        "maximumFindings": 10,
-        "expandedAssessmentState": "separately_quoted"
-      },
       "buildCredit": {
         "basisPoints": 10000,
-        "maximumCents": 20000,
-        "oneUse": true,
-        "acceptanceWindowDays": 90,
-        "sameOrganizationRequired": true,
-        "sameProjectRequired": true,
-        "cashValue": false,
-        "eligibleSuccessor": "custom_base_build_card_through_scale"
+        "maximumCents": 35000,
+        "eligibleSuccessor": "any_accepted_site_sourcery_build"
       },
       "boundary": "The assessment diagnoses the existing website. Remediation is a separately accepted build or service scope.",
       "placements": [
@@ -376,54 +361,5 @@
       ]
     }
   ],
-  "projectionDigest": "5276e2f38096625428814677518ffaaf6063f07f78169be20b8bf4ac5d511225",
-  "domains": {
-    "id": "domain-registration",
-    "label": "Domain registration",
-    "summary": "A web address bought on your behalf and registered in your name.",
-    "pricingModel": "price-book-banded",
-    "costsConfirmed": false,
-    "notice": "Endings are priced in bands because registries charge different wholesale for each. Unusual endings and premium names are quoted for the exact name before anything is bought.",
-    "rule": {
-      "multiplier": 2,
-      "floorCents": 2500,
-      "handlingCents": 1500
-    },
-    "bands": [
-      {
-        "id": "standard",
-        "label": "Standard",
-        "endings": [
-          "com"
-        ],
-        "wholesaleCents": 1100,
-        "firstYearCents": 4000,
-        "renewalCents": 4000
-      },
-      {
-        "id": "plus",
-        "label": "Plus",
-        "endings": [
-          "net",
-          "org"
-        ],
-        "wholesaleCents": 1400,
-        "firstYearCents": 4500,
-        "renewalCents": 4500
-      }
-    ]
-  },
-  "responder": {
-    "id": "responder",
-    "label": "The Responder",
-    "summary": "A missed call gets a text back within seconds, and an answered call gets a follow-up you dictate. Either way the customer leaves with something in writing.",
-    "pricingModel": "fixed",
-    "setupCents": 30000,
-    "monthlyCents": 25000,
-    "note": "One price, both behaviours. Tiering invites the customer to pick the cheaper option and stalls the close; the marginal cost of the answered-call text is pennies. Sold in person only.",
-    "includes": [
-      "missed-call text-back",
-      "answered-call follow-up"
-    ]
-  }
+  "projectionDigest": "61904ce2fc6a6346babe43adbf902675f3a002c6e179b1aae883df498b8e91db"
 }

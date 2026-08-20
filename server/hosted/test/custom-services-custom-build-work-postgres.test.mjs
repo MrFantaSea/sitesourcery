@@ -55,10 +55,11 @@ function jobRow(overrides = {}) {
     content_words: 3000,
     supplied_media: 24,
     target_completion_date: "2026-09-15",
-    start_gross_minor: "90000",
-    start_credit_minor: "20000",
-    start_paid_subtotal_minor: "70000",
-    final_due_minor: "90000",
+    start_gross_minor: "80000",
+    start_credit_minor: "35000",
+    start_paid_subtotal_minor: "45000",
+    start_settlement_kind: "provider_payment",
+    final_due_minor: "80000",
     final_payment_state: "unpaid",
     currency: "USD",
     linkage_valid: true,
@@ -247,13 +248,13 @@ test("owner jobs expose the exact safe projection in target/open order", async (
           },
           targetCompletionDate: "2026-09-15",
           firstPayment: {
-            grossMinor: 90000,
-            creditMinor: 20000,
-            paidSubtotalMinor: 70000,
+            grossMinor: 80000,
+            creditMinor: 35000,
+            paidSubtotalMinor: 45000,
             currency: "USD"
           },
           finalHandoff: {
-            amountMinor: 90000,
+            amountMinor: 80000,
             currency: "USD",
             state: "unpaid"
           }
@@ -276,7 +277,7 @@ test("owner jobs expose the exact safe projection in target/open order", async (
   assert.match(jobsQuery, /join ss\.service_custom_build_invoices invoice/u);
   assert.match(
     jobsQuery,
-    /join ss\.service_custom_build_payment_receipts receipt/u
+    /left join ss\.service_custom_build_payment_receipts receipt/u
   );
   assert.match(
     jobsQuery,

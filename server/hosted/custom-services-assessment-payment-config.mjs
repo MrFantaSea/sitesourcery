@@ -28,13 +28,13 @@ export function validateCustomServicesAssessmentPaymentRelease(value) {
         "taxMode"
       ]) ||
     typeof value.approved !== "boolean" ||
-    value.amountMinor !== 20000 ||
+    value.amountMinor !== 35000 ||
     value.currency !== "USD" ||
     value.taxMode !== "disabled_by_owner"
   ) {
     throw configurationError(
       "CUSTOM_SERVICES_ASSESSMENT_PAYMENT_RELEASE_INVALID",
-      "Assessment payment release must preserve the exact $200 pre-effective disabled-tax contract."
+      "Assessment payment release must preserve the exact $350 held disabled-tax contract."
     );
   }
   return Object.freeze({ ...value });
@@ -56,7 +56,7 @@ export function createConfiguredCustomServicesAssessmentPaymentRelease({
     mode,
     release: validateCustomServicesAssessmentPaymentRelease({
       approved: mode === "approved",
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       taxMode: "disabled_by_owner"
     })

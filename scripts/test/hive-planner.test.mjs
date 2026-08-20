@@ -830,15 +830,17 @@ test("the public Responder experience is inquiry-only and cannot start work", ()
   assert.doesNotMatch(main, /<button\b|data-hive-(?:back|cell|download|next|pause)/iu);
 });
 
-test("the retired Hive route redirects canonically to the held Responder page", () => {
-  assert.match(LEGACY_HTML, /http-equiv="refresh" content="0;url=\/responder\/"/u);
+test("the canonical Hive route is a local-only conversation guide", () => {
+  assert.doesNotMatch(LEGACY_HTML, /http-equiv="refresh"/u);
   assert.match(
     LEGACY_HTML,
-    /rel="canonical" href="https:\/\/sitesourcery\.com\/responder\/"/u
+    /rel="canonical" href="https:\/\/sitesourcery\.com\/hive\/"/u
   );
-  assert.match(LEGACY_HTML, /href="\/responder\/">Continue to The Responder/u);
-  assert.equal((HTML.match(/data-hive-static-cell=/gu) || []).length, 5);
-  assert.doesNotMatch(HTML, /data-hive-noscript-cell|data-hive-stage=/u);
+  assert.equal((LEGACY_HTML.match(/data-hive-planner/gu) || []).length, 1);
+  assert.equal((LEGACY_HTML.match(/data-hive-noscript-cell=/gu) || []).length, 6);
+  assert.equal((LEGACY_HTML.match(/data-hive-stage="[1-5]"/gu) || []).length, 5);
+  assert.match(LEGACY_HTML, /Your choice only changes this page\. It is not saved or sent\./u);
+  assert.match(LEGACY_HTML, /cannot place an order, reserve time, or start anything/u);
 });
 
 test("contains no network, persistence, markup-injection, or payment API", () => {

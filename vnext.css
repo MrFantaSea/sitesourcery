@@ -8896,6 +8896,23 @@ li[id^="about-"]:target {
    artwork. The information panels remain ordinary HTML above it.
    --------------------------------------------------------------------------- */
 
+/* These restored rooms give their icon-only menu an explicit accessible name,
+   so the redundant visual word can leave layout entirely. */
+body:is(.website-paths-page, .made-for-you-page) .menu-button > span {
+  display: none;
+}
+
+@media (max-width: 26rem) {
+  body:is(.website-paths-page, .made-for-you-page) .nav-call > span {
+    display: none;
+  }
+}
+
+#website-proof,
+#made-for-you-proof {
+  overflow-x: clip;
+}
+
 body.vnext-page.about-page::after {
   background:
     linear-gradient(90deg,

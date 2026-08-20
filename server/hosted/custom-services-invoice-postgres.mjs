@@ -201,19 +201,40 @@ function project(row, input, paymentRelease) {
     "assessmentInvoiceRow"
   );
 
+  const subtotalMinor = amount(row.subtotal_minor, "invoice.subtotal");
+  const unitAmountMinor = amount(
+    row.unit_amount_minor,
+    "invoice.unitAmount"
+  );
+  const expectedSubtotalMinor = amount(
+    row.expected_subtotal_minor,
+    "payment.subtotal"
+  );
+  const historicalContract =
+    subtotalMinor === 20_000 &&
+    unitAmountMinor === 20_000 &&
+    expectedSubtotalMinor === 20_000 &&
+    row.tax_state === "calculation_required" &&
+    row.hold_reason === "tax_calculation_required";
+  const successorContract =
+    subtotalMinor === 35_000 &&
+    unitAmountMinor === 35_000 &&
+    expectedSubtotalMinor === 35_000 &&
+    row.tax_state === "disabled_by_owner" &&
+    row.hold_reason === "tax_disabled_by_owner";
+
   invariant(
     row.organization_id === input.organizationId &&
       row.project_id === input.projectId &&
       row.customer_user_id === input.customerId &&
       row.purpose === "assessment" &&
       row.invoice_state === "tax_calculation_pending" &&
-      row.tax_state === "calculation_required" &&
+      (historicalContract || successorContract) &&
       row.tax_minor === null &&
       row.total_minor === null &&
       row.payable === false &&
       row.charge_occurred === false &&
       row.payment_state === "held" &&
-      row.hold_reason === "tax_calculation_required" &&
       row.dispatch_authorized === false &&
       row.provider_effect_certainty === "not_submitted" &&
       row.expected_tax_minor === null &&
@@ -240,15 +261,6 @@ function project(row, input, paymentRelease) {
     { status: 500 }
   );
 
-  const subtotalMinor = amount(row.subtotal_minor, "invoice.subtotal");
-  invariant(
-    subtotalMinor === 20000 &&
-      amount(row.unit_amount_minor, "invoice.unitAmount") === 20000 &&
-      amount(row.expected_subtotal_minor, "payment.subtotal") === 20000,
-    "invoice_repository_conflict",
-    "The held assessment invoice amount changed unexpectedly.",
-    { status: 500 }
-  );
   const invoiceDigest = digest(row.invoice_digest, "invoice.digest");
   invariant(
     invoiceDigest === digest(
@@ -291,8 +303,9 @@ function project(row, input, paymentRelease) {
         amount(
           row.receipt_subtotal_minor,
           "receipt.subtotal"
-        ) === 20000 &&
-        totalMinor === 20000 + taxMinor &&
+        ) === subtotalMinor &&
+        totalMinor === subtotalMinor + taxMinor &&
+        (!successorContract || taxMinor === 0) &&
         row.receipt_currency === "USD" &&
         SHA256.test(
           String(row.receipt_provider_facts_digest ?? "")
@@ -406,6 +419,7 @@ function project(row, input, paymentRelease) {
     !hasReceipt &&
     !paymentVerifying &&
     !paymentAttention &&
+    successorContract &&
     paymentRelease.approved &&
     (
       row.checkout_attempt_state === null ||
@@ -458,22 +472,24 @@ function project(row, input, paymentRelease) {
         quantity: 1,
         unit: "assessment",
         unitAmount: {
-          amountMinor: 20000,
+          amountMinor: subtotalMinor,
           currency: "USD",
-          formatted: "$200.00"
+          formatted: usd(subtotalMinor)
         }
       },
       subtotal: {
         amountMinor: subtotalMinor,
         currency: "USD",
-        formatted: "$200.00"
+        formatted: usd(subtotalMinor)
       },
       tax: {
-        state: hasReceipt ? "calculated" : "calculation_required",
+        state: hasReceipt ? "calculated" : row.tax_state,
         amountMinor: receipt?.taxMinor ?? null,
         message: hasReceipt
           ? `Tax confirmed at ${usd(receipt.taxMinor)}.`
-          : "Stripe calculates tax at secure checkout, if applicable."
+          : successorContract
+            ? "Prices exclude tax. Tax calculation and collection remain disabled by the owner."
+            : "Stripe calculates tax at secure checkout, if applicable."
       },
       total: {
         state: hasReceipt ? "final" : "pending_tax",
@@ -522,7 +538,7 @@ function project(row, input, paymentRelease) {
                 ? "payment_attention"
             : checkoutRequiresReconciliation
             ? "reconciliation_required"
-            : !paymentRelease.approved
+            : !successorContract || !paymentRelease.approved
               ? "payment_release_held"
             : "checkout_not_available",
         message: checkoutAvailable
@@ -535,7 +551,7 @@ function project(row, input, paymentRelease) {
                 ? "Payment needs manual review before any further action."
             : checkoutRequiresReconciliation
             ? "The earlier payment-page request is being reconciled before another can open."
-            : !paymentRelease.approved
+            : !successorContract || !paymentRelease.approved
               ? "Secure assessment payment is held in this runtime."
             : "Secure payment is not available yet."
       }

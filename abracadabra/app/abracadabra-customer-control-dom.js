@@ -92,11 +92,11 @@
     "scale"
   ];
   var CUSTOM_BUILD_COMMERCIAL_CONTRACT_ID =
-    "SS-CUSTOM-SERVICES-2026-08-05.1";
+    "SS-CUSTOM-SERVICES-2026-08-19.2";
   var CUSTOM_BUILD_COMMERCIAL_CONTRACT_DIGEST =
-    "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+    "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
   var CUSTOM_BUILD_LEGAL_DOCUMENT_ID =
-    "00000000-0000-4000-8000-000000000342";
+    "00000000-0000-4000-8000-000000001410";
   var CUSTOM_BUILD_PROGRESS_SCHEMA =
     "sitesourcery.custom-build-progress/v1";
   var CUSTOM_BUILD_CHANGE_COMPLETION_SCHEMA =
@@ -151,42 +151,42 @@
     Object.freeze({
       id: "card",
       label: "Card",
-      amountMinor: 40000,
+      amountMinor: 35000,
       defaults: [1, 5, 1, 500, 2],
       maxima: [1, 5, 1, 500, 2]
     }),
     Object.freeze({
       id: "card-plus",
       label: "Card Plus",
-      amountMinor: 65000,
+      amountMinor: 60000,
       defaults: [1, 8, 1, 900, 8],
       maxima: [1, 8, 1, 900, 8]
     }),
     Object.freeze({
       id: "site",
       label: "Site",
-      amountMinor: 120000,
+      amountMinor: 100000,
       defaults: [4, 16, 4, 1800, 12],
       maxima: [4, 16, 4, 1800, 12]
     }),
     Object.freeze({
       id: "site-plus",
       label: "Site Plus",
-      amountMinor: 180000,
+      amountMinor: 160000,
       defaults: [7, 28, 7, 3000, 24],
       maxima: [7, 28, 7, 3000, 24]
     }),
     Object.freeze({
       id: "signature",
       label: "Signature",
-      amountMinor: 280000,
+      amountMinor: 240000,
       defaults: [10, 40, 10, 4500, 36],
       maxima: [10, 40, 10, 4500, 36]
     }),
     Object.freeze({
       id: "flagship",
       label: "Flagship",
-      amountMinor: 400000,
+      amountMinor: 360000,
       defaults: [15, 60, 15, 7000, 60],
       maxima: [15, 60, 15, 7000, 60]
     }),
@@ -198,6 +198,14 @@
       maxima: [30, 120, 30, 14500, 120]
     })
   ]);
+  var CUSTOM_BUILD_HISTORICAL_AMOUNT_MINOR = Object.freeze({
+    card: 40000,
+    "card-plus": 65000,
+    site: 120000,
+    "site-plus": 180000,
+    signature: 280000,
+    flagship: 400000
+  });
   var ASSESSMENT_SEVERITIES = [
     "critical",
     "high",
@@ -3162,7 +3170,7 @@
         ]
       )
       || !UUID.test(text(value.creditId))
-      || value.amountMinor !== 20000
+      || value.amountMinor !== 35000
       || value.currency !== "USD"
       || value.applicationScope !== "custom_base_build"
       || !sameAssessmentList(
@@ -3259,7 +3267,7 @@
         || scaleUnits > 15)
     ) return null;
     var serviceAmountMinor = tier.id === "scale"
-      ? 400000 + scaleUnits * 27000
+      ? 360000 + scaleUnits * 24000
       : tier.amountMinor;
     var paymentSchedule = ["card", "card-plus"]
       .includes(tier.id)
@@ -3271,7 +3279,7 @@
     var creditAmountMinor = creditSelection === "no_credit"
       ? 0
       : creditSelection === "apply_assessment_credit"
-        ? 20000
+        ? 35000
         : null;
     if (creditAmountMinor === null) return null;
     return Object.freeze({
@@ -3287,6 +3295,50 @@
     });
   }
 
+  function customBuildHistoricalEstimate(
+    tierId,
+    footprint,
+    creditMinor
+  ) {
+    var tier = customBuildTier(tierId);
+    if (!tier || ![0, 20000].includes(creditMinor)) return null;
+    var values = [
+      footprint.craftedPages,
+      footprint.sections,
+      footprint.uniqueLayouts,
+      footprint.contentWords,
+      footprint.suppliedMedia
+    ];
+    var minima = [1, 1, 1, 0, 0];
+    if (!values.every(function (value, index) {
+      return Number.isSafeInteger(value)
+        && value >= minima[index]
+        && value <= tier.maxima[index];
+    })) return null;
+    var scaleUnits = tier.id === "scale"
+      ? customBuildScaleUnits(footprint)
+      : null;
+    if (
+      tier.id === "scale"
+      && (!Number.isSafeInteger(scaleUnits)
+        || scaleUnits < 1
+        || scaleUnits > 15)
+    ) return null;
+    var serviceAmountMinor = tier.id === "scale"
+      ? 400000 + scaleUnits * 27000
+      : CUSTOM_BUILD_HISTORICAL_AMOUNT_MINOR[tier.id];
+    var fullBeforeWork = ["card", "card-plus"].includes(tier.id);
+    var startValueMinor = fullBeforeWork
+      ? serviceAmountMinor
+      : Math.floor(serviceAmountMinor / 2);
+    return {
+      startValueMinor: startValueMinor,
+      startCreditMinor: creditMinor,
+      startDueMinor: startValueMinor - creditMinor,
+      finalDueMinor: serviceAmountMinor - startValueMinor
+    };
+  }
+
   function customBuildTermsRules(paymentSchedule, creditSelection) {
     var paymentRule = paymentSchedule === "full_before_work"
       ? "The remaining balance is due before build work begins."
@@ -3297,7 +3349,7 @@
         ? "No assessment credit is applied to this quote."
         : "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
       paymentRule,
-      "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
+      "Prices exclude tax. Tax calculation and collection remain disabled by the owner. Separately stated third-party provider charges are not included in the base price.",
       "Build work does not begin until the required first payment is verified.",
       "The 30-day workmanship correction covers reproducible defects in the accepted deliverables, not new content, features, changed decisions, third-party changes, or ongoing management."
     ];
@@ -3315,7 +3367,7 @@
       ]
     )
       && UUID.test(text(value.creditId))
-      && value.amountMinor === 20000
+      && value.amountMinor === 35000
       && value.currency === "USD"
       && [
         "available",
@@ -3526,7 +3578,7 @@
       || value.pricing.customerAmountMinor !==
         estimate.customerAmountMinor
       || value.pricing.currency !== "USD"
-      || value.pricing.taxState !== "calculation_required"
+      || value.pricing.taxState !== "disabled_by_owner"
       || value.pricing.paymentSchedule !==
         estimate.paymentSchedule
       || value.pricing.startValueMinor !==
@@ -3670,7 +3722,7 @@
     )
       && SHA256.test(text(value.acceptedDisclosureDigest))
       && SHA256.test(text(value.acceptedQuoteDigest))
-      && [0, 20000].includes(value.creditMinor)
+      && [0, 20000, 35000].includes(value.creditMinor)
       && safeMinor(value.finalHandoffMinor)
       && safeMinor(value.grossStartMinor)
       && value.grossStartMinor > value.creditMinor
@@ -3729,22 +3781,31 @@
         ["amountMinor", "currency", "state"]
       )
     ) return false;
-    var estimate = customBuildPublicEstimate(
+    var currentEstimate = customBuildPublicEstimate(
       value.tierId,
       value.footprint,
       value.firstPayment.creditMinor === 0
         ? "no_credit"
         : "apply_assessment_credit"
     );
-    return Boolean(estimate)
-      && value.firstPayment.grossMinor === estimate.startValueMinor
-      && value.firstPayment.creditMinor === estimate.startCreditMinor
-      && value.firstPayment.paidSubtotalMinor === estimate.startDueMinor
+    var historicalEstimate = customBuildHistoricalEstimate(
+      value.tierId,
+      value.footprint,
+      value.firstPayment.creditMinor
+    );
+    var estimates = [currentEstimate, historicalEstimate].filter(Boolean);
+    return estimates.some(function (estimate) {
+      return value.firstPayment.grossMinor === estimate.startValueMinor
+        && value.firstPayment.creditMinor === estimate.startCreditMinor
+        && value.firstPayment.paidSubtotalMinor === estimate.startDueMinor
+        && value.finalHandoff.amountMinor === estimate.finalDueMinor;
+    })
       && value.firstPayment.currency === "USD"
-      && value.finalHandoff.amountMinor === estimate.finalDueMinor
       && value.finalHandoff.currency === "USD"
       && value.finalHandoff.state ===
-        (estimate.finalDueMinor === 0 ? "not_required" : "unpaid");
+        (value.finalHandoff.amountMinor === 0
+          ? "not_required"
+          : "unpaid");
   }
 
   function verifiedCustomerCustomBuildInvoice(value, expectation) {
@@ -3868,6 +3929,7 @@
       )
     ) return null;
     var paid = value.state === "paid";
+    var chargeExpected = paid && expectation.subtotalMinor > 0;
     var ready = value.state === "checkout_ready";
     var expectedCreditStates = paid
       ? ["settled"]
@@ -3876,7 +3938,7 @@
         : ["reserved"];
     if (
       !expectedCreditStates.includes(invoice.credit.state)
-      || invoice.payment.chargeOccurred !== paid
+      || invoice.payment.chargeOccurred !== chargeExpected
       || value.action.available !==
         (value.state === "checkout_available")
       || value.action.reason !==
@@ -6225,7 +6287,7 @@
         "sameOrganizationAndProjectOnly"
       ]
     )
-      && value.amountMinor === 20000
+      && value.amountMinor === 35000
       && value.currency === "USD"
       && value.applicationScope === "custom_base_build"
       && sameAssessmentList(
@@ -6560,11 +6622,11 @@
       || !SHA256.test(text(quote.quoteDigest))
       || !SHA256.test(text(quote.disclosureDigest))
       || !record(quote.servicePrice)
-      || quote.servicePrice.amountMinor !== 20000
+      || quote.servicePrice.amountMinor !== 35000
       || quote.servicePrice.currency !== "USD"
-      || quote.servicePrice.formatted !== "$200.00"
+      || quote.servicePrice.formatted !== "$350.00"
       || !record(quote.tax)
-      || quote.tax.state !== "calculation_required"
+      || quote.tax.state !== "disabled_by_owner"
       || !record(quote.payment)
       || quote.payment.schedule !== "full_before_work"
       || quote.payment.invoice !== "later_separate_invoice"
@@ -6687,16 +6749,16 @@
         invoice.line.unitAmount,
         ["amountMinor", "currency", "formatted"]
       )
-      || invoice.line.unitAmount.amountMinor !== 20000
+      || invoice.line.unitAmount.amountMinor !== 35000
       || invoice.line.unitAmount.currency !== "USD"
-      || invoice.line.unitAmount.formatted !== "$200.00"
+      || invoice.line.unitAmount.formatted !== "$350.00"
       || !exactKeys(
         invoice.subtotal,
         ["amountMinor", "currency", "formatted"]
       )
-      || invoice.subtotal.amountMinor !== 20000
+      || invoice.subtotal.amountMinor !== 35000
       || invoice.subtotal.currency !== "USD"
-      || invoice.subtotal.formatted !== "$200.00"
+      || invoice.subtotal.formatted !== "$350.00"
       || !exactKeys(invoice.tax, ["amountMinor", "message", "state"])
       || typeof invoice.tax.message !== "string"
       || invoice.tax.message.length < 1
@@ -6737,7 +6799,7 @@
         || invoice.total.state !== "final"
         || !safeMinor(invoice.total.amountMinor)
         || invoice.total.amountMinor !==
-          20000 + invoice.tax.amountMinor
+          35000 + invoice.tax.amountMinor
         || invoice.total.formatted !==
           "$" + (invoice.total.amountMinor / 100).toFixed(2)
         || !exactKeys(
@@ -6753,7 +6815,7 @@
       ) return null;
     } else if (
       value.job !== null
-      || invoice.tax.state !== "calculation_required"
+      || invoice.tax.state !== "disabled_by_owner"
       || invoice.tax.amountMinor !== null
       || invoice.total.state !== "pending_tax"
       || invoice.total.amountMinor !== null
@@ -6817,9 +6879,9 @@
         checkout.subtotal,
         ["amountMinor", "currency", "formatted"]
       )
-      || checkout.subtotal.amountMinor !== 20000
+      || checkout.subtotal.amountMinor !== 35000
       || checkout.subtotal.currency !== "USD"
-      || checkout.subtotal.formatted !== "$200.00"
+      || checkout.subtotal.formatted !== "$350.00"
       || !exactKeys(checkout.tax, ["amountMinor", "state"])
       || checkout.tax.state !== "calculated_at_checkout"
       || checkout.tax.amountMinor !== null
@@ -13306,7 +13368,7 @@
         documentRef,
         "button",
         "spark-button spark-button-primary",
-        quote ? "Update $200 quote" : "Issue $200 quote"
+        quote ? "Update $350 quote" : "Issue $350 quote"
       );
       submit.type = "submit";
       submit.disabled = busyCaseId === entry.caseId;

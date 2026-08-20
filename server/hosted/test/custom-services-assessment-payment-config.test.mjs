@@ -31,7 +31,7 @@ test("assessment payment defaults held behind one exact release", () => {
     mode: "held",
     release: {
       approved: false,
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       taxMode: "disabled_by_owner"
     }

@@ -14,6 +14,11 @@ import {
   prepareBrowserAuditArtifact,
 } from "./browser-audit-artifact.mjs";
 import {
+  CANONICAL_ROUTES,
+  LEGACY_REDIRECTS,
+  SITE_ORIGIN,
+} from "./check-routes.mjs";
+import {
   reviewedLinuxCiSandboxArguments,
 } from "../server/hosted/test/reviewed-browser-support.mjs";
 import { getBrowserSafeAlakazamCatalog } from
@@ -40,7 +45,17 @@ const BROWSER_CANDIDATES = Object.freeze([
 ].filter(Boolean));
 const VIEWPORTS = Object.freeze([
   Object.freeze({ label: "phone-320", width: 320, height: 720, mobile: true }),
+  Object.freeze({ label: "phone-360", width: 360, height: 800, mobile: true }),
   Object.freeze({ label: "phone-390", width: 390, height: 844, mobile: true }),
+  Object.freeze({
+    label: "reflow-720-at-200-percent",
+    width: 360,
+    height: 450,
+    mobile: false,
+    sourceWidth: 720,
+    zoomPercent: 200,
+  }),
+  Object.freeze({ label: "tablet-768", width: 768, height: 1024, mobile: false }),
   Object.freeze({ label: "desktop", width: 1440, height: 1000, mobile: false }),
 ]);
 const CONTENT_TYPES = Object.freeze({
@@ -248,13 +263,13 @@ function paidJob() {
     },
     targetCompletionDate: "2026-09-15",
     firstPayment: {
-      grossMinor: 60000,
-      creditMinor: 20000,
-      paidSubtotalMinor: 40000,
+      grossMinor: 50000,
+      creditMinor: 35000,
+      paidSubtotalMinor: 15000,
       currency: "USD",
     },
     finalHandoff: {
-      amountMinor: 60000,
+      amountMinor: 50000,
       currency: "USD",
       state: "unpaid",
     },
@@ -262,10 +277,10 @@ function paidJob() {
 }
 
 function paidCustomBuildQuote() {
-  const contractId = "SS-CUSTOM-SERVICES-2026-08-05.1";
+  const contractId = "SS-CUSTOM-SERVICES-2026-08-19.2";
   const contractDigest =
-    "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
-  const legalDocumentId = "00000000-0000-4000-8000-000000000342";
+    "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
+  const legalDocumentId = "00000000-0000-4000-8000-000000001410";
   return {
     schema: "sitesourcery.custom-services-custom-build-quote/v1",
     state: "accepted",
@@ -273,7 +288,7 @@ function paidCustomBuildQuote() {
     customerId: PAID_CUSTOMER_ID,
     credit: {
       creditId: PAID_CREDIT_ID,
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       state: "settled",
       acceptanceCutoff: PAID_CREDIT_CUTOFF,
@@ -311,37 +326,37 @@ function paidCustomBuildQuote() {
           "This quote covers only the scope and footprint shown here. Added or changed work requires a separate written change order.",
           "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
           "The remaining first installment is due before build work begins; the final installment is due before final launch or handoff.",
-          "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
+          "Prices exclude tax. Tax calculation and collection remain disabled by the owner. Separately stated third-party provider charges are not included in the base price.",
           "Build work does not begin until the required first payment is verified.",
           "The 30-day workmanship correction covers reproducible defects in the accepted deliverables, not new content, features, changed decisions, third-party changes, or ongoing management.",
         ],
       },
       pricing: {
-        serviceAmountMinor: 120000,
-        creditAmountMinor: 20000,
-        customerAmountMinor: 100000,
+        serviceAmountMinor: 100000,
+        creditAmountMinor: 35000,
+        customerAmountMinor: 65000,
         currency: "USD",
-        taxState: "calculation_required",
+        taxState: "disabled_by_owner",
         paymentSchedule: "half_before_work_half_before_handoff",
-        startValueMinor: 60000,
-        startCreditMinor: 20000,
-        startDueMinor: 40000,
-        finalDueMinor: 60000,
+        startValueMinor: 50000,
+        startCreditMinor: 35000,
+        startDueMinor: 15000,
+        finalDueMinor: 50000,
         installments: [
           {
             number: 1,
             kind: "start",
-            grossValueMinor: 60000,
-            creditAmountMinor: 20000,
-            amountDueMinor: 40000,
+            grossValueMinor: 50000,
+            creditAmountMinor: 35000,
+            amountDueMinor: 15000,
             dueTrigger: "before_work",
           },
           {
             number: 2,
             kind: "final",
-            grossValueMinor: 60000,
+            grossValueMinor: 50000,
             creditAmountMinor: 0,
-            amountDueMinor: 60000,
+            amountDueMinor: 50000,
             dueTrigger: "before_handoff",
           },
         ],
@@ -374,26 +389,26 @@ function paidCustomBuildInvoice() {
           lineNumber: 1,
           componentKey: "custom_build_start",
           displayName: "Site first installment",
-          amountMinor: 60000,
+          amountMinor: 50000,
           currency: "USD",
         },
         {
           lineNumber: 2,
           componentKey: "assessment_build_credit",
           displayName: "Website assessment build credit",
-          amountMinor: -20000,
+          amountMinor: -35000,
           currency: "USD",
         },
       ],
-      subtotal: { amountMinor: 40000, currency: "USD" },
+      subtotal: { amountMinor: 15000, currency: "USD" },
       tax: { amountMinor: null, state: "calculated_at_checkout" },
       total: {
         amountMinor: null,
         currency: "USD",
         state: "shown_at_checkout",
       },
-      credit: { amountMinor: 20000, state: "settled" },
-      finalHandoff: { amountMinor: 60000, state: "due_before_handoff" },
+      credit: { amountMinor: 35000, state: "settled" },
+      finalHandoff: { amountMinor: 50000, state: "due_before_handoff" },
       payment: {
         chargeOccurred: true,
         checkoutUrl: null,
@@ -1380,6 +1395,7 @@ async function startServer() {
   const missingFiles = [];
   const paidFixtures = new Map();
   let paidFixtureSequence = 0;
+  let staticFailureMode = "";
   const server = createHttpServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     if (url.pathname.startsWith("/api/v1/")) {
@@ -2022,6 +2038,22 @@ async function startServer() {
       response.end("Bad request");
       return;
     }
+    const extension = path.extname(file).toLowerCase();
+    const deliberatelyUnavailable =
+      (staticFailureMode === "styles" && extension === ".css")
+      || (
+        staticFailureMode === "images"
+        && [".ico", ".png", ".svg", ".webp"].includes(extension)
+      );
+    if (deliberatelyUnavailable) {
+      response.writeHead(503, {
+        "Cache-Control": "no-store",
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Content-Type-Options": "nosniff",
+      });
+      response.end("Deliberately unavailable during bounded browser proof");
+      return;
+    }
     try {
       let bytes = await readFile(file);
       const staticPaidCookie = String(request.headers.cookie || "")
@@ -2151,6 +2183,12 @@ async function startServer() {
     },
     customerHandoffDocumentReadCount(token) {
       return fixtureReadCount(token, "customerHandoffDocumentReads");
+    },
+    setStaticFailureMode(mode) {
+      if (!["", "images", "styles"].includes(mode)) {
+        throw new Error(`Unknown static failure mode: ${mode}`);
+      }
+      staticFailureMode = mode;
     },
     close: () =>
       new Promise((resolve) => server.close(resolve)),
@@ -2333,6 +2371,58 @@ async function navigate(cdp, url) {
   );
 }
 
+async function navigateWithoutPageScript(cdp, url) {
+  const navigation = await cdp.send("Page.navigate", { url });
+  if (navigation.errorText) {
+    throw new Error(
+      `No-script navigation failed for ${url}: ${navigation.errorText}`,
+    );
+  }
+  const deadline = Date.now() + 8000;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      const history = await cdp.send("Page.getNavigationHistory");
+      const current = history.entries?.[history.currentIndex];
+      if (current?.url === url) {
+        await delay(150);
+        return current;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(50);
+  }
+  throw new Error(
+    `Timed out waiting for no-script navigation to ${url}`
+      + (lastError ? `; last CDP error: ${lastError.message}` : ""),
+  );
+}
+
+async function inspectNoScript(cdp) {
+  const [{ nodes = [] }, history, metrics] = await Promise.all([
+    cdp.send("Accessibility.getFullAXTree"),
+    cdp.send("Page.getNavigationHistory"),
+    cdp.send("Page.getLayoutMetrics"),
+  ]);
+  const current = history.entries?.[history.currentIndex] ?? {};
+  const active = nodes.filter((node) => !node.ignored);
+  const role = (node) => String(node.role?.value ?? "").toLowerCase();
+  const headingLevel = (node) => node.properties?.find(
+    (property) => property.name === "level",
+  )?.value?.value;
+  return {
+    url: current.url ?? "",
+    title: current.title ?? "",
+    mainCount: active.filter((node) => role(node) === "main").length,
+    h1: active
+      .filter((node) => role(node) === "heading" && headingLevel(node) === 1)
+      .map((node) => String(node.name?.value ?? "").trim()),
+    viewportWidth: Math.round(metrics.layoutViewport?.clientWidth ?? 0),
+    contentWidth: Math.round(metrics.contentSize?.width ?? 0),
+  };
+}
+
 async function isolatePaidJourney(cdp) {
   try {
     await cdp.send("Page.stopLoading");
@@ -2391,6 +2481,35 @@ async function inspect(cdp) {
         document.body.scrollWidth,
         document.documentElement.scrollWidth
       );
+      const isolatedOverflow = [];
+      if (scrollWidth > innerWidth) {
+        const measuredWidth = () => Math.max(
+          document.body.scrollWidth,
+          document.documentElement.scrollWidth
+        );
+        const selector = (element) => element.id
+          ? "#" + element.id
+          : element.tagName.toLowerCase()
+            + (element.classList.length
+              ? "." + [...element.classList].slice(0, 2).join(".")
+              : "");
+        const isolate = (parent, depth = 0) => {
+          if (depth > 4 || isolatedOverflow.length >= 20) return;
+          for (const child of parent.children) {
+            const previous = child.style.getPropertyValue("display");
+            const priority = child.style.getPropertyPriority("display");
+            child.style.setProperty("display", "none", "important");
+            const without = measuredWidth();
+            if (previous) child.style.setProperty("display", previous, priority);
+            else child.style.removeProperty("display");
+            if (without < scrollWidth) {
+              isolatedOverflow.push({ selector: selector(child), without });
+              isolate(child, depth + 1);
+            }
+          }
+        };
+        isolate(document.body);
+      }
       const overflow = [...document.body.querySelectorAll("*")]
         .filter(visible)
         .map((element) => {
@@ -2406,6 +2525,30 @@ async function inspect(cdp) {
         })
         .filter((entry) => entry.left < -1 || entry.right > innerWidth + 1)
         .slice(0, 12);
+      const textOverflow = [];
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode() && textOverflow.length < 12) {
+        const node = walker.currentNode;
+        if (!clean(node.nodeValue) || !visible(node.parentElement)) continue;
+        const range = document.createRange();
+        range.selectNodeContents(node);
+        const rects = [...range.getClientRects()];
+        if (rects.some((rect) => rect.left < -1 || rect.right > innerWidth + 1)) {
+          textOverflow.push({
+            parent: node.parentElement.id
+              ? "#" + node.parentElement.id
+              : node.parentElement.tagName.toLowerCase()
+                + (node.parentElement.classList.length
+                  ? "." + [...node.parentElement.classList].slice(0, 2).join(".")
+                  : ""),
+            text: clean(node.nodeValue).slice(0, 100),
+            rects: rects.map((rect) => ({
+              left: Math.round(rect.left * 10) / 10,
+              right: Math.round(rect.right * 10) / 10,
+            })),
+          });
+        }
+      }
       const accountFields = [...document.querySelectorAll(
         '#control-room input:not([type="hidden"]), #control-room button'
       )].filter(visible).map((element) => ({
@@ -2413,7 +2556,10 @@ async function inspect(cdp) {
         height: Math.round(element.getBoundingClientRect().height * 10) / 10,
       }));
       return {
+        hash: location.hash,
+        href: location.href,
         path: location.pathname,
+        search: location.search,
         title: document.title,
         lang: document.documentElement.lang,
         canonical: document.querySelector('link[rel="canonical"]')?.href || "",
@@ -2421,8 +2567,12 @@ async function inspect(cdp) {
         mainTextLength: clean(document.querySelector("main")?.innerText).length,
         h1: [...document.querySelectorAll("h1")].map((node) => clean(node.textContent)),
         viewportWidth: innerWidth,
+        bodyScrollWidth: document.body.scrollWidth,
+        documentScrollWidth: document.documentElement.scrollWidth,
         scrollWidth,
         overflow,
+        isolatedOverflow,
+        textOverflow,
         brokenImages: [...document.images]
           .filter((image) => image.complete && image.naturalWidth === 0)
           .map((image) => image.getAttribute("src")),
@@ -2471,7 +2621,102 @@ async function inspect(cdp) {
   );
 }
 
-function snapshotFailures(snapshot, route, viewport) {
+async function inspectAccessibilityAndLinks(cdp) {
+  const [dom, { nodes = [] }] = await Promise.all([
+    evaluate(
+      cdp,
+      `(() => {
+        const ids = [...document.querySelectorAll("[id]")]
+          .map((element) => element.id)
+          .filter(Boolean);
+        const duplicateIds = [...new Set(
+          ids.filter((id, index) => ids.indexOf(id) !== index)
+        )];
+        const internalLinks = [...document.querySelectorAll("a[href]")]
+          .map((link) => link.href)
+          .filter((href) => href.startsWith(location.origin + "/"));
+        return {
+          duplicateIds,
+          imagesMissingAlt: [...document.images]
+            .filter((image) => !image.hasAttribute("alt"))
+            .map((image) => image.getAttribute("src") || "")
+            .slice(0, 12),
+          internalLinks,
+          mainCount: document.querySelectorAll("main").length,
+          mainTargetCount: document.querySelectorAll("main#main").length,
+          skipLinkCount: document.querySelectorAll('a[href="#main"]').length,
+        };
+      })()`,
+    ),
+    cdp.send("Accessibility.getFullAXTree"),
+  ]);
+  const interactiveRoles = new Set([
+    "button",
+    "checkbox",
+    "combobox",
+    "link",
+    "menuitem",
+    "radio",
+    "searchbox",
+    "slider",
+    "spinbutton",
+    "switch",
+    "textbox",
+  ]);
+  const unnamedInteractive = nodes
+    .filter((node) =>
+      !node.ignored
+      && interactiveRoles.has(String(node.role?.value ?? "").toLowerCase())
+      && !String(node.name?.value ?? "").trim()
+    )
+    .map((node) => String(node.role?.value ?? "unknown"))
+    .slice(0, 12);
+  return { ...dom, unnamedInteractive };
+}
+
+async function inspectReducedMotion(cdp) {
+  return evaluate(
+    cdp,
+    `(() => {
+      const milliseconds = (value) => String(value || "")
+        .split(",")
+        .map((part) => part.trim())
+        .map((part) => part.endsWith("ms")
+          ? Number.parseFloat(part)
+          : Number.parseFloat(part) * 1000)
+        .filter(Number.isFinite);
+      const offenders = [...document.body.querySelectorAll("*")]
+        .map((element) => {
+          const style = getComputedStyle(element);
+          return {
+            animation: style.animationName,
+            animationMs: Math.max(0, ...milliseconds(style.animationDuration)),
+            selector: element.id
+              ? "#" + element.id
+              : element.tagName.toLowerCase(),
+            transitionMs: Math.max(0, ...milliseconds(style.transitionDuration)),
+          };
+        })
+        .filter((entry) =>
+          (entry.animation !== "none" && entry.animationMs > 1)
+          || entry.transitionMs > 1
+        )
+        .slice(0, 12);
+      return {
+        preferred: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        scrollBehavior: getComputedStyle(document.documentElement).scrollBehavior,
+        offenders,
+      };
+    })()`,
+  );
+}
+
+function snapshotFailures(
+  snapshot,
+  route,
+  viewport,
+  { checkHostedApp = true } = {},
+) {
   const failures = [];
   const label = `${viewport.label} ${route}`;
   if (snapshot.path !== route) {
@@ -2488,16 +2733,21 @@ function snapshotFailures(snapshot, route, viewport) {
   if (snapshot.scrollWidth !== snapshot.viewportWidth) {
     failures.push(
       `${label}: horizontal overflow ${snapshot.scrollWidth}px > ${snapshot.viewportWidth}px `
-      + JSON.stringify(snapshot.overflow),
+      + JSON.stringify({
+        elements: snapshot.overflow,
+        isolated: snapshot.isolatedOverflow,
+        text: snapshot.textOverflow,
+      }),
     );
   }
   if (snapshot.brokenImages.length) {
     failures.push(`${label}: broken images ${JSON.stringify(snapshot.brokenImages)}`);
   }
-  if (!snapshot.canonical.startsWith("https://sitesourcery.com/")) {
+  const expectedCanonical = new URL(route, `${SITE_ORIGIN}/`).href;
+  if (snapshot.canonical !== expectedCanonical) {
     failures.push(`${label}: canonical is ${JSON.stringify(snapshot.canonical)}`);
   }
-  if (snapshot.app) {
+  if (snapshot.app && checkHostedApp) {
     if (snapshot.app.mode !== "hosted") {
       failures.push(`${label}: hosted control mode is ${JSON.stringify(snapshot.app.mode)}`);
     }
@@ -4280,6 +4530,7 @@ let primaryFailure = null;
 const failures = [];
 const browserErrors = [];
 const checkoutNavigations = [];
+const documentNavigations = [];
 
 function waitForChildExit(milliseconds) {
   if (!child || processState.exited) return Promise.resolve(true);
@@ -4378,6 +4629,7 @@ try {
     }
   });
   cdp.on("Network.requestWillBeSent", ({ request, type }) => {
+    if (type === "Document") documentNavigations.push(request?.url ?? "");
     if (
       type === "Document"
       && String(request?.url || "").startsWith("https://checkout.stripe.com/")
@@ -4412,6 +4664,7 @@ try {
     cdp.send("Runtime.enable"),
     cdp.send("Log.enable"),
     cdp.send("Network.enable"),
+    cdp.send("Accessibility.enable"),
     cdp.send("Fetch.enable", {
       patterns: [{
         urlPattern: "https://checkout.stripe.com/*",
@@ -4425,13 +4678,16 @@ try {
     path.join(ARTIFACT_ROOT, "sitemap.xml"),
     "utf8",
   );
-  const routes = [
-    ...new Set([
-      ...[...sitemap.matchAll(/<loc>https:\/\/sitesourcery\.com([^<]*)<\/loc>/gu)]
-        .map((match) => match[1]),
-      "/abracadabra/app/",
-    ]),
-  ];
+  const sitemapRoutes = [...sitemap.matchAll(
+    /<loc>https:\/\/sitesourcery\.com([^<]*)<\/loc>/gu,
+  )].map((match) => match[1]);
+  if (JSON.stringify(sitemapRoutes) !== JSON.stringify(CANONICAL_ROUTES)) {
+    failures.push(
+      "sitemap route order/content does not equal the frozen 24-route manifest: "
+        + JSON.stringify(sitemapRoutes),
+    );
+  }
+  const routes = [...CANONICAL_ROUTES];
 
   for (const viewport of VIEWPORTS) {
     await setViewport(cdp, viewport);
@@ -4452,6 +4708,225 @@ try {
         ),
       );
     }
+  }
+
+  const publicProofViewport = VIEWPORTS.find(
+    ({ label }) => label === "phone-390",
+  );
+  await setViewport(cdp, publicProofViewport);
+  const observedCanonicalLinks = new Set();
+  for (const route of routes) {
+    if (route === "/abracadabra/app/") {
+      await cdp.send("Storage.clearDataForOrigin", {
+        origin: server.origin,
+        storageTypes: "all",
+      });
+    }
+    const queryUrl = new URL(route, server.origin);
+    queryUrl.searchParams.set("fin007", "query-proof");
+    await navigate(cdp, queryUrl.href);
+    if (route === "/abracadabra/app/") await openHostedAccount(cdp);
+    const querySnapshot = await inspect(cdp);
+    failures.push(...snapshotFailures(
+      querySnapshot,
+      route,
+      publicProofViewport,
+    ).map((failure) => `query ${failure}`));
+    if (
+      querySnapshot.search !== "?fin007=query-proof"
+      || querySnapshot.hash
+    ) {
+      failures.push(
+        `query ${route}: query/fragment drifted: ${querySnapshot.href}`,
+      );
+    }
+
+    const fragmentUrl = new URL(route, server.origin);
+    fragmentUrl.hash = "main";
+    await navigate(cdp, fragmentUrl.href);
+    if (route === "/abracadabra/app/") await openHostedAccount(cdp);
+    const fragmentSnapshot = await inspect(cdp);
+    failures.push(...snapshotFailures(
+      fragmentSnapshot,
+      route,
+      publicProofViewport,
+    ).map((failure) => `fragment ${failure}`));
+    if (
+      fragmentSnapshot.hash !== "#main"
+      || !await evaluate(cdp, `Boolean(document.getElementById("main"))`)
+    ) {
+      failures.push(
+        `fragment ${route}: #main did not resolve: ${fragmentSnapshot.href}`,
+      );
+    }
+
+    const accessibility = await inspectAccessibilityAndLinks(cdp);
+    if (
+      accessibility.duplicateIds.length
+      || accessibility.imagesMissingAlt.length
+      || accessibility.mainCount !== 1
+      || accessibility.mainTargetCount !== 1
+      || accessibility.skipLinkCount !== 1
+      || accessibility.unnamedInteractive.length
+    ) {
+      failures.push(
+        `accessibility ${route}: ${JSON.stringify(accessibility)}`,
+      );
+    }
+    for (const href of accessibility.internalLinks) {
+      const linked = new URL(href);
+      if (CANONICAL_ROUTES.includes(linked.pathname)) {
+        observedCanonicalLinks.add(linked.pathname);
+      } else {
+        failures.push(
+          `link graph ${route}: noncanonical internal link ${href}`,
+        );
+      }
+    }
+  }
+  const missingCanonicalLinks = CANONICAL_ROUTES.filter(
+    (route) => !observedCanonicalLinks.has(route),
+  );
+  if (missingCanonicalLinks.length) {
+    failures.push(
+      "link graph has no browser-observed canonical link to "
+        + JSON.stringify(missingCanonicalLinks),
+    );
+  }
+
+  for (const [legacyFile, target] of Object.entries(LEGACY_REDIRECTS)) {
+    const inputUrl = new URL(`/${legacyFile}`, server.origin).href;
+    const expectedUrl = new URL(target, `${server.origin}/`).href;
+    const expectedRequestUrl = new URL(expectedUrl);
+    expectedRequestUrl.hash = "";
+    const priorDocumentCount = documentNavigations.length;
+    await cdp.send("Page.navigate", { url: inputUrl });
+    await waitFor(
+      cdp,
+      `location.href === ${JSON.stringify(expectedUrl)}`,
+    );
+    await delay(250);
+    const stableUrl = await evaluate(cdp, "location.href");
+    const chain = documentNavigations.slice(priorDocumentCount);
+    if (
+      stableUrl !== expectedUrl
+      || chain.length !== 2
+      || chain[0] !== inputUrl
+      || chain[1] !== expectedRequestUrl.href
+    ) {
+      failures.push(
+        `redirect ${legacyFile}: unstable/wrong destination or loop: `
+          + JSON.stringify({ chain, expectedUrl, stableUrl }),
+      );
+      continue;
+    }
+    const targetUrl = new URL(target, SITE_ORIGIN);
+    const redirectSnapshot = await inspect(cdp);
+    failures.push(...snapshotFailures(
+      redirectSnapshot,
+      targetUrl.pathname,
+      publicProofViewport,
+      { checkHostedApp: false },
+    ).map((failure) => `redirect ${legacyFile} ${failure}`));
+    if (
+      targetUrl.hash
+      && !await evaluate(
+        cdp,
+        `Boolean(document.getElementById(${JSON.stringify(
+          targetUrl.hash.slice(1),
+        )}))`,
+      )
+    ) {
+      failures.push(
+        `redirect ${legacyFile}: destination fragment ${targetUrl.hash} is missing`,
+      );
+    }
+  }
+
+  await cdp.send("Emulation.setScriptExecutionDisabled", { value: true });
+  try {
+    for (const route of routes) {
+      const url = new URL(route, server.origin).href;
+      await navigateWithoutPageScript(cdp, url);
+      const noScript = await inspectNoScript(cdp);
+      if (
+        noScript.url !== url
+        || noScript.mainCount !== 1
+        || noScript.h1.length !== 1
+        || !noScript.h1[0]
+        || noScript.viewportWidth !== publicProofViewport.width
+        || noScript.contentWidth > noScript.viewportWidth + 1
+      ) {
+        failures.push(
+          `no-script ${route}: ${JSON.stringify(noScript)}`,
+        );
+      }
+    }
+  } finally {
+    await cdp.send("Emulation.setScriptExecutionDisabled", { value: false });
+  }
+
+  await cdp.send("Emulation.setEmulatedMedia", {
+    media: "screen",
+    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+  });
+  try {
+    for (const route of routes) {
+      await navigate(cdp, new URL(route, server.origin).href);
+      const reducedSnapshot = await inspect(cdp);
+      failures.push(...snapshotFailures(
+        reducedSnapshot,
+        route,
+        publicProofViewport,
+        { checkHostedApp: false },
+      ).map((failure) => `reduced-motion ${failure}`));
+      const reducedMotion = await inspectReducedMotion(cdp);
+      if (
+        !reducedMotion.preferred
+        || reducedMotion.scrollBehavior !== "auto"
+        || reducedMotion.offenders.length
+      ) {
+        failures.push(
+          `reduced-motion ${route}: ${JSON.stringify(reducedMotion)}`,
+        );
+      }
+    }
+  } finally {
+    await cdp.send("Emulation.setEmulatedMedia", {
+      media: "screen",
+      features: [],
+    });
+  }
+
+  try {
+    server.setStaticFailureMode("styles");
+    await navigate(cdp, `${server.origin}/`);
+    const withoutStyles = await inspect(cdp);
+    if (
+      !withoutStyles.main
+      || withoutStyles.mainTextLength < 20
+      || withoutStyles.h1.length !== 1
+      || withoutStyles.canonical !== `${SITE_ORIGIN}/`
+    ) {
+      failures.push(
+        `progressive styles failure: ${JSON.stringify(withoutStyles)}`,
+      );
+    }
+    server.setStaticFailureMode("images");
+    await navigate(cdp, `${server.origin}/work/`);
+    const withoutImages = await inspect(cdp);
+    if (
+      !withoutImages.main
+      || withoutImages.mainTextLength < 20
+      || withoutImages.h1.length !== 1
+      || withoutImages.canonical !== `${SITE_ORIGIN}/work/`
+    ) {
+      failures.push(
+        `progressive image failure: ${JSON.stringify(withoutImages)}`,
+      );
+    }
+  } finally {
+    server.setStaticFailureMode("");
   }
 
   await setViewport(cdp, VIEWPORTS[1]);
@@ -5257,13 +5732,22 @@ try {
       && url.endsWith(
         `/api/v1/projects/${PAID_PROJECT_ID}/custom-services/custom-build-final-handoff`
       );
+    const expectedProgressiveStaticFailure = text ===
+        "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+      && /\.(?:css|ico|png|svg|webp)(?:$|\?)/u.test(url);
+    const expectedProgressiveStyleMimeFailure =
+      text.startsWith("Refused to apply style from '")
+      && text.includes("/vnext.css'")
+      && text.includes("MIME type ('text/plain')");
     return !expectedHeldRead
       && !expectedUncertainCheckout
       && !expectedStaleProjectAuthority
       && !expectedHandoffHeld
       && !expectedPaymentCapabilityDenial
       && !expectedDocumentHeld
-      && !expectedFinalReadHeld;
+      && !expectedFinalReadHeld
+      && !expectedProgressiveStaticFailure
+      && !expectedProgressiveStyleMimeFailure;
   });
   if (unexpectedBrowserErrors.length) {
     failures.push(
@@ -5282,8 +5766,8 @@ try {
     );
   }
   console.log(
-    `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} viewports, `
-      + "exact-width layout, four-stage account room, mobile menu, complete maker preview, held Alakazam publish/rollback/unpublish authorization, issued-change plus ready-completion fixtures, H1N Purpose-1 customer/owner change-payment journeys, and Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity, retained document and final-state errors, a delayed-authority zero-write race, keyboard activation, and 44px controls at 320×720, 390×844, and 1440×1000.",
+    `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} required width modes, `
+      + "exact-width layout, including a 720-pixel source at 200% reflow; four-stage account room; mobile menu; complete maker preview; held Alakazam publish/rollback/unpublish authorization; issued-change plus ready-completion fixtures; H1N Purpose-1 customer/owner change-payment journeys; Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity; retained document and final-state errors; a delayed-authority zero-write race; keyboard activation; and 44px controls at the required 320, 360, 390, 720-at-200%-reflow, 768, and 1440 width modes.",
   );
 } catch (error) {
   primaryFailure = error;

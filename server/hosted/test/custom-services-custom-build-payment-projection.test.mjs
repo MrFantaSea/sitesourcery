@@ -23,6 +23,7 @@ function paidInvoiceRow(overrides = {}) {
     subtotal_minor: "70000",
     final_due_minor: "90000",
     currency: "USD",
+    invoice_state: "tax_calculation_pending",
     invoice_digest: "c".repeat(64),
     issued_at: "2026-08-06T14:00:00.000Z",
     payment_deadline: "2026-08-13T14:00:00.000Z",
@@ -50,6 +51,7 @@ function paidInvoiceRow(overrides = {}) {
     job_start_gross_minor: "90000",
     job_start_credit_minor: "20000",
     job_start_paid_subtotal_minor: "70000",
+    job_start_settlement_kind: "provider_payment",
     job_final_due_minor: "90000",
     job_currency: "USD",
     final_payment_state: "unpaid",
@@ -171,6 +173,55 @@ test("direct Custom payment projection retains one full-price line without synth
   assert.match(
     context.queries[0].text,
     /left join ss\.service_credit_applications/iu
+  );
+});
+
+test("fully credited Card projection opens work without a Stripe charge", async () => {
+  const context = boundary(paidInvoiceRow({
+    tier_id: "card",
+    invoice_state: "credit_settled",
+    gross_start_minor: "35000",
+    credit_minor: "35000",
+    subtotal_minor: "0",
+    final_due_minor: "0",
+    checkout_state: null,
+    checkout_session_id: null,
+    event_state: null,
+    receipt_id: null,
+    job_tier_id: "card",
+    job_start_gross_minor: "35000",
+    job_start_credit_minor: "35000",
+    job_start_paid_subtotal_minor: "0",
+    job_start_settlement_kind: "credit_only",
+    job_final_due_minor: "0",
+    final_payment_state: "not_required",
+    lines: [
+      {
+        lineNumber: 1,
+        componentKey: "custom_build_start",
+        displayName: "Card first installment",
+        amountMinor: 35000
+      },
+      {
+        lineNumber: 2,
+        componentKey: "assessment_build_credit",
+        displayName: "Website assessment build credit",
+        amountMinor: -35000
+      }
+    ]
+  }));
+
+  const projection = await context.payment.readCurrentInvoice(scope());
+
+  assert.equal(projection.state, "paid");
+  assert.equal(projection.invoice.subtotal.amountMinor, 0);
+  assert.equal(projection.invoice.payment.chargeOccurred, false);
+  assert.equal(projection.invoice.credit.state, "settled");
+  assert.equal(projection.job.firstPayment.paidSubtotalMinor, 0);
+  assert.equal(projection.job.finalHandoff.state, "not_required");
+  assert.match(
+    context.queries[0].text,
+    /job\.start_settlement_kind = 'credit_only'[\s\S]*receipt\.id is null/iu
   );
 });
 

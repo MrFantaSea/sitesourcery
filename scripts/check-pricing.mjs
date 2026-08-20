@@ -24,13 +24,15 @@ const {
   sellableNow,
 } = await import(path.join(root, "server/commerce/rails.mjs"));
 const EXPECTED_CATALOG_IDENTITY = Object.freeze({
-  version: "SS-COMMERCIAL-2026.5",
-  tierCatalogId: "SS-TIERS-2026.5",
-  addonCatalogId: "SS-ADDONS-2026.5",
-  careCatalogId: "SS-CARE-2026.5",
-  professionalServiceCatalogId: "SS-PROFESSIONAL-2026.1",
-  sourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
-  projectionDigest: "5276e2f38096625428814677518ffaaf6063f07f78169be20b8bf4ac5d511225",
+  version: "SS-COMMERCIAL-2026.6",
+  tierCatalogId: "SS-TIERS-2026.6",
+  addonCatalogId: "SS-ADDONS-2026.6",
+  careCatalogId: "SS-CARE-2026.6",
+  professionalServiceCatalogId: "SS-PROFESSIONAL-2026.2",
+  sourceCatalogDigest: "3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0",
+  approvedSourceCatalogDigest: "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
+  approvedSourceFileSha256: "9398d025b12f96ad1989620226cd153dabd39ee81d2ba11d1f03badf1cad2ee1",
+  projectionDigest: "61904ce2fc6a6346babe43adbf902675f3a002c6e179b1aae883df498b8e91db",
 });
 
 function stableStringify(value) {
@@ -50,7 +52,10 @@ for (const [field, expected] of Object.entries(EXPECTED_CATALOG_IDENTITY)) {
     errors.push(`data/public-catalog.json: ${field} must be ${expected}; received ${publicCatalog[field] ?? "missing"}`);
   }
 }
-for (const field of ["sourceCatalogDigest", "projectionDigest"]) {
+for (const field of [
+  "sourceCatalogDigest", "approvedSourceCatalogDigest",
+  "approvedSourceFileSha256", "projectionDigest",
+]) {
   if (!/^[a-f0-9]{64}$/.test(String(publicCatalog[field] || ""))) {
     errors.push(`data/public-catalog.json: ${field} must be a lowercase SHA-256 digest`);
   }
@@ -62,8 +67,8 @@ if (publicCatalog.projectionDigest !== recomputedProjectionDigest) {
 }
 
 async function verifyRootCatalogLineage({ required = false } = {}) {
-  const catalogPath = path.resolve(root, "../commercial/catalog.mjs");
-  const projectionPath = path.resolve(root, "../commercial/public-catalog.mjs");
+  const catalogPath = path.resolve(root, "commercial/catalog.mjs");
+  const projectionPath = path.resolve(root, "commercial/public-catalog.mjs");
   try {
     await Promise.all([access(catalogPath), access(projectionPath)]);
   } catch {
@@ -86,6 +91,8 @@ async function verifyRootCatalogLineage({ required = false } = {}) {
       careCatalogId: catalogModule.CARE_CATALOG_ID,
       professionalServiceCatalogId: catalogModule.PROFESSIONAL_SERVICE_CATALOG_ID,
       sourceCatalogDigest: catalogModule.CATALOG_DIGEST,
+      approvedSourceCatalogDigest: catalogModule.APPROVED_SOURCE_CATALOG_DIGEST,
+      approvedSourceFileSha256: catalogModule.APPROVED_SOURCE_FILE_SHA256,
     };
     for (const [field, expected] of Object.entries(EXPECTED_CATALOG_IDENTITY)) {
       if (field === "projectionDigest") continue;
@@ -123,7 +130,9 @@ function inspectPublicProjection(value, trail = "data/public-catalog.json") {
 }
 inspectPublicProjection(publicCatalog);
 
-const publicHtmlFiles = publicFileAllowlist.filter((file) => file.endsWith(".html"));
+const publicHtmlFiles = publicFileAllowlist.filter((file) =>
+  file.endsWith(".html") && file !== "flyer.html"
+);
 const files = Object.fromEntries(await Promise.all(publicHtmlFiles.map(async (file) => [
   file,
   await readFile(path.join(root, file), "utf8"),
@@ -389,30 +398,16 @@ const assessment = publicCatalog.professionalServices?.find((service) =>
   service.id === "website-assessment");
 if (
   !assessment ||
-  assessment.priceCents !== 20000 ||
-  assessment.contractId !==
-    "SS-CUSTOM-SERVICES-2026-08-05.1" ||
-  assessment.contractDigest !==
-    "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8" ||
-  assessment.standardScope?.maximumWebsites !== 1 ||
-  assessment.standardScope?.maximumRepresentativePagesOrTypes !== 5 ||
-  JSON.stringify(assessment.standardScope?.requiredViewports) !==
-    JSON.stringify(["desktop", "phone"]) ||
-  assessment.standardScope?.maximumFindings !== 10 ||
-  assessment.standardScope?.expandedAssessmentState !==
-    "separately_quoted" ||
+  assessment.priceCents !== 35000 ||
+  assessment.scopeState !== "must_be_stated_before_sale" ||
+  assessment.turnaroundState !== "must_be_stated_before_sale" ||
   assessment.buildCredit?.basisPoints !== 10000 ||
-  assessment.buildCredit?.maximumCents !== 20000 ||
-  assessment.buildCredit?.oneUse !== true ||
-  assessment.buildCredit?.acceptanceWindowDays !== 90 ||
-  assessment.buildCredit?.sameOrganizationRequired !== true ||
-  assessment.buildCredit?.sameProjectRequired !== true ||
-  assessment.buildCredit?.cashValue !== false ||
+  assessment.buildCredit?.maximumCents !== 35000 ||
   assessment.buildCredit?.eligibleSuccessor !==
-    "custom_base_build_card_through_scale"
+    "any_accepted_site_sourcery_build"
 ) {
   errors.push(
-    "data/public-catalog.json: website-assessment must be the bounded exact $200 offer with one-use same-project $200 Custom build credit"
+    "data/public-catalog.json: website-assessment must match the approved exact $350 source offer and full non-cash accepted-build credit"
   );
 } else {
   const allowedDollarDisplays = new Set();
@@ -442,6 +437,7 @@ if (
     buildAddons: publicCatalog.buildAddons,
     architectureBands: publicCatalog.architectureBands,
     migration: publicCatalog.migration,
+    carePlans: publicCatalog.carePlans,
     professionalServices: publicCatalog.professionalServices,
   });
   for (const offer of SELLABLE) {

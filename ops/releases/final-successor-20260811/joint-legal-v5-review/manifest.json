@@ -1,0 +1,68 @@
+{
+  "schema": "sitesourcery.joint-legal-v5-review/v1",
+  "state": "review-candidate-unapproved",
+  "effective": false,
+  "published": false,
+  "deployable": false,
+  "indexed": false,
+  "ownerApproved": false,
+  "release": null,
+  "seller": "Desiderata Labs LLC",
+  "filedAlternateName": "SITESOURCERY",
+  "publicBrand": "Site Sourcery",
+  "jurisdiction": "New Jersey, United States",
+  "contact": {
+    "phone": "+18562441220",
+    "email": "sitesourcery@proton.me"
+  },
+  "catalog": {
+    "version": "SS-COMMERCIAL-2026.6",
+    "digest": "3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0"
+  },
+  "artifacts": {
+    "center": {
+      "file": "legal/index.html",
+      "sha256": "12cc8da033dac98c25eb78989736bdbdbaf1a8407c173f7863ff2b211ee03cae",
+      "byteCount": 5450
+    },
+    "privacy": {
+      "file": "legal/privacy/index.html",
+      "sha256": "aefdfbb5d734090fffd26dcd32767ba7f08fabf19c231cb9586fe783a367b572",
+      "byteCount": 31478
+    },
+    "websiteTerms": {
+      "file": "legal/website-terms/index.html",
+      "sha256": "31a1d3b057e09a883fa0ae46cedc63c9a01b32604fbfe199c7a33724b856a22b",
+      "byteCount": 28804
+    }
+  },
+  "frozenSources": {
+    "ops/releases/joint-legal-v4-2026-08-09T214211Z/hosted/legal/index.html": {
+      "sha256": "e9e3026d5e97b764b523f46e01ee5ce9b86e471cf427254f83e97f61457ab4d2",
+      "byteCount": 4980
+    },
+    "ops/releases/joint-legal-v4-2026-08-09T214211Z/hosted/legal/privacy/index.html": {
+      "sha256": "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+      "byteCount": 31451
+    },
+    "ops/releases/joint-legal-v4-2026-08-09T214211Z/hosted/legal/website-terms/index.html": {
+      "sha256": "4c937f54ae5805a15a9ae835d0266973fb8e8117065dbfce2030ff3f189ff642",
+      "byteCount": 26215
+    }
+  },
+  "reviewBasis": [
+    "https://www.ftc.gov/business-guidance/resources/com-disclosures-how-make-effective-disclosures-digital-advertising",
+    "https://pub.njleg.state.nj.us/Bills/2022/PL22/96_.PDF",
+    "https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/",
+    "https://stripe.com/privacy",
+    "https://resend.com/legal/privacy-policy",
+    "https://www.twilio.com/en-us/legal/privacy"
+  ],
+  "gates": [
+    "owner review of these exact bytes",
+    "owner approval of exact V5 document versions",
+    "owner approval of one exact effective UTC time",
+    "content seal and release receipt",
+    "separate deployment and public-cutover authority"
+  ]
+}

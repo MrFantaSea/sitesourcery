@@ -208,7 +208,7 @@ export async function verifyCareCommercePostgres(pool) {
   assert.deepEqual(await service.createHeldQuote(authenticated, quoteInput), quote);
   assert.equal(quote.record.payable, false);
   assert.equal(quote.record.tax.authoritative, false);
-  assert.equal(quote.record.priceVersion, "SS-CUSTOM-SERVICES-2026-08-05.1");
+  assert.equal(quote.record.priceVersion, "SS-COMMERCIAL-2026.6");
   passed("quote-exact-and-replay-safe");
 
   await expectCode(

@@ -98,13 +98,13 @@ assert.ok(
 );
 
 const ASSESSMENT_POLICY_ID =
-  "00000000-0000-4000-8000-000000000341";
-const CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-05.1";
+  "00000000-0000-4000-8000-000000001411";
+const CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-19.2";
 const CONTRACT_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
 const APPROVED_ASSESSMENT_PAYMENT_RELEASE = Object.freeze({
   approved: true,
-  amountMinor: 20000,
+  amountMinor: 35000,
   currency: "USD",
   taxMode: "disabled_by_owner"
 });
@@ -766,7 +766,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(ownerReceipt.state, "issued");
     assert.equal(ownerReceipt.quoteRevision, 1);
     assert.deepEqual(ownerReceipt.price, {
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD"
     });
     assert.deepEqual(
@@ -925,12 +925,12 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         revision: 1,
         profileRevision: 1,
         intakeRevision: 1,
-        amount: 20000,
+        amount: 35000,
         providerDirect: 0,
         credit: 0,
-        subtotal: 20000,
+        subtotal: 35000,
         currency: "USD",
-        taxState: "calculation_required",
+        taxState: "disabled_by_owner",
         paymentSchedule: "full_before_work",
         websites: 1,
         pagesOrTypes: 5,
@@ -963,7 +963,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
     assert.deepEqual(invoiceMaterialized.rows[0], {
       lines: 1,
-      coverages: 4,
+      coverages: 3,
       installments: 1,
       targets: 3
     });
@@ -1153,7 +1153,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         snapshot: reviewSnapshot
       });
     assert.equal(reviewProjection.state, "review_required");
-    assert.equal(reviewProjection.quote.servicePrice.amountMinor, 20000);
+    assert.equal(reviewProjection.quote.servicePrice.amountMinor, 35000);
     assert.equal(reviewProjection.quote.revision, 2);
 
     const acceptanceCommandId = `quote-accept-${randomUUID()}`;
@@ -1232,7 +1232,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       "sitesourcery.custom-services-assessment-invoice/v2"
     );
     assert.equal(invoiceProjection.state, "checkout_available");
-    assert.equal(invoiceProjection.invoice.subtotal.amountMinor, 20000);
+    assert.equal(invoiceProjection.invoice.subtotal.amountMinor, 35000);
     assert.equal(invoiceProjection.invoice.tax.amountMinor, null);
     assert.equal(invoiceProjection.invoice.total.amountMinor, null);
     assert.equal(invoiceProjection.invoice.payment.checkoutAvailable, true);
@@ -1285,7 +1285,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     const checkout =
       await assessmentPayment.createCheckout(checkoutInput);
     assert.equal(checkout.state, "ready");
-    assert.equal(checkout.checkout.subtotal.amountMinor, 20000);
+    assert.equal(checkout.checkout.subtotal.amountMinor, 35000);
     assert.equal(checkout.checkout.tax.state, "calculated_at_checkout");
     assert.equal(checkout.checkout.total.state, "shown_at_checkout");
     assert.equal(checkout.checkout.chargeOccurred, false);
@@ -1304,7 +1304,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
     assert.equal(
       checkoutCalls[0].purpose.price.amountMinor,
-      20000
+      35000
     );
     assert.equal(
       checkoutCalls[0].purpose.price.taxBehavior,
@@ -1906,8 +1906,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           line_category: "service",
           quantity: 1,
           unit_label: "assessment",
-          unit_amount_minor: 20000,
-          customer_amount_minor: 20000,
+          unit_amount_minor: 35000,
+          customer_amount_minor: 35000,
           provider_direct_amount_minor: 0,
           scope_boundary_digest: replacement.scope_boundary_digest,
           created_at: isoAfter()
@@ -2210,9 +2210,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         providerIds.assessmentPaymentIntent,
       customerId: providerIds.assessmentStripeCustomer,
       paymentStatus: "paid",
-      subtotalMinor: 20000,
+      subtotalMinor: 35000,
       taxMinor: 0,
-      totalMinor: 20000,
+      totalMinor: 35000,
       taxMode: "disabled_by_owner",
       currency: "USD",
       purposeDigest: retainedPurposeDigest,
@@ -2409,7 +2409,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       settled.receiptId
     );
     assert.equal(paidInvoiceProjection.invoice.tax.amountMinor, 0);
-    assert.equal(paidInvoiceProjection.invoice.total.amountMinor, 20000);
+    assert.equal(paidInvoiceProjection.invoice.total.amountMinor, 35000);
     assert.equal(paidInvoiceProjection.job.jobId, settled.jobId);
     assert.equal(paidInvoiceProjection.job.state, "open");
     assert.equal(
@@ -2451,9 +2451,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
          (select count(*)::int
             from ss.service_assessment_payment_receipts
            where invoice_id = $2
-             and subtotal_minor = 20000
+             and subtotal_minor = 35000
              and tax_minor = 0
-             and total_minor = 20000) as receipts,
+             and total_minor = 35000) as receipts,
          (select count(*)::int
             from ss.service_assessment_jobs
            where invoice_id = $2
@@ -2730,7 +2730,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
     assert.equal(delivery.state, "delivered");
     assert.equal(delivery.findingCount, 1);
-    assert.equal(delivery.credit.amountMinor, 20000);
+    assert.equal(delivery.credit.amountMinor, 35000);
     assert.equal(delivery.credit.currency, "USD");
     assert.equal(delivery.credit.applicationScope, "custom_base_build");
     assert.equal(delivery.credit.maximumApplications, 1);
@@ -2921,7 +2921,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       (entry) => entry.assessment?.jobId === paidJob.jobId
     );
     assert.ok(opportunity);
-    assert.equal(opportunity.credit.amountMinor, 20000);
+    assert.equal(opportunity.credit.amountMinor, 35000);
     assert.equal(opportunity.credit.state, "available");
     assert.equal(opportunity.currentQuote, null);
 
@@ -2958,13 +2958,13 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     );
     assert.equal(issuedBuild.state, "issued");
     assert.equal(issuedBuild.quote.tier.id, "site");
-    assert.equal(issuedBuild.quote.pricing.serviceAmountMinor, 120000);
-    assert.equal(issuedBuild.quote.pricing.creditAmountMinor, 20000);
-    assert.equal(issuedBuild.quote.pricing.customerAmountMinor, 100000);
-    assert.equal(issuedBuild.quote.pricing.startValueMinor, 60000);
-    assert.equal(issuedBuild.quote.pricing.startCreditMinor, 20000);
-    assert.equal(issuedBuild.quote.pricing.startDueMinor, 40000);
-    assert.equal(issuedBuild.quote.pricing.finalDueMinor, 60000);
+    assert.equal(issuedBuild.quote.pricing.serviceAmountMinor, 100000);
+    assert.equal(issuedBuild.quote.pricing.creditAmountMinor, 35000);
+    assert.equal(issuedBuild.quote.pricing.customerAmountMinor, 65000);
+    assert.equal(issuedBuild.quote.pricing.startValueMinor, 50000);
+    assert.equal(issuedBuild.quote.pricing.startCreditMinor, 35000);
+    assert.equal(issuedBuild.quote.pricing.startDueMinor, 15000);
+    assert.equal(issuedBuild.quote.pricing.finalDueMinor, 50000);
     assert.deepEqual(
       issuedBuild.quote.pricing.installments.map((entry) => ({
         number: entry.number,
@@ -2972,8 +2972,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         dueTrigger: entry.dueTrigger
       })),
       [
-        { number: 1, amountDueMinor: 40000, dueTrigger: "before_work" },
-        { number: 2, amountDueMinor: 60000, dueTrigger: "before_handoff" }
+        { number: 1, amountDueMinor: 15000, dueTrigger: "before_work" },
+        { number: 2, amountDueMinor: 50000, dueTrigger: "before_handoff" }
       ]
     );
     assert.deepEqual(
@@ -3166,9 +3166,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       paymentIntentId: raceAssessmentPaymentIntentId,
       customerId: raceAssessmentStripeCustomerId,
       paymentStatus: "paid",
-      subtotalMinor: 20000,
+      subtotalMinor: 35000,
       taxMinor: 0,
-      totalMinor: 20000,
+      totalMinor: 35000,
       taxMode: "disabled_by_owner",
       currency: "USD",
       purposeDigest: raceAssessmentPurposeDigest,
@@ -3274,7 +3274,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             "The isolated V47 Site-build fixture has complete desktop and phone assessment evidence."
         }
       );
-    assert.equal(raceAssessmentDelivery.credit.amountMinor, 20000);
+    assert.equal(raceAssessmentDelivery.credit.amountMinor, 35000);
 
     const raceBuildIssue = {
       commandId: `v47-race-custom-build-issue-${randomUUID()}`,
@@ -3309,7 +3309,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       quoteId: raceCustomerBuildIssued.quote.quoteId,
       quoteRevision: raceCustomerBuildIssued.quote.quoteRevision
     });
-    assert.equal(raceIssuedBuild.quote.pricing.finalDueMinor, 60000);
+    assert.equal(raceIssuedBuild.quote.pricing.finalDueMinor, 50000);
     assert.equal(raceAcceptedBuild.state, "accepted");
     const positiveDigestForeignCustomerId = customer.userId;
     assert.notEqual(
@@ -3357,7 +3357,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       const positiveStartProvider = {
         async createCustomBuildStartCheckout(input) {
           positiveStartPurpose = structuredClone(input.purpose);
-          assert.equal(input.purpose.price.amountMinor, 40000);
+          assert.equal(input.purpose.price.amountMinor, 15000);
           assert.equal(input.purpose.quoteId, issuedBuild.quote.quoteId);
           return {
             checkoutId: positiveStartSessionId,
@@ -3375,9 +3375,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             paymentIntentId: positiveStartPaymentIntentId,
             customerId: positiveCustomerId,
             paymentStatus: "paid",
-            subtotalMinor: 40000,
+            subtotalMinor: 15000,
             taxMinor: 0,
-            totalMinor: 40000,
+            totalMinor: 15000,
             taxMode: "disabled_by_owner",
             currency: "USD",
             purposeDigest: input.purposeDigest,
@@ -3414,8 +3414,8 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         });
       const positiveStartInvoice =
         await positiveStartPayment.readCurrentInvoice(customerAssessmentScope);
-      assert.equal(positiveStartInvoice.invoice.subtotal.amountMinor, 40000);
-      assert.equal(positiveStartInvoice.invoice.finalHandoff.amountMinor, 60000);
+      assert.equal(positiveStartInvoice.invoice.subtotal.amountMinor, 15000);
+      assert.equal(positiveStartInvoice.invoice.finalHandoff.amountMinor, 50000);
       const positiveStartCheckout = await positiveStartPayment.createCheckout({
         ...customerAssessmentScope,
         commandId: `custom-build-v46-positive-${randomUUID()}`,
@@ -3461,7 +3461,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       const positivePaid =
         await positiveStartPayment.readCurrentInvoice(customerAssessmentScope);
       const positiveJobId = positivePaid.job.jobId;
-      assert.equal(positivePaid.job.finalHandoff.amountMinor, 60000);
+      assert.equal(positivePaid.job.finalHandoff.amountMinor, 50000);
       assert.equal(positivePaid.job.finalHandoff.state, "unpaid");
 
       const positiveProgress =
@@ -3918,17 +3918,17 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         positiveFinalRow.effective_change_order_digests,
         [positiveChangeOrder.quoteDigest]
       );
-      assert.equal(Number(positiveFinalRow.final_due_minor), 60000);
+      assert.equal(Number(positiveFinalRow.final_due_minor), 50000);
       assert.equal(Number(positiveFinalRow.credit_minor), 0);
       assert.equal(positiveFinalRow.workmanship_correction_days, 30);
       assert.match(positiveFinalRow.invoice_number, /^SSCB-FINAL-/u);
-      assert.equal(Number(positiveFinalRow.subtotal_minor), 60000);
+      assert.equal(Number(positiveFinalRow.subtotal_minor), 50000);
       assert.equal(Number(positiveFinalRow.invoice_credit_minor), 0);
       assert.equal(
         positiveFinalRow.component_key,
         "custom_build_final_installment"
       );
-      assert.equal(Number(positiveFinalRow.amount_minor), 60000);
+      assert.equal(Number(positiveFinalRow.amount_minor), 50000);
       assert.equal(Number(positiveFinalRow.line_credit_minor), 0);
       assert.ok(positiveFinalRow.quote_installment_id);
       assert.equal(positiveFinalRow.clearance_count, 0);
@@ -3953,7 +3953,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         acceptedQuoteDigest: positiveFinalRow.accepted_quote_digest,
         acceptedDisclosureDigest:
           positiveFinalRow.accepted_disclosure_digest,
-        price: { amountMinor: 60000, currency: "USD" },
+        price: { amountMinor: 50000, currency: "USD" },
         taxMode: "disabled_by_owner"
       };
       assert.deepEqual(
@@ -4050,7 +4050,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         accepted_quote_digest: positiveFinalRow.accepted_quote_digest,
         accepted_disclosure_digest:
           positiveFinalRow.accepted_disclosure_digest,
-        expected_subtotal_minor: 60000,
+        expected_subtotal_minor: 50000,
         currency: "USD",
         tax_mode: "disabled_by_owner",
         provider_request_expires_at: finalExpiresAt,
@@ -4126,9 +4126,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         chargeCaptured: true,
         amountRefundedMinor: 0,
         disputed: false,
-        subtotalMinor: 60000,
+        subtotalMinor: 50000,
         taxMinor: 0,
-        totalMinor: 60000,
+        totalMinor: 50000,
         taxMode: "disabled_by_owner",
         currency: "USD",
         purposeDigest: finalPurposeDigest,
@@ -4163,9 +4163,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         charge_captured: true,
         amount_refunded_minor: 0,
         disputed: false,
-        subtotal_minor: 60000,
+        subtotal_minor: 50000,
         tax_minor: 0,
-        total_minor: 60000,
+        total_minor: 50000,
         tax_mode: "disabled_by_owner",
         currency: "USD",
         purpose: "custom_build_final",
@@ -5138,7 +5138,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
             accepted_quote_digest: positiveFinalRow.accepted_quote_digest,
             accepted_disclosure_digest:
               positiveFinalRow.accepted_disclosure_digest,
-            expected_subtotal_minor: 60000,
+            expected_subtotal_minor: 50000,
             currency: "USD",
             tax_mode: "automatic",
             provider_request_expires_at: isoAfter({ hours: 1 }),
@@ -5196,7 +5196,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     assert.equal(declinedCreditBuild.credit, null);
     assert.equal(declinedCreditBuild.quote.creditSelection, "no_credit");
     assert.equal(declinedCreditBuild.quote.pricing.creditAmountMinor, 0);
-    assert.equal(declinedCreditBuild.quote.pricing.startDueMinor, 60000);
+    assert.equal(declinedCreditBuild.quote.pricing.startDueMinor, 50000);
     assert.equal(
       (await customBuild.readCurrentQuote(customerAssessmentScope)).credit,
       null
@@ -5226,45 +5226,56 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       {
         ...customBuildIssue,
         commandId: `custom-build-issue-${randomUUID()}`,
-        tierId: "card-plus",
+        tierId: "card",
         craftedPages: 1,
-        sections: 8,
+        sections: 5,
         uniqueLayouts: 1,
-        contentWords: 900,
-        suppliedMedia: 8,
+        contentWords: 500,
+        suppliedMedia: 2,
         scopeStatement:
-          "Build one polished Card Plus page with the corrected essential design scope."
+          "Build one polished Card page with the corrected essential design scope."
       }
     );
-    assert.equal(replacementBuild.quote.pricing.serviceAmountMinor, 65000);
-    assert.equal(replacementBuild.quote.pricing.startDueMinor, 45000);
+    assert.equal(replacementBuild.quote.pricing.serviceAmountMinor, 35000);
+    assert.equal(replacementBuild.quote.pricing.startDueMinor, 0);
     assert.equal(replacementBuild.quote.pricing.finalDueMinor, 0);
     assert.equal(replacementBuild.credit.state, "available");
 
     const replacementCustomerQuote = await customBuild.readCurrentQuote(
       customerAssessmentScope
     );
-    const replacementAccepted = await customBuild.acceptCurrentQuote({
+    const replacementAcceptanceCommandId =
+      `custom-build-accept-${randomUUID()}`;
+    const replacementAcceptanceInput = {
       ...customerAssessmentScope,
       acceptanceStatement: "accepted_exact_custom_build_quote",
       acceptedDisclosureDigest:
         replacementCustomerQuote.quote.disclosureDigest,
       acceptedQuoteDigest: replacementCustomerQuote.quote.quoteDigest,
-      commandId: `custom-build-accept-${randomUUID()}`,
+      commandId: replacementAcceptanceCommandId,
       quoteId: replacementCustomerQuote.quote.quoteId,
       quoteRevision: replacementCustomerQuote.quote.quoteRevision
-    });
+    };
+    const replacementAccepted = await customBuild.acceptCurrentQuote(
+      replacementAcceptanceInput
+    );
     assert.equal(replacementAccepted.state, "accepted");
-    assert.equal(replacementAccepted.credit.state, "reserved");
+    assert.equal(replacementAccepted.credit.state, "settled");
+    assert.deepEqual(
+      await customBuild.acceptCurrentQuote(replacementAcceptanceInput),
+      replacementAccepted
+    );
 
     let retainedBuildPurpose = null;
+    let buildProviderCalls = 0;
     const buildCheckoutId = providerIds.buildStartCheckout;
     const buildCustomerId = providerIds.assessmentStripeCustomer;
     const buildPaymentIntentId = providerIds.buildStartPaymentIntent;
     const customBuildPaymentProvider = {
       async createCustomBuildStartCheckout(input) {
+        buildProviderCalls += 1;
         retainedBuildPurpose = structuredClone(input.purpose);
-        assert.equal(input.purpose.price.amountMinor, 45000);
+        assert.equal(input.purpose.price.amountMinor, 25000);
         assert.equal(input.purpose.quoteId, replacementBuild.quote.quoteId);
         return {
           checkoutId: buildCheckoutId,
@@ -5273,6 +5284,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         };
       },
       async retrieveCustomBuildStartPayment(input) {
+        buildProviderCalls += 1;
         assert.deepEqual(input.purpose, retainedBuildPurpose);
         const facts = {
           schema:
@@ -5282,9 +5294,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           paymentIntentId: buildPaymentIntentId,
           customerId: buildCustomerId,
           paymentStatus: "paid",
-          subtotalMinor: 45000,
+          subtotalMinor: 25000,
           taxMinor: 0,
-          totalMinor: 45000,
+          totalMinor: 25000,
           taxMode: "disabled_by_owner",
           currency: "USD",
           purposeDigest: input.purposeDigest,
@@ -5296,6 +5308,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         });
       },
       async retrieveCustomBuildStartCheckoutLifecycle(input) {
+        buildProviderCalls += 1;
         return {
           schema:
             "sitesourcery.stripe-custom-build-start-checkout-lifecycle/v1",
@@ -5337,9 +5350,34 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     const buildInvoice = await customBuildPayment.readCurrentInvoice(
       customerAssessmentScope
     );
-    assert.equal(buildInvoice.state, "checkout_available");
-    assert.equal(buildInvoice.invoice.subtotal.amountMinor, 45000);
-    assert.equal(buildInvoice.invoice.credit.amountMinor, 20000);
+    const retainedBuildAuthority = await pool.query(
+      `select
+         revision.id as quote_revision_id,
+         acceptance.id as quote_acceptance_id,
+         acceptance.accepted_quote_digest,
+         acceptance.accepted_disclosure_digest
+       from ss.service_custom_build_quote_acceptances acceptance
+       join ss.service_custom_build_quote_revisions revision
+         on revision.organization_id = acceptance.organization_id
+        and revision.id = acceptance.quote_revision_id
+       where acceptance.quote_id = $1`,
+      [replacementBuild.quote.quoteId]
+    );
+    assert.equal(retainedBuildAuthority.rowCount, 1);
+    retainedBuildPurpose = {
+      quoteRevisionId: retainedBuildAuthority.rows[0].quote_revision_id,
+      quoteAcceptanceId:
+        retainedBuildAuthority.rows[0].quote_acceptance_id,
+      acceptedQuoteDigest:
+        retainedBuildAuthority.rows[0].accepted_quote_digest,
+      acceptedDisclosureDigest:
+        retainedBuildAuthority.rows[0].accepted_disclosure_digest
+    };
+    assert.equal(buildInvoice.state, "paid");
+    assert.equal(buildInvoice.invoice.subtotal.amountMinor, 0);
+    assert.equal(buildInvoice.invoice.credit.amountMinor, 35000);
+    assert.equal(buildInvoice.invoice.credit.state, "settled");
+    assert.equal(buildInvoice.invoice.payment.chargeOccurred, false);
     assert.equal(buildInvoice.invoice.finalHandoff.amountMinor, 0);
     assert.equal(buildInvoice.invoice.lines.length, 2);
     assert.equal(
@@ -5347,79 +5385,69 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         (total, line) => total + line.amountMinor,
         0
       ),
-      45000
+      0
     );
-    const buildCheckoutInput = {
-      ...customerAssessmentScope,
-      commandId: `custom-build-checkout-${randomUUID()}`,
-      invoiceId: buildInvoice.invoice.invoiceId,
-      invoiceDigest: buildInvoice.invoice.invoiceDigest
-    };
-    const buildCheckout = await customBuildPayment.createCheckout(
-      buildCheckoutInput
+    assert.equal(buildProviderCalls, 0);
+    await assert.rejects(
+      customBuildPayment.createCheckout({
+        ...customerAssessmentScope,
+        commandId: `credit-only-card-checkout-${randomUUID()}`,
+        invoiceId: buildInvoice.invoice.invoiceId,
+        invoiceDigest: buildInvoice.invoice.invoiceDigest
+      }),
+      (error) => error.code === "CUSTOM_BUILD_INVOICE_CHANGED"
     );
-    assert.equal(buildCheckout.state, "ready");
-    assert.equal(buildCheckout.checkout.subtotal.amountMinor, 45000);
-    assert.deepEqual(
-      await customBuildPayment.createCheckout(buildCheckoutInput),
-      buildCheckout
+    await assert.rejects(
+      customBuildPayment.createCheckout({
+        actorId: other.userId,
+        customerId: other.userId,
+        organizationId: other.organizationId,
+        projectId: other.projectId,
+        commandId: `foreign-credit-only-card-${randomUUID()}`,
+        invoiceId: buildInvoice.invoice.invoiceId,
+        invoiceDigest: buildInvoice.invoice.invoiceDigest
+      }),
+      (error) => error.code === "CUSTOM_BUILD_INVOICE_UNAVAILABLE"
     );
-    assert.ok(retainedBuildPurpose);
-    const buildPurposeDigest = digest(retainedBuildPurpose);
-    const buildMetadata = {
-      schema: "sitesourcery_custom_build_start_checkout_v1",
-      tenant_id: retainedBuildPurpose.tenantId,
-      customer_id: retainedBuildPurpose.customerId,
-      project_id: retainedBuildPurpose.projectId,
-      quote_id: retainedBuildPurpose.quoteId,
-      quote_revision_id: retainedBuildPurpose.quoteRevisionId,
-      quote_acceptance_id: retainedBuildPurpose.quoteAcceptanceId,
-      credit_application_id: retainedBuildPurpose.creditApplicationId,
-      invoice_id: retainedBuildPurpose.invoiceId,
-      invoice_number: retainedBuildPurpose.invoiceNumber,
-      accepted_quote_digest: retainedBuildPurpose.acceptedQuoteDigest,
-      accepted_disclosure_digest:
-        retainedBuildPurpose.acceptedDisclosureDigest,
-      invoice_digest: retainedBuildPurpose.invoiceDigest,
-      purpose_digest: buildPurposeDigest
-    };
-    const buildStripeEvent = {
-      id: providerIds.buildStartEvent,
-      type: "checkout.session.completed",
-      livemode: false,
-      api_version: "2026-06-24.dahlia",
-      created: Math.floor(Date.now() / 1000) - 1,
-      data: {
-        object: {
-          id: buildCheckoutId,
-          metadata: buildMetadata
-        }
-      }
-    };
-    const buildSettlement = await customBuildPayment.ingestStripeEvent(
-      buildStripeEvent
+    assert.equal(buildProviderCalls, 0);
+    const zeroProviderRows = await client.query(
+      `select
+         (select count(*)::int
+          from ss.service_custom_build_checkout_attempts attempt
+          where attempt.invoice_id = $1) as checkout_attempts,
+         (select count(*)::int
+          from ss.service_custom_build_stripe_events event
+          where event.invoice_id = $1) as stripe_events,
+         (select count(*)::int
+          from ss.service_custom_build_payment_receipts receipt
+          where receipt.invoice_id = $1) as payment_receipts,
+         (select count(*)::int
+          from ss.service_custom_build_jobs job
+          where job.invoice_id = $1
+            and job.start_settlement_kind = 'credit_only'
+            and job.payment_receipt_id is null
+            and job.start_paid_subtotal_minor = 0) as credit_only_jobs`,
+      [buildInvoice.invoice.invoiceId]
     );
-    assert.equal(buildSettlement.status, "payment_settled");
-    assert.equal(buildSettlement.next, "custom_build_work");
-    assert.deepEqual(
-      await customBuildPayment.ingestStripeEvent(buildStripeEvent),
-      buildSettlement
-    );
-    const paidBuildInvoice = await customBuildPayment.readCurrentInvoice(
-      customerAssessmentScope
-    );
+    assert.deepEqual(zeroProviderRows.rows[0], {
+      checkout_attempts: 0,
+      stripe_events: 0,
+      payment_receipts: 0,
+      credit_only_jobs: 1
+    });
+    const paidBuildInvoice = buildInvoice;
     assert.equal(paidBuildInvoice.state, "paid");
     assert.equal(paidBuildInvoice.invoice.credit.state, "settled");
     assert.equal(paidBuildInvoice.job.state, "open");
-    assert.equal(paidBuildInvoice.job.tierId, "card-plus");
+    assert.equal(paidBuildInvoice.job.tierId, "card");
     assert.equal(
       paidBuildInvoice.job.targetCompletionDate,
       customBuildIssue.targetCompletionDate
     );
-    assert.equal(paidBuildInvoice.job.firstPayment.creditMinor, 20000);
+    assert.equal(paidBuildInvoice.job.firstPayment.creditMinor, 35000);
     assert.equal(
       paidBuildInvoice.job.firstPayment.paidSubtotalMinor,
-      45000
+      0
     );
     assert.equal(paidBuildInvoice.job.finalHandoff.state, "not_required");
     assert.equal(paidBuildInvoice.job.finalHandoff.amountMinor, 0);
@@ -7413,10 +7441,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       [
         { kind: "checkout_session", purpose: "custom_build_change" },
         { kind: "payment_intent", purpose: "custom_build_change" },
-        { kind: "stripe_event", purpose: "custom_build_change" },
-        { kind: "checkout_session", purpose: "custom_build_start" },
-        { kind: "payment_intent", purpose: "custom_build_start" },
-        { kind: "stripe_event", purpose: "custom_build_start" }
+        { kind: "stripe_event", purpose: "custom_build_change" }
       ]
     );
     await assert.rejects(
@@ -7853,7 +7878,7 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
          (select count(*)::int from ss.service_assessment_report_findings
            where job_id = $1) as report_findings,
          (select count(*)::int from ss.service_credit_grants
-           where source_job_id = $1 and amount_minor = 20000) as credits,
+           where source_job_id = $1 and amount_minor = 35000) as credits,
          (select count(*)::int from ss.service_assessment_evidence
            where job_id = $1) as evidence`,
       [paidJob.jobId]

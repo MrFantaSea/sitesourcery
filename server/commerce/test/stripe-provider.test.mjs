@@ -414,7 +414,7 @@ function serviceAssessmentPurpose(overrides = {}) {
     invoiceDigest: "f".repeat(64),
     taxMode: "automatic",
     price: {
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       billing: "one_time",
       taxBehavior: "exclusive"
@@ -484,7 +484,7 @@ function serviceAssessmentCheckoutReadback({
   paymentStatus = "paid",
   overrides = {}
 } = {}) {
-  const subtotalMinor = 20000;
+  const subtotalMinor = 35000;
   const totalMinor = subtotalMinor + taxMinor;
   const metadata = serviceAssessmentMetadata(purpose);
   const customerId = "cus_test_service_assessment_1";
@@ -4676,7 +4676,7 @@ test("one-time Download reuses the account's bound Stripe Customer", async () =>
   assert.equal(params.customer_update, undefined);
 });
 
-test("assessment invoice creates one exact automatic-tax $200 Checkout", async () => {
+test("assessment invoice creates one exact automatic-tax $350 Checkout", async () => {
   const config = configuration({ taxMode: "automatic" });
   const { adapter, calls } = adapterFixture({ config });
   const request = serviceAssessmentRequest();
@@ -4694,7 +4694,7 @@ test("assessment invoice creates one exact automatic-tax $200 Checkout", async (
     {
       price_data: {
         currency: "usd",
-        unit_amount: 20000,
+        unit_amount: 35000,
         tax_behavior: "exclusive",
         product_data: {
           name: "Site Sourcery website assessment",
@@ -4858,9 +4858,9 @@ test("assessment settlement returns frozen redacted facts for tax-zero and tax-p
         "pi_test_service_assessment_1",
       customerId: "cus_test_service_assessment_1",
       paymentStatus: "paid",
-      subtotalMinor: 20000,
+      subtotalMinor: 35000,
       taxMinor,
-      totalMinor: 20000 + taxMinor,
+      totalMinor: 35000 + taxMinor,
       taxMode: "automatic",
       currency: "USD",
       purposeDigest: digest(purpose),

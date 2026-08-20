@@ -103,13 +103,13 @@ const packageLock = JSON.parse(packageLockSource);
 
 test("browser gate owns the exact customer navigation and route-only current state", () => {
   assert.deepEqual(PRIMARY_NAV_CONTRACT, [
-    { label: "Websites", href: "/websites/", className: "" },
-    { label: "Domains", href: "/domains/", className: "" },
-    { label: "Services", href: "/solutions/", className: "" },
-    { label: "Calls & follow-up", href: "/hive/", className: "" },
-    { label: "Examples", href: "/work/", className: "" },
+    { label: "Abracadabra", href: "/abracadabra/", className: "" },
+    { label: "Alakazam", href: "/alakazam/", className: "" },
+    { label: "Sorcery", href: "/custom/", className: "" },
+    { label: "Care", href: "/care/", className: "" },
+    { label: "The Responder", href: "/responder/", className: "" },
+    { label: "Spell book", href: "/work/", className: "" },
     { label: "About", href: "/about/", className: "" },
-    { label: "Get started", href: "/start/", className: "nav-start" },
   ]);
   assert.deepEqual(
     ROUTE_PRIMARY_NAV,
@@ -145,10 +145,10 @@ test("browser gate owns the exact customer navigation and route-only current sta
     primaryNavContractFailures(wrongOrder, "/websites/")
       .some((failure) => failure.includes("entry 0 label")),
   );
-  const wrongCurrent = entries("/websites/");
+  const wrongCurrent = entries("/abracadabra/");
   wrongCurrent[0].ariaCurrent = "";
   assert.ok(
-    primaryNavContractFailures(wrongCurrent, "/websites/")
+    primaryNavContractFailures(wrongCurrent, "/abracadabra/")
       .some((failure) => failure.includes("aria-current")),
   );
   const hiddenDesktopStart = desktop.map((entry) => ({ ...entry }));
@@ -750,7 +750,7 @@ test("progressive-failure gate keeps every canonical route usable at bounded ini
     "/legal/privacy/": 16,
     "/legal/website-terms/": 17,
   });
-  assert.equal(CANONICAL_ROUTES.length, 20);
+  assert.equal(CANONICAL_ROUTES.length, 24);
 
   const validSnapshot = (scenario) => ({
     belowFold: {

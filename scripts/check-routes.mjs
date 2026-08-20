@@ -28,25 +28,29 @@ export const CANONICAL_ROUTES = Object.freeze([
   "/legal/",
   "/legal/privacy/",
   "/legal/website-terms/",
+  "/alakazam/",
+  "/care/",
+  "/responder/",
+  "/services/",
 ]);
 
 export const FUNCTIONAL_APP_ROUTES = Object.freeze([]);
 
-// Domains sits second because every arrival needs an address whichever website
-// lane they take, and it was previously reachable only as an anchor inside
-// /solutions/.
+// This is the successor product navigation. The complete 24-route manifest is
+// larger; this header keeps the seven primary product/proof choices stable.
 export const PRIMARY_NAV = Object.freeze([
-  Object.freeze({ label: "Websites", href: "/websites/" }),
-  Object.freeze({ label: "Domains", href: "/domains/" }),
-  Object.freeze({ label: "Services", href: "/solutions/" }),
-  Object.freeze({ label: "Calls & follow-up", href: "/hive/" }),
-  Object.freeze({ label: "Examples", href: "/work/" }),
+  Object.freeze({ label: "Abracadabra", href: "/abracadabra/" }),
+  Object.freeze({ label: "Alakazam", href: "/alakazam/" }),
+  Object.freeze({ label: "Sorcery", href: "/custom/" }),
+  Object.freeze({ label: "Care", href: "/care/" }),
+  Object.freeze({ label: "The Responder", href: "/responder/" }),
+  Object.freeze({ label: "Spell book", href: "/work/" }),
   Object.freeze({ label: "About", href: "/about/" }),
-  Object.freeze({ label: "Get started", href: "/start/" }),
 ]);
 
 export const LEGACY_REDIRECTS = Object.freeze({
   "about.html": "/about/",
+  "alacazam/index.html": "/alakazam/",
   "automation.html": "/hive/",
   "contact.html": "/contact/",
   "faq.html": "/faq/",
@@ -58,7 +62,7 @@ export const LEGACY_REDIRECTS = Object.freeze({
   "the-difference.html": "/about/#the-difference",
   "the-meter.html": "/custom/process/#scope",
   "the-moat.html": "/about/#the-difference",
-  "the-responder.html": "/hive/",
+  "the-responder.html": "/responder/",
 });
 
 export const CANONICAL_PHONE = Object.freeze({
@@ -72,10 +76,15 @@ export const BRAND_IDENTITY_DISCLOSURE =
   "Site Sourcery is the brand presentation of the filed alternate name SITESOURCERY. Desiderata Labs LLC is the legal seller.";
 
 const ALLOWED_EXTERNAL_REFERENCES = new Set([
+  "legal/privacy/index.html\u0000href\u0000https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/",
   "work/index.html\u0000href\u0000https://sconesourcery.com/",
+  "work/index.html\u0000href\u0000https://daarx.money/",
 ]);
 
-const IGNORED_TOP_LEVEL = new Set([".git", "_hosted", "_site", "node_modules"]);
+const IGNORED_TOP_LEVEL = new Set([
+  ".git", "_hosted", "_site", "clients", "commercial", "data",
+  "node_modules", "ops", "print-collateral", "scripts", "server",
+]);
 const HTML_ENTITY = Object.freeze({
   amp: "&",
   apos: "'",
@@ -578,6 +587,9 @@ export async function validateRouteContract(root = process.cwd()) {
     ...Object.keys(LEGACY_REDIRECTS),
     "404.html",
     "flyer.html",
+    ...publicFileAllowlist.filter((file) =>
+      /^legal\/(?:privacy|website-terms)\/versions\/[^/]+\/index\.html$/u.test(file)
+    ),
   ]);
   const actualDeployableHtml = publicFileAllowlist.filter((file) =>
     file.endsWith(".html")

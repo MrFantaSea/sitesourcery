@@ -10,9 +10,9 @@ export const CUSTOM_SERVICES_FOUNDATION_SNAPSHOT_SCHEMA =
 
 const FOUNDATION_CONTRACT =
   "canonical-ss-v34-custom-services-foundation";
-const CATALOG_VERSION = "SS-PROFESSIONAL-2026.1";
+const CATALOG_VERSION = "SS-PROFESSIONAL-2026.2";
 const SERVICE_KEY = "website_assessment_standard";
-const LEGAL_VERSION = "SS-CUSTOM-SERVICES-2026-08-05.1";
+const LEGAL_VERSION = "SS-CUSTOM-SERVICES-2026-08-19.2";
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;

@@ -55,7 +55,7 @@ function eligibility(input, overrides = {}) {
     customerId: IDS.customer,
     projectLifecycle: "active",
     catalogIdentityId: "00000000-0000-4000-8000-000000001211",
-    catalogVersion: "SS-CARE-CORE-2026.1",
+    catalogVersion: "SS-CARE-CORE-2026.2",
     serviceKey: "website_rescue",
     contractKind: "rescue",
     commercialAuthorityState: "exact_held",
@@ -254,11 +254,11 @@ test("held quote and invoice reservation bind exact org/project/contract/period 
   assert.equal(firstQuote.audience, "operator");
   assert.equal(firstQuote.record.subtotalMinor, undefined);
   assert.equal(firstQuote.record.line.subtotalMinor, 25_000);
-  assert.equal(firstQuote.record.catalogVersion, "SS-CARE-COMMERCE-2026.1");
-  assert.equal(firstQuote.record.careCoreCatalogVersion, "SS-CARE-CORE-2026.1");
-  assert.equal(firstQuote.record.priceVersion, "SS-CUSTOM-SERVICES-2026-08-05.1");
+  assert.equal(firstQuote.record.catalogVersion, "SS-CARE-COMMERCE-2026.2");
+  assert.equal(firstQuote.record.careCoreCatalogVersion, "SS-CARE-CORE-2026.2");
+  assert.equal(firstQuote.record.priceVersion, "SS-COMMERCIAL-2026.6");
   assert.equal(firstQuote.record.commercialContractDigest,
-    "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8");
+    "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d");
   assert.equal(firstQuote.record.payable, false);
   assert.equal(firstQuote.record.tax.taxMode, null);
   assert.equal(firstQuote.record.providerEffects, false);

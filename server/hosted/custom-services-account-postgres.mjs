@@ -7,13 +7,13 @@ import { HostedError, invariant } from "./errors.mjs";
 
 const FOUNDATION_CONTRACT =
   "canonical-ss-v34-custom-services-foundation";
-const CATALOG_VERSION = "SS-PROFESSIONAL-2026.1";
+const CATALOG_VERSION = "SS-PROFESSIONAL-2026.2";
 const SERVICE_KEY = "website_assessment_standard";
-const LEGAL_VERSION = "SS-CUSTOM-SERVICES-2026-08-05.1";
+const LEGAL_VERSION = "SS-CUSTOM-SERVICES-2026-08-19.2";
 const LEGAL_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
 const ASSESSMENT_POLICY_ID =
-  "00000000-0000-4000-8000-000000000341";
+  "00000000-0000-4000-8000-000000001411";
 const HELD = "held";
 
 const UUID =
@@ -717,15 +717,30 @@ export function createPostgresCustomServicesAccountRepository({
                 and policy.pricing_mode = 'fixed'
                 and policy.billing_cadence = 'one_time'
                 and policy.currency = 'USD'
-                and policy.unit_amount_minor = 20000
+                and policy.unit_amount_minor = 35000
                 and policy.minimum_quantity = 1
                 and policy.maximum_quantity = 1
                 and policy.scope_boundary = jsonb_build_object(
+                  'catalogDigest',
+                    '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0',
+                  'credit', jsonb_build_object(
+                    'amountMinor', 35000,
+                    'applicationScope', 'custom_base_build',
+                    'maximumApplications', 1,
+                    'nonCash', true,
+                    'sameOrganizationAndProjectOnly', true
+                  ),
+                  'deliverable',
+                    'written assessment with screenshot evidence and real findings ranked by severity',
                   'expandedAssessmentState', 'separately_quoted',
                   'maximumFindings', 10,
                   'maximumRepresentativePagesOrTypes', 5,
                   'maximumWebsites', 1,
-                  'requiredViewports', jsonb_build_array('desktop', 'phone')
+                  'requiredViewports', jsonb_build_array('desktop', 'phone'),
+                  'scopeState', 'must_be_stated_before_sale',
+                  'turnaroundState', 'must_be_stated_before_sale',
+                  'taxDisplay', 'exclusive',
+                  'taxState', 'disabled_by_owner'
                 )
                 and policy.scope_boundary_digest =
                     ss.service_json_digest(policy.scope_boundary)

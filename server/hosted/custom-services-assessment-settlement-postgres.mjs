@@ -268,7 +268,7 @@ function purposeFromRow(row) {
     invoiceDigest: row.invoice_digest,
     taxMode: row.tax_mode,
     price: {
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       billing: "one_time",
       taxBehavior: "exclusive"
@@ -388,11 +388,11 @@ function exactPaymentFacts(value, resolution) {
       PAYMENT_INTENT_ID.test(String(value.paymentIntentId ?? "")) &&
       STRIPE_CUSTOMER_ID.test(String(value.customerId ?? "")) &&
       value.paymentStatus === "paid" &&
-      value.subtotalMinor === 20000 &&
+      value.subtotalMinor === 35000 &&
       Number.isSafeInteger(value.taxMinor) &&
       value.taxMinor >= 0 &&
       value.taxMinor <= 99_999_999 &&
-      value.totalMinor === 20000 + value.taxMinor &&
+      value.totalMinor === 35000 + value.taxMinor &&
       ["automatic", "disabled_by_owner"].includes(
         value.taxMode
       ) &&
@@ -501,7 +501,7 @@ function exactClaimRow(row, event) {
       row.attempt_state === "ready" &&
       row.provider === "stripe" &&
       row.provider_effect_certainty === "confirmed" &&
-      Number(row.expected_subtotal_minor) === 20000 &&
+      Number(row.expected_subtotal_minor) === 35000 &&
       row.currency === "USD" &&
       ["automatic", "disabled_by_owner"].includes(
         row.tax_mode
@@ -510,8 +510,8 @@ function exactClaimRow(row, event) {
         Number(row.tax_minor) === 0) &&
       row.invoice_state === "tax_calculation_pending" &&
       row.invoice_purpose === "assessment" &&
-      Number(row.subtotal_minor) === 20000 &&
-      row.tax_state === "calculation_required" &&
+      Number(row.subtotal_minor) === 35000 &&
+      row.tax_state === "disabled_by_owner" &&
       row.tax_minor === null &&
       row.total_minor === null &&
       row.payable === false &&
@@ -1023,7 +1023,7 @@ export function createPostgresCustomServicesAssessmentSettlement({
                ) values (
                  $1, $2, $3, $4, $5, $6, $7, $8,
                  'stripe', $9, $10, $11, 'paid',
-                 20000, $12, $13, $14, 'USD',
+                 35000, $12, $13, $14, 'USD',
                  $15, $16, $17, $18::jsonb, $19, $20, $21
                )`,
               [

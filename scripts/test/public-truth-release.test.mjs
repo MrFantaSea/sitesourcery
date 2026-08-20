@@ -98,7 +98,6 @@ const LEGACY_SOURCE_ONLY_ARTIFACT_PATHS = Object.freeze([
   "atelier-utility.js",
   "sourcery.js",
   "style.css",
-  "thanks.html",
 ]);
 const [CURRENT_WORKFLOW_TEXT, CURRENT_OG_SOURCE_TEXT] = await Promise.all([
   readFile(path.join(PROJECT_ROOT, ".github/workflows/public-truth-reconciliation.yml"), "utf8"),
@@ -324,10 +323,8 @@ function productionFiles(overrides = {}) {
     files[file] = `<!doctype html><link rel="canonical" href="${canonical}"><h1>${route}</h1>`;
   }
   for (const [file, target] of Object.entries(PRODUCTION_LEGACY_REDIRECTS)) {
-    if (file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
-    const canonicalTarget = new URL(target, `${PRODUCTION_ORIGIN}/`);
-    canonicalTarget.hash = "";
-    const canonical = canonicalTarget.href;
+    if (SOURCE_ONLY_LEGACY_REDIRECT && file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
+    const canonical = new URL(target, `${PRODUCTION_ORIGIN}/`).href;
     files[file] = [
       "<!doctype html>",
       '<meta name="robots" content="noindex">',
@@ -535,8 +532,8 @@ test("artifact exclusion contract covers generated, server, workflow, governance
   }
 });
 
-test("verifier publication ledger independently matches the reviewed 90-file held builder ledger", () => {
-  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 90);
+test("verifier publication ledger independently matches the reviewed 93-file held builder ledger", () => {
+  assert.equal(REVIEWED_PUBLIC_ARTIFACT_PATHS.length, 93);
   assert.deepEqual(REVIEWED_PUBLIC_ARTIFACT_PATHS, publicFileAllowlist);
   assert.deepEqual(
     [...REVIEWED_PUBLIC_ARTIFACT_PATHS].sort(),
@@ -1472,11 +1469,11 @@ test("postdeploy route fixture proves canonical pages, custom 404, redirects, an
   });
 });
 
-test("real reviewed 90-file artifact satisfies the production manifest and byte-level route contract", async () => {
+test("real reviewed 93-file artifact satisfies the production manifest and byte-level route contract", async () => {
   const files = reviewedArtifactFiles();
   const manifest = artifactManifestFor(files);
   assert.equal(manifest.count, REVIEWED_PUBLIC_ARTIFACT_PATHS.length);
-  assert.equal(manifest.count, 90);
+  assert.equal(manifest.count, 93);
   assert.equal(validateProductionRouteManifest(manifest), manifest);
 
   const { fetchImpl } = liveFixtureFetch(files);
@@ -1500,7 +1497,7 @@ test("real reviewed 90-file artifact satisfies the production manifest and byte-
       contract.legacyRedirects,
       Object.keys(PRODUCTION_LEGACY_REDIRECTS).filter((file) => file !== SOURCE_ONLY_LEGACY_REDIRECT),
     );
-    assert.equal(contract.sourceOnlyRedirectAbsence, "thanks.html");
+    assert.equal(contract.sourceOnlyRedirectAbsence, null);
   });
 });
 
@@ -1718,12 +1715,9 @@ test("artifact projection ignores source-only legacy bytes and rejects them in t
   });
 });
 
-test("artifact projection fails closed when source-only bytes replace one reviewed path", async () => {
+test("artifact projection fails closed when source bytes omit one reviewed path", async () => {
   await withReviewedArtifact({}, async (root, files) => {
-    const substituted = {
-      ...files,
-      "thanks.html": "source-only replacement attempt",
-    };
+    const substituted = { ...files };
     delete substituted[".nojekyll"];
     await assert.rejects(
       () => validateArtifactSafety(root, manifestFor(substituted)),

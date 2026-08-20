@@ -10,7 +10,7 @@ export const CUSTOM_SERVICES_OWNER_QUOTE_RECEIPT_SCHEMA =
   "sitesourcery.custom-services-owner-assessment-quote/v1";
 
 const ASSESSMENT_POLICY_ID =
-  "00000000-0000-4000-8000-000000000341";
+  "00000000-0000-4000-8000-000000001411";
 const QUOTE_ROUTE =
   "custom_services.owner.assessment_quote.issue";
 const UUID =
@@ -279,7 +279,7 @@ function quoteReceipt(row) {
     quoteId: row.quote_id,
     quoteRevision: Number(row.quote_revision),
     price: {
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD"
     },
     deliveryDate: canonicalDate(row.delivery_date),
@@ -585,7 +585,7 @@ export function createPostgresCustomServicesOwner({
                  join ss.service_catalog_policies policy
                    on policy.id = offering.policy_id
                   and policy.service_key = 'website_assessment_standard'
-                  and policy.unit_amount_minor = 20000
+                  and policy.unit_amount_minor = 35000
                   and policy.currency = 'USD'
                   and policy.publication_state = 'held'
                  join ss.legal_documents document
@@ -759,8 +759,8 @@ export function createPostgresCustomServicesOwner({
                    ) values (
                      $1, $2, $3, $4, $5, 1, $6, $7, $8, $9,
                      $10, $11, $12::text[], $13, $14,
-                     20000, 0, 0, 20000, 'USD',
-                     'calculation_required', 'full_before_work', 1, 5, 10,
+                     35000, 0, 0, 35000, 'USD',
+                     'disabled_by_owner', 'full_before_work', 1, 5, 10,
                      true, true, 'separately_quoted', $15, $16, $17,
                      $18::date, clock_timestamp(),
                      clock_timestamp() + interval '14 days', $19,

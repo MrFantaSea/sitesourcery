@@ -150,7 +150,7 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "819cd488e6a86c7b256791acdb95f83f7705a8c6511b1955616cf1642911506d",
+    "cc607525255d4e5167bfc913c42bc6080faeb4be28da530e329dbbd42a1777a6",
   "abracadabra/app/abracadabra-hosted-control.js":
     "8a0801d41bec47cbd71f5f0adf0d9a4716296621167d3e1667da9b39ce12477b",
   "abracadabra/app/abracadabra-responder-surfaces.css":
@@ -278,7 +278,7 @@ export const heldAlakazamExecutableSemantics = Object.freeze([
 export const heldTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
     "Your source for websites.",
-    "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400.",
+    "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350.",
     "Make a preview — free.",
     "Neither of these is for sale yet.",
     "Check and ask about a domain",
@@ -295,9 +295,9 @@ export const heldTruthRequirements = Object.freeze({
     "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
-    "http-equiv=\"refresh\" content=\"0;url=/abracadabra/\"",
-    "This page folded into the lane.",
-    "Continue to Abracadabra · Alakazam.",
+    "Make your preview in six short steps.",
+    "Looking is free. The private Download and Alakazam payment paths remain held",
+    "Start building",
   ]),
   "abracadabra/app/index.html": Object.freeze([
     "Abracadabra Alakazam",
@@ -367,7 +367,7 @@ export const heldTruthForbiddenPhrases = Object.freeze({
 export const hostedTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
     "Your source for websites.",
-    "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400.",
+    "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350.",
     "Make a preview — free.",
     "Neither of these is for sale yet.",
     "Check and ask about a domain",
@@ -383,9 +383,9 @@ export const hostedTruthRequirements = Object.freeze({
     "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
-    "http-equiv=\"refresh\" content=\"0;url=/abracadabra/\"",
-    "This page folded into the lane.",
-    "Continue to Abracadabra · Alakazam.",
+    "Make your preview in six short steps.",
+    "Looking is free. The private Download and Alakazam payment paths remain held",
+    "Start building",
   ]),
   "abracadabra/app/index.html": Object.freeze([
     "Build, preview, and download with Abracadabra",
