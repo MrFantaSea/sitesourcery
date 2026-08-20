@@ -952,7 +952,7 @@ async function start() {
   const operatorProviderReconciliation =
     createPostgresProviderReconciliationOperator({
       authority,
-      clock: commerceV2.clock,
+      clock: () => commerceV2.clock.now(),
       randomUUID: () => commerceV2.ids.next("operator_reconciliation")
     });
   const operatorProviderReconciliationReadiness =
@@ -1460,10 +1460,20 @@ async function start() {
         public_successor: candidateRow("static"),
         hosted_browser: candidateRow("static"),
         accounts_recovery: heldRow(
-          readiness.registration?.ready === true &&
-          readiness.registration?.verified === true &&
-          readiness.recovery?.ready === true &&
-          readiness.recovery?.verified === true &&
+          (
+            readiness.registration?.mode !== "production" ||
+            (
+              readiness.registration?.ready === true &&
+              readiness.registration?.verified === true
+            )
+          ) &&
+          (
+            readiness.recovery?.mode !== "production" ||
+            (
+              readiness.recovery?.ready === true &&
+              readiness.recovery?.verified === true
+            )
+          ) &&
           mailLifecycleReadiness.ready === true
         ),
         organizations_tenancy: heldRow(readiness.ready === true),
