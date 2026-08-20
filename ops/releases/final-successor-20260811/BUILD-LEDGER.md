@@ -252,3 +252,36 @@ The live placeholder and protected HQ database remained unchanged. Every
 public, DNS, provider, deployment, and cutover effect remains held. FIN-009
 private immutable staging and owner acceptance are next and were not started by
 FIN-008.
+
+FIN-009 exact live staging exposed one release blocker before push: sealed
+Legal V5 authority was present, but the default Pages/hosted builders still
+made V2 current and omitted the immutable V5 URL. Candidate
+`26b07202d91000b9a7ae0de36471c7979f9482a1`, tree
+`00f648e39931a3e62445bc6c1d441087c69a8136`, fixes the default build,
+retains V2/V3/V4, emits exact current/versioned V5 artifacts, and passed its
+19/19 focused regressions. Control commit
+`804b9a57922f14eed673fe5a1b66a8f42afad4ce`, tree
+`7be00a5a9ab783a30d834470380dcd0ef84ac8ee`, binds the sole exact successor
+input.
+
+The complete exact held CI proof passed 885/885 product tests, 1,080 hosted
+tests with zero failures and 14 intentional skips, 210/210 operations tests,
+99 deterministic Pages files, 118 deterministic hosted files, 144 pinned-
+Chrome views, and all 95 migrations on fresh PostgreSQL 16 with cleanup. Its
+final digest is
+`367530bd60eb921f2ba9f69d8774437e707713c5b453b3d2064c83162db5c5b1`.
+
+The exact release is active only in the isolated Dell FIN-009 namespace. The
+installed artifact, epoch/seal/readback, immutable/current V5 bytes, seven-
+route journey, held boundaries, unchanged database fingerprint, 400/400 live
+load sample, standalone load contract, four real private monitor probes,
+current/stale dead-man behavior, controlled restart, encrypted Zen backup
+binding, immutable rollback artifact, unchanged public placeholder, and
+unchanged production PID all passed. Evidence is recorded in
+`FIN-009-PRIVATE-STAGING-PROVENANCE.md` and
+`fin009-private-staging-receipt.json`, SHA-256
+`6a06463eb8b29c57c26c5902044600ae2d705b20805213ba87b9827a2be90e07`.
+
+FIN-009 is `accepted_private_held`. No push, public deployment, DNS, Cloudflare,
+Pages, provider, customer, protected-HQ, production, or cutover effect is
+authorized or claimed. Owner acceptance is the next gate and remains false.
