@@ -14,13 +14,13 @@ variables and must not be placed in committed evidence.
 
 ## Frozen inputs
 
-- Candidate input commit: `e6865bfb072aae7882e16ee7fa859c411703c6cb`
-- Candidate input tree: `03c169e426b6b36a71a57fd8e248fcf222887513`
+- Candidate input commit: `b2aafdd9a873007069780e4a9d890217802fa4c0`
+- Candidate input tree: `4d182564c0158e19e8809bc38ccfb9ec17d65034`
 - Predecessor: `84aca6b757a806b428ae0cce8115c12dcc6486cd`
 - Predecessor migrations: exact unchanged 58-file prefix through
   `202608090105_hosted_joint_legal_v4_authority.sql`
-- Candidate migrations: 94 files through
-  `202608190141_commercial_catalog_convergence.sql`
+- Candidate migrations: 95 files through
+  `202608200142_hosted_joint_legal_v5_authority.sql`
 - PostgreSQL: major 16
 - Protected predecessor shape: 201 base tables (`auth=1`, `ss=200`)
 - Successor shape: 287 base tables (`auth=1`, `ss=286`)
@@ -35,7 +35,7 @@ encrypted attempt, restore, rollback, cleanup, and effect holds are recorded in
 node ops/fin008-data-convergence.mjs inventory
 ```
 
-The result must report the exact 58/36/94 partition and all three frozen
+The result must report the exact 58/37/95 partition and all three frozen
 manifest digests before any disposable database is created.
 
 ## Empty install
@@ -48,7 +48,7 @@ SITESOURCERY_PG_MIGRATION_TEST_URL=<secret-or-local-url> \
   node server/data-plane/tests/verify-empty-postgres-migrations.mjs
 ```
 
-The verifier applies all 94 migrations, exercises its composed PostgreSQL
+The verifier applies all 95 migrations, exercises its composed PostgreSQL
 journeys, and retains only the caller-owned disposable target for comparison.
 
 ## Predecessor copy and upgrade
@@ -65,7 +65,7 @@ SITESOURCERY_FIN008_DATABASE_URL=<disposable-url> \
   node ops/fin008-data-convergence.mjs snapshot
 ```
 
-Apply only the frozen 36-file delta, binding the exact observed predecessor
+Apply only the frozen 37-file delta, binding the exact observed predecessor
 fingerprint:
 
 ```text
