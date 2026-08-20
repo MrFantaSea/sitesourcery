@@ -9,11 +9,13 @@ release input, run PostgreSQL, push, deploy, or grant release authority.
    release epoch whose `source.commitSha` and `source.treeSha` identify that
    exact candidate and whose migration authority is derived from its final
    ordered migration bytes. Never copy a retained migration count forward.
-2. Build the candidate's Legal V4 Pages projection and collect the exact
-   `ci-legal-v4-pages` manifest. Supply its exact positive file count and
-   manifest digest to the successor input. The current reviewed projection is
-   94 files, but later successors must derive their own exact count rather than
-   copying that checkpoint.
+2. Build the candidate's current successor Pages projection and collect the
+   exact `ci-legal-v4-pages` manifest. That domain and the successor input's
+   `legalV4Pages` field are retained v1 schema names, not permission to rebuild
+   retired V4 bytes. Supply the exact positive file count and manifest digest
+   to the successor input. The current reviewed projection is 93 files, but
+   later successors must derive their own exact count rather than copying that
+   checkpoint.
 3. After building exact `_site` and `_hosted` artifacts, run the candidate's
    `node ops/ci-release-proof.mjs generate --root . --epoch-id <new-id> --rollback-commit <sha> --rollback-tree <sha> --rollback-artifact-root <path>`. The command requires a clean held
    candidate with zero prior CI successor inputs, derives current migration and

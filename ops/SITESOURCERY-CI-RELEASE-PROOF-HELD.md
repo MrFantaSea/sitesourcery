@@ -24,8 +24,9 @@ The successor input must bind all of the following to the same candidate:
   identities;
 - the final ordered migration names, byte counts, individual digests, derived
   count, latest filename, and manifest digest;
-- the exact positive Legal V4 Pages file count and manifest supplied by the
-  successor input;
+- the exact positive current successor Pages file count and manifest supplied
+  by the successor input (the retained v1 evidence field remains named
+  `legalV4Pages` for schema compatibility);
 - Node `24.18.0` and wholly held authority.
 
 Missing, stale, reordered, extra, or changed evidence fails closed. There is no
@@ -42,15 +43,15 @@ default migration count and no branch-tip fallback.
 4. It installs only lockfile dependencies and the repository's exact reviewed
    browser, then runs `npm test` and records the full-suite receipt.
 5. It independently runs `npm run check:ops` and records the ops receipt.
-6. It builds and checks the Legal V4 Pages projection, verifies the rebuilt
-   artifact against both the successor's exact positive file count and supplied
-   manifest, and records the legal receipt. The current reviewed projection is
-   94 files; that number belongs only in its explicit successor evidence and is
-   not a workflow or runtime constant.
+6. It builds and checks the candidate's current successor Pages projection,
+   verifies the rebuilt artifact against both the successor's exact positive
+   file count and supplied manifest, and records the retained v1 legal receipt.
+   The current reviewed projection is 93 files; that number belongs only in its
+   explicit successor evidence and is not a workflow or runtime constant.
 7. It audits the exact projection at 320, 360, 390, 720, 768, and 1440 CSS
    pixels with Google Chrome for Testing `149.0.7827.55`, then records route
-   and view counts. The current 15-route projection therefore produces exactly
-   90 route/view combinations; 720 CSS pixels is the reviewed 1440-pixel
+   and view counts. The current 24-route projection therefore produces exactly
+   144 route/view combinations; 720 CSS pixels is the reviewed 1440-pixel
    display at 200% reflow equivalent.
 8. It starts a runner-local PostgreSQL 16 cluster on loopback and creates only
    `ss_ci_release_<run-id>_<run-attempt>`, after exact regex validation. The
