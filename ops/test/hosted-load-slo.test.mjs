@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import {
   mkdtemp,
   readFile,
@@ -6,6 +7,8 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import {
@@ -31,6 +34,7 @@ const SOURCE = Object.freeze({
 });
 const OBSERVED_AT = "2026-08-11T18:00:00.000Z";
 const RUN_ID = "load-slo-local-20260811";
+const execFileAsync = promisify(execFile);
 
 let receiptPromise = null;
 
@@ -218,6 +222,50 @@ test("CLI retains one immutable receipt and refuses overwrite", async () => {
       /output already exists/u
     );
     assert.equal(calls, 1);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("documented relative CLI invocation stays alive through its deadline proof", async () => {
+  const fixture = await mkdtemp(
+    path.join(os.tmpdir(), "ss-hosted-load-slo-cli-")
+  );
+  const output = path.join(fixture, "receipt.json");
+  const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [
+        "ops/hosted-load-slo.mjs",
+        "run",
+        "--output",
+        output,
+        "--run-id",
+        RUN_ID,
+        "--observed-at",
+        OBSERVED_AT,
+        "--source-commit",
+        SOURCE.commitSha,
+        "--source-tree",
+        SOURCE.treeSha
+      ],
+      {
+        cwd: repositoryRoot,
+        timeout: 10_000
+      }
+    );
+    assert.equal(result.stderr, "");
+    const summary = JSON.parse(result.stdout.trim());
+    assert.equal(summary.ok, true);
+    assert.equal(summary.path, output);
+    assert.equal(summary.productionReady, false);
+    assert.equal(summary.externalEffects, "none");
+    const receipt = JSON.parse(await readFile(output, "utf8"));
+    assert.deepEqual(validateHostedLoadSloReceipt(receipt), receipt);
+    assert.equal(receipt.observations.ingress.deadlineStatus, 504);
+    assert.equal(receipt.observations.ingress.deadlineCode,
+      "REQUEST_DEADLINE_EXCEEDED");
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }
