@@ -8,7 +8,7 @@ import {
   validateEngagementInvitationIssue
 } from "../engagement-bootstrap.mjs";
 import {
-  createProjectLegalAuthorityV4Fixture
+  createProjectLegalAuthorityV5Fixture
 } from "../project-legal-authority.mjs";
 import { canonicalJson, digest } from "../security.mjs";
 
@@ -17,51 +17,51 @@ const ORGANIZATION_ID = "20000000-0000-4000-8000-000000000001";
 const NOW = "2026-08-10T12:00:00.000Z";
 
 function authority() {
-  const privacyV4 = {
-    version: "SS-HOSTED-PRIVACY-TEST-V4",
+  const privacyV5 = {
+    version: "SS-HOSTED-PRIVACY-TEST-V5",
     contentDigest: "a".repeat(64),
-    contentUri: "https://example.test/privacy/v4",
+    contentUri: "https://example.test/privacy/v5",
     effectiveAt: "2026-08-10T00:00:00.000Z",
     byteCount: 1234,
-    artifactUri: "https://example.test/privacy/v4.html"
+    artifactUri: "https://example.test/privacy/v5.html"
   };
-  const websiteTermsV4 = {
-    version: "SS-HOSTED-WEBSITE-TERMS-TEST-V4",
+  const websiteTermsV5 = {
+    version: "SS-HOSTED-WEBSITE-TERMS-TEST-V5",
     contentDigest: "b".repeat(64),
-    contentUri: "https://example.test/terms/v4",
-    effectiveAt: privacyV4.effectiveAt,
+    contentUri: "https://example.test/terms/v5",
+    effectiveAt: privacyV5.effectiveAt,
     byteCount: 4321,
-    artifactUri: "https://example.test/terms/v4.html"
+    artifactUri: "https://example.test/terms/v5.html"
   };
   const documents = [
     {
       kind: "privacy",
-      version: privacyV4.version,
-      contentDigest: privacyV4.contentDigest,
-      contentUri: privacyV4.contentUri,
-      effectiveAt: privacyV4.effectiveAt
+      version: privacyV5.version,
+      contentDigest: privacyV5.contentDigest,
+      contentUri: privacyV5.contentUri,
+      effectiveAt: privacyV5.effectiveAt
     },
     {
       kind: "product",
-      version: websiteTermsV4.version,
-      contentDigest: websiteTermsV4.contentDigest,
+      version: websiteTermsV5.version,
+      contentDigest: websiteTermsV5.contentDigest,
       contentUri: "https://sitesourcery.com/legal/website-terms/#self-service",
-      effectiveAt: websiteTermsV4.effectiveAt
+      effectiveAt: websiteTermsV5.effectiveAt
     },
     {
       kind: "website",
-      version: websiteTermsV4.version,
-      contentDigest: websiteTermsV4.contentDigest,
+      version: websiteTermsV5.version,
+      contentDigest: websiteTermsV5.contentDigest,
       contentUri: "https://sitesourcery.com/legal/website-terms/",
-      effectiveAt: websiteTermsV4.effectiveAt
+      effectiveAt: websiteTermsV5.effectiveAt
     }
   ];
-  return createProjectLegalAuthorityV4Fixture({
-    privacyV4,
-    websiteTermsV4,
+  return createProjectLegalAuthorityV5Fixture({
+    privacyV5,
+    websiteTermsV5,
     authorityDigest: digest(canonicalJson({
       documents,
-      schema: "sitesourcery.project-legal-authority/v4"
+      schema: "sitesourcery.project-legal-authority/v5"
     }))
   });
 }

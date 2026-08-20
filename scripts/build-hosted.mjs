@@ -108,6 +108,10 @@ const FIN007_HOSTED_TRUTH_REQUIREMENTS = Object.freeze({
 });
 const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   ...hostedStagingAssetSha256,
+  "abracadabra/app/abracadabra-api.js":
+    "fa70dea571e5ef436cafe7902fa1d77b332bdefde679ce6296579bc56bc2eedc",
+  "abracadabra/app/abracadabra-hosted-control.js":
+    "f20d12a7de39e3232be3b2a2a42d1ba0c3bebcb7e0a18cdf88ff5e2054b1582b",
   "abracadabra/app/abracadabra-customer-control-dom.js":
     "cc607525255d4e5167bfc913c42bc6080faeb4be28da530e329dbbd42a1777a6",
 });

@@ -139,12 +139,12 @@ export function createPostgresEngagementBootstrapRepository({
   );
   invariant(
     legalAuthority?.acceptanceSchema ===
-      "sitesourcery.project-legal-acceptance/v4" &&
+      "sitesourcery.project-legal-acceptance/v5" &&
       Array.isArray(legalAuthority.documents) &&
       Array.isArray(legalAuthority.documentBindings) &&
       Array.isArray(legalAuthority.artifactBindings),
     "ENGAGEMENT_CONFIGURATION_ERROR",
-    "Released joint legal V4 bindings are required for engagement bootstrap.",
+    "Released joint legal V5 bindings are required for engagement bootstrap.",
     { status: 500 }
   );
   invariant(

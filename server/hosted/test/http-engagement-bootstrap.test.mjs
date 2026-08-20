@@ -60,7 +60,7 @@ function issueBody() {
 function claimBody() {
   return {
     legalAcceptance: {
-      schema: "sitesourcery.project-legal-acceptance/v4",
+      schema: "sitesourcery.project-legal-acceptance/v5",
       acceptanceStatement:
         "accepted_exact_project_terms_and_acknowledged_privacy",
       authorityDigest: "a".repeat(64),

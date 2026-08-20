@@ -50,7 +50,7 @@ export const CI_RELEASE_GENERATION_LAYOUT = Object.freeze({
   artifactRoot: "_hosted",
   migrationRoot: "server/data-plane/supabase/migrations",
   legalConstantsPath:
-    "ops/releases/joint-legal-v4-2026-08-09T214211Z/joint-legal-v4-release-constants.json"
+    "ops/releases/final-successor-20260811/joint-legal-v5-finalization/joint-legal-v5-release-constants.json"
 });
 
 function fail(message) {

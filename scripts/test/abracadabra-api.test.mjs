@@ -287,6 +287,36 @@ test("paired V4 authority produces only the V4 acceptance schema and rejects mix
   );
 });
 
+test("paired V5 authority produces V5 acceptance at the approved next-day instant", () => {
+  const authority = projectLegalAuthorityFixture();
+  const v5 = {
+    ...authority,
+    schema: "sitesourcery.project-legal-authority/v5",
+    authorityDigest: "f".repeat(64),
+    documents: authority.documents.map((document) => ({
+      ...document,
+      version: document.version.replace(/-V3$/u, "-V5"),
+      contentUri: document.kind === "privacy"
+        ? document.contentUri.replace(/-V3\/$/u, "-V5/")
+        : document.contentUri,
+      effectiveAt: "2099-01-02T00:00:00.000Z",
+    })),
+  };
+  const acceptance = projectLegalAcceptanceFromAuthority(v5);
+  assert.equal(acceptance.schema, "sitesourcery.project-legal-acceptance/v5");
+  assert.deepEqual(acceptance.documents, v5.documents);
+  assert.throws(
+    () => validateProjectLegalAuthority({
+      ...v5,
+      documents: v5.documents.map((document, index) => index === 2
+        ? { ...document, version: document.version.replace(/-V5$/u, "-V4") }
+        : document),
+    }),
+    (error) => error instanceof APIError
+      && error.code === "LEGAL_AUTHORITY_INVALID",
+  );
+});
+
 test("project creation sends the exact captured authority and never the retired boolean", async () => {
   const authority = projectLegalAuthorityFixture();
   const legalAcceptance =

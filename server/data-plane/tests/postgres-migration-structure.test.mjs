@@ -4208,3 +4208,48 @@ test("FIN-007 migration 141 converges held commercial identities without rewriti
     /publication_state\s*,?\s*'live'|availability_state\s*,?\s*'available'|customer_effects_authorized\s*=\s*true|payment_effects_authorized\s*=\s*true|provider_effects_authorized\s*=\s*true/iu
   );
 });
+
+test("FIN-008 migration 142 installs exact Legal V5 while retaining V3/V4 evidence", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608200142_hosted_joint_legal_v5_authority.sql"
+  );
+  assert.ok(migration, "missing FIN-008 Legal V5 migration 142");
+  assert.match(migration.sql, /^-- FIN-008 correction:[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const identity of [
+    "SS-HOSTED-PRIVACY-2026-08-20-V5",
+    "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+    "2026-08-21T04:00:00.000Z",
+    "6bcd6a4bad033cfb6bdfa131afa02ec950b9ddd22d2bc2a5fed0834605bc0934",
+    "00000000-0000-4000-8000-000000000149",
+    "00000000-0000-4000-8000-000000000150",
+    "00000000-0000-4000-8000-000000000151"
+  ]) {
+    assert.match(migration.sql, new RegExp(identity.replaceAll(".", "\\."), "u"));
+  }
+  assert.match(
+    migration.sql,
+    /project_legal_acceptance_receipts_schema_version_v5_check[\s\S]*project-legal-acceptance\/v3[\s\S]*project-legal-acceptance\/v4[\s\S]*project-legal-acceptance\/v5/iu
+  );
+  assert.match(
+    migration.sql,
+    /customer_engagement_invitations_legal_schema_v5_check[\s\S]*project-legal-acceptance\/v4[\s\S]*project-legal-acceptance\/v5/iu
+  );
+  assert.match(
+    migration.sql,
+    /create or replace function ss\.validate_project_legal_acceptance_receipt\(\)[\s\S]*project-legal-acceptance\/v3[\s\S]*project-legal-acceptance\/v4[\s\S]*project-legal-acceptance\/v5/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_joint_legal_v5_history_fingerprint[\s\S]*Legal V5 integration rewrote retained evidence/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_joint_legal_v5_contract\(\)[\s\S]*canonical-hosted-joint-legal-v5-authority[\s\S]*grant execute on function ss\.hosted_joint_legal_v5_contract\(\)\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /deploymentAuthorized\s*=\s*true|provider_effects_authorized\s*=\s*true|publication_state\s*=\s*'live'/iu
+  );
+});

@@ -29,7 +29,7 @@ test("FIN-008 freezes the exact predecessor, delta, and candidate migration byte
     inventory.predecessor.latest,
     FIN008_PREDECESSOR_LATEST_MIGRATION
   );
-  assert.equal(inventory.delta.count, 36);
+  assert.equal(inventory.delta.count, 37);
   assert.equal(
     inventory.predecessor.count + inventory.delta.count,
     inventory.count
