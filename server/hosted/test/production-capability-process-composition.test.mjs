@@ -164,6 +164,14 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
   assert.match(source, /capabilityProcessMatrix,/u);
   assert.match(
     source,
+    /readiness[.]registration\?\.mode !== "production"[\s\S]{0,240}readiness[.]registration\?\.ready === true[\s\S]{0,160}readiness[.]registration\?\.verified === true/u
+  );
+  assert.match(
+    source,
+    /readiness[.]recovery\?\.mode !== "production"[\s\S]{0,240}readiness[.]recovery\?\.ready === true[\s\S]{0,160}readiness[.]recovery\?\.verified === true/u
+  );
+  assert.match(
+    source,
     /await capabilityProcessMatrix\.assertStartup\(\s*await capabilityProcessMatrix\.snapshot\(\)\s*\);/u
   );
   assert.ok(

@@ -29,6 +29,10 @@ test("production root composes canonical queue, reconciliation, and support life
   assert.match(source, /createPostgresProviderReconciliationOperator/u);
   assert.match(
     source,
+    /createPostgresProviderReconciliationOperator\(\{\s*authority,\s*clock: \(\) => commerceV2[.]clock[.]now\(\),/u
+  );
+  assert.match(
+    source,
     /operatorProviderReconciliationReadiness[.]providerEffects !== false/u
   );
   assert.doesNotMatch(
