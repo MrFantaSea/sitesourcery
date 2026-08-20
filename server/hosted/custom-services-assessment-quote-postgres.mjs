@@ -11,7 +11,7 @@ export const CUSTOM_SERVICES_QUOTE_ACCEPTANCE_RECEIPT_SCHEMA =
   "sitesourcery.custom-services-quote-acceptance-receipt/v1";
 
 const ASSESSMENT_POLICY_ID =
-  "00000000-0000-4000-8000-000000000341";
+  "00000000-0000-4000-8000-000000001411";
 const ACCEPTANCE_STATEMENT =
   "accepted_exact_quote_and_delivery_date";
 const ACCEPT_ROUTE = "custom_services.assessment_quote.accept";
@@ -677,15 +677,15 @@ const QUOTE_SELECT = `select
   (
     (select count(*) = 1 from ss.service_quote_lines line
       where line.quote_revision_id = revision.id
-        and line.customer_amount_minor = 20000)
-    and (select count(*) = 4 from ss.service_quote_line_coverages coverage
+        and line.customer_amount_minor = 35000)
+    and (select count(*) = 3 from ss.service_quote_line_coverages coverage
       where coverage.quote_revision_id = revision.id)
     and (select count(*) = cardinality(revision.review_targets)
       from ss.service_quote_review_targets target
       where target.quote_revision_id = revision.id)
     and (select count(*) = 1 from ss.service_quote_installments installment
       where installment.quote_revision_id = revision.id
-        and installment.amount_minor = 20000
+        and installment.amount_minor = 35000
         and installment.currency = 'USD'
         and installment.due_trigger = 'before_work')
   ) as materialization_valid,

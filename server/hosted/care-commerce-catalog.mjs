@@ -5,18 +5,23 @@ import { digest } from "./security.mjs";
 export const CARE_COMMERCE_CATALOG_SCHEMA =
   "sitesourcery.care-commerce-catalog/v1";
 export const CARE_COMMERCE_CATALOG_VERSION =
-  "SS-CARE-COMMERCE-2026.1";
+  "SS-CARE-COMMERCE-2026.2";
 export const CARE_COMMERCE_PRICE_VERSION =
-  "SS-CUSTOM-SERVICES-2026-08-05.1";
-export const CARE_CORE_CATALOG_VERSION = "SS-CARE-CORE-2026.1";
+  "SS-COMMERCIAL-2026.6";
+export const CARE_CORE_CATALOG_VERSION = "SS-CARE-CORE-2026.2";
 export const CARE_COMMERCIAL_CONTRACT_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
 
 const CATALOG_IDENTITIES = Object.freeze({
   website_rescue: "00000000-0000-4000-8000-000000001211",
   outside_management: "00000000-0000-4000-8000-000000001212",
   custom_care: "00000000-0000-4000-8000-000000001213",
-  alakazam_care: "00000000-0000-4000-8000-000000001214"
+  alakazam_care: "00000000-0000-4000-8000-000000001214",
+  plan_host: "00000000-0000-4000-8000-000000001421",
+  plan_care_lite: "00000000-0000-4000-8000-000000001422",
+  plan_care: "00000000-0000-4000-8000-000000001423",
+  plan_care_plus: "00000000-0000-4000-8000-000000001424",
+  plan_partner: "00000000-0000-4000-8000-000000001425"
 });
 
 const HELD = deepFreeze({
@@ -123,7 +128,41 @@ const CATALOG = deepFreeze({
       price: null,
       disclosure: null,
       effects: HELD
-    }
+    },
+    ...[
+      ["plan_host", "Host", 2_500, 0, 0],
+      ["plan_care_lite", "Care Lite", 6_900, 30, 3],
+      ["plan_care", "Care", 11_900, 60, 6],
+      ["plan_care_plus", "Care Plus", 19_900, 120, 10],
+      ["plan_partner", "Partner", 34_900, 240, 16]
+    ].map(([serviceKey, label, monthlyAmountMinor, includedMinutes, editCap]) => ({
+      serviceKey,
+      catalogIdentityId: CATALOG_IDENTITIES[serviceKey],
+      contractKind: "catalog_care",
+      commercialAuthorityState: "exact_held",
+      billingCadence: "month",
+      quotePreparationAllowed: true,
+      price: {
+        mode: "fixed",
+        currency: "USD",
+        monthlyAmountMinor,
+        includedMinutes,
+        editCap,
+        overflow: serviceKey === "plan_partner"
+          ? {
+              billingMode: "metered_started_minute",
+              rateMinorPerStartedMinute: 250,
+              maximumMinor: 15_000,
+              maximumMinutes: 60
+            }
+          : null
+      },
+      disclosure: {
+        plan: `${label} is a held monthly Care plan. Inquiry and quote preparation do not activate service or authorize billing.`,
+        tax: "Displayed price excludes tax; tax calculation and collection are disabled by the owner."
+      },
+      effects: HELD
+    }))
   ]
 });
 
@@ -194,6 +233,22 @@ export function priceHeldCareSelection(serviceKey, input) {
     "This Care offer has no owner-approved price and cannot be quoted.",
     { status: 409 }
   );
+  if (offer.contractKind === "catalog_care") {
+    exactObject(input, ["kind"], "Care price selection");
+    invariant(
+      input.kind === "monthly_plan",
+      "CARE_COMMERCE_PRICE_SELECTION_INVALID",
+      "Catalog Care selection must identify the monthly plan.",
+      { status: 400 }
+    );
+    return selectionLine(
+      input,
+      serviceKey,
+      `${offer.serviceKey.replace(/^plan_/u, "").replaceAll("_", " ")} monthly Care plan`,
+      offer.price.monthlyAmountMinor,
+      "month"
+    );
+  }
   if (serviceKey === "website_rescue") {
     exactObject(input, ["kind", "repairUnits"], "Care price selection");
     invariant(

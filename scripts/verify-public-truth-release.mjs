@@ -45,46 +45,51 @@ export const REVIEWED_DOMAIN_PREFLIGHT_SHA256 = "50c2b271a8a879f27b9b10f4580196c
  */
 export const PRODUCTION_CANONICAL_ROUTE_FILES = Object.freeze({
   "/": "index.html",
-  "/about/": "about/index.html",
-  "/abracadabra/": "abracadabra/index.html",
-  "/abracadabra/app/": "abracadabra/app/index.html",
-  "/contact/": "contact/index.html",
+  "/websites/": "websites/index.html",
+  "/websites/made-for-you/": "websites/made-for-you/index.html",
   "/custom/": "custom/index.html",
-  "/custom/process/": "custom/process/index.html",
   "/custom/scope/": "custom/scope/index.html",
+  "/custom/process/": "custom/process/index.html",
+  "/abracadabra/": "abracadabra/index.html",
+  "/abracadabra/how/": "abracadabra/how/index.html",
+  "/abracadabra/app/": "abracadabra/app/index.html",
+  "/hive/": "hive/index.html",
+  "/solutions/": "solutions/index.html",
   "/domains/": "domains/index.html",
+  "/work/": "work/index.html",
+  "/about/": "about/index.html",
   "/faq/": "faq/index.html",
+  "/contact/": "contact/index.html",
+  "/start/": "start/index.html",
   "/legal/": "legal/index.html",
   "/legal/privacy/": "legal/privacy/index.html",
   "/legal/website-terms/": "legal/website-terms/index.html",
+  "/alakazam/": "alakazam/index.html",
+  "/care/": "care/index.html",
   "/responder/": "responder/index.html",
-  "/work/": "work/index.html",
+  "/services/": "services/index.html",
 });
 
 export const PRODUCTION_LEGACY_REDIRECTS = Object.freeze({
   "about.html": "/about/",
-  "abracadabra/how/index.html": "/abracadabra/",
-  "alacazam/index.html": "/abracadabra/#plans",
-  "alakazam/index.html": "/abracadabra/#plans",
-  "automation.html": "/responder/",
+  "alacazam/index.html": "/alakazam/",
+  "automation.html": "/hive/",
   "contact.html": "/contact/",
   "faq.html": "/faq/",
-  "hive/index.html": "/responder/",
   "how-it-works.html": "/custom/process/",
   "pricing.html": "/custom/scope/",
   "privacy.html": "/legal/privacy/",
-  "services/index.html": "/custom/",
-  "start/index.html": "/contact/",
   "terms.html": "/legal/website-terms/",
   "thanks.html": "/contact/",
-  "the-difference.html": "/about/",
-  "the-meter.html": "/custom/process/",
-  "the-moat.html": "/about/",
+  "the-difference.html": "/about/#the-difference",
+  "the-meter.html": "/custom/process/#scope",
+  "the-moat.html": "/about/#the-difference",
   "the-responder.html": "/responder/",
-  "websites/index.html": "/custom/",
 });
 
-export const SOURCE_ONLY_LEGACY_REDIRECT = "thanks.html";
+// Retained for report-schema compatibility. FIN-007's reviewed artifact carries
+// every legacy redirect above, so there is no source-only redirect exception.
+export const SOURCE_ONLY_LEGACY_REDIRECT = null;
 
 /*
  * This is the complete candidate delta relative to CANDIDATE_BASE_SHA. It is
@@ -268,6 +273,7 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "assets/work-scone-current-720.webp",
   "assets/work-scone-current.png",
   "automation.html",
+  "care/index.html",
   "contact.html",
   "contact/index.html",
   "custom/index.html",
@@ -277,7 +283,6 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "domains/index.html",
   "faq.html",
   "faq/index.html",
-  "flyer.html",
   "hive/index.html",
   "how-it-works.html",
   "index.html",
@@ -294,8 +299,10 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "robots.txt",
   "services/index.html",
   "sitemap.xml",
+  "solutions/index.html",
   "start/index.html",
   "terms.html",
+  "thanks.html",
   "the-difference.html",
   "the-meter.html",
   "the-moat.html",
@@ -303,6 +310,7 @@ export const REVIEWED_PUBLIC_ARTIFACT_PATHS = Object.freeze([
   "vnext.css",
   "vnext.js",
   "websites/index.html",
+  "websites/made-for-you/index.html",
   "work/index.html",
   "work/work.css",
 ]);
@@ -1041,7 +1049,7 @@ export function validateProductionRouteManifest(manifest) {
   }
   if (!paths.has("404.html")) fail("production artifact is missing the custom 404 document");
   for (const file of Object.keys(PRODUCTION_LEGACY_REDIRECTS)) {
-    if (file === SOURCE_ONLY_LEGACY_REDIRECT) {
+    if (SOURCE_ONLY_LEGACY_REDIRECT && file === SOURCE_ONLY_LEGACY_REDIRECT) {
       if (paths.has(file)) fail(`${SOURCE_ONLY_LEGACY_REDIRECT} must remain absent from the production artifact`);
     } else if (!paths.has(file)) {
       fail(`production artifact is missing legacy redirect ${file}`);
@@ -1075,10 +1083,11 @@ function productionResourcePlan(manifest, origin) {
       url: new URL(pathname, `${normalizedOrigin}/`).href,
     });
   });
-  for (const [key, pathname] of [
-    ["custom-404", custom404ProbePath(manifest)],
-    ["source-only-redirect", `/${SOURCE_ONLY_LEGACY_REDIRECT}`],
-  ]) {
+  const absenceProbes = [["custom-404", custom404ProbePath(manifest)]];
+  if (SOURCE_ONLY_LEGACY_REDIRECT) {
+    absenceProbes.push(["source-only-redirect", `/${SOURCE_ONLY_LEGACY_REDIRECT}`]);
+  }
+  for (const [key, pathname] of absenceProbes) {
     resources.push(Object.freeze({
       expectedSha256: missing.sha256,
       expectedSize: missing.size,
@@ -1559,9 +1568,7 @@ function assertLegacyProductionRedirect(file, target, source) {
   const canonical = htmlTags(source, "link").filter((attributes) => (
     (htmlAttributeValue(attributes, "rel") ?? "").toLowerCase().split(/\s+/u).includes("canonical")
   ));
-  const canonicalTarget = new URL(target, `${PRODUCTION_ORIGIN}/`);
-  canonicalTarget.hash = "";
-  const expectedCanonical = canonicalTarget.href;
+  const expectedCanonical = new URL(target, `${PRODUCTION_ORIGIN}/`).href;
   if (canonical.length !== 1 || htmlAttributeValue(canonical[0], "href") !== expectedCanonical) {
     fail(`live legacy redirect ${file} canonical must be ${expectedCanonical}`);
   }
@@ -1595,7 +1602,10 @@ export async function verifyProductionRouteContract({
   if (byKey.get("absence:custom-404")?.exact !== true) {
     fail("production custom 404 route did not return the exact 404 document and status");
   }
-  if (byKey.get("absence:source-only-redirect")?.exact !== true) {
+  if (
+    SOURCE_ONLY_LEGACY_REDIRECT
+    && byKey.get("absence:source-only-redirect")?.exact !== true
+  ) {
     fail(`${SOURCE_ONLY_LEGACY_REDIRECT} did not resolve through the exact custom 404 contract`);
   }
   for (const [route, file] of Object.entries(PRODUCTION_CANONICAL_ROUTE_FILES)) {
@@ -1614,7 +1624,7 @@ export async function verifyProductionRouteContract({
     fail("production custom 404 document must carry noindex and exactly one h1");
   }
   for (const [file, target] of Object.entries(PRODUCTION_LEGACY_REDIRECTS)) {
-    if (file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
+    if (SOURCE_ONLY_LEGACY_REDIRECT && file === SOURCE_ONLY_LEGACY_REDIRECT) continue;
     assertLegacyProductionRedirect(
       file,
       target,

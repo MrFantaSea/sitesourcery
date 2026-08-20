@@ -2469,13 +2469,13 @@ function validateServiceAssessmentPurpose(
         "currency",
         "taxBehavior"
       ]) &&
-      purpose.price.amountMinor === 20000 &&
+      purpose.price.amountMinor === 35000 &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
       purpose.price.taxBehavior === "exclusive" &&
       STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode),
     "stripe_service_assessment_checkout_invalid",
-    "Assessment Checkout permits only the reviewed one-time $200 invoice",
+    "Assessment Checkout permits only the reviewed one-time $350 invoice",
     { status: 500 }
   );
   const acceptedDisclosureDigest = safeMetadataValue(
@@ -2562,7 +2562,7 @@ function serviceAssessmentCheckoutResponse(
       validated.identity.invoiceId &&
       value?.mode === "payment" &&
       value?.currency === "usd" &&
-      value?.amount_subtotal === 20000 &&
+      value?.amount_subtotal === 35000 &&
       value?.automatic_tax?.enabled === automaticTax &&
       value?.status === "open" &&
       value?.payment_status === "unpaid" &&
@@ -2676,7 +2676,7 @@ function serviceAssessmentPaymentFacts(
     "Stripe assessment tax amount",
     code
   );
-  const subtotalMinor = 20000;
+  const subtotalMinor = 35000;
   const totalMinor = subtotalMinor + taxMinor;
   const customerId = providerReferenceId(
     value?.customer,
@@ -2818,7 +2818,7 @@ function serviceAssessmentCheckoutLifecycle(
       value.livemode === config.livemode &&
       value.mode === "payment" &&
       value.currency === "usd" &&
-      value.amount_subtotal === 20000 &&
+      value.amount_subtotal === 35000 &&
       value.automatic_tax?.enabled === automaticTax,
     code,
     "Stripe did not return the exact assessment Checkout lifecycle",
@@ -8811,7 +8811,7 @@ export function createStripeProviderAdapter(options = {}) {
             {
               price_data: {
                 currency: "usd",
-                unit_amount: 20000,
+                unit_amount: 35000,
                 tax_behavior: "exclusive",
                 product_data: {
                   name: "Site Sourcery website assessment",

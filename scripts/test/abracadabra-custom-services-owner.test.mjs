@@ -195,7 +195,7 @@ test("owner quote desk stays private and exposes only the bounded quote controls
   for (const copy of [
     "Private Site Sourcery tools",
     "Owner assessment quote desk",
-    "Issue $200 quote",
+    "Issue $350 quote",
     "Promised delivery date",
     "Pages or page types (one per line)"
   ]) {
@@ -233,18 +233,18 @@ function assessmentInvoiceProjection(checkoutAvailable = false) {
         quantity: 1,
         unit: "assessment",
         unitAmount: {
-          amountMinor: 20000,
+          amountMinor: 35000,
           currency: "USD",
-          formatted: "$200.00"
+          formatted: "$350.00"
         }
       },
       subtotal: {
-        amountMinor: 20000,
+        amountMinor: 35000,
         currency: "USD",
-        formatted: "$200.00"
+        formatted: "$350.00"
       },
       tax: {
-        state: "calculation_required",
+        state: "disabled_by_owner",
         amountMinor: null,
         message: "Tax is still being calculated, if applicable."
       },
@@ -293,14 +293,14 @@ function paidAssessmentInvoiceProjection() {
       ...pending.invoice,
       tax: {
         state: "calculated",
-        amountMinor: 1450,
-        message: "Tax confirmed at $14.50."
+        amountMinor: 0,
+        message: "Tax confirmed at $0.00."
       },
       total: {
         state: "final",
-        amountMinor: 21450,
+        amountMinor: 35000,
         currency: "USD",
-        formatted: "$214.50"
+        formatted: "$350.00"
       },
       payment: {
         state: "paid",
@@ -339,9 +339,9 @@ function assessmentCheckoutResponse(invoice) {
       url: "https://checkout.stripe.com/c/pay/assessment_test",
       expiresAt: "2026-08-05T18:00:00.000Z",
       subtotal: {
-        amountMinor: 20000,
+        amountMinor: 35000,
         currency: "USD",
-        formatted: "$200.00"
+        formatted: "$350.00"
       },
       tax: {
         state: "calculated_at_checkout",
@@ -369,7 +369,7 @@ test("customer assessment invoice accepts held and checkout-available no-charge 
       ...paid,
       invoice: {
         ...paid.invoice,
-        total: { ...paid.invoice.total, amountMinor: 21449 }
+        total: { ...paid.invoice.total, amountMinor: 34999 }
       }
     }),
     null
@@ -568,7 +568,7 @@ function ownerAssessmentJobs(overrides = {}) {
 function assessmentCredit() {
   return {
     creditId: CREDIT_ID,
-    amountMinor: 20000,
+    amountMinor: 35000,
     currency: "USD",
     applicationScope: "custom_base_build",
     eligibleTierIds: CREDIT_TIERS,
@@ -745,7 +745,7 @@ function customerAssessmentReport() {
         }
       ],
       buildCredit: {
-        amountMinor: 20000,
+        amountMinor: 35000,
         currency: "USD",
         applicationScope: "custom_base_build",
         eligibleTierIds: CREDIT_TIERS,
@@ -1082,18 +1082,18 @@ test("browser evidence preparation decodes, strips metadata, and bounds every sc
 function customBuildCredit(state = "available") {
   return {
     creditId: CREDIT_ID,
-    amountMinor: 20000,
+    amountMinor: 35000,
     currency: "USD",
     state,
     acceptanceCutoff: ACCEPTANCE_CUTOFF
   };
 }
 
-const CUSTOM_BUILD_CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-05.1";
+const CUSTOM_BUILD_CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-19.2";
 const CUSTOM_BUILD_CONTRACT_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
 const CUSTOM_BUILD_LEGAL_DOCUMENT_ID =
-  "00000000-0000-4000-8000-000000000342";
+  "00000000-0000-4000-8000-000000001410";
 
 function customBuildTerms(creditSelection = "apply_assessment_credit") {
   return {
@@ -1107,7 +1107,7 @@ function customBuildTerms(creditSelection = "apply_assessment_credit") {
         ? "No assessment credit is applied to this quote."
         : "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
       "The remaining first installment is due before build work begins; the final installment is due before final launch or handoff.",
-      "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
+      "Prices exclude tax. Tax calculation and collection remain disabled by the owner. Separately stated third-party provider charges are not included in the base price.",
       "Build work does not begin until the required first payment is verified.",
       "The 30-day workmanship correction covers reproducible defects in the accepted deliverables, not new content, features, changed decisions, third-party changes, or ongoing management."
     ]
@@ -1152,31 +1152,31 @@ function customBuildQuote(overrides = {}) {
       "Build four crafted pages with the listed sections, supplied content, responsive review, and exact handoff boundary.",
     terms: customBuildTerms(),
     pricing: {
-      serviceAmountMinor: 120000,
-      creditAmountMinor: 20000,
-      customerAmountMinor: 100000,
+      serviceAmountMinor: 100000,
+      creditAmountMinor: 35000,
+      customerAmountMinor: 65000,
       currency: "USD",
-      taxState: "calculation_required",
+      taxState: "disabled_by_owner",
       paymentSchedule: "half_before_work_half_before_handoff",
-      startValueMinor: 60000,
-      startCreditMinor: 20000,
-      startDueMinor: 40000,
-      finalDueMinor: 60000,
+      startValueMinor: 50000,
+      startCreditMinor: 35000,
+      startDueMinor: 15000,
+      finalDueMinor: 50000,
       installments: [
         {
           number: 1,
           kind: "start",
-          grossValueMinor: 60000,
-          creditAmountMinor: 20000,
-          amountDueMinor: 40000,
+          grossValueMinor: 50000,
+          creditAmountMinor: 35000,
+          amountDueMinor: 15000,
           dueTrigger: "before_work"
         },
         {
           number: 2,
           kind: "final",
-          grossValueMinor: 60000,
+          grossValueMinor: 50000,
           creditAmountMinor: 0,
-          amountDueMinor: 60000,
+          amountDueMinor: 50000,
           dueTrigger: "before_handoff"
         }
       ]
@@ -1200,15 +1200,15 @@ function directCustomBuildQuote(overrides = {}) {
     pricing: {
       ...assessed.pricing,
       creditAmountMinor: 0,
-      customerAmountMinor: 120000,
+      customerAmountMinor: 100000,
       startCreditMinor: 0,
-      startDueMinor: 60000,
+      startDueMinor: 50000,
       installments: assessed.pricing.installments.map((entry) =>
         entry.number === 1
           ? {
               ...entry,
               creditAmountMinor: 0,
-              amountDueMinor: 60000
+              amountDueMinor: 50000
             }
           : entry
       )
@@ -1290,13 +1290,13 @@ function paidCustomBuildJob(overrides = {}) {
     },
     targetCompletionDate: "2026-09-15",
     firstPayment: {
-      grossMinor: 60000,
-      creditMinor: 20000,
-      paidSubtotalMinor: 40000,
+      grossMinor: 50000,
+      creditMinor: 35000,
+      paidSubtotalMinor: 15000,
       currency: "USD"
     },
     finalHandoff: {
-      amountMinor: 60000,
+      amountMinor: 50000,
       currency: "USD",
       state: "unpaid"
     },
@@ -1392,12 +1392,12 @@ function directCustomBuildReceipt() {
 
 test("Custom build public estimates match every server-authority pricing rule without becoming request authority", () => {
   for (const [tierId, footprint, amountMinor] of [
-    ["card", [1, 5, 1, 500, 2], 40000],
-    ["card-plus", [1, 8, 1, 900, 8], 65000],
-    ["site", [4, 16, 4, 1800, 12], 120000],
-    ["site-plus", [7, 28, 7, 3000, 24], 180000],
-    ["signature", [10, 40, 10, 4500, 36], 280000],
-    ["flagship", [15, 60, 15, 7000, 60], 400000]
+    ["card", [1, 5, 1, 500, 2], 35000],
+    ["card-plus", [1, 8, 1, 900, 8], 60000],
+    ["site", [4, 16, 4, 1800, 12], 100000],
+    ["site-plus", [7, 28, 7, 3000, 24], 160000],
+    ["signature", [10, 40, 10, 4500, 36], 240000],
+    ["flagship", [15, 60, 15, 7000, 60], 360000]
   ]) {
     const estimate = customBuildPublicEstimate(tierId, {
       craftedPages: footprint[0],
@@ -1407,10 +1407,10 @@ test("Custom build public estimates match every server-authority pricing rule wi
       suppliedMedia: footprint[4]
     }, "apply_assessment_credit");
     assert.equal(estimate.serviceAmountMinor, amountMinor, tierId);
-    assert.equal(estimate.creditAmountMinor, 20000, tierId);
+    assert.equal(estimate.creditAmountMinor, 35000, tierId);
     assert.equal(
       estimate.customerAmountMinor,
-      amountMinor - 20000,
+      amountMinor - 35000,
       tierId
     );
   }
@@ -1423,14 +1423,14 @@ test("Custom build public estimates match every server-authority pricing rule wi
       suppliedMedia: 2
     }, "apply_assessment_credit") },
     {
-      serviceAmountMinor: 40000,
-      creditAmountMinor: 20000,
-      customerAmountMinor: 20000,
+      serviceAmountMinor: 35000,
+      creditAmountMinor: 35000,
+      customerAmountMinor: 0,
       paymentSchedule: "full_before_work",
       scaleUnits: null,
-      startValueMinor: 40000,
-      startCreditMinor: 20000,
-      startDueMinor: 20000,
+      startValueMinor: 35000,
+      startCreditMinor: 35000,
+      startDueMinor: 0,
       finalDueMinor: 0
     }
   );
@@ -1442,10 +1442,10 @@ test("Custom build public estimates match every server-authority pricing rule wi
     suppliedMedia: 64
   }, "apply_assessment_credit");
   assert.equal(scale.scaleUnits, 1);
-  assert.equal(scale.serviceAmountMinor, 427000);
-  assert.equal(scale.customerAmountMinor, 407000);
-  assert.equal(scale.startDueMinor, 193500);
-  assert.equal(scale.finalDueMinor, 213500);
+  assert.equal(scale.serviceAmountMinor, 384000);
+  assert.equal(scale.customerAmountMinor, 349000);
+  assert.equal(scale.startDueMinor, 157000);
+  assert.equal(scale.finalDueMinor, 192000);
   assert.equal(customBuildPublicEstimate("scale", {
     craftedPages: 15,
     sections: 60,
@@ -1461,7 +1461,7 @@ test("Custom build public estimates match every server-authority pricing rule wi
     suppliedMedia: 120
   }, "apply_assessment_credit");
   assert.equal(maximum.scaleUnits, 15);
-  assert.equal(maximum.serviceAmountMinor, 805000);
+  assert.equal(maximum.serviceAmountMinor, 720000);
   const direct = customBuildPublicEstimate("site", {
     craftedPages: 4,
     sections: 16,
@@ -1470,8 +1470,8 @@ test("Custom build public estimates match every server-authority pricing rule wi
     suppliedMedia: 12
   }, "no_credit");
   assert.equal(direct.creditAmountMinor, 0);
-  assert.equal(direct.startDueMinor, 60000);
-  assert.equal(direct.customerAmountMinor, 120000);
+  assert.equal(direct.startDueMinor, 50000);
+  assert.equal(direct.customerAmountMinor, 100000);
 });
 
 test("customer Custom build snapshots fail closed around exact money, credit, footprint, and lifecycle truth", () => {

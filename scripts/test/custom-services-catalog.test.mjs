@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+
+import {
+  CUSTOM_SERVICES_CONTRACT_DIGEST,
+  CUSTOM_SERVICES_CONTRACT_ID
+} from "../../commercial/custom-services-contract.mjs";
 
 const catalog = JSON.parse(
   await readFile(
@@ -9,44 +13,23 @@ const catalog = JSON.parse(
     "utf8"
   )
 );
-const contractBytes = await readFile(
-  new URL(
-    "../../ops/SITESOURCERY-CUSTOM-SERVICES-COMMERCIAL-CONTRACT-2026-08-05.md",
-    import.meta.url
-  )
-);
-
-test("the standard assessment is one bounded $200 offer with at most one $200 Custom build credit", () => {
+test("the successor assessment is exactly $350 with one full non-cash accepted-build credit", () => {
   const assessment = catalog.professionalServices.find(
     (service) => service.id === "website-assessment"
   );
   assert.ok(assessment);
-  assert.equal(assessment.priceCents, 20_000);
+  assert.equal(assessment.priceCents, 35_000);
+  assert.equal(CUSTOM_SERVICES_CONTRACT_ID, "SS-CUSTOM-SERVICES-2026-08-19.2");
   assert.equal(
-    assessment.contractId,
-    "SS-CUSTOM-SERVICES-2026-08-05.1"
+    CUSTOM_SERVICES_CONTRACT_DIGEST,
+    "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d"
   );
-  assert.equal(
-    assessment.contractDigest,
-    createHash("sha256").update(contractBytes).digest("hex")
-  );
-  assert.deepEqual(assessment.standardScope, {
-    maximumWebsites: 1,
-    maximumRepresentativePagesOrTypes: 5,
-    requiredViewports: ["desktop", "phone"],
-    maximumFindings: 10,
-    expandedAssessmentState: "separately_quoted"
-  });
+  assert.equal(assessment.scopeState, "must_be_stated_before_sale");
+  assert.equal(assessment.turnaroundState, "must_be_stated_before_sale");
   assert.deepEqual(assessment.buildCredit, {
     basisPoints: 10_000,
-    maximumCents: 20_000,
-    oneUse: true,
-    acceptanceWindowDays: 90,
-    sameOrganizationRequired: true,
-    sameProjectRequired: true,
-    cashValue: false,
-    eligibleSuccessor:
-      "custom_base_build_card_through_scale"
+    maximumCents: 35_000,
+    eligibleSuccessor: "any_accepted_site_sourcery_build"
   });
   assert.ok(
     assessment.buildCredit.maximumCents <=

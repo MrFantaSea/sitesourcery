@@ -514,7 +514,7 @@ export async function verifyCareCorePostgres(pool) {
 
   const exact = await pool.query(`
     select
-      count(*) = 4 as catalog_exact,
+      count(*) = 9 as catalog_exact,
       bool_and(availability_state = 'held'
         and not customer_effects_authorized
         and not payment_effects_authorized
@@ -562,7 +562,7 @@ export async function verifyCareCorePostgres(pool) {
 
   return Object.freeze({
     assertions: gates.length,
-    catalogIdentities: 4,
+    catalogIdentities: 9,
     contracts: 2,
     periods: 3,
     tickets: 2,

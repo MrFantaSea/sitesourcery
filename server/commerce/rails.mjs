@@ -159,7 +159,7 @@ export const SELLABLE = Object.freeze([
     id: "assessment",
     label: "Website assessment",
     rail: "checkout_session",
-    amountCents: 20000,
+    amountCents: 35000,
     availability: OFFER_AVAILABILITY.ACCOUNT_ONLY,
     creditsForward: "custom.build",
     taxTreatment: "review_required",
@@ -190,7 +190,7 @@ export const SELLABLE = Object.freeze([
     availability: OFFER_AVAILABILITY.INQUIRY_ONLY,
     taxTreatment: "review_required",
     note:
-      "Quoted per job, $400 to $4,000 before art direction and migration. Card "
+      "Quoted per job, $350 to $3,600 before art direction and migration. Card "
       + "and Card Plus invoice in full up front; Site and above split half "
       + "before work and half only after completion and before final handoff. "
       + "Recording completion does not automatically charge the final half."

@@ -4148,3 +4148,63 @@ test("FIN-006E3 binds Android dual-purpose FCM and Voice authority", async () =>
     /push_token\s+(?:text|varchar)|device_token\s+(?:text|varchar)|outgoing_allowed boolean not null default true|provider_effects\s*=\s*true|push_delivery_effects\s*=\s*true|voice_call_effects\s*=\s*true|grant all privileges/iu
   );
 });
+
+test("FIN-007 migration 141 converges held commercial identities without rewriting history", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608190141_commercial_catalog_convergence.sql"
+  );
+  assert.ok(migration, "missing FIN-007 commercial convergence migration 141");
+  assert.match(migration.sql, /^-- FIN-007:[\s\S]*\bbegin;/u);
+  assert.match(migration.sql, /commit;\s*$/u);
+  for (const identity of [
+    "SS-CUSTOM-SERVICES-2026-08-19.2",
+    "SS-PROFESSIONAL-2026.2",
+    "SS-TIERS-2026.6",
+    "SS-CARE-CORE-2026.2",
+    "SS-CARE-COMMERCE-2026.2",
+    "SS-COMMERCIAL-2026.6"
+  ]) {
+    assert.match(migration.sql, new RegExp(identity.replaceAll(".", "\\."), "u"));
+  }
+  assert.match(
+    migration.sql,
+    /when 'card' then 35000[\s\S]*when 'card-plus' then 60000[\s\S]*when 'site' then 100000[\s\S]*when 'site-plus' then 160000[\s\S]*when 'signature' then 240000[\s\S]*when 'flagship' then 360000/iu
+  );
+  assert.match(
+    migration.sql,
+    /360000 \+ selected_scale_units::bigint \* 24000/iu
+  );
+  assert.match(
+    migration.sql,
+    /credit_amount_minor in \(0, 20000, 35000\)[\s\S]*commercial_contract_id = 'SS-CUSTOM-SERVICES-2026-08-19\.2'[\s\S]*tax_state = 'disabled_by_owner'/iu
+  );
+  assert.match(
+    migration.sql,
+    /catalog_version in \('SS-CARE-CORE-2026\.1', 'SS-CARE-CORE-2026\.2'\)[\s\S]*'plan_host'[\s\S]*'plan_care_lite'[\s\S]*'plan_care'[\s\S]*'plan_care_plus'[\s\S]*'plan_partner'/iu
+  );
+  assert.match(
+    migration.sql,
+    /commercial_catalog_convergence_contract_v1\(\)[\s\S]*canonical-ss-v141-commercial-2026\.6-credit-only-card-held-historical-compatible/iu
+  );
+  assert.match(
+    migration.sql,
+    /alter column payment_receipt_id drop not null[\s\S]*start_settlement_kind text generated always as[\s\S]*'credit_only'[\s\S]*start_paid_subtotal_minor = 0/iu
+  );
+  assert.match(
+    migration.sql,
+    /subtotal_minor = 0[\s\S]*state = 'credit_settled'[\s\S]*tier_id = 'card'[\s\S]*gross_start_minor = 35000[\s\S]*credit_minor = 35000/iu
+  );
+  assert.match(
+    migration.sql,
+    /create or replace function ss\.ensure_service_custom_build_invoice[\s\S]*revision\.start_due_minor = 0[\s\S]*insert into ss\.service_custom_build_jobs[\s\S]*update ss\.service_credit_applications[\s\S]*state = 'settled'/iu
+  );
+  assert.match(
+    migration.sql,
+    /not exists \([\s\S]*service_custom_build_checkout_attempts[\s\S]*not exists \([\s\S]*service_custom_build_stripe_events[\s\S]*not exists \([\s\S]*service_custom_build_payment_receipts/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /publication_state\s*,?\s*'live'|availability_state\s*,?\s*'available'|customer_effects_authorized\s*=\s*true|payment_effects_authorized\s*=\s*true|provider_effects_authorized\s*=\s*true/iu
+  );
+});

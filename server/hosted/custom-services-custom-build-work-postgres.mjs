@@ -14,12 +14,12 @@ const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 const CANONICAL_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 const UNSIGNED_INTEGER = /^(0|[1-9][0-9]*)$/u;
 const TIER_RULES = new Map([
-  ["card", { amountMinor: 40_000, maxima: [1, 5, 1, 500, 2] }],
-  ["card-plus", { amountMinor: 65_000, maxima: [1, 8, 1, 900, 8] }],
-  ["site", { amountMinor: 120_000, maxima: [4, 16, 4, 1_800, 12] }],
-  ["site-plus", { amountMinor: 180_000, maxima: [7, 28, 7, 3_000, 24] }],
-  ["signature", { amountMinor: 280_000, maxima: [10, 40, 10, 4_500, 36] }],
-  ["flagship", { amountMinor: 400_000, maxima: [15, 60, 15, 7_000, 60] }],
+  ["card", { amountMinor: 35_000, maxima: [1, 5, 1, 500, 2] }],
+  ["card-plus", { amountMinor: 60_000, maxima: [1, 8, 1, 900, 8] }],
+  ["site", { amountMinor: 100_000, maxima: [4, 16, 4, 1_800, 12] }],
+  ["site-plus", { amountMinor: 160_000, maxima: [7, 28, 7, 3_000, 24] }],
+  ["signature", { amountMinor: 240_000, maxima: [10, 40, 10, 4_500, 36] }],
+  ["flagship", { amountMinor: 360_000, maxima: [15, 60, 15, 7_000, 60] }],
   ["scale", { amountMinor: null, maxima: [30, 120, 30, 14_500, 120] }]
 ]);
 const TIER_IDS = new Set(TIER_RULES.keys());
@@ -216,15 +216,15 @@ function exactTierPayment(tierId, footprint) {
       scaleUnits >= 1 && scaleUnits <= 15,
       "Custom-build Scale footprint is invalid."
     );
-    amountMinor = 400_000 + scaleUnits * 27_000;
+    amountMinor = 360_000 + scaleUnits * 24_000;
   }
   const grossMinor = ["card", "card-plus"].includes(tierId)
     ? amountMinor
     : amountMinor / 2;
   return {
     grossMinor,
-    creditMinor: 20_000,
-    paidSubtotalMinor: grossMinor - 20_000,
+    creditMinor: 35_000,
+    paidSubtotalMinor: grossMinor - 35_000,
     finalAmountMinor: amountMinor - grossMinor
   };
 }
@@ -298,7 +298,7 @@ function safeJob(row) {
   const paidSubtotalMinor = storedInteger(
     row.start_paid_subtotal_minor,
     "Custom-build first-payment paid subtotal",
-    1,
+    0,
     Number.MAX_SAFE_INTEGER
   );
   const finalAmountMinor = storedInteger(
@@ -320,6 +320,16 @@ function safeJob(row) {
       paidSubtotalMinor === exactPayment.paidSubtotalMinor &&
       finalAmountMinor === exactPayment.finalAmountMinor,
     "Custom-build payment amounts do not match the exact tier."
+  );
+  repositoryInvariant(
+    (row.start_settlement_kind === "provider_payment" &&
+      paidSubtotalMinor > 0) ||
+      (row.start_settlement_kind === "credit_only" &&
+        row.tier_id === "card" &&
+        grossMinor === 35_000 &&
+        creditMinor === 35_000 &&
+        paidSubtotalMinor === 0),
+    "Custom-build start settlement is inconsistent."
   );
   repositoryInvariant(
     (finalAmountMinor === 0 && row.final_payment_state === "not_required") ||
@@ -553,6 +563,7 @@ export function createPostgresCustomServicesCustomBuildWork({ authority } = {}) 
                job.start_gross_minor,
                job.start_credit_minor,
                job.start_paid_subtotal_minor,
+               job.start_settlement_kind,
                job.final_due_minor,
                job.final_payment_state,
                job.currency,
@@ -575,20 +586,35 @@ export function createPostgresCustomServicesCustomBuildWork({ authority } = {}) 
                  and job.start_paid_subtotal_minor = invoice.subtotal_minor
                  and job.final_due_minor = invoice.final_due_minor
                  and job.currency = invoice.currency
-                 and job.payment_receipt_id = receipt.id
-                 and receipt.invoice_id = invoice.id
-                 and receipt.project_id = invoice.project_id
-                 and receipt.case_id = invoice.case_id
-                 and receipt.customer_user_id = invoice.customer_user_id
-                 and receipt.credit_application_id =
-                   invoice.credit_application_id
-                 and receipt.subtotal_minor = invoice.subtotal_minor
-                 and receipt.currency = invoice.currency
-                 and receipt.invoice_digest = invoice.invoice_digest
-                 and receipt.accepted_quote_digest =
-                   invoice.accepted_quote_digest
-                 and receipt.accepted_disclosure_digest =
-                   invoice.accepted_disclosure_digest
+                 and (
+                   (job.start_settlement_kind = 'provider_payment'
+                     and job.payment_receipt_id = receipt.id
+                     and receipt.invoice_id = invoice.id
+                     and receipt.project_id = invoice.project_id
+                     and receipt.case_id = invoice.case_id
+                     and receipt.customer_user_id = invoice.customer_user_id
+                     and receipt.credit_application_id is not distinct from
+                       invoice.credit_application_id
+                     and receipt.subtotal_minor = invoice.subtotal_minor
+                     and receipt.currency = invoice.currency
+                     and receipt.invoice_digest = invoice.invoice_digest
+                     and receipt.accepted_quote_digest =
+                       invoice.accepted_quote_digest
+                     and receipt.accepted_disclosure_digest =
+                       invoice.accepted_disclosure_digest
+                     and receipt.payment_status = 'paid'
+                     and receipt.provider = 'stripe')
+                   or
+                   (job.start_settlement_kind = 'credit_only'
+                     and job.payment_receipt_id is null
+                     and receipt.id is null
+                     and invoice.state = 'credit_settled'
+                     and invoice.tier_id = 'card'
+                     and invoice.gross_start_minor = 35000
+                     and invoice.credit_minor = 35000
+                     and invoice.subtotal_minor = 0
+                     and invoice.charge_occurred = false)
+                 )
                  and revision.scope_statement = job.scope_statement
                  and revision.project_id = job.project_id
                  and revision.case_id = job.case_id
@@ -613,14 +639,12 @@ export function createPostgresCustomServicesCustomBuildWork({ authority } = {}) 
                    job.start_paid_subtotal_minor
                  and revision.final_due_minor = job.final_due_minor
                  and revision.currency = job.currency
-                 and receipt.payment_status = 'paid'
-                 and receipt.provider = 'stripe'
                ) as linkage_valid
              from ss.service_custom_build_jobs job
              join ss.service_custom_build_invoices invoice
                on invoice.organization_id = job.organization_id
               and invoice.id = job.invoice_id
-             join ss.service_custom_build_payment_receipts receipt
+             left join ss.service_custom_build_payment_receipts receipt
                on receipt.organization_id = job.organization_id
               and receipt.id = job.payment_receipt_id
              join ss.service_custom_build_quote_revisions revision

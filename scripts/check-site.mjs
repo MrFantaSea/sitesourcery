@@ -58,7 +58,10 @@ const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
  * and legacy single-file redirects. The review proved these rot invisibly
  * when only index.html files are read.
  */
-const NAV_EXEMPT_FILES = new Set(["flyer.html"]); // print artifact, no chrome
+const NAV_EXEMPT_FILES = new Set([
+  "404.html", // noncanonical fallback; not part of the 24-route successor nav
+  "flyer.html", // print artifact, no chrome
+]);
 const CANONICAL_EXEMPT = new Set(["404.html", "flyer.html"]);
 
 /**
@@ -156,8 +159,9 @@ function checkRedirect(page, source, routes, idsByRoute) {
   if (!/name="robots"\s+content="noindex"/iu.test(source)) {
     fail(page, "a redirect must be noindex so it never competes with its target");
   }
-  // The canonical is the target PAGE - fragments are meaningless to crawlers.
-  if (!source.includes(`<link rel="canonical" href="https://sitesourcery.com${route}"`)) {
+  // The frozen compatibility contract binds refresh, canonical, and fallback
+  // to the same exact route-plus-fragment target.
+  if (!source.includes(`<link rel="canonical" href="https://sitesourcery.com${target}"`)) {
     fail(page, "a redirect must declare its target page as canonical");
   }
 }
@@ -166,7 +170,10 @@ function checkNav(page, source, reference) {
   const found = source.match(NAV);
   if (!found) return fail(page, "has no primary nav");
   // aria-current marks the page you are on, so it is expected to differ.
-  const normalise = (value) => value.replace(/\s*aria-current="page"/gu, "");
+  const normalise = (value) => value
+    .replace(/\s*aria-current="page"/gu, "")
+    .replace(/>\s+</gu, "><")
+    .trim();
   if (reference && normalise(found[0]) !== normalise(reference)) {
     fail(page, "primary nav differs from the rest of the site");
   }
@@ -586,10 +593,12 @@ for (const page of pages) {
     continue;
   }
   if (!NAV_EXEMPT_FILES.has(page)) {
-    const nav = checkNav(page, source, referenceNav);
-    referenceNav ??= nav;
+    if (!IMMUTABLE_LEGAL_ARTIFACT_FILES.has(page)) {
+      const nav = checkNav(page, source, referenceNav);
+      referenceNav ??= nav;
+    }
+    checkDocumentSemantics(page, source);
   }
-  if (!NAV_EXEMPT_FILES.has(page)) checkDocumentSemantics(page, source);
   checkContact(page, source);
   checkPrices(page, source, allowed);
   checkOfferClaims(page, source, commerce);

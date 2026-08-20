@@ -466,9 +466,9 @@ function createContractPaymentProvider() {
           customerId:
             `cus_test_assessment_${assessmentCheckoutSequence}`,
           paymentStatus: "paid",
-          subtotalMinor: 20000,
+          subtotalMinor: 35000,
           taxMinor: 0,
-          totalMinor: 20000,
+          totalMinor: 35000,
           taxMode: "disabled_by_owner",
           currency: "USD",
           purposeDigest: input.purposeDigest,
@@ -1456,7 +1456,7 @@ test(
       });
     const assessmentPaymentRelease = Object.freeze({
       approved: true,
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       taxMode: "disabled_by_owner"
     });
@@ -4570,7 +4570,7 @@ test(
           const publicInquiry = await evaluate(
             `(() => ({
               priceShown: document.body.textContent.includes(
-                "Assessment — $200."
+                "Assessment — $350."
               ),
               inquiryHref: document.querySelector(
                 'a[href="/contact/"]'
@@ -5468,9 +5468,9 @@ test(
         assert.equal(quoteResult.body.origin, "direct");
         assert.equal(issuedQuote.origin, "direct");
         passed("direct-quote-created");
-        assert.equal(issuedQuote.pricing.serviceAmountMinor, 120000);
+        assert.equal(issuedQuote.pricing.serviceAmountMinor, 100000);
         assert.equal(issuedQuote.pricing.creditAmountMinor, 0);
-        assert.equal(issuedQuote.pricing.startDueMinor, 60000);
+        assert.equal(issuedQuote.pricing.startDueMinor, 50000);
         assert.equal(issuedQuote.creditSelection, "no_credit");
         assert.match(issuedQuote.quoteDigest, /^[a-f0-9]{64}$/u);
         assert.match(issuedQuote.disclosureDigest, /^[a-f0-9]{64}$/u);

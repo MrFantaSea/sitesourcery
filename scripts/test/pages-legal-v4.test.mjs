@@ -32,10 +32,10 @@ function sha256(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-test("Pages Legal V4 plan is the exact 94-file V2/V3/V4 publication ledger", () => {
+test("Pages Legal V4 plan is the exact 97-file V2/V3/V4 publication ledger", () => {
   const plan = createPagesJointLegalV4Plan({ root: ROOT, finalizationRoot: V4_ROOT });
   const files = pagesLegalV4Files(publicFileAllowlist, plan);
-  assert.equal(files.length, 94);
+  assert.equal(files.length, 97);
   for (const file of [
     "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
     `legal/privacy/versions/${JOINT_LEGAL_V3_RELEASE.privacyVersion}/index.html`,
@@ -55,7 +55,7 @@ test("Pages Legal V4 build publishes V4 current aliases and preserves all versio
     buildPagesArtifact({ root: ROOT, output, jointLegalV4FinalizationRoot: V4_ROOT });
     assert.deepEqual(
       verifyPagesArtifact({ root: ROOT, output, jointLegalV4FinalizationRoot: V4_ROOT }),
-      { files: 94, output },
+      { files: 97, output },
     );
     const identities = [
       ["legal/privacy/index.html", JOINT_LEGAL_V4_RELEASE.privacySha256],

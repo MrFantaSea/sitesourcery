@@ -88,7 +88,7 @@ function project(row, input) {
       row.period_id === input.periodId &&
       UUID.test(row.customer_user_id) &&
       UUID.test(row.catalog_identity_id) &&
-      row.catalog_version === "SS-CARE-CORE-2026.1" &&
+      ["SS-CARE-CORE-2026.1", "SS-CARE-CORE-2026.2"].includes(row.catalog_version) &&
       ["exact_held", "owner_redline_required"].includes(
         row.commercial_authority_state
       ) &&
@@ -456,11 +456,11 @@ function exactQuote(command, quote) {
       quote.periodId === command.periodId &&
       quote.actorId === command.actorId &&
       UUID.test(quote.quoteId) && UUID.test(quote.catalogIdentityId) &&
-      quote.catalogVersion === "SS-CARE-COMMERCE-2026.1" &&
-      quote.careCoreCatalogVersion === "SS-CARE-CORE-2026.1" &&
-      quote.priceVersion === "SS-CUSTOM-SERVICES-2026-08-05.1" &&
+      quote.catalogVersion === "SS-CARE-COMMERCE-2026.2" &&
+      quote.careCoreCatalogVersion === "SS-CARE-CORE-2026.2" &&
+      quote.priceVersion === "SS-COMMERCIAL-2026.6" &&
       quote.commercialContractDigest ===
-        "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8" &&
+        "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d" &&
       quote.state === "held" && quote.payable === false &&
       quote.dispatchAuthorized === false && quote.customerEffects === false &&
       quote.paymentEffects === false && quote.providerEffects === false &&

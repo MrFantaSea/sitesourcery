@@ -562,7 +562,7 @@ function sha256(bytes) {
 
 function reportCredit(deliveredAt, cutoff) {
   return Object.freeze({
-    amountMinor: 20000,
+    amountMinor: 35000,
     currency: "USD",
     applicationScope: "custom_base_build",
     eligibleTierIds: [...ELIGIBLE_TIER_IDS],

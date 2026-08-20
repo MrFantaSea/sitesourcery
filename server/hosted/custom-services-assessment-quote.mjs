@@ -7,13 +7,13 @@ export const CUSTOM_SERVICES_ASSESSMENT_QUOTE_SNAPSHOT_SCHEMA =
   "sitesourcery.custom-services-assessment-quote-snapshot/v1";
 
 const ASSESSMENT_POLICY_ID =
-  "00000000-0000-4000-8000-000000000341";
+  "00000000-0000-4000-8000-000000001411";
 const LEGAL_DOCUMENT_ID =
-  "00000000-0000-4000-8000-000000000342";
+  "00000000-0000-4000-8000-000000001410";
 const COMMERCIAL_CONTRACT_ID =
-  "SS-CUSTOM-SERVICES-2026-08-05.1";
+  "SS-CUSTOM-SERVICES-2026-08-19.2";
 const COMMERCIAL_CONTRACT_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
 const ACCEPTANCE_STATEMENT =
   "accepted_exact_quote_and_delivery_date";
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
@@ -501,12 +501,12 @@ function exactQuoteRevision(
   );
 
   invariant(
-    value.serviceAmountMinor === 20000 &&
+    value.serviceAmountMinor === 35000 &&
       value.providerDirectAmountMinor === 0 &&
       value.creditAmountMinor === 0 &&
-      value.subtotalMinor === 20000 &&
+      value.subtotalMinor === 35000 &&
       value.currency === "USD" &&
-      value.taxState === "calculation_required" &&
+      value.taxState === "disabled_by_owner" &&
       value.paymentSchedule === "full_before_work",
     "repository_conflict",
     "the assessment quote money changed",
@@ -889,14 +889,14 @@ function quoteProjection(storedQuote) {
     quoteDigest: revision.quoteDigest,
     disclosureDigest: revision.disclosureDigest,
     servicePrice: Object.freeze({
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
-      formatted: "$200.00"
+      formatted: "$350.00"
     }),
     tax: Object.freeze({
-      state: "calculation_required",
+      state: "disabled_by_owner",
       message:
-        "Tax, if applicable, will be calculated on a later separate invoice. This quote is not a payable total."
+        "Prices exclude tax. Tax calculation and collection remain disabled by the owner; this quote is not a payable total."
     }),
     payment: Object.freeze({
       schedule: "full_before_work",

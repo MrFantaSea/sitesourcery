@@ -60,9 +60,9 @@ function accountRow(overrides = {}) {
 
 function policyRow(overrides = {}) {
   return {
-    catalog_version: "SS-PROFESSIONAL-2026.1",
+    catalog_version: "SS-PROFESSIONAL-2026.2",
     service_key: "website_assessment_standard",
-    legal_version: "SS-CUSTOM-SERVICES-2026-08-05.1",
+    legal_version: "SS-CUSTOM-SERVICES-2026-08-19.2",
     publication_state: "held",
     ...overrides
   };
@@ -285,9 +285,9 @@ test("PostgreSQL foundation read returns an exact frozen empty snapshot", async 
       projectState: "active"
     },
     policy: {
-      catalogVersion: "SS-PROFESSIONAL-2026.1",
+      catalogVersion: "SS-PROFESSIONAL-2026.2",
       serviceKey: "website_assessment_standard",
-      legalVersion: "SS-CUSTOM-SERVICES-2026-08-05.1",
+      legalVersion: "SS-CUSTOM-SERVICES-2026-08-19.2",
       publicationState: "held"
     },
     profile: null,
@@ -381,12 +381,12 @@ test("PostgreSQL foundation read uses one exact actor-bound read-only transactio
     [
       [CUSTOMER_ID, ORGANIZATION_ID, PROJECT_ID],
       [
-        "00000000-0000-4000-8000-000000000341",
-        "SS-PROFESSIONAL-2026.1",
+        "00000000-0000-4000-8000-000000001411",
+        "SS-PROFESSIONAL-2026.2",
         "website_assessment_standard",
         "held",
-        "SS-CUSTOM-SERVICES-2026-08-05.1",
-        "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8"
+        "SS-CUSTOM-SERVICES-2026-08-19.2",
+        "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d"
       ],
       [ORGANIZATION_ID, PROJECT_ID],
       [ORGANIZATION_ID, PROJECT_ID, CUSTOMER_ID],
@@ -395,7 +395,7 @@ test("PostgreSQL foundation read uses one exact actor-bound read-only transactio
         PROJECT_ID,
         CASE_ID,
         CUSTOMER_ID,
-        "00000000-0000-4000-8000-000000000341"
+        "00000000-0000-4000-8000-000000001411"
       ],
       [ORGANIZATION_ID, PROJECT_ID, CASE_ID, CUSTOMER_ID]
     ]

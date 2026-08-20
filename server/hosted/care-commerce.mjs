@@ -186,7 +186,8 @@ function exactEligibility(value, expected) {
       value.periodId === expected.periodId &&
       UUID.test(value.customerId) &&
       UUID.test(value.catalogIdentityId) &&
-      value.catalogVersion === CARE_CORE_CATALOG_VERSION &&
+      ["SS-CARE-CORE-2026.1", CARE_CORE_CATALOG_VERSION]
+        .includes(value.catalogVersion) &&
       ["exact_held", "owner_redline_required"].includes(
         value.commercialAuthorityState
       ) &&

@@ -31,7 +31,7 @@ function row(overrides = {}) {
     customer_effects_authorized: false,
     payment_effects_authorized: false,
     contract_provider_effects_authorized: false,
-    catalog_version: "SS-CARE-CORE-2026.1",
+    catalog_version: "SS-CARE-CORE-2026.2",
     service_key: "outside_management",
     commercial_authority_state: "exact_held",
     period_id: IDS.period,

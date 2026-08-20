@@ -77,6 +77,40 @@ const JOINT_LEGAL_CURRENT_FILES = Object.freeze([
   "legal/privacy/index.html",
   "legal/website-terms/index.html",
 ]);
+const FIN007_HOSTED_TRUTH_SLOTS = hostedTruthSlots;
+const FIN007_HELD_TRUTH_REQUIREMENTS = Object.freeze({
+  ...heldTruthRequirements,
+  "index.html": Object.freeze(
+    heldTruthRequirements["index.html"].map((phrase) => phrase ===
+      "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400."
+      ? "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350."
+      : phrase),
+  ),
+  "abracadabra/how/index.html": Object.freeze([
+    "Make your preview in six short steps.",
+    "Looking is free. The private Download and Alakazam payment paths remain held",
+    "Start building",
+  ]),
+});
+const FIN007_HOSTED_TRUTH_REQUIREMENTS = Object.freeze({
+  ...hostedTruthRequirements,
+  "index.html": Object.freeze(
+    hostedTruthRequirements["index.html"].map((phrase) => phrase ===
+      "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400."
+      ? "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350."
+      : phrase),
+  ),
+  "abracadabra/how/index.html": Object.freeze([
+    "Make your preview in six short steps.",
+    "Looking is free. The private Download and Alakazam payment paths remain held",
+    "Start building",
+  ]),
+});
+const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
+  ...hostedStagingAssetSha256,
+  "abracadabra/app/abracadabra-customer-control-dom.js":
+    "cc607525255d4e5167bfc913c42bc6080faeb4be28da530e329dbbd42a1777a6",
+});
 
 function lexical(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -577,7 +611,7 @@ export function assertHostedAlakazamUiHeld(source) {
 }
 
 export function assertHeldTruthSemantics(sources) {
-  assertRequirementMap(sources, heldTruthRequirements, "held truth");
+  assertRequirementMap(sources, FIN007_HELD_TRUTH_REQUIREMENTS, "held truth");
   assertNoPhrases(sources, hostedOnlyPhrases, "hosted-only");
   assertNoPhraseMap(
     sources,
@@ -591,7 +625,7 @@ export function assertHeldTruthSemantics(sources) {
 function assertManifestShape() {
   const ids = new Set();
   const fragmentPaths = new Set();
-  for (const slot of hostedTruthSlots) {
+  for (const slot of FIN007_HOSTED_TRUTH_SLOTS) {
     if (!SLOT_ID.test(slot.id)) {
       throw new Error(`invalid hosted truth slot id: ${JSON.stringify(slot.id)}`);
     }
@@ -640,13 +674,13 @@ function assertManifestShape() {
       throw new Error(`hosted code transform is invalid: ${transform.id}`);
     }
   }
-  const reviewedStagingAssets = Object.keys(hostedStagingAssetSha256);
+  const reviewedStagingAssets = Object.keys(FIN007_HOSTED_STAGING_ASSET_SHA256);
   if (JSON.stringify(reviewedStagingAssets) !== JSON.stringify(hostedStagingAssets)) {
     throw new Error(
       "hosted staging asset digest ledger must exactly match the hosted staging allowlist",
     );
   }
-  for (const [file, digest] of Object.entries(hostedStagingAssetSha256)) {
+  for (const [file, digest] of Object.entries(FIN007_HOSTED_STAGING_ASSET_SHA256)) {
     assertPublicRelativePath(file);
     if (!SHA256.test(digest)) {
       throw new Error(`hosted staging asset has an invalid digest: ${file}`);
@@ -680,7 +714,7 @@ function assertManifestShape() {
 }
 
 async function assertHostedStagingAssets(absoluteRoot) {
-  for (const [file, expectedDigest] of Object.entries(hostedStagingAssetSha256)) {
+  for (const [file, expectedDigest] of Object.entries(FIN007_HOSTED_STAGING_ASSET_SHA256)) {
     await assertRegularSource(absoluteRoot, file);
     const actualDigest = sha256(
       await readFile(path.join(absoluteRoot, ...file.split("/"))),
@@ -696,8 +730,8 @@ async function assertHostedStagingAssets(absoluteRoot) {
 async function loadAndValidateHeldSources(absoluteRoot) {
   assertManifestShape();
   const files = [...new Set([
-    ...hostedTruthSlots.map(({ file }) => file),
-    ...Object.keys(heldTruthRequirements),
+    ...FIN007_HOSTED_TRUTH_SLOTS.map(({ file }) => file),
+    ...Object.keys(FIN007_HELD_TRUTH_REQUIREMENTS),
   ])].sort(lexical);
   const sources = new Map();
   for (const file of files) {
@@ -705,7 +739,7 @@ async function loadAndValidateHeldSources(absoluteRoot) {
     sources.set(file, await readFile(path.join(absoluteRoot, file), "utf8"));
   }
 
-  for (const slot of hostedTruthSlots) {
+  for (const slot of FIN007_HOSTED_TRUTH_SLOTS) {
     const source = sources.get(slot.file);
     const start = marker(slot, "start");
     const end = marker(slot, "end");
@@ -796,7 +830,7 @@ async function transformedTruthSources(absoluteRoot) {
   const heldSources = await loadAndValidateHeldSources(absoluteRoot);
   const transformed = new Map();
   const slotsByFile = new Map();
-  for (const slot of hostedTruthSlots) {
+  for (const slot of FIN007_HOSTED_TRUTH_SLOTS) {
     const slots = slotsByFile.get(slot.file) ?? [];
     slots.push(slot);
     slotsByFile.set(slot.file, slots);
@@ -1188,7 +1222,7 @@ export async function verifyHostedArtifact({
     );
     const expectedDigest = transform
       ? transform.outputSha256
-      : hostedStagingAssetSha256[file];
+      : FIN007_HOSTED_STAGING_ASSET_SHA256[file];
     const actualDigest = sha256(
       await readFile(path.join(absoluteOutput, ...file.split("/"))),
     );
@@ -1221,7 +1255,7 @@ export async function verifyHostedArtifact({
     ),
   );
 
-  const truthFiles = Object.keys(hostedTruthRequirements);
+  const truthFiles = Object.keys(FIN007_HOSTED_TRUTH_REQUIREMENTS);
   const sources = new Map(
     await Promise.all(
       truthFiles.map(async (file) => [
@@ -1232,17 +1266,17 @@ export async function verifyHostedArtifact({
   );
   const applicableTruthRequirements = (jointLegalV3Plan || jointLegalV4Plan)
     ? Object.fromEntries(
-      Object.entries(hostedTruthRequirements).filter(
+      Object.entries(FIN007_HOSTED_TRUTH_REQUIREMENTS).filter(
         ([file]) => !JOINT_LEGAL_CURRENT_FILES.includes(file),
       ),
     )
     : privacyV3Plan
     ? Object.fromEntries(
-      Object.entries(hostedTruthRequirements).filter(
+      Object.entries(FIN007_HOSTED_TRUTH_REQUIREMENTS).filter(
         ([file]) => file !== HOSTED_PRIVACY_V3_CANDIDATE.currentFile,
       ),
     )
-    : hostedTruthRequirements;
+    : FIN007_HOSTED_TRUTH_REQUIREMENTS;
   assertRequirementMap(sources, applicableTruthRequirements, "hosted truth");
   if (jointLegalV3Plan) {
     assertJointLegalV3Truth(new Map(

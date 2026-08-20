@@ -169,13 +169,13 @@ export const PROGRESSIVE_DISCLOSURE_COUNTS = Object.freeze({
   "/legal/website-terms/": 17,
 });
 export const PRIMARY_NAV_CONTRACT = Object.freeze([
-  Object.freeze({ label: "Websites", href: "/websites/", className: "" }),
-  Object.freeze({ label: "Domains", href: "/domains/", className: "" }),
-  Object.freeze({ label: "Services", href: "/solutions/", className: "" }),
-  Object.freeze({ label: "Calls & follow-up", href: "/hive/", className: "" }),
-  Object.freeze({ label: "Examples", href: "/work/", className: "" }),
+  Object.freeze({ label: "Abracadabra", href: "/abracadabra/", className: "" }),
+  Object.freeze({ label: "Alakazam", href: "/alakazam/", className: "" }),
+  Object.freeze({ label: "Sorcery", href: "/custom/", className: "" }),
+  Object.freeze({ label: "Care", href: "/care/", className: "" }),
+  Object.freeze({ label: "The Responder", href: "/responder/", className: "" }),
+  Object.freeze({ label: "Spell book", href: "/work/", className: "" }),
   Object.freeze({ label: "About", href: "/about/", className: "" }),
-  Object.freeze({ label: "Get started", href: "/start/", className: "nav-start" }),
 ]);
 const PROGRESSIVE_FAILURE_SENTINEL = "SITESOURCERY_PROGRESSIVE_FAILURE_AUDIT";
 const ROUTE_TRANSFER_BUDGET_BYTES = 1024 * 1024;

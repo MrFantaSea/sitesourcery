@@ -140,9 +140,9 @@ function snapshot(overrides = {}) {
     runtimeContract: "canonical-ss-v34-custom-services-foundation",
     account: account(),
     policy: {
-      catalogVersion: "SS-PROFESSIONAL-2026.1",
+      catalogVersion: "SS-PROFESSIONAL-2026.2",
       serviceKey: "website_assessment_standard",
-      legalVersion: "SS-CUSTOM-SERVICES-2026-08-05.1",
+      legalVersion: "SS-CUSTOM-SERVICES-2026-08-19.2",
       publicationState: "held"
     },
     profile: null,
@@ -445,7 +445,7 @@ test("held policy is exact and cannot be turned into a runtime capability", () =
   for (const policyDrift of [
     { publicationState: "published" },
     { serviceKey: "website_assessment_expanded" },
-    { catalogVersion: "SS-PROFESSIONAL-2026.2" },
+    { catalogVersion: "SS-PROFESSIONAL-2026.3" },
     { legalVersion: "SS-CUSTOM-SERVICES-2026-08-05.2" }
   ]) {
     assertError(

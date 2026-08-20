@@ -52,11 +52,11 @@ export const HOSTED_PRIVACY_V3_CONTENT = Object.freeze({
   published: false,
   deployable: false,
   reviewArtifactSha256:
-    "1fdc50606115e31e61aad1063e724949f0e2efb3444aaba775a7db9c14523a14",
-  reviewArtifactByteCount: 25_994,
+    "d051b6fbf3191b59a86863ff673cd1571cf2b117c2f8ee51bcaa693cfb4f69dc",
+  reviewArtifactByteCount: 26_058,
   contentTemplateSha256:
-    "8bc347cf8c0755d7e923fef60f5c481660ee37ca3dd1bbaa1df4f1371a018bfc",
-  contentTemplateByteCount: 25_763,
+    "1f80e120f6edc8be6c989aa34de7f6f2a8bde3db5027b31c045d7d89b935a129",
+  contentTemplateByteCount: 25_827,
   approvalReceiptSha256: null,
   contentSealSha256: null,
 });

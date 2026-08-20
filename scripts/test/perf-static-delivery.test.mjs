@@ -129,7 +129,7 @@ test("optimized OG and held artifact ledgers remain exact", async () => {
   assert.equal(image.isPalette, true);
   const reviewedAssets = DOMAIN_HERO_ASSETS.map(({ file }) => `assets/${file}`);
   for (const manifest of [publicFileAllowlist, REVIEWED_PUBLIC_ARTIFACT_PATHS]) {
-    assert.equal(manifest.length, 90);
+    assert.equal(manifest.length, 93);
     assert.equal(manifest.includes(ORIGINAL_HERO), false);
     assert.deepEqual(manifest.filter((file) => reviewedAssets.includes(file)), reviewedAssets.toSorted());
   }

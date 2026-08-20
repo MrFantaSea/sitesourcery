@@ -15,10 +15,10 @@ const RUNTIME_CONTRACT =
   "canonical-ss-v41-custom-build-quote-credit";
 const DIRECT_CONTRACT =
   "canonical-custom-direct-v1-engagement-optional-credit";
-const COMMERCIAL_CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-05.1";
+const COMMERCIAL_CONTRACT_ID = "SS-CUSTOM-SERVICES-2026-08-19.2";
 const COMMERCIAL_CONTRACT_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
-const LEGAL_DOCUMENT_ID = "00000000-0000-4000-8000-000000000342";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
+const LEGAL_DOCUMENT_ID = "00000000-0000-4000-8000-000000001410";
 const ISSUE_ROUTE = "custom-services.custom-build-quote.issue";
 const ISSUE_DIRECT_ROUTE = "custom-services.custom-build-quote.issue-direct";
 const ACCEPT_ROUTE = "custom-services.custom-build-quote.accept";
@@ -402,7 +402,7 @@ function quoteProjection(row) {
         row.credit_selection
       ) &&
       (row.credit_selection === "apply_assessment_credit"
-        ? Number(row.credit_amount_minor) === 20_000
+        ? Number(row.credit_amount_minor) === 35_000
         : Number(row.credit_amount_minor) === 0) &&
       Array.isArray(row.installments),
     "custom_build_repository_conflict",
@@ -473,8 +473,10 @@ function quoteProjection(row) {
           ? "No assessment credit is applied to this quote."
           : "The assessment credit is non-cash, same-project, one-use value applied only to this Custom base build's first required installment.",
         paymentRule,
-        "Tax and any separately stated third-party provider charges are not included in the base price and are shown before payment.",
-        "Build work does not begin until the required first payment is verified.",
+        "Prices exclude tax. Tax calculation and collection remain disabled by the owner. Separately stated third-party provider charges are not included in the base price.",
+        Number(row.start_due_minor) === 0
+          ? "Build work begins when the exact non-cash assessment credit settlement is recorded; no provider charge is created."
+          : "Build work does not begin until the required first payment is verified.",
         "The 30-day workmanship correction covers reproducible defects in the accepted deliverables, not new content, features, changed decisions, third-party changes, or ongoing management."
       ]
     },
@@ -485,7 +487,11 @@ function quoteProjection(row) {
         "creditAmountMinor",
         { zero: true }
       ),
-      customerAmountMinor: number(row.customer_amount_minor, "customerAmountMinor"),
+      customerAmountMinor: number(
+        row.customer_amount_minor,
+        "customerAmountMinor",
+        { zero: true }
+      ),
       currency: row.currency,
       taxState: row.tax_state,
       paymentSchedule: row.payment_schedule,
@@ -1535,7 +1541,9 @@ export function createPostgresCustomServicesCustomBuild({
               receipt.state === "accepted" &&
                 (receipt.quote.pricing.creditAmountMinor === 0
                   ? receipt.credit === null
-                  : receipt.credit?.state === "reserved"),
+                  : (receipt.credit?.state === "reserved" ||
+                    (receipt.quote.pricing.startDueMinor === 0 &&
+                      receipt.credit?.state === "settled"))),
               "custom_build_repository_conflict",
               "The Custom build acceptance did not retain its exact credit selection.",
               { status: 500 }

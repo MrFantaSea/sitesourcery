@@ -1107,32 +1107,47 @@ const CUSTOM_SERVICES_READINESS_QUERY = `
         from ss.service_catalog_policies policy
         join ss.legal_documents document
           on document.id = policy.legal_document_id
-       where policy.id = '00000000-0000-4000-8000-000000000341'
-         and policy.catalog_version = 'SS-PROFESSIONAL-2026.1'
+       where policy.id = '00000000-0000-4000-8000-000000001411'
+         and policy.catalog_version = 'SS-PROFESSIONAL-2026.2'
          and policy.service_key = 'website_assessment_standard'
          and policy.pricing_mode = 'fixed'
          and policy.billing_cadence = 'one_time'
          and policy.currency = 'USD'
-         and policy.unit_amount_minor = 20000
+         and policy.unit_amount_minor = 35000
          and policy.minimum_quantity = 1
          and policy.maximum_quantity = 1
          and policy.publication_state = 'held'
          and policy.scope_boundary = jsonb_build_object(
+           'catalogDigest',
+             '3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0',
+           'credit', jsonb_build_object(
+             'amountMinor', 35000,
+             'applicationScope', 'custom_base_build',
+             'maximumApplications', 1,
+             'nonCash', true,
+             'sameOrganizationAndProjectOnly', true
+           ),
+           'deliverable',
+             'written assessment with screenshot evidence and real findings ranked by severity',
            'expandedAssessmentState', 'separately_quoted',
            'maximumFindings', 10,
            'maximumRepresentativePagesOrTypes', 5,
            'maximumWebsites', 1,
-           'requiredViewports', jsonb_build_array('desktop', 'phone')
+           'requiredViewports', jsonb_build_array('desktop', 'phone'),
+           'scopeState', 'must_be_stated_before_sale',
+           'turnaroundState', 'must_be_stated_before_sale',
+           'taxDisplay', 'exclusive',
+           'taxState', 'disabled_by_owner'
          )
          and policy.scope_boundary_digest =
            ss.service_json_digest(policy.scope_boundary)
          and document.kind = 'custom_services'
-         and document.version = 'SS-CUSTOM-SERVICES-2026-08-05.1'
+         and document.version = 'SS-CUSTOM-SERVICES-2026-08-19.2'
          and document.content_digest =
-           '9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8'
+           '0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d'
          and document.retired_at is null
          and (
-           select count(*) = 4
+           select count(*) = 3
              from ss.service_catalog_coverage coverage
             where coverage.policy_id = policy.id
               and coverage.boundary_digest = policy.scope_boundary_digest
@@ -1248,6 +1263,51 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
       as custom_service_assessment_delivery_contract_marker_ready,
     ss.hosted_runtime_contract_v41() =
       'canonical-ss-v41-custom-build-quote-credit'
+      and (
+        to_regprocedure(
+          'ss.commercial_catalog_convergence_contract_v1()'
+        ) is null
+        or exists (
+          select 1
+          from pg_proc procedure_record
+          where procedure_record.oid = to_regprocedure(
+            'ss.commercial_catalog_convergence_contract_v1()'
+          )
+            and pg_get_functiondef(procedure_record.oid) like
+              '%canonical-ss-v141-commercial-2026.6-credit-only-card-held-historical-compatible%'
+            and exists (
+              select 1
+              from pg_attribute attribute_record
+              where attribute_record.attrelid =
+                'ss.service_custom_build_jobs'::regclass
+                and attribute_record.attname = 'start_settlement_kind'
+                and attribute_record.attgenerated = 's'
+                and not attribute_record.attisdropped
+            )
+            and exists (
+              select 1
+              from pg_constraint constraint_record
+              where constraint_record.conrelid =
+                'ss.service_custom_build_jobs'::regclass
+                and constraint_record.conname =
+                  'service_custom_build_jobs_start_settlement_kind_check'
+                and pg_get_constraintdef(constraint_record.oid) like
+                  '%credit_only%start_paid_subtotal_minor = 0%'
+            )
+            and exists (
+              select 1
+              from pg_constraint constraint_record
+              where constraint_record.conrelid =
+                'ss.service_custom_build_invoices'::regclass
+                and constraint_record.conname =
+                  'service_custom_build_invoices_settlement_state_check'
+                and pg_get_constraintdef(constraint_record.oid) like
+                  '%credit_settled%'
+                and pg_get_constraintdef(constraint_record.oid) like
+                  '%subtotal_minor = 0%'
+            )
+        )
+      )
       as custom_build_quote_credit_contract_marker_ready,
     (
       select count(*) = 1
@@ -1737,11 +1797,14 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
     ) as custom_service_quotes_digests_ready,
     (
       select
-        contract.definitions ~ 'service_amount_minor = 20000'
-        and contract.definitions ~ 'subtotal_minor = 20000'
+        contract.definitions like '%SS-CUSTOM-SERVICES-2026-08-19.2%'
+        and contract.definitions like
+          '%0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d%'
+        and contract.definitions ~ 'service_amount_minor = 35000'
+        and contract.definitions ~ 'subtotal_minor = 35000'
         and contract.definitions ~ 'currency = ''USD'''
         and contract.definitions ~
-          'tax_state = ''calculation_required'''
+          'tax_state = ''disabled_by_owner'''
         and contract.definitions ~
           'payment_schedule = ''full_before_work'''
         and contract.definitions ~ 'maximum_websites = 1'
@@ -1756,19 +1819,19 @@ const CUSTOM_SERVICE_QUOTES_READINESS_QUERY = `
           'expanded_assessment_state = ''separately_quoted'''
         and contract.definitions ~
           'component_key = ''website_assessment_standard'''
-        and contract.definitions ~ 'unit_amount_minor = 20000'
-        and contract.definitions ~ 'amount_minor = 20000'
+        and contract.definitions ~ 'unit_amount_minor.*35000'
+        and contract.definitions ~ 'amount_minor.*35000'
         and contract.definitions ~ 'due_trigger = ''before_work'''
         and lower(
           pg_get_functiondef(
             'ss.prepare_service_quote_revision()'::regprocedure
           )
-        ) like '%new.service_amount_minor := 20000%'
+        ) like '%new.service_amount_minor := 35000%'
         and lower(
           pg_get_functiondef(
             'ss.prepare_service_quote_revision()'::regprocedure
           )
-        ) like '%new.tax_state := ''calculation_required''%'
+        ) like '%new.tax_state := ''disabled_by_owner''%'
         and lower(
           pg_get_functiondef(
             'ss.prepare_service_quote_revision()'::regprocedure
@@ -2596,7 +2659,7 @@ export function createCanonicalPostgresAuthority({
       status.code,
       status.code === "SHADOW_SCHEMA_PRESENT"
         ? "The unsupported ss_hosted shadow schema must be removed before startup."
-        : "Canonical PostgreSQL migrations through Custom build quote credit v41 are required.",
+        : "Canonical PostgreSQL migrations through FIN-007 commercial convergence v141 are required.",
       { status: 503, details: status }
     );
     return status;

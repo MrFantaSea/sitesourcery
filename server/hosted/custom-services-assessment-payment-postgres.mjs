@@ -231,7 +231,7 @@ function purpose(row, taxMode = row?.tax_mode) {
     invoiceDigest: row.invoice_digest,
     taxMode,
     price: {
-      amountMinor: 20000,
+      amountMinor: 35000,
       currency: "USD",
       billing: "one_time",
       taxBehavior: "exclusive"
@@ -248,7 +248,7 @@ function response(row, input) {
   invariant(
     UUID.test(String(row.invoice_id ?? "")) &&
       INVOICE_NUMBER.test(String(row.invoice_number ?? "")) &&
-      Number(row.expected_subtotal_minor) === 20000 &&
+      Number(row.expected_subtotal_minor) === 35000 &&
       row.currency === "USD" &&
       ["automatic", "disabled_by_owner"].includes(
         row.tax_mode
@@ -279,9 +279,9 @@ function response(row, input) {
       url: checkout.url,
       expiresAt: checkout.expiresAt,
       subtotal: {
-        amountMinor: 20000,
+        amountMinor: 35000,
         currency: "USD",
-        formatted: "$200.00"
+        formatted: "$350.00"
       },
       tax: {
         state: "calculated_at_checkout",
@@ -320,9 +320,9 @@ function safeResponse(value, input) {
         "currency",
         "formatted"
       ]) &&
-      checkout.subtotal.amountMinor === 20000 &&
+      checkout.subtotal.amountMinor === 35000 &&
       checkout.subtotal.currency === "USD" &&
-      checkout.subtotal.formatted === "$200.00" &&
+      checkout.subtotal.formatted === "$350.00" &&
       hasExactKeys(checkout.tax, ["amountMinor", "state"]) &&
       checkout.tax.state === "calculated_at_checkout" &&
       checkout.tax.amountMinor === null &&
@@ -377,9 +377,9 @@ function safeResponse(value, input) {
       url: url.toString(),
       expiresAt,
       subtotal: {
-        amountMinor: 20000,
+        amountMinor: 35000,
         currency: "USD",
-        formatted: "$200.00"
+        formatted: "$350.00"
       },
       tax: {
         state: "calculated_at_checkout",
@@ -692,8 +692,8 @@ export function createPostgresCustomServicesAssessmentPayment({
             invoice.invoice_digest === input.invoiceDigest &&
               invoice.reservation_invoice_digest ===
                 input.invoiceDigest &&
-              Number(invoice.subtotal_minor) === 20000 &&
-              invoice.tax_state === "calculation_required" &&
+              Number(invoice.subtotal_minor) === 35000 &&
+              invoice.tax_state === "disabled_by_owner" &&
               invoice.tax_minor === null &&
               invoice.total_minor === null &&
               invoice.currency === "USD" &&
@@ -827,7 +827,7 @@ export function createPostgresCustomServicesAssessmentPayment({
                state, provider_effect_certainty
              ) values (
                $1, $2, $3, $4, $5, $6, 'stripe', $7,
-               $8, $9, 20000, 'USD', $10,
+               $8, $9, 35000, 'USD', $10,
                'provider_pending', 'not_submitted'
              )`,
             [

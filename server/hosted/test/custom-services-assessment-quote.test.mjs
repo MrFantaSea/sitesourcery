@@ -28,9 +28,9 @@ const OTHER_ID =
 const LATER_INTAKE_ID =
   "a0000000-0000-4000-8000-000000000001";
 const POLICY_ID =
-  "00000000-0000-4000-8000-000000000341";
+  "00000000-0000-4000-8000-000000001411";
 const LEGAL_DOCUMENT_ID =
-  "00000000-0000-4000-8000-000000000342";
+  "00000000-0000-4000-8000-000000001410";
 
 const INTAKE_DIGEST = "a".repeat(64);
 const SCOPE_DIGEST = "b".repeat(64);
@@ -38,7 +38,7 @@ const QUOTE_DIGEST = "c".repeat(64);
 const DISCLOSURE_DIGEST = "d".repeat(64);
 const LATER_INTAKE_DIGEST = "e".repeat(64);
 const COMMERCIAL_DIGEST =
-  "9bb93ae1f7ed2bb7015a7d995dabdb014bd94b9362b44727a67b3580f9af57c8";
+  "0b6fcad1c2fab2904a223fc95ebeb88da1aca680a5c56c1e3d2327486fac1d4d";
 
 const QUOTE_CREATED_AT = "2026-08-08T09:00:00.000Z";
 const ISSUED_AT = "2026-08-09T12:00:00.000Z";
@@ -102,12 +102,12 @@ function quoteRevision(overrides = {}) {
     policyId: POLICY_ID,
     scopeBoundaryDigest: SCOPE_DIGEST,
     policyScopeBoundaryDigest: SCOPE_DIGEST,
-    serviceAmountMinor: 20000,
+    serviceAmountMinor: 35000,
     providerDirectAmountMinor: 0,
     creditAmountMinor: 0,
-    subtotalMinor: 20000,
+    subtotalMinor: 35000,
     currency: "USD",
-    taxState: "calculation_required",
+    taxState: "disabled_by_owner",
     paymentSchedule: "full_before_work",
     maximumWebsites: 1,
     maximumRepresentativePagesOrTypes: 5,
@@ -115,7 +115,7 @@ function quoteRevision(overrides = {}) {
     desktopReviewIncluded: true,
     phoneReviewIncluded: true,
     expandedAssessmentState: "separately_quoted",
-    commercialContractId: "SS-CUSTOM-SERVICES-2026-08-05.1",
+    commercialContractId: "SS-CUSTOM-SERVICES-2026-08-19.2",
     commercialContractDigest: COMMERCIAL_DIGEST,
     legalDocumentId: LEGAL_DOCUMENT_ID,
     deliveryDate: DELIVERY_DATE,
@@ -266,7 +266,7 @@ test("not_available exposes no invented quote or acceptance action", () => {
   assertDeeplyFrozen(projection);
 });
 
-test("review_required exposes only the bounded $200 customer contract", () => {
+test("review_required exposes only the bounded $350 customer contract", () => {
   const projection = projectCustomServicesAssessmentQuote(input());
 
   assert.deepEqual(projection, {
@@ -278,14 +278,14 @@ test("review_required exposes only the bounded $200 customer contract", () => {
       quoteDigest: QUOTE_DIGEST,
       disclosureDigest: DISCLOSURE_DIGEST,
       servicePrice: {
-        amountMinor: 20000,
+        amountMinor: 35000,
         currency: "USD",
-        formatted: "$200.00"
+        formatted: "$350.00"
       },
       tax: {
-        state: "calculation_required",
+        state: "disabled_by_owner",
         message:
-          "Tax, if applicable, will be calculated on a later separate invoice. This quote is not a payable total."
+          "Prices exclude tax. Tax calculation and collection remain disabled by the owner; this quote is not a payable total."
       },
       payment: {
         schedule: "full_before_work",
