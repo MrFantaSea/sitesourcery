@@ -1,29 +1,29 @@
 {
   "schema": "sitesourcery.fin008-data-epoch-receipt/v1",
   "state": "proved",
-  "capturedAt": "2026-08-20T12:44:00.000Z",
+  "capturedAt": "2026-08-20T14:10:40.000Z",
   "source": {
-    "candidateInputCommitSha": "e6865bfb072aae7882e16ee7fa859c411703c6cb",
-    "candidateInputTreeSha": "03c169e426b6b36a71a57fd8e248fcf222887513",
+    "candidateInputCommitSha": "b2aafdd9a873007069780e4a9d890217802fa4c0",
+    "candidateInputTreeSha": "4d182564c0158e19e8809bc38ccfb9ec17d65034",
     "predecessorCommitSha": "84aca6b757a806b428ae0cce8115c12dcc6486cd",
     "predecessorTreeSha": "bd7859348a54b633173d386e0eadc8acc4c8ad54"
   },
   "migrations": {
-    "count": 94,
-    "latest": "202608190141_commercial_catalog_convergence.sql",
-    "manifestSha256": "139d050a7c04bdc1a97bd9ec05fe28c887ad11d488282edf3bceb5246820791a",
+    "count": 95,
+    "latest": "202608200142_hosted_joint_legal_v5_authority.sql",
+    "manifestSha256": "8e5a5a8b52432335ffb05d7d83bf5e88836af2c9e12149547ff037b4009d9880",
     "predecessorCount": 58,
     "predecessorLatest": "202608090105_hosted_joint_legal_v4_authority.sql",
     "predecessorManifestSha256": "e7f9c03e6fddebc3dcef52962d45f1789887a3a89867a4d964fe65278229ae84",
-    "deltaCount": 36,
+    "deltaCount": 37,
     "deltaFirst": "202608100106_customer_engagement_bootstrap.sql",
-    "deltaManifestSha256": "08e7d0ad0e62e74df2a5391bb19baeb666c08bcb373c8a85e6c085780a7ae2a1"
+    "deltaManifestSha256": "4737b46d786c5fc0ba376d6ad6a98bcc09046e7ad4d740d2891eae44e9c53d99"
   },
   "artifacts": {
     "pagesFileCount": 93,
     "pagesLedgerSha256": "29aa628bc153277736e26f48be8b8a83d15107226d5dbd8c3edf2c8a4077ab79",
     "hostedFileCount": 112,
-    "hostedLedgerSha256": "a26a00aa5d6788ab46ba1f434d46f28de5ecfea04533ad1fb6173415508276c7"
+    "hostedLedgerSha256": "fe1e32eb269d5b8ea2e7ef47b443bc4b359680b31cd7be9b66b7ed642c65634c"
   },
   "catalog": {
     "version": "SS-COMMERCIAL-2026.6",
@@ -61,9 +61,9 @@
       "auth": 1,
       "ss": 286
     },
-    "schemaSha256": "c4788908ebdabbe2210f49ac001876fda082efe00814502220d47b3a6b4f3cd1",
-    "rowCountsSha256": "f05f4e1fd7c415660568113b6fa264790fec43d9a003ccd30e80e31374719143",
-    "ownershipSha256": "04744f6c2253fe2d19e42c8472b515672b3293765d14316945d0153938c59aa0",
+    "schemaSha256": "de7a4d476899db85d0d4bf2e93c9f54210f39bc77c416586a8b960cf0e5a397a",
+    "rowCountsSha256": "9202ca42ecf31e03cf3669e92078a9bbe782e6250986c3b9bcb1d5fd61a1f015",
+    "ownershipSha256": "d78890529e36bfbc5e364c8dd710e3e2bebd89d28995ffa78c21c1cbeab8fca2",
     "metadataCounts": {
       "columns": 4785,
       "constraints": 4138,
@@ -71,7 +71,7 @@
       "indexes": 1064,
       "policies": 111,
       "relations": 294,
-      "routines": 584,
+      "routines": 585,
       "tablePrivileges": 3262,
       "triggers": 488
     },
@@ -81,7 +81,7 @@
       {
         "relation": "ss.legal_documents",
         "before": "10",
-        "after": "11"
+        "after": "14"
       },
       {
         "relation": "ss.service_catalog_policies",
@@ -92,6 +92,11 @@
         "relation": "ss.service_catalog_coverage",
         "before": "33",
         "after": "64"
+      },
+      {
+        "relation": "ss.legal_document_artifacts",
+        "before": "6",
+        "after": "8"
       }
     ],
     "serviceRoleBypassRls": true,
@@ -103,15 +108,15 @@
     "providerEffects": false
   },
   "candidateBackup": {
-    "attemptId": "fin008-e6865bf-20260820T122536Z",
+    "attemptId": "fin008-4c59921-20260820T135043Z",
     "sourceFailureDomainId": "mac-fin008-rehearsal-01",
     "destinationFailureDomainId": "zen-sitesourcery-backup-01",
-    "destinationMarkerSha256": "2dc63155371f048f4617d90e3b1037b8c2419cf9905946d3e859861933005c0e",
+    "destinationMarkerSha256": "ff55be668ce298e1638106b082af34a3ed0cd1eaa8cd236ef263ebae614b91e5",
     "recipientFingerprintSha256": "7367055483c4d3134b1f1330aad599a81932f8651fce3ce93b40867d146ebde2",
     "ciphertextFormat": "age",
-    "ciphertextBytes": 3797564,
-    "ciphertextSha256": "2916ef2de38363ba0ba258ead251d840b736e40f82011e8e77567e7afc272222",
-    "plaintextDumpSha256": "8e4c60e93c7507cde64f23b1b5523a81f72041f20a4e77da9f189f33c46b9c82",
+    "ciphertextBytes": 3790956,
+    "ciphertextSha256": "59e35a8a38e6d23e439c4d04403a81df9aa5dad72a2fc475da1ed07d291ed598",
+    "plaintextDumpSha256": "edcec2cb733cf794ed4aa1180e306db1ddd0cefee55c56e52d50b93cac3f0711",
     "remoteMode": "0400",
     "plaintextFileCreated": false,
     "providerEgress": "held"
@@ -123,9 +128,9 @@
     "dataChecksums": true,
     "databaseNetworkExposure": "unix_socket_only",
     "providerEgress": "held",
-    "schemaSha256": "c4788908ebdabbe2210f49ac001876fda082efe00814502220d47b3a6b4f3cd1",
-    "rowCountsSha256": "f05f4e1fd7c415660568113b6fa264790fec43d9a003ccd30e80e31374719143",
-    "ownershipSha256": "04744f6c2253fe2d19e42c8472b515672b3293765d14316945d0153938c59aa0",
+    "schemaSha256": "de7a4d476899db85d0d4bf2e93c9f54210f39bc77c416586a8b960cf0e5a397a",
+    "rowCountsSha256": "9202ca42ecf31e03cf3669e92078a9bbe782e6250986c3b9bcb1d5fd61a1f015",
+    "ownershipSha256": "d78890529e36bfbc5e364c8dd710e3e2bebd89d28995ffa78c21c1cbeab8fca2",
     "allRelationsOwnedByDatabaseOwner": true,
     "allRoutinesOwnedByDatabaseOwner": true,
     "rlsAndHeldInvariants": true,
@@ -133,8 +138,8 @@
     "convergedWithUpgradedSource": true
   },
   "rollback": {
-    "predecessorReadyReadOnlySha256": "b7e9919934c48c4a784fa20b814f108cb7b24ec34c8f87a90526dc843a2b1442",
-    "successorFailClosedReadOnlySha256": "f1675426471c470c69afee59a7eced7ce074d783f52f0e023a55a8fddace64f3",
+    "predecessorReadyReadOnlySha256": "5c026aa6a470eb4060465a38ca5a86d93e288477f61545bfd4a44ea452660d29",
+    "successorFailClosedReadOnlySha256": "4eec791b8be703c57b6132e0eefef5a8e30ce4fea0cea41fec4f0d789e61804f",
     "predecessorReadyOnPredecessor": true,
     "predecessorWritableOnSuccessor": false,
     "successorRefusalCode": "DATABASE_NOT_MIGRATED",
