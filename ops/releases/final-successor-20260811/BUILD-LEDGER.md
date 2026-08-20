@@ -26,7 +26,7 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-004 | proved | Preserved union and outside overlays | Mail, operator, domains, Responder, Care, Alakazam, operations, adjacent systems | FIN-004A through FIN-004V proved; every adjacent effect remains held |
 | FIN-005 | proved | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition and bounded Assessment/Custom proof adaptation | No unclassified preserved lane; 87-migration joined proof and cumulative matrix passed |
 | FIN-006 | proved | Integrated source | Root composition and cross-system contracts | Exact 20-row/six-process matrix, all-93-migration proof, and 15-gate all-held trace |
-| FIN-007 | proved-held; owner legal gate open | Canonical commercial source at exact SHA-256 `9398d025…` | Catalog/public/routes/artifacts, zero-cash credited Card settlement, and nonpublic Legal V5 review closure | Implementation `b69ff5f…`; clean cumulative ladder; 94-migration rebuild; 24 × 6 Chrome matrix; deterministic 93-file Pages and 112-file hosted artifacts; V5 finalization absent |
+| FIN-007 | proved-held; owner legal gate open | Canonical commercial source at exact SHA-256 `9398d025…` | Catalog/public/routes/artifacts, zero-cash credited Card settlement, and nonpublic Legal V5 review closure | Implementation `b69ff5f…`; owner legal correction `383ac38…`; clean cumulative ladder; 94-migration rebuild; 24 × 6 Chrome matrix; deterministic 93-file Pages and 112-file hosted artifacts; V5 finalization absent |
 | FIN-008 | pending | Candidate migration epoch | Empty and 201-table upgrade rehearsals | Convergent schema/data/restore invariants |
 | FIN-009 | pending | Clean candidate SHA | Private immutable staging | Installed readback and complete owner acceptance |
 | FIN-010 | pending | Accepted installed SHA | Production-held install and public cutover | Explicit owner approval and rollback-ready probes |
@@ -215,3 +215,15 @@ is `b69ff5f8930c86d17a1c0dc0e7070ed76f738bf9`, tree
 bytes, V5 document versions, and one effective UTC instant remains a separate
 fail-closed gate; no V5 finalization artifact, deployment, public replacement,
 DNS change, provider effect, or cutover is claimed.
+
+Before that gate closed, the owner directed an all-sales-final/no-voluntary-
+refund posture with the narrow applicable-law exception required to preserve
+the protection. Correction implementation
+`383ac38b2a38907dd8c14e9ff16e76b9e6f40a04`, tree
+`5c642f42feb6eb858ed9ffad9a94455ad3a8384a`, adds product-specific earned-
+payment boundaries, a specific-purchase liability cap, indirect/lost-profit
+exclusion, customer-content indemnity, warranty boundary, and New Jersey
+law/venue. Corrected review manifest
+`b94bec35baf7dba4cc86f8679fa95902d1ffa7175d9b26f72b635330b78c6742`
+passed 13/13 legal tests, 18/18 legal Chrome views, and the complete clean
+cumulative ladder. It remains non-effective, noindex, and unfinalized.

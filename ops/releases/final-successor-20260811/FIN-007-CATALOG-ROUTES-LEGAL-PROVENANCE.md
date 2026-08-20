@@ -13,6 +13,12 @@ Implementation commit:
 Implementation tree:
 `ee16b3953b18b7ff9d2342eb7dedc4f271dac94d`
 
+Owner-directed Legal V5 correction implementation:
+`383ac38b2a38907dd8c14e9ff16e76b9e6f40a04`
+
+Owner-directed Legal V5 correction tree:
+`5c642f42feb6eb858ed9ffad9a94455ad3a8384a`
+
 ## Frozen commercial identity
 
 The approved external source remained byte-immutable at
@@ -82,11 +88,19 @@ and non-cash credit, credit-only settlement, tax state, Custom payment and
 ownership rules, exact retention schedule, provider disclosures, and complete
 held product/effect matrix.
 
-The review manifest SHA-256 is
+The initial review manifest SHA-256 was
 `559887dfbff54531ec6f65140592281edb3539cc0b7a3116a5fd8730665608ec`.
+Before approval or finalization, the owner directed a no-voluntary-refund,
+all-sales-final posture. The corrected candidate makes that rule conspicuous,
+binds it to authenticated Download availability, assessment work start, and
+Custom work/reserved-capacity/milestone start, and adds a specific-purchase
+liability cap, indirect/lost-profit exclusion, customer-content indemnity,
+express warranty boundary, and New Jersey law/venue. The corrected current
+review manifest SHA-256 is
+`b94bec35baf7dba4cc86f8679fa95902d1ffa7175d9b26f72b635330b78c6742`.
 Every review HTML document is `noindex,nofollow,noarchive`, non-effective,
 unpublished, nondeployable, and explicitly unapproved. Legal tests passed
-10/10. Chrome for Testing 149.0.7827.55 passed 18/18 review views using only a
+13/13. Chrome for Testing 149.0.7827.55 passed 18/18 review views using only a
 loopback origin, with zero missing files or response failures.
 
 No Joint Legal V5 finalization file exists. Finalization still requires the
@@ -98,7 +112,7 @@ Deployment and public cutover remain separate later gates.
 ## Proof ladder
 
 - Focused catalog/migration/runtime/UI proof: 138/138.
-- Legal V5 unit/integration proof: 10/10; review-browser proof: 18/18.
+- Corrected Legal V5 unit/integration proof: 13/13; review-browser proof: 18/18.
 - Canonical Node/product proof: 883/883.
 - Retained public-truth proof: V2 retirement 29/29, legacy 77/77, V3 18/18.
 - Complete clean `npm test`: exit 0, including hosted/service 1,077 passed,
@@ -121,6 +135,13 @@ configuration, HQ, Dell, protected database, or cutover state changed. No V5
 legal release values were invented. Every new payment/provider/public effect
 remains held. The implementation was committed before the clean cumulative
 proof so the exact clean-tree operations gates could pass.
+
+The owner-directed legal correction was likewise committed before its clean
+cumulative proof. Exact correction `383ac38...` passed canonical Node 883/883,
+hosted/service 1,077 with zero failures and 14 intentional no-database skips,
+operations 206/206, deterministic 93-file Pages and hosted artifacts, and the
+complete 24-route/six-width browser audit. The corrected legal-focused proof
+then re-passed 13/13 and 18/18 on the exact clean implementation commit.
 
 FIN-007 engineering implementation and review-only evidence are sealed by this
 record. Full FIN-007 completion credit remains withheld until the owner closes
