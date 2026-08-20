@@ -20,9 +20,9 @@ export const FIN008_PREDECESSOR_COMMIT =
 export const FIN008_PREDECESSOR_MIGRATION_COUNT = 58;
 export const FIN008_PREDECESSOR_LATEST_MIGRATION =
   "202608090105_hosted_joint_legal_v4_authority.sql";
-export const FIN008_EXPECTED_MIGRATION_COUNT = 94;
+export const FIN008_EXPECTED_MIGRATION_COUNT = 95;
 export const FIN008_EXPECTED_LATEST_MIGRATION =
-  "202608190141_commercial_catalog_convergence.sql";
+  "202608200142_hosted_joint_legal_v5_authority.sql";
 
 const MIGRATIONS = new URL(
   "../server/data-plane/supabase/migrations/",

@@ -312,10 +312,10 @@ export function createHostedEngagementBootstrap({
   );
   invariant(
     legalAuthority?.acceptanceSchema ===
-      "sitesourcery.project-legal-acceptance/v4" &&
+      "sitesourcery.project-legal-acceptance/v5" &&
       typeof legalAuthority.authorityDigest === "string",
     "ENGAGEMENT_CONFIGURATION_ERROR",
-    "Released joint legal V4 authority is required for engagement claims.",
+    "Released joint legal V5 authority is required for engagement claims.",
     { status: 500 }
   );
   invariant(

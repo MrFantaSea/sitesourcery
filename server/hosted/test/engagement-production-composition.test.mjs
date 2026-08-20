@@ -8,7 +8,7 @@ import {
 } from "../engagement-production-composition.mjs";
 
 const LEGAL = Object.freeze({
-  acceptanceSchema: "sitesourcery.project-legal-acceptance/v4",
+  acceptanceSchema: "sitesourcery.project-legal-acceptance/v5",
   authorityDigest: "a".repeat(64),
   documents: Object.freeze([]),
   documentBindings: Object.freeze([]),
