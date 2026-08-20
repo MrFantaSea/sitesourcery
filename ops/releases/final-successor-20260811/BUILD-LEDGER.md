@@ -3,8 +3,9 @@
 Candidate branch: `integration/final-successor-20260811`  
 Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
 Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-007 proved with exact owner-approved held Legal V5 finalization;
-FIN-008 is next and unopened
+Status: FIN-008 proved with exact convergent data epoch, encrypted distinct-
+domain backup, clean-room restore, and rollback safety; FIN-009 is next and
+unopened
 
 ## Governing inputs
 
@@ -27,7 +28,7 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-005 | proved | All eight cleanup archive heads and named recent lanes | Outside-union provenance/disposition and bounded Assessment/Custom proof adaptation | No unclassified preserved lane; 87-migration joined proof and cumulative matrix passed |
 | FIN-006 | proved | Integrated source | Root composition and cross-system contracts | Exact 20-row/six-process matrix, all-93-migration proof, and 15-gate all-held trace |
 | FIN-007 | proved | Canonical commercial source at exact SHA-256 `9398d025…` | Catalog/public/routes/artifacts, zero-cash credited Card settlement, and owner-approved held Legal V5 finalization | Implementation `b69ff5f…`; legal correction `383ac38…`; finalization `9a8eb2a…`; receipt SHA-256 `5e51f126…`; clean cumulative ladder; 94-migration rebuild; 24 × 6 Chrome matrix; deterministic 93-file Pages and 112-file hosted artifacts; no public/provider/deployment effect |
-| FIN-008 | pending | Candidate migration epoch | Empty and 201-table upgrade rehearsals | Convergent schema/data/restore invariants |
+| FIN-008 | proved | Candidate migration epoch | Empty and exact 201-table predecessor upgrade rehearsals, encrypted distinct-domain backup, clean-room restore, and paired rollback | Implementation `4820765…`; exact 58/36/94 manifests; canonical schema `c4788908…`; 201/201 predecessor relations preserved without row loss; encrypted Zen attempt `2916ef2d…`; clean restore convergence; clean cumulative ladder; all effects held |
 | FIN-009 | pending | Clean candidate SHA | Private immutable staging | Installed readback and complete owner acceptance |
 | FIN-010 | pending | Accepted installed SHA | Production-held install and public cutover | Explicit owner approval and rollback-ready probes |
 
@@ -233,3 +234,18 @@ law/venue. Corrected review manifest
 passed 13/13 legal tests, 18/18 legal Chrome views, and the complete clean
 cumulative ladder. The review bundle remains noindex and immutable; the exact
 owner-approved final bytes are now sealed separately in the held finalization.
+
+FIN-008's exact 58-file predecessor plus additive 36-file delta, empty and
+predecessor-upgrade convergence, 201/201 preserved predecessor relations,
+canonical successor schema/data/ownership fingerprints, encrypted distinct-
+domain Zen backup, no-plaintext checksummed clean-room restore, paired
+predecessor rollback, exact cleanup, and clean cumulative proof are recorded in
+`FIN-008-DATA-EPOCH-RESTORE-PROVENANCE.md`. The implementation is
+`4820765bab1860bc71f494a1728fd2bda37b2891`, tree
+`2ab0571cc46cb6ec40a138fd411d2c7ccaa866cc`; the machine-readable receipt is
+`fin008-data-epoch-receipt.json`, SHA-256
+`fc5f1455d085e22b8937bbd8433d1045086d57818e59862ffb5d7d607da6b673`.
+The live placeholder and protected HQ database remained unchanged. Every
+public, DNS, provider, deployment, and cutover effect remains held. FIN-009
+private immutable staging and owner acceptance are next and were not started by
+FIN-008.
