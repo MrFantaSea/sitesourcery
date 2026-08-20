@@ -1239,6 +1239,22 @@ test("quality and Pages jobs retain exact bounded timing contracts", async () =>
   assert.equal(workflowJobTimeout(pages, "deploy"), 8);
 });
 
+test("site quality retains the history required for predecessor proofs", async () => {
+  const siteQuality = await readFile(
+    path.join(SITE_ROOT, ".github/workflows/site-quality.yml"),
+    "utf8",
+  );
+  const checkoutAt = siteQuality.indexOf("- name: Check out repository");
+  const setupAt = siteQuality.indexOf("- name: Use pinned Node.js", checkoutAt);
+  assert.ok(checkoutAt >= 0, "site quality must check out the repository");
+  assert.ok(setupAt > checkoutAt, "site quality must set up Node after checkout");
+  assert.match(
+    siteQuality.slice(checkoutAt, setupAt),
+    /with:\s+fetch-depth:\s*0/u,
+    "site quality must retain full history for production predecessor proofs",
+  );
+});
+
 test("cross-revision workflows use current control tooling for historical artifacts", async () => {
   const [containment, reconciliation] = await Promise.all([
     readFile(path.join(SITE_ROOT, ".github/workflows/containment.yml"), "utf8"),
