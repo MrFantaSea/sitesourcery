@@ -985,10 +985,10 @@ test("workflow is manual protected held and has no effect-bearing action", async
     "successor_input_sha256:",
     "npm test",
     "npm run check:ops",
-    "build:pages:legal-v4",
-    "record Legal V4 and browser evidence",
-    "build:hosted:legal-v4",
-    "check:hosted:legal-v4",
+    "build:pages && npm run check:artifact",
+    "record exact successor Pages and browser evidence",
+    "Build and verify complete held current successor hosted projection",
+    "run: npm run check:hosted",
     "ss_ci_release_[1-9][0-9]*_[1-9][0-9]*",
     "ci-release-proof.mjs absence",
     "--control-root control",
@@ -1017,10 +1017,11 @@ test("workflow is manual protected held and has no effect-bearing action", async
     /Expected values to be strictly deep-equal/u
   );
   assert.ok(
-    source.indexOf("npm test") < source.indexOf("build:hosted:legal-v4") &&
-      source.indexOf("build:hosted:legal-v4") <
+    source.indexOf("npm test") <
+        source.indexOf("Build and verify complete held current successor hosted projection") &&
+      source.indexOf("Build and verify complete held current successor hosted projection") <
         source.indexOf("ci-release-proof.mjs final"),
-    "complete hosted V4 projection must replace the ordinary build before origin verification",
+    "complete current successor hosted projection must precede origin verification",
   );
   assert.doesNotMatch(source, /\b(?:upload|deploy)-(?:pages-)?artifact@/u);
   assert.doesNotMatch(source, /\b(?:deploy-pages|configure-pages)@/u);
@@ -1038,7 +1039,7 @@ test("workflow is manual protected held and has no effect-bearing action", async
   );
   assert.match(
     runbook,
-    /320, 360, 390, 720, 768, and 1440 CSS[\s\S]*90 route\/view combinations/u
+    /320, 360, 390, 720, 768, and 1440 CSS[\s\S]*144 route\/view combinations/u
   );
   for (const required of [
     "if (command === \"generate\")",

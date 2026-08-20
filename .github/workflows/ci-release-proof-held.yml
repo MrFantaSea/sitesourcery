@@ -210,15 +210,15 @@ jobs:
             --workflow-sha "$CI_RELEASE_WORKFLOW_SHA" >/dev/null
           node control/ops/ci-release-proof.mjs record --step ops
 
-      - name: Build and verify exact Legal V4 Pages projection
+      - name: Build and verify exact current successor Pages projection
         working-directory: target
-        run: npm run build:pages:legal-v4 && npm run check:artifact:legal-v4
+        run: npm run build:pages && npm run check:artifact
 
-      - name: Build and verify complete held Legal V4 hosted projection
+      - name: Build and verify complete held current successor hosted projection
         working-directory: target
-        run: npm run build:hosted:legal-v4 && npm run check:hosted:legal-v4
+        run: npm run check:hosted
 
-      - name: Re-bind protected proof and record Legal V4 and browser evidence
+      - name: Re-bind protected proof and record exact successor Pages and browser evidence
         shell: bash
         run: |
           set -euo pipefail
