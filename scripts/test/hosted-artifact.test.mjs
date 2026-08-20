@@ -23,6 +23,7 @@ import {
   assertNoHeldAlakazamExecutableSemantics,
   buildHostedArtifact,
   hostedFileAllowlist,
+  hostedFilesForJointLegalV5,
   hostedOperatorAssets,
   hostedFilesForPrivacyV3Render,
   verifyHostedArtifact,
@@ -32,6 +33,9 @@ import {
   publicFileAllowlist,
   verifyPagesArtifact,
 } from "../build-pages.mjs";
+import {
+  createPagesJointLegalV5Plan,
+} from "../hosted-truth/pages-legal-v5.mjs";
 import { hostedStagingAssets } from "../configure-abracadabra-hosted-staging.mjs";
 import {
   heldAlakazamArtifactExcludedFiles,
@@ -54,7 +58,6 @@ import {
   assertPrivacyV3CandidateSources,
   assertPrivacyV3ContentApprovalPending,
   assertPrivacyV3Unsealed,
-  assertUnsealedPrivacyCurrentAlias,
   HOSTED_PRIVACY_V2_ARTIFACT,
   HOSTED_PRIVACY_V3_CANDIDATE,
   HOSTED_PRIVACY_V3_CONTENT,
@@ -122,6 +125,7 @@ const PRIVACY_TOPICS = [
   "network-records",
   "domains",
   "billing",
+  "professional-services",
   "retention",
   "safety-support",
   "communications",
@@ -141,8 +145,8 @@ const TERMS_TOPICS = [
   "customer-content",
   "prohibited-uses",
   "safety-holds",
-  "custom-work",
   "assessment",
+  "custom-work",
   "hive-planner",
   "care",
   "site-ownership",
@@ -435,7 +439,7 @@ test("held Alakazam copy fragments and customer UI fail closed before release", 
   assert.equal(assertHostedAlakazamUiHeld(customerControl), true);
 });
 
-test("one hosted build emits the exact $5 Download contract, customer controls, and no retired product", async (t) => {
+test("one hosted build emits approved Legal V5, the exact $5 Download contract, customer controls, and no retired product", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-hosted-artifact-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
   const output = path.join(temporary, "artifact");
@@ -462,13 +466,16 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
     sha256(exactTermsV2Archive),
     HOSTED_WEBSITE_TERMS_V2_ARTIFACT.sha256,
   );
-  assert.equal(assertUnsealedPrivacyCurrentAlias({ root: output }), true);
+  const legalV5 = createPagesJointLegalV5Plan({ root: ROOT });
+  const privacyV5 = legalV5.publishedArtifacts.find(
+    ({ role }) => role === "privacy-current",
+  );
   assert.equal(
-    (await readFile(
+    sha256(await readFile(
       path.join(output, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
-    )).equals(exactV2Archive),
-    true,
-    "an ordinary unsealed hosted build must keep the current privacy alias on V2",
+    )),
+    privacyV5.sha256,
+    "the default hosted build must publish the sealed V5 current alias",
   );
   assert.equal(hostedFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
   assert.equal(publicFileAllowlist.includes(HOSTED_PRIVACY_V2_ARTIFACT.file), true);
@@ -521,13 +528,20 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   await verifyHostedArtifact({ root: ROOT, output });
 
   const files = (await walk(output)).sort();
-  assert.deepEqual(files, [...hostedFileAllowlist]);
+  assert.deepEqual(files, [...hostedFilesForJointLegalV5({ root: ROOT })]);
   for (const file of heldAlakazamArtifactExcludedFiles) {
     await assert.rejects(access(path.join(output, file)));
   }
 
+  const applicableTruthRequirements = Object.fromEntries(
+    Object.entries(hostedTruthRequirements).filter(([file]) => ![
+      "legal/index.html",
+      "legal/privacy/index.html",
+      "legal/website-terms/index.html",
+    ].includes(file)),
+  );
   const sources = await readTruthFiles(output, hostedTruthRequirements);
-  assertRequirements(sources, hostedTruthRequirements);
+  assertRequirements(sources, applicableTruthRequirements);
   assertMissingPhrases(sources, heldOnlyPhrases);
   for (const file of files.filter((candidate) =>
     candidate === "index.html" || candidate.endsWith("/index.html"))) {
@@ -697,24 +711,27 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   assert.deepEqual(topicIds(privacy), PRIVACY_TOPICS);
   assert.deepEqual(topicIds(terms), TERMS_TOPICS);
   for (const phrase of [
-    "$5 once per editor project unlocks Download for that project.",
-    "Later accepted versions and repeat downloads from the same retained editor project do not require another Site Sourcery purchase.",
-    "A different editor project has its own one-time $5 Download unlock.",
-    "The customer may modify it and self-host it without another Site Sourcery payment.",
-    "Made-for-you design, writing, migration, integrations, domain help, and publishing need a separate written scope.",
-    "Hive is a short phone or in-person conversation with Zack",
+    "A completed one-time $5 payment unlocks Download for that retained editor project and does not renew.",
+    "without another Site Sourcery payment for the same project entitlement",
+    "The current $5 Download does not authorize it, and current Alakazam publication remains held.",
+    "The customer may edit, copy, and self-host that file with a provider they choose",
+    "Custom work begins only after the customer and Site Sourcery accept an exact written quote",
+    "The private held authority SS-RESPONDER-COMMERCE-2026.1",
   ]) {
     assert.ok(terms.includes(phrase), phrase);
   }
   for (const legalSource of [privacy, terms]) {
-    assert.match(legalSource, /href="tel:\+18562441220">\(856\) 244-1220<\/a>/u);
+    assert.match(
+      legalSource,
+      /href="tel:\+18562441220">\(856\)&nbsp;244&#8209;1220<\/a>/u,
+    );
     assert.match(
       legalSource,
       /href="mailto:sitesourcery@proton\.me">sitesourcery@proton\.me<\/a>/u,
     );
     assert.doesNotMatch(
       legalSource,
-      /\b(?:cancel anytime|refund within|retained for \d+ days?|Rent|Owned \+ managed)\b/iu,
+      /\b(?:cancel anytime|refund within|Rent|Owned \+ managed)\b/iu,
     );
   }
 
@@ -731,28 +748,28 @@ test("one hosted build emits the exact $5 Download contract, customer controls, 
   assert.equal(releaseControl.allowsCommercialDeployment, false);
 });
 
-test("an ordinary public build cannot publish the unsealed privacy V3 candidate", async (t) => {
+test("an ordinary public build publishes sealed Legal V5 and never the unsealed source candidate", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-privacy-v3-public-hold-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
   const output = path.join(temporary, "artifact");
 
   assert.equal(buildPagesArtifact({ root: ROOT, output }), output);
   assert.equal(verifyPagesArtifact({ root: ROOT, output }).output, output);
-  assert.equal(assertUnsealedPrivacyCurrentAlias({ root: output }), true);
+  const legalV5 = createPagesJointLegalV5Plan({ root: ROOT });
+  const privacyV5 = legalV5.publishedArtifacts.find(
+    ({ role }) => role === "privacy-current",
+  );
 
-  const [sourceCandidate, publishedCurrent, publishedV2] = await Promise.all([
+  const [sourceCandidate, publishedCurrent] = await Promise.all([
     readFile(path.join(ROOT, HOSTED_PRIVACY_V3_CANDIDATE.currentFile)),
     readFile(path.join(output, HOSTED_PRIVACY_V3_CANDIDATE.currentFile)),
-    readFile(path.join(output, HOSTED_PRIVACY_V2_ARTIFACT.file)),
   ]);
   assert.equal(sourceCandidate.equals(publishedCurrent), false);
-  assert.equal(publishedCurrent.equals(publishedV2), true);
-  assert.equal(sha256(publishedCurrent), HOSTED_PRIVACY_V2_ARTIFACT.sha256);
-  assert.equal(
-    (await walk(output)).some((file) =>
-      /^legal\/privacy\/versions\/SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3\/index\.html$/u.test(file)),
-    false,
-  );
+  assert.equal(sha256(publishedCurrent), privacyV5.sha256);
+  const files = await walk(output);
+  for (const artifact of legalV5.publishedArtifacts) {
+    assert.ok(files.includes(artifact.file), artifact.file);
+  }
 });
 
 test("every nullable privacy V3 release field independently fails closed", () => {

@@ -17,7 +17,6 @@ import {
   assertImmutableLegalArtifactSources,
   assertPrivacyV3CandidateSources,
   assertPrivacyV3NotPublished,
-  assertUnsealedPrivacyCurrentAlias,
   HOSTED_PRIVACY_V2_ARTIFACT,
   HOSTED_PRIVACY_V3_CANDIDATE,
   immutableLegalArtifactFiles,
@@ -27,6 +26,11 @@ import {
   createPagesJointLegalV4Plan,
   pagesLegalV4Files,
 } from "./hosted-truth/pages-legal-v4.mjs";
+import {
+  assertPagesJointLegalV5Artifact,
+  createPagesJointLegalV5Plan,
+  pagesLegalV5Files,
+} from "./hosted-truth/pages-legal-v5.mjs";
 
 /*
  * This is intentionally an allowlist, not a recursive copy with exceptions.
@@ -298,9 +302,12 @@ export function buildPagesArtifact({
         finalizationRoot: jointLegalV4FinalizationRoot,
       })
     : null;
+  const jointLegalV5Plan = jointLegalV4Plan
+    ? null
+    : createPagesJointLegalV5Plan({ root: absoluteRoot });
   const artifactFiles = jointLegalV4Plan
     ? pagesLegalV4Files(publicFileAllowlist, jointLegalV4Plan)
-    : publicFileAllowlist;
+    : pagesLegalV5Files(publicFileAllowlist, jointLegalV5Plan);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
   assertPrivacyV3CandidateSources({ root: absoluteRoot });
 
@@ -324,7 +331,8 @@ export function buildPagesArtifact({
     for (const file of artifactFiles) {
       const destination = path.join(absoluteOutput, ...file.split("/"));
       mkdirSync(path.dirname(destination), { recursive: true });
-      const plannedSource = jointLegalV4Plan?.sourceByFile.get(file);
+      const plannedSource = jointLegalV4Plan?.sourceByFile.get(file)
+        ?? jointLegalV5Plan?.sourceByFile.get(file);
       const source = plannedSource
         ?? path.join(absoluteRoot, ...unsealedPublicationSource(file).split("/"));
       copyFileSync(source, destination);
@@ -333,7 +341,7 @@ export function buildPagesArtifact({
     if (jointLegalV4Plan) {
       assertPagesJointLegalV4Artifact(absoluteOutput, jointLegalV4Plan);
     } else {
-      assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+      assertPagesJointLegalV5Artifact(absoluteOutput, jointLegalV5Plan);
     }
   } catch (error) {
     /*
@@ -361,9 +369,12 @@ export function verifyPagesArtifact({
         finalizationRoot: jointLegalV4FinalizationRoot,
       })
     : null;
+  const jointLegalV5Plan = jointLegalV4Plan
+    ? null
+    : createPagesJointLegalV5Plan({ root: absoluteRoot });
   const artifactFiles = jointLegalV4Plan
     ? pagesLegalV4Files(publicFileAllowlist, jointLegalV4Plan)
-    : publicFileAllowlist;
+    : pagesLegalV5Files(publicFileAllowlist, jointLegalV5Plan);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
   assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputStat = lstatSync(absoluteOutput);
@@ -374,7 +385,7 @@ export function verifyPagesArtifact({
   if (jointLegalV4Plan) {
     assertPagesJointLegalV4Artifact(absoluteOutput, jointLegalV4Plan);
   } else {
-    assertUnsealedPrivacyCurrentAlias({ root: absoluteOutput });
+    assertPagesJointLegalV5Artifact(absoluteOutput, jointLegalV5Plan);
   }
 
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
@@ -392,7 +403,8 @@ export function verifyPagesArtifact({
   }
 
   for (const file of artifactFiles) {
-    const plannedSource = jointLegalV4Plan?.sourceByFile.get(file);
+    const plannedSource = jointLegalV4Plan?.sourceByFile.get(file)
+      ?? jointLegalV5Plan?.sourceByFile.get(file);
     const sourceBytes = readFileSync(
       plannedSource ?? path.join(absoluteRoot, ...unsealedPublicationSource(file).split("/")),
     );
