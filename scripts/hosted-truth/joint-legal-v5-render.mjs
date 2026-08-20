@@ -361,7 +361,7 @@ export function renderPrivacyV5({ root = process.cwd(), plan } = {}) {
 const TERMS_ACCEPTANCE = `        <h2 id="acceptance">Acceptance, authority, and release state</h2>
         <p class="legal-topic-summary" data-legal-summary="acceptance">Browsing and guest previewing do not accept terms. A catalog entry, inquiry, or payment alone does not release a service or authorize work.</p>
         <details class="legal-topic" data-legal-topic="acceptance"><summary>Read full acceptance terms</summary><div class="legal-topic-body" data-legal-clause="acceptance">
-          <p>These terms apply only after publication with an exact version and effective time and only to the services expressly released at that time. Browsing, making a guest preview, reading a catalog entry, or sending an inquiry does not create an account, save a project, accept terms, authorize payment, publish a site, or start work. A person accepting for an organization represents that they are old enough to contract and authorized to act for it.</p>
+          <p>These terms apply only after publication with an exact version and effective time and only to the services expressly released at that time. Released paid services are offered for business and commercial use, not personal, family, or household use. Browsing, making a guest preview, reading a catalog entry, or sending an inquiry does not create an account, save a project, accept terms, authorize payment, publish a site, or start work. A person accepting for an organization represents that they are old enough to contract and authorized to act for it.</p>
           <p>A saved project, $5 Download, Website assessment, or Custom build requires the exact signed-in acceptance, quote, scope, responsibilities, payment or credit schedule, and applicable agreement shown before the action. Payment alone does not authorize work, publication, domain action, or another service. Alakazam, Care, domain and DNS mutations, The Responder, native clients, and every unreleased payment, email, telephony, messaging, provider, and publication effect remain held until separately released. Implemented code and private quote preparation do not make a held product available.</p>
         </div></details>`;
 
@@ -372,12 +372,13 @@ const TERMS_DOMAINS = `        <h2 id="customer-domains">Domain work remains sep
           <p>Spaceship is the selected held registrar integration, but no provider mutation is authorized. Any later domain work requires a separately released written scope identifying the customer decision, registrant and account control, provider terms, exact current provider cost and customer price, renewal and transfer responsibilities, authorized changes, verified provider readback, and failure handling.</p>
         </div></details>`;
 
-const TERMS_BILLING = `        <h2 id="billing-cancellation">Payment, tax, credit-only settlement, refunds, and disputes</h2>
-        <p class="legal-topic-summary" data-legal-summary="billing-cancellation">Stripe handles positive card payments. A fully credited Card start moves no money and creates no payment receipt.</p>
+const TERMS_BILLING = `        <h2 id="billing-cancellation">Payment, tax, final sales, and disputes</h2>
+        <p class="legal-topic-summary" data-legal-summary="billing-cancellation">Except where applicable law expressly requires otherwise, all sales are final and Site Sourcery offers no voluntary refunds.</p>
         <details class="legal-topic" data-legal-topic="billing-cancellation"><summary>Read payment and reversal terms</summary><div class="legal-topic-body" data-legal-clause="billing-cancellation">
           <p>Secure card entry for an authorized positive amount is handled by Stripe. Site Sourcery verifies the exact quote, project or service purpose, customer, subtotal, credit, currency, tax state and result, Checkout, PaymentIntent, Charge, and provider status before recording a provider payment. Site Sourcery does not ask for the full card number or card security code. A held, expired, declined, cancelled, mismatched, or otherwise incomplete Checkout creates no entitlement or paid-service authority.</p>
           <p>All catalog and quote prices are USD and shown before applicable tax. The current internal tax state is <code>disabled_by_owner</code>, so the held payment path calculates and collects no tax. That state is not tax advice or a promise that no tax is legally due. No taxable purpose can open until its tax treatment, configuration, customer display, and owner release are separately approved and proved.</p>
-          <p>A completed one-time $5 payment unlocks Download for that retained editor project and does not renew. Refund or dispute consequences follow the accepted purchase terms, provider evidence, and applicable law. A full refund or lost dispute can revoke future Download access; a partial refund or unresolved dispute can suspend it for review. Site Sourcery cannot retrieve a file already saved to the customer’s device or independent host, and these terms make no blanket refund promise.</p>
+          <p>Except where applicable law expressly requires otherwise or a separately accepted written agreement expressly says otherwise, all sales are final and all payments are non-refundable. Site Sourcery offers no refund, return, cancellation, cash redemption, or replacement credit for change of mind, nonuse, customer delay, customer-supplied error, subjective dissatisfaction with work that matches the accepted scope, or a third-party or provider change. Any legally required remedy is limited by the liability terms below to the fullest extent the law permits.</p>
+          <p>A completed one-time $5 payment unlocks Download for that retained editor project and does not renew. The Download sale becomes final when the accepted HTML file is made available through the authenticated Download route. A provider reversal, chargeback, or payment dispute can revoke or suspend future access. Site Sourcery cannot retrieve a file already saved to the customer’s device or independent host.</p>
           <p>A delivered $350 Website assessment can supply one non-transferable, one-use, non-cash $350 credit for one eligible accepted build for the same organization and project within 90 days. If that credit fully covers a $350 Card start, the accepted invoice has a $350 gross start, $350 credit, and $0 customer subtotal. It is credit-only zero-balance clearance: no Checkout, PaymentIntent, Charge, or payment receipt is created. A partial credit reduces the amount due; only a positive remainder can enter Stripe.</p>
         </div></details>`;
 
@@ -386,6 +387,7 @@ const TERMS_ASSESSMENT = `        <h2 id="assessment">Website assessment</h2>
         <details class="legal-topic" data-legal-topic="assessment"><summary>Read full Website-assessment terms</summary><div class="legal-topic-body" data-legal-clause="assessment">
           <p>The standard Website assessment costs $350 and is paid in full before assessment work begins. Its accepted quote covers one customer organization, one existing public website, one primary goal, up to five representative public pages or page types, desktop and phone review, and up to ten important findings with screenshot evidence, severity, practical importance, and a recommended order of work. The exact selected pages or types and turnaround are stated before sale. Larger or denser review is separately quoted before expanded inspection begins.</p>
           <p>The assessment diagnoses the existing public site. It does not include repairs, an exhaustive crawl, authenticated admin or source-code review, malware cleanup, account recovery, penetration testing, legal advice, or accessibility certification. Remediation requires a separate accepted scope.</p>
+          <p>The assessment payment is final and non-refundable once assessment work begins. Delivery of the written findings completes the purchased assessment even if the customer does not use the findings, pursue remediation, or accept a later build.</p>
           <p>After delivery, the full non-cash $350 is a one-use credit toward one eligible accepted Site Sourcery base build for the same organization and project if that build is accepted within 90 days. The credit is not transferable, cannot be used twice, and does not pay tax, provider costs, ongoing service, or unrelated work. Its use against Card can result in the $0 credit-only settlement described above.</p>
         </div></details>`;
 
@@ -397,9 +399,31 @@ function termsCustom(truth) {
           <p>Fixed catalog add-ons are ${truth.fixedAddons}. Extra revision rounds and priority windows use tier-specific prices shown in the exact quote. Creativity treatment is: ${truth.creativity}. Architecture, migration, provider costs, third-party fees, excess scope, and every variable-price item must be stated in the accepted quote; nothing is silently added or charged.</p>
           <p>Custom work begins only after the customer and Site Sourcery accept an exact written quote, scope, exclusions, responsibilities, dependencies, payment schedule, completion evidence, and separate agreement. Provider fees are separate unless expressly included. Added or changed work requires a written change order, customer acceptance, and its required settlement before added work begins.</p>
           <p>Card and Card Plus require full payment or exact credit clearance before work starts. Site through Scale require 50% before work; the final 50% becomes payable only after Site Sourcery records completion evidence and before final handoff. Completion does not authorize an automatic charge. Final handoff requires the completed scope plus provider-confirmed final payment or the accepted quote’s exact zero-balance clearance. Ownership of agreed client deliverables transfers only after final payment or that exact clearance, subject to third-party material, licenses, and retained Site Sourcery tools identified in the agreement.</p>
+          <p>Each Custom payment is final and non-refundable once the work, reserved production capacity, or accepted milestone tied to that payment begins. Customer delay, missing material, changed decisions, abandonment, nonuse, or refusal of work matching the accepted scope does not create a refund, erase an earned installment, or delay amounts already due. Work outside the accepted scope requires a separately accepted change order.</p>
           <p>The included 30-day workmanship correction window starts only when immutable final handoff is recorded after financial clearance. It covers reproducible defects in accepted deliverables, not new content, new features, changed decisions, third-party changes, another operator’s damage, provider incidents, or work outside the accepted scope. Ongoing Care requires a separate released and accepted written scope.</p>
         </div></details>`;
 }
+
+const TERMS_CUSTOMER_CONTENT = `        <h2 id="customer-content">Customer content, rights, responsibility, and claims</h2>
+        <p class="legal-topic-summary" data-legal-summary="customer-content">The customer must have the rights and authority for everything supplied or directed and is responsible for resulting third-party claims.</p>
+        <details class="legal-topic" data-legal-topic="customer-content"><summary>Read customer-content terms</summary><div class="legal-topic-body" data-legal-clause="customer-content">
+          <p>The customer grants Desiderata Labs LLC and its service providers a nonexclusive permission to receive, store, back up, compile, screen, display, secure, review, and deliver customer material only as reasonably needed for the accepted account, project, assessment, Custom, payment, and delivery services. The customer represents that it has all rights, permissions, licenses, and authority needed for the names, marks, words, images, links, data, access, instructions, and other material it supplies or directs Site Sourcery to use. Do not provide passwords, full payment-card data, regulated health information, or unrelated sensitive information.</p>
+          <p>To the fullest extent permitted by law, the customer will defend, indemnify, and hold harmless Desiderata Labs LLC, its personnel, contractors, and service providers from third-party claims, damages, judgments, penalties, costs, and reasonable attorneys’ fees arising from customer-supplied material, customer instructions, the customer’s lack of authority, unlawful use, infringement, or misuse of delivered work. This obligation does not apply to the extent a claim was caused by Desiderata Labs LLC’s fraud, willful misconduct, or material breach of the accepted agreement.</p>
+        </div></details>`;
+
+const TERMS_WARRANTY = `        <h2 id="warranty">Service warranty boundary</h2>
+        <p class="legal-topic-summary" data-legal-summary="warranty">Except for an express accepted scope or correction window, services are provided as available without additional warranties.</p>
+        <details class="legal-topic" data-legal-topic="warranty"><summary>Read warranty terms</summary><div class="legal-topic-body" data-legal-clause="warranty">
+          <p>To the fullest extent permitted by law, and except for an express commitment in the accepted written scope or the stated 30-day workmanship correction window, the public pages, maker, account, saved-project, payment, assessment, Custom, and Download functions are provided “as is” and “as available.” Desiderata Labs LLC disclaims implied warranties of merchantability, fitness for a particular purpose, title, noninfringement, and uninterrupted or error-free operation. Network, browser, payment, customer-device, customer-supplied content, and independent provider systems can fail separately. Customers must inspect delivered work, verify suitability for their business and legal setting, and keep suitable copies.</p>
+        </div></details>`;
+
+const TERMS_LIMITS = `        <h2 id="limits">Liability limits and separate written agreements</h2>
+        <p class="legal-topic-summary" data-legal-summary="limits">No indirect or lost-profit damages; total liability is capped at the amount paid for the specific affected purchase.</p>
+        <details class="legal-topic" data-legal-topic="limits"><summary>Read limit terms</summary><div class="legal-topic-body" data-legal-clause="limits">
+          <p>To the fullest extent permitted by law, Desiderata Labs LLC is not liable for indirect, incidental, special, exemplary, punitive, or consequential damages, or for lost profits, revenue, business, goodwill, data, opportunities, anticipated savings, business interruption, or substitute services, arising from or related to Site Sourcery, any purchase, or any delivered work, regardless of the legal theory and even if advised that harm was possible.</p>
+          <p>To the fullest extent permitted by law, Desiderata Labs LLC’s total aggregate liability for all claims arising from or related to a specific affected purchase or service will not exceed the amount the customer actually paid directly to Desiderata Labs LLC for that specific affected purchase or service. These exclusions and caps apply together, survive termination, and apply even if a limited remedy fails of its essential purpose.</p>
+          <p>An accepted project agreement can state different project-specific commitments, remedies, or limits and controls for that project. Nothing in these terms excludes liability or a right that applicable law does not permit the parties to exclude or limit, including liability for fraud or willful misconduct.</p>
+        </div></details>`;
 
 function termsResponder(truth) {
   return `        <h2 id="hive-planner">The Responder remains held</h2>
@@ -421,9 +445,9 @@ function termsCare(truth) {
 }
 
 const TERMS_CHANGES = `        <h2 id="changes-contact">Changes, governing setting, requests, and contact</h2>
-        <p class="legal-topic-summary" data-legal-summary="changes-contact">Desiderata Labs LLC operates from New Jersey. A material change receives a new exact version and effective time.</p>
+        <p class="legal-topic-summary" data-legal-summary="changes-contact">New Jersey law governs and New Jersey courts are the agreed forum to the extent permitted by law.</p>
         <details class="legal-topic" data-legal-topic="changes-contact"><summary>Read change and contact terms</summary><div class="legal-topic-body" data-legal-clause="changes-contact">
-          <p>Desiderata Labs LLC operates from New Jersey, United States. Applicable law, nonwaivable rights, and an accepted project agreement can provide rights or duties these general terms cannot change. These terms do not invent a street address, force a waiver of nonwaivable consumer rights, or replace qualified legal or tax advice.</p>
+          <p>These terms and each covered transaction are governed by New Jersey law, without regard to conflict-of-law rules. To the extent permitted by law, any court action must be brought exclusively in a New Jersey state court located in Gloucester County or in the United States District Court for the District of New Jersey, and each party consents to that jurisdiction and venue. A nonwaivable right to use another forum remains unaffected.</p>
           <p>A material change is issued under a new exact version and effective time and receives direct notice or fresh acceptance when required. Questions and legal notices can begin at (856) 244-1220 or sitesourcery@proton.me; Site Sourcery may verify identity and authority before acting on an account, contract, or privacy request.</p>
         </div></details>`;
 
@@ -440,10 +464,13 @@ export function renderWebsiteTermsV5({ root = process.cwd(), plan } = {}) {
   source = replaceSection(source, "acceptance", TERMS_ACCEPTANCE);
   source = replaceSection(source, "customer-domains", TERMS_DOMAINS);
   source = replaceSection(source, "billing-cancellation", TERMS_BILLING);
+  source = replaceSection(source, "customer-content", TERMS_CUSTOMER_CONTENT);
   source = replaceSection(source, "assessment", TERMS_ASSESSMENT);
   source = replaceSection(source, "custom-work", termsCustom(truth));
   source = replaceSection(source, "hive-planner", termsResponder(truth));
   source = replaceSection(source, "care", termsCare(truth));
+  source = replaceSection(source, "warranty", TERMS_WARRANTY);
+  source = replaceSection(source, "limits", TERMS_LIMITS);
   source = replaceSection(source, "changes-contact", TERMS_CHANGES);
   assertRenderedWebsiteTermsV5(source, plan);
   return source;
@@ -460,7 +487,7 @@ function centerHero(privacyPlan, termsPlan) {
 function centerCards(privacyPlan, termsPlan) {
   return `<section class="section section-dark"><div class="site-shell card-grid">
       <article class="card"><p class="card-kicker">Privacy notice</p><h2>Information, providers, and exact retention</h2><p data-legal-summary="privacy">Public requests, accounts, saved projects, payment or credit evidence, professional-service records, Cloudflare, Stripe, Resend, Proton, held providers, security, deletion, and requests.</p><a class="button button-primary" href="/legal/privacy/">Read Privacy V5</a></article>
-      <article class="card"><p class="card-kicker">Website and product terms</p><h2>Acceptance, prices, credit, work, and handoff</h2><p data-legal-summary="terms">Catalog ${CATALOG_VERSION}, $350 assessment, credit-only Card settlement, Custom scope and payment, ownership, workmanship, and nonwaivable rights.</p><a class="button button-primary" href="/legal/website-terms/">Read Website Terms V5</a></article>
+      <article class="card"><p class="card-kicker">Website and product terms</p><h2>Final sales, prices, work, and hard limits</h2><p data-legal-summary="terms">Catalog ${CATALOG_VERSION}, all-sales-final posture, $350 assessment, credit-only Card settlement, Custom payment boundaries, customer-supplied-content responsibility, and capped liability.</p><a class="button button-primary" href="/legal/website-terms/">Read Website Terms V5</a></article>
       <article class="card"><p class="card-kicker">Held means unavailable</p><h2>No silent product or provider release</h2><p data-legal-summary="held">Alakazam, Care, registrar and DNS mutations, publication, The Responder, native clients, and their payment, telephony, messaging, mail, and provider effects remain held until separately approved.</p><a class="button button-secondary" href="/services/">See product status</a></article>
       <article class="card"><p class="card-kicker">Direct contact</p><h2>Desiderata Labs LLC · Site Sourcery</h2><p data-legal-summary="contact">New Jersey, United States. Site Sourcery may verify identity or authority before acting on an account, contract, payment, or privacy request.</p><p><a href="tel:+18562441220">(856) 244-1220</a><br><a href="mailto:sitesourcery@proton.me">sitesourcery@proton.me</a></p></article>
     </div></section>`;
@@ -573,6 +600,12 @@ export function assertRenderedWebsiteTermsV5(source, plan) {
     "Ownership of agreed client deliverables transfers only after final payment",
     "The included 30-day workmanship correction window starts only",
     "current internal tax state is <code>disabled_by_owner</code>",
+    "all sales are final and all payments are non-refundable",
+    "The assessment payment is final and non-refundable once assessment work begins",
+    "Each Custom payment is final and non-refundable once the work",
+    "the customer will defend, indemnify, and hold harmless Desiderata Labs LLC",
+    "total aggregate liability for all claims arising from or related to a specific affected purchase",
+    "governed by New Jersey law",
     "remain held until separately released",
   ]) if (!source.includes(phrase)) {
     throw new Error(`Website Terms V5 is missing required truth: ${phrase}`);
