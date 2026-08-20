@@ -1159,6 +1159,16 @@ test("current browser overflow checks permit a classic scrollbar gutter", () => 
   );
 });
 
+test("current browser navigation has a separate bounded CI deadline", () => {
+  assert.match(currentAuditSource, /const CDP_COMMAND_TIMEOUT_MS = 10000;/u);
+  assert.match(currentAuditSource, /const CDP_NAVIGATION_TIMEOUT_MS = 30000;/u);
+  assert.match(
+    currentAuditSource,
+    /const timeoutMs = method === "Page\.navigate"\s+\? CDP_NAVIGATION_TIMEOUT_MS\s+: CDP_COMMAND_TIMEOUT_MS;/u,
+  );
+  assert.doesNotMatch(currentAuditSource, /CDP_NAVIGATION_TIMEOUT_MS = [4-9][0-9]{4,}/u);
+});
+
 test("test commands are executable by the exact pinned Node runtime", () => {
   const pinnedNode = pinnedNodeSource.trim();
   assert.equal(pinnedNode, "24.18.0");
