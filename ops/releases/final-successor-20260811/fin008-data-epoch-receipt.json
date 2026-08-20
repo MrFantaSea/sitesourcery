@@ -1,0 +1,167 @@
+{
+  "schema": "sitesourcery.fin008-data-epoch-receipt/v1",
+  "state": "proved",
+  "capturedAt": "2026-08-20T12:44:00.000Z",
+  "source": {
+    "candidateInputCommitSha": "e6865bfb072aae7882e16ee7fa859c411703c6cb",
+    "candidateInputTreeSha": "03c169e426b6b36a71a57fd8e248fcf222887513",
+    "predecessorCommitSha": "84aca6b757a806b428ae0cce8115c12dcc6486cd",
+    "predecessorTreeSha": "bd7859348a54b633173d386e0eadc8acc4c8ad54"
+  },
+  "migrations": {
+    "count": 94,
+    "latest": "202608190141_commercial_catalog_convergence.sql",
+    "manifestSha256": "139d050a7c04bdc1a97bd9ec05fe28c887ad11d488282edf3bceb5246820791a",
+    "predecessorCount": 58,
+    "predecessorLatest": "202608090105_hosted_joint_legal_v4_authority.sql",
+    "predecessorManifestSha256": "e7f9c03e6fddebc3dcef52962d45f1789887a3a89867a4d964fe65278229ae84",
+    "deltaCount": 36,
+    "deltaFirst": "202608100106_customer_engagement_bootstrap.sql",
+    "deltaManifestSha256": "08e7d0ad0e62e74df2a5391bb19baeb666c08bcb373c8a85e6c085780a7ae2a1"
+  },
+  "artifacts": {
+    "pagesFileCount": 93,
+    "pagesLedgerSha256": "29aa628bc153277736e26f48be8b8a83d15107226d5dbd8c3edf2c8a4077ab79",
+    "hostedFileCount": 112,
+    "hostedLedgerSha256": "a26a00aa5d6788ab46ba1f434d46f28de5ecfea04533ad1fb6173415508276c7"
+  },
+  "catalog": {
+    "version": "SS-COMMERCIAL-2026.6",
+    "catalogSha256": "3416befc73dccbf2f8dc0f40233d4cd7c1833e4e329bd1047ce8bf41fd2e4de0",
+    "approvedSourceSha256": "9398d025b12f96ad1989620226cd153dabd39ee81d2ba11d1f03badf1cad2ee1",
+    "approvedSourceSemanticSha256": "0474cd8a48b0b28760e6aa1696eb0021de02f5420646a44efae625bba6a74bcc",
+    "publicProjectionSha256": "61904ce2fc6a6346babe43adbf902675f3a002c6e179b1aae883df498b8e91db"
+  },
+  "legal": {
+    "privacyVersion": "SS-HOSTED-PRIVACY-2026-08-20-V5",
+    "websiteTermsVersion": "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+    "effectiveAt": "2026-08-21T04:00:00.000Z",
+    "contentSealSha256": "2b6047d5ee93f5b59032e63c977cecb8e662abcc92cc5a02aba795493e0bfe2e",
+    "approvalSha256": "8ecce4fa01325e3a0e926fed359c34167f58a4a4cc57d257d913be1d8db55e7e",
+    "releaseReceiptFileSha256": "5e51f126f19f635f712944ebbf80b7232c700df3e7b94c9a5396b9f66b5af82f",
+    "published": false,
+    "deploymentAuthorized": false
+  },
+  "protectedPredecessor": {
+    "databaseMutated": false,
+    "totalTableCount": 201,
+    "tableCounts": {
+      "auth": 1,
+      "ss": 200
+    },
+    "schemaSha256": "e5d1efe881766fc201335e125f26fdb3c9c7cf27de61873b6f0b62201c0231a2",
+    "rowCountsSha256": "6cb1b7ce8f586a0df239bc03a788176675f8194b72d3a523ef05d35dc4845484",
+    "canonicalFencedBackupAttemptId": "2026-08-20T081757630Z-125422db-dc13-4881-9974-8522353eeb9e",
+    "canonicalFencedBackupReceiptSha256": "a3b6c1f05908ffbd3b639453bd02e2cbea9c64e9ede3e9e74bd53f84e04f1c76"
+  },
+  "successor": {
+    "postgresMajor": 16,
+    "totalTableCount": 287,
+    "tableCounts": {
+      "auth": 1,
+      "ss": 286
+    },
+    "schemaSha256": "c4788908ebdabbe2210f49ac001876fda082efe00814502220d47b3a6b4f3cd1",
+    "rowCountsSha256": "f05f4e1fd7c415660568113b6fa264790fec43d9a003ccd30e80e31374719143",
+    "ownershipSha256": "04744f6c2253fe2d19e42c8472b515672b3293765d14316945d0153938c59aa0",
+    "metadataCounts": {
+      "columns": 4785,
+      "constraints": 4138,
+      "enums": 0,
+      "indexes": 1064,
+      "policies": 111,
+      "relations": 294,
+      "routines": 584,
+      "tablePrivileges": 3262,
+      "triggers": 488
+    },
+    "freshAndUpgradeConverged": true,
+    "preservedPredecessorRelations": 201,
+    "predecessorRowChanges": [
+      {
+        "relation": "ss.legal_documents",
+        "before": "10",
+        "after": "11"
+      },
+      {
+        "relation": "ss.service_catalog_policies",
+        "before": "9",
+        "after": "17"
+      },
+      {
+        "relation": "ss.service_catalog_coverage",
+        "before": "33",
+        "after": "64"
+      }
+    ],
+    "serviceRoleBypassRls": true,
+    "authenticatedRoleNoBypassRls": true,
+    "everyRlsTableForced": true,
+    "identityCrosswalksPresent": true,
+    "lifecycleStateHeld": true,
+    "lifecycleCommandsHeld": true,
+    "providerEffects": false
+  },
+  "candidateBackup": {
+    "attemptId": "fin008-e6865bf-20260820T122536Z",
+    "sourceFailureDomainId": "mac-fin008-rehearsal-01",
+    "destinationFailureDomainId": "zen-sitesourcery-backup-01",
+    "destinationMarkerSha256": "2dc63155371f048f4617d90e3b1037b8c2419cf9905946d3e859861933005c0e",
+    "recipientFingerprintSha256": "7367055483c4d3134b1f1330aad599a81932f8651fce3ce93b40867d146ebde2",
+    "ciphertextFormat": "age",
+    "ciphertextBytes": 3797564,
+    "ciphertextSha256": "2916ef2de38363ba0ba258ead251d840b736e40f82011e8e77567e7afc272222",
+    "plaintextDumpSha256": "8e4c60e93c7507cde64f23b1b5523a81f72041f20a4e77da9f189f33c46b9c82",
+    "remoteMode": "0400",
+    "plaintextFileCreated": false,
+    "providerEgress": "held"
+  },
+  "cleanRoomRestore": {
+    "failureDomainId": "zen-sitesourcery-backup-01",
+    "freshDatabase": true,
+    "postgresMajor": 16,
+    "dataChecksums": true,
+    "databaseNetworkExposure": "unix_socket_only",
+    "providerEgress": "held",
+    "schemaSha256": "c4788908ebdabbe2210f49ac001876fda082efe00814502220d47b3a6b4f3cd1",
+    "rowCountsSha256": "f05f4e1fd7c415660568113b6fa264790fec43d9a003ccd30e80e31374719143",
+    "ownershipSha256": "04744f6c2253fe2d19e42c8472b515672b3293765d14316945d0153938c59aa0",
+    "allRelationsOwnedByDatabaseOwner": true,
+    "allRoutinesOwnedByDatabaseOwner": true,
+    "rlsAndHeldInvariants": true,
+    "plaintextFileCreated": false,
+    "convergedWithUpgradedSource": true
+  },
+  "rollback": {
+    "predecessorReadyReadOnlySha256": "b7e9919934c48c4a784fa20b814f108cb7b24ec34c8f87a90526dc843a2b1442",
+    "successorFailClosedReadOnlySha256": "f1675426471c470c69afee59a7eced7ce074d783f52f0e023a55a8fddace64f3",
+    "predecessorReadyOnPredecessor": true,
+    "predecessorWritableOnSuccessor": false,
+    "successorRefusalCode": "DATABASE_NOT_MIGRATED",
+    "successorRefusalReason": "custom_service_quotes_terms",
+    "tenantIsolationReadOnly": true,
+    "destructiveSql": false,
+    "providerEffects": false
+  },
+  "cleanup": {
+    "localDisposableDatabaseCount": 0,
+    "localCiphertextAbsent": true,
+    "disposablePredecessorWorktreeAbsent": true,
+    "zenRestoreRootAbsent": true,
+    "zenSocketRootAbsent": true,
+    "zenCiphertextRetained": true
+  },
+  "effects": {
+    "public": false,
+    "dns": false,
+    "cloudflare": false,
+    "pages": false,
+    "stripe": false,
+    "resend": false,
+    "spaceship": false,
+    "twilio": false,
+    "provider": false,
+    "deployment": false,
+    "cutover": false
+  }
+}
