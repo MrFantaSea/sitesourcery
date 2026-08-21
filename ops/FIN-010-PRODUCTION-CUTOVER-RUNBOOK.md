@@ -133,6 +133,9 @@ each remaining blocker is named above.
     production-rehearsal backup cycle's private per-user `BACKUP_QUIESCE`
     marker exists. That second condition is a compatibility fence only; the
     runtime socket and primary FIN-010 fence remain root-managed.
+    The runtime unit also treats the wrapper's intentional `143` result during
+    a systemd stop as successful, so the retained backup cycle observes the
+    required `inactive` state instead of a false failed state.
 
 ## Phase B — fresh paired backup and protected data epoch
 

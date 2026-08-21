@@ -730,6 +730,7 @@ ExecStartPre=+${verify}
 ExecStart=+${FIN010_INSTALLED_WRAPPER_PATH}
 Restart=on-failure
 RestartSec=3
+SuccessExitStatus=143
 TimeoutStartSec=45
 TimeoutStopSec=30
 KillSignal=SIGTERM
