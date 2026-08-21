@@ -102,6 +102,18 @@ each remaining blocker is named above.
    API to `127.0.0.1:8788` and immutable static bytes to `127.0.0.1:8899`; it
    removes the stale `/opt/sitesourcery/current` static dependency. The tunnel
    credential and ingress YAML remain unchanged.
+10. Before runtime activation, install the generated hosted/worker environments
+    and API/tenant wrapper at their exact `/etc/sitesourcery` paths as
+    `root:simtech`, mode `0640`, `0640`, and `0550`. Make the exact candidate
+    release and pinned Node toolchain recursively `root:simtech`, remove all
+    group/other write bits, and grant group read/execute only where required.
+    Re-hash the candidate artifact after the metadata-only ownership change.
+    The user-manager filesystem namespace maps host root to the overflow UID,
+    so the generated unit uses systemd's documented `+` prefix for the
+    immutable verifier and main wrapper. Both still run as the unprivileged
+    user-manager identity; the non-filesystem guards remain in force, and the
+    repeated server ownership check continues to validate the real root-owned
+    evidence instead of accepting a remapped surrogate.
 
 ## Phase B — fresh paired backup and protected data epoch
 

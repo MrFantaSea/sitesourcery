@@ -10,6 +10,9 @@ import {
   FIN010_CADDY_CONFIG_PATH,
   FIN010_EVIDENCE,
   FIN010_HOSTED_ENVIRONMENT_PATH,
+  FIN010_INSTALLED_HOSTED_ENVIRONMENT_PATH,
+  FIN010_INSTALLED_WORKER_ENVIRONMENT_PATH,
+  FIN010_INSTALLED_WRAPPER_PATH,
   FIN010_PREDECESSOR_COMMIT,
   FIN010_PRODUCTION_ROOT,
   FIN010_PUBLICATION_SOCKET,
@@ -207,6 +210,14 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
     units["sitesourcery-production.service"],
     /^ExecStartPre=\+.*verify-final-release-epoch-v2\.mjs/mu
   );
+  assert.match(
+    units["sitesourcery-production.service"],
+    new RegExp(`^EnvironmentFile=${FIN010_INSTALLED_HOSTED_ENVIRONMENT_PATH}$`, "mu")
+  );
+  assert.match(
+    units["sitesourcery-production.service"],
+    new RegExp(`^ExecStart=\\+${FIN010_INSTALLED_WRAPPER_PATH}$`, "mu")
+  );
   assert.equal(units["sitesourcery-production.service"].includes("${SITESOURCERY_"), false);
   for (const evidence of Object.values(FIN010_EVIDENCE)) {
     assert.match(units["sitesourcery-production.service"], new RegExp(evidence.path, "u"));
@@ -214,6 +225,10 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   }
   assert.match(units["sitesourcery-production-worker.service"], /ConditionPathExists=.*WORKERS_APPROVED/u);
   assert.match(units["sitesourcery-production-worker.service"], /ConditionPathExists=!.*WORKERS_HOLD/u);
+  assert.match(
+    units["sitesourcery-production-worker.service"],
+    new RegExp(`^EnvironmentFile=${FIN010_INSTALLED_WORKER_ENVIRONMENT_PATH}$`, "mu")
+  );
   assert.equal(
     Object.values(units).some((value) => value.includes(FIN010_PREDECESSOR_COMMIT)),
     false
