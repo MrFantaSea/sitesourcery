@@ -697,7 +697,10 @@ WorkingDirectory=${FIN010_RELEASE_ROOT}
 Environment=NODE_ENV=production
 EnvironmentFile=${FIN010_HOSTED_ENVIRONMENT_PATH}
 ExecStartPre=${FIN010_NODE} ${FIN010_RELEASE_ROOT}/server/hosted/assert-runtime.mjs
-ExecStartPre=${verify}
+# The user-manager mount namespace maps host UID 0 to the overflow UID. Run
+# only this immutable read-only verifier outside that namespace so it can
+# enforce the root-owned evidence policy; the runtime remains fully sandboxed.
+ExecStartPre=+${verify}
 ExecStart=${FIN010_WRAPPER_PATH}
 Restart=on-failure
 RestartSec=3
