@@ -28,7 +28,7 @@ remain independently gated until their exact steps below pass.
   HTTP 404.
 
 The production release path is
-`/home/simtech/sitesourcery-production/releases/26b07202d91000b9a7ae0cce8115c12dcc6486cd`.
+`/home/simtech/sitesourcery-production/releases/26b07202d91000b9a7ae0de36471c7979f9482a1`.
 The existing predecessor release, environment, unit bytes, GitHub Pages
 placeholder, databases, archives, and evidence are retained for at least 30
 days after cutover. Nothing is auto-retired at day 30.
