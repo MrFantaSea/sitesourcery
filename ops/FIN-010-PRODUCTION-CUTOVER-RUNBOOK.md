@@ -129,6 +129,10 @@ each remaining blocker is named above.
     owned by `root:simtech` at mode `0770`. The generated runtime and worker use
     this root-managed directory for the private publication socket and the
     shared `BACKUP_QUIESCE` fence; neither may fall back to a per-user path.
+    They also refuse startup while the retained, separately proved
+    production-rehearsal backup cycle's private per-user `BACKUP_QUIESCE`
+    marker exists. That second condition is a compatibility fence only; the
+    runtime socket and primary FIN-010 fence remain root-managed.
 
 ## Phase B — fresh paired backup and protected data epoch
 

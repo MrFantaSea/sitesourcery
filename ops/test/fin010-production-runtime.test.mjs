@@ -266,6 +266,10 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   );
   assert.match(
     units["sitesourcery-production.service"],
+    /^ConditionPathExists=!%t\/sitesourcery-production\/BACKUP_QUIESCE$/mu
+  );
+  assert.match(
+    units["sitesourcery-production.service"],
     new RegExp(`^ReadWritePaths=.* ${FIN010_RUNTIME_DIRECTORY}$`, "mu")
   );
   for (const evidence of Object.values(FIN010_EVIDENCE)) {
@@ -277,6 +281,10 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   assert.match(
     units["sitesourcery-production-worker.service"],
     new RegExp(`^ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}$`, "mu")
+  );
+  assert.match(
+    units["sitesourcery-production-worker.service"],
+    /^ConditionPathExists=!%t\/sitesourcery-production\/BACKUP_QUIESCE$/mu
   );
   assert.match(
     units["sitesourcery-production-worker.service"],
