@@ -313,6 +313,16 @@ import {
   createStripeWebhookRouter
 } from "../stripe-webhook-router.mjs";
 
+const PRODUCTION_READINESS_POLICY = Object.freeze({
+  ttlMs: 1_000,
+  timeoutMs: 5_000,
+  staleAfterMs: 15_000
+});
+const PRODUCTION_CAPABILITIES_POLICY = Object.freeze({
+  ttlMs: 1_000,
+  timeoutMs: 5_000
+});
+
 const moduleRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
@@ -1565,6 +1575,8 @@ async function start() {
         }),
         releaseIdentity,
         ingressPolicy,
+        readinessPolicy: PRODUCTION_READINESS_POLICY,
+        capabilitiesPolicy: PRODUCTION_CAPABILITIES_POLICY,
         capabilityProcessMatrix,
         strictCapabilityProcessMatrix: true
       }),

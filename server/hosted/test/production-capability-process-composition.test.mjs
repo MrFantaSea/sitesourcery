@@ -119,6 +119,37 @@ test("strict capabilities and readiness expose the same exact green matrix", asy
   );
 });
 
+test("strict readiness singleflights the shared service readiness fanout", async () => {
+  let calls = 0;
+  let release;
+  const blocked = new Promise((resolve) => {
+    release = resolve;
+  });
+  const selectedService = service();
+  const load = selectedService.readiness;
+  selectedService.readiness = async () => {
+    calls += 1;
+    await blocked;
+    return load();
+  };
+  const matrix = createCapabilityProcessMatrix({
+    loadRows: async () => rowStates(),
+    processes: processStates()
+  });
+  const selected = createHostedApi(selectedService, {
+    capabilityProcessMatrix: matrix,
+    strictCapabilityProcessMatrix: true
+  });
+  const response = selected.fetch(
+    new Request(`${ORIGIN}/api/v1/ready`)
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 1);
+  release();
+  assert.equal((await response).status, 200);
+  assert.equal(calls, 1);
+});
+
 test("required matrix drift fails readiness while capabilities stay inspectable", async () => {
   const selected = api("transactional_mail");
   const readyResponse = await selected.fetch(
@@ -162,6 +193,22 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
   );
   assert.match(source, /strictCapabilityProcessMatrix: true/u);
   assert.match(source, /capabilityProcessMatrix,/u);
+  assert.match(
+    source,
+    /const PRODUCTION_READINESS_POLICY = Object[.]freeze\(\{\s*ttlMs: 1_000,\s*timeoutMs: 5_000,\s*staleAfterMs: 15_000\s*\}\);/u
+  );
+  assert.match(
+    source,
+    /const PRODUCTION_CAPABILITIES_POLICY = Object[.]freeze\(\{\s*ttlMs: 1_000,\s*timeoutMs: 5_000\s*\}\);/u
+  );
+  assert.match(
+    source,
+    /readinessPolicy: PRODUCTION_READINESS_POLICY/u
+  );
+  assert.match(
+    source,
+    /capabilitiesPolicy: PRODUCTION_CAPABILITIES_POLICY/u
+  );
   assert.match(
     source,
     /readiness[.]registration\?\.mode !== "production"[\s\S]{0,240}readiness[.]registration\?\.ready === true[\s\S]{0,160}readiness[.]registration\?\.verified === true/u
