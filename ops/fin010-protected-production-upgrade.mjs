@@ -18,8 +18,8 @@ import {
   writeImmutableEvidence
 } from "./immutable-evidence.mjs";
 import {
-  FIN010_CANDIDATE_COMMIT,
-  FIN010_CANDIDATE_TREE,
+  FIN010_DATA_CANDIDATE_COMMIT,
+  FIN010_DATA_CANDIDATE_TREE,
   FIN010_PREDECESSOR_COMMIT,
   FIN010_PRODUCTION_ROOT,
   parseFin010EnvironmentFile,
@@ -193,8 +193,8 @@ export async function collectFin010ProductionPreflight(pool) {
     capturedAt: new Date().toISOString(),
     source: {
       predecessorCommitSha: FIN010_PREDECESSOR_COMMIT,
-      candidateCommitSha: FIN010_CANDIDATE_COMMIT,
-      candidateTreeSha: FIN010_CANDIDATE_TREE
+      candidateCommitSha: FIN010_DATA_CANDIDATE_COMMIT,
+      candidateTreeSha: FIN010_DATA_CANDIDATE_TREE
     },
     database: compactSnapshot(snapshot),
     migrations: {
@@ -247,8 +247,16 @@ export function validateFin010UpgradeControl(control, {
     "candidateTreeSha"
   ], "Control source");
   exact(control.source.predecessorCommitSha, FIN010_PREDECESSOR_COMMIT, "Predecessor commit");
-  exact(control.source.candidateCommitSha, FIN010_CANDIDATE_COMMIT, "Candidate commit");
-  exact(control.source.candidateTreeSha, FIN010_CANDIDATE_TREE, "Candidate tree");
+  exact(
+    control.source.candidateCommitSha,
+    FIN010_DATA_CANDIDATE_COMMIT,
+    "Data candidate commit"
+  );
+  exact(
+    control.source.candidateTreeSha,
+    FIN010_DATA_CANDIDATE_TREE,
+    "Data candidate tree"
+  );
 
   exactObject(control.database, [
     "name",

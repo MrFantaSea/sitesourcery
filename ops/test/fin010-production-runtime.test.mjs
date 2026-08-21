@@ -7,6 +7,8 @@ import { test } from "node:test";
 import {
   FIN010_CANDIDATE_COMMIT,
   FIN010_CANDIDATE_TREE,
+  FIN010_DATA_CANDIDATE_COMMIT,
+  FIN010_DATA_CANDIDATE_TREE,
   FIN010_BACKUP_QUIESCE_PATH,
   FIN010_CADDY_CONFIG_PATH,
   FIN010_EVIDENCE,
@@ -74,6 +76,8 @@ function deterministicRandomBytes() {
 }
 
 test("FIN-010 derives the exact candidate production-held environment without crossing held provider secrets", async () => {
+  assert.notEqual(FIN010_CANDIDATE_COMMIT, FIN010_DATA_CANDIDATE_COMMIT);
+  assert.notEqual(FIN010_CANDIDATE_TREE, FIN010_DATA_CANDIDATE_TREE);
   const result = createFin010ProductionEnvironments({
     predecessorEnvironmentText: predecessorEnvironment(),
     candidateEnvironmentText: await candidateEnvironment(),
