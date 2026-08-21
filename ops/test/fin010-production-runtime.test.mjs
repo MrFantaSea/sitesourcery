@@ -308,6 +308,11 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   assert.equal(FIN010_CADDY_CONFIG_PATH.endsWith("/Caddyfile"), true);
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8788/u);
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8899/u);
+  assert.match(caddy, /Cache-Control "no-store, no-transform"/u);
+  assert.equal(
+    [...caddy.matchAll(/Cache-Control "no-store, no-transform"/gu)].length,
+    1
+  );
   assert.equal(caddy.includes("/opt/sitesourcery/current"), false);
   assert.match(caddy, /not host sitesourcery\.com www\.sitesourcery\.com/u);
   assert.deepEqual(

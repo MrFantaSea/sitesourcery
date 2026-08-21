@@ -707,7 +707,7 @@ ${legacyRedirects}
 
   handle {
     header {
-      Cache-Control "no-store"
+      Cache-Control "no-store, no-transform"
       -Server
       Referrer-Policy "strict-origin-when-cross-origin"
       X-Content-Type-Options "nosniff"
