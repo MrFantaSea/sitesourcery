@@ -76,11 +76,11 @@ each remaining blocker is named above.
    loopback listeners only, and the exact predecessor artifact manifest.
 4. Verify the root-owned accepted evidence files before using them:
 
-   - `/etc/sitesourcery/fin010-e886227-final-release-epoch-v2.json`:
+   - `/etc/sitesourcery/final-release-epoch-v2.json`:
      `802915b31a81fbf0ff436def90eeaa05e49f7952b2221ee3ea30d1a5129b52c6`
-   - `/etc/sitesourcery/fin010-e886227-origin-seal.json`:
+   - `/etc/sitesourcery/origin-seal.json`:
      `155acdafc854b1966bc42fe2e9633bd85abb55665e5e38eb68800d23114edace`
-   - `/etc/sitesourcery/fin010-e886227-origin-installed-readback.json`:
+   - `/etc/sitesourcery/origin-installed-readback.json`:
      `f09f30fe5539d9709e6db862e2e5270203f3159da323908c8b1ef8468ccd18a6`
 
 5. Fetch the accepted release from protected GitHub into the absent production
