@@ -1,11 +1,12 @@
 # Final successor build ledger
 
-Candidate branch: `integration/final-successor-20260811`  
-Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`  
-Public placeholder: `50b13ce…`, deliberately unchanged  
-Status: FIN-008 proved with exact convergent data epoch, encrypted distinct-
-domain backup, clean-room restore, and rollback safety; FIN-009 is next and
-unopened
+Candidate lineage branch: `integration/final-successor-20260811`
+Integration base: `b03cccbdc5252db3bd5f90084dbfa27beca33f52`
+Final protected control: `597011edebf9c960075118b4c0986d12bd4f9ac3`
+Public release: exact runtime `e8862278eb66e87d3536b4e084dc9647c996d993`
+through the reviewed Cloudflare tunnel
+Status: FIN-010 complete at honest 100/100; exact successor public,
+registration/recovery reconciled, rollback retained, and stabilization active
 
 ## Governing inputs
 
@@ -29,8 +30,8 @@ The owner resolved the complete product questionnaire. Later owner approvals are
 | FIN-006 | proved | Integrated source | Root composition and cross-system contracts | Exact 20-row/six-process matrix, all-93-migration proof, and 15-gate all-held trace |
 | FIN-007 | proved | Canonical commercial source at exact SHA-256 `9398d025…` | Catalog/public/routes/artifacts, zero-cash credited Card settlement, and owner-approved held Legal V5 finalization | Implementation `b69ff5f…`; legal correction `383ac38…`; finalization `9a8eb2a…`; receipt SHA-256 `5e51f126…`; clean cumulative ladder; 94-migration rebuild; 24 × 6 Chrome matrix; deterministic 93-file Pages and 112-file hosted artifacts; no public/provider/deployment effect |
 | FIN-008 | proved | Legal V5-corrected candidate migration epoch | Empty and exact 201-table predecessor upgrade rehearsals, encrypted distinct-domain backup, clean-room restore, and paired rollback | Correction `b2aafdd…`; proof `5e69fba…`; exact 58/37/95 manifests; canonical schema `de7a4d47…`; 201/201 predecessor relations preserved without row loss; encrypted Zen attempt `59e35a8a…`; clean restore convergence; clean cumulative ladder; all effects held |
-| FIN-009 | pending | Clean candidate SHA | Private immutable staging | Installed readback and complete owner acceptance |
-| FIN-010 | pending | Accepted installed SHA | Production-held install and public cutover | Explicit owner approval and rollback-ready probes |
+| FIN-009 | proved | Candidate `26b0720…`, control `804b9a5…` | Private immutable staging | Exact installed readback, held live proof, owner acceptance, and protected successor merge |
+| FIN-010 | proved | Runtime `e886227…`, final control `597011e…` | Production-held install, public cutover, controlled identity proof, and stabilization | 24 exact routes, 14 redirects, 144 accepted width views, registration/recovery reconciliation, rollback, backup, monitor, and machine receipt |
 
 ## Ledger rule
 
@@ -285,3 +286,29 @@ unchanged production PID all passed. Evidence is recorded in
 FIN-009 is `accepted_private_held`. No push, public deployment, DNS, Cloudflare,
 Pages, provider, customer, protected-HQ, production, or cutover effect is
 authorized or claimed. Owner acceptance is the next gate and remains false.
+
+That final FIN-009 sentence is historical staging state. The owner subsequently
+accepted and pushed the candidate, and FIN-010 installed runtime `e886227...`,
+tree `ac53f6a...`, behind the exact held production boundary. Protected main
+control `597011e...`, tree `6123146...`, passed focused 6/6, complete operations
+221/221, PR #20, exact-main Site quality run `32523531704`, and exact-main
+controlled-Pages validation run `32523531386`.
+
+Cloudflare and Spaceship now delegate exactly to `jasmine`/`nash`, proxy only
+apex and `www` through the reviewed tunnel, retain unchanged Resend mail, and
+retain no parent DS. The final edge proof passed 24/24 canonical routes at exact
+accepted bytes, all 14 permanent redirects, the accepted six-width/144-view
+artifact by exact byte equivalence, TLS, Legal V5, APIs, and negative controls.
+Automatic Cloudflare RUM is disabled and the gateway's final HTML header is
+`no-store, no-transform`.
+
+One owner-controlled registration and one recovery were delivered through
+their approved Resend purposes, consumed through the real signed-in mailbox,
+and reconciled to durable provider-acceptance and possession evidence. The
+recovered account signed in and its credential is stored only in the Mac login
+Keychain. Immediate stabilization is green 6/6, the five-minute monitor remains
+active, rollback/backup/predecessor evidence is retained, and all unavailable
+Stripe, Domains, Twilio, publication, and native-distribution effects remain
+installed and held behind their exact named gates. FIN-010 evidence is
+`FIN-010-PRODUCTION-CUTOVER-PROVENANCE.md` and
+`fin010-production-cutover-receipt.json`, SHA-256 `7812b780...`.

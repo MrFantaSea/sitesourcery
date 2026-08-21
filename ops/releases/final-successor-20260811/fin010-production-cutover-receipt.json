@@ -1,0 +1,185 @@
+{
+  "schema": "sitesourcery.fin010-production-cutover-receipt/v1",
+  "recordedAt": "2026-08-21T21:27:44Z",
+  "state": "complete_stabilizing",
+  "completion": {
+    "denominator": 100,
+    "sealedPoints": 100,
+    "honestPercent": 100
+  },
+  "release": {
+    "runtimeCommit": "e8862278eb66e87d3536b4e084dc9647c996d993",
+    "runtimeTree": "ac53f6a59feb9ab7b6e05cb8e03d9c8bcc810eb2",
+    "migrationCount": 95,
+    "latestMigration": "202608200142_hosted_joint_legal_v5_authority.sql",
+    "heldProofControl": "b05fcfb624f49265190c66b8d8941e33c42e35bb",
+    "heldProofRun": 32496652189,
+    "heldProofReceiptSha256": "72be365aa1da3db93ed549d15f095c18c322eb7bc4ef280713ff1a410521b7e1"
+  },
+  "operationsControl": {
+    "commit": "597011edebf9c960075118b4c0986d12bd4f9ac3",
+    "tree": "61231469c0987f64482bd168d1deff79aacaa246",
+    "pullRequest": 20,
+    "pullRequestCheckRun": 32523167245,
+    "mainSiteQualityRun": 32523531704,
+    "mainPagesValidationRun": 32523531386,
+    "focusedTests": "6/6",
+    "operationsTests": "221/221"
+  },
+  "publicEdge": {
+    "checkedAt": "2026-08-21T21:27:42.259Z",
+    "cloudflareZone": "active",
+    "edgeIpObserved": "104.21.19.68",
+    "authoritativeNameservers": [
+      "jasmine.ns.cloudflare.com",
+      "nash.ns.cloudflare.com"
+    ],
+    "parentDs": "absent",
+    "dnssec": "off",
+    "mailRecords": "unchanged_exact_resend_mx_spf_dkim",
+    "apexAndWww": "proxied_tunnel",
+    "tunnelId": "211ffa61-e170-444d-a945-04fead19c972",
+    "canonicalRoutes": {
+      "passed": 24,
+      "expected": 24,
+      "acceptedBytesExact": true
+    },
+    "legacyRedirects": {
+      "passed": 14,
+      "expected": 14,
+      "status": 308
+    },
+    "requiredWidthModes": {
+      "passed": 6,
+      "canonicalViews": 144,
+      "equivalenceBasis": "public_bytes_equal_accepted_six_width_artifact"
+    },
+    "tls": {
+      "subjectAltName": "DNS:sitesourcery.com, DNS:*.sitesourcery.com",
+      "issuer": "Google Trust Services WE1",
+      "validFrom": "2026-08-21T18:45:19Z",
+      "validTo": "2026-11-19T19:44:10Z",
+      "fingerprint256": "89:57:27:39:7A:27:6F:61:1E:31:8C:D1:FB:FD:FE:4D:97:66:EA:83:13:11:C9:C9:DB:E8:01:85:A3:DD:8B:FF"
+    },
+    "negativeControls": {
+      "originWrongHostStatus": 421,
+      "publicWrongHostStatus": 403,
+      "internalProbeStatus": 404
+    },
+    "cloudflareRum": "disabled_and_no_injection_after_no_transform"
+  },
+  "legal": {
+    "privacyCurrentAndVersionedSha256": "5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5",
+    "websiteTermsCurrentAndVersionedSha256": "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a"
+  },
+  "gateway": {
+    "installedConfigSha256": "c625963bd1365efbd213211842e7beac0659149d1e3c88056009f5d5fb70ae8e",
+    "predecessorConfigSha256": "073a246cd808e61a6a14de0676b0699860524506e5dfce4c30862b785f768764",
+    "rollbackPath": "/home/simtech/sitesourcery-production/rollback/Caddyfile.pre-597011edebf9c960075118b4c0986d12bd4f9ac3",
+    "staticCacheControl": "no-store, no-transform",
+    "listener": "127.0.0.1:8081"
+  },
+  "production": {
+    "services": {
+      "runtime": "active",
+      "static": "active",
+      "origin": "active",
+      "cloudflared": "active",
+      "backupTimer": "active",
+      "monitorTimer": "active"
+    },
+    "loopbackListeners": [
+      "127.0.0.1:8080",
+      "127.0.0.1:8081",
+      "127.0.0.1:8788"
+    ],
+    "runtimeRestarts": 0,
+    "backupAttempt": "2026-08-21T171334466Z-0dcb2b83-5af3-4dd3-acb7-c05074e03481",
+    "backupManifestSha256": "a1591c5cf46f8851410662b494ef8b9d765745d557a765bf88ed2e417a8542e4",
+    "backupCiphertextArtifacts": 2,
+    "backupPlaintextRetained": false,
+    "installedLoad": "400/400 concurrency 20 p95 13.724ms max 27.826ms"
+  },
+  "controlledIdentity": {
+    "destinationSha256": "ed51630a2e5be6a808cf65fc739afdaeac228bf249c653245099ef262a11bf9e",
+    "registration": {
+      "provider": "resend",
+      "state": "activated",
+      "providerAcceptanceRecorded": true,
+      "deliveryReceiptSha256": "2bd70068baada9dc8c9b1090a6dd966c6d885803171148018c56d9e0ca84f33c",
+      "possessionEvidenceSha256": "b4fe40af1fe1020172b0b8688414a38e43d0992958bacd938f04cd783df1c863",
+      "userCreated": true,
+      "organizationCreated": true
+    },
+    "recovery": {
+      "provider": "resend",
+      "state": "delivered",
+      "providerAcceptanceRecorded": true,
+      "possessionEvidenceSha256": "7a321bcba9089659fc4893ac1883e6037055c0bff48c9291f277c2a16171aabd",
+      "finalSignIn": true
+    },
+    "credentialCustody": "macos_login_keychain_secret_omitted"
+  },
+  "capabilities": {
+    "registration": true,
+    "recovery": true,
+    "downloadPayment": false,
+    "domainPurchase": false,
+    "publication": false,
+    "domainProviderEffects": false,
+    "workers": "held"
+  },
+  "stabilization": {
+    "startedAt": "2026-08-21T21:06:21.054Z",
+    "immediateCheckpoint": {
+      "completedAt": "2026-08-21T21:06:44Z",
+      "checks": "6/6",
+      "alerts": 0,
+      "deliveryAttempted": false
+    },
+    "restartWindowIncident": {
+      "observedAt": "2026-08-21T20:52:35.532Z",
+      "code": "RUNTIME_PROBE_UNAVAILABLE",
+      "runtimeServiceRestarts": 0,
+      "recoveryObservedAt": "2026-08-21T20:57:45.569Z",
+      "subsequentGreenCheckpoints": 2
+    },
+    "publicReadyTransient": {
+      "observedAt": "2026-08-21T21:16:00Z",
+      "status": 503,
+      "runtimeServiceRestarts": 0,
+      "backupActive": false,
+      "quiesceFencePresent": false,
+      "directFollowup": "20/20 HTTP 200",
+      "publicFollowup": "20/20 HTTP 200 from 2026-08-21T21:24:57Z through 2026-08-21T21:26:12Z",
+      "classification": "transient_not_reproduced_exact_cause_unassigned"
+    },
+    "fifteenMinuteCheckpoint": {
+      "completedAt": "2026-08-21T21:27:44Z",
+      "publicProof": "24/24 exact routes, 14/14 redirects, APIs, Legal V5, TLS, and negative controls",
+      "monitorChecks": "6/6",
+      "alerts": 0,
+      "deliveryAttempted": false
+    },
+    "nextCheckpoints": [
+      "2026-08-21T22:06:21Z",
+      "2026-08-22T21:06:21Z",
+      "2026-08-28T21:06:21Z"
+    ]
+  },
+  "retention": {
+    "pagesFallbackRecorded": true,
+    "predecessorAndRestorePairRetained": true,
+    "oldUnitsEnvironmentGatewayRetained": true,
+    "minimumDays": 30,
+    "automaticRetirement": false
+  },
+  "heldExitStates": [
+    "stripe_reauthentication_and_live_account_evidence",
+    "spaceship_commercial_use_consent",
+    "twilio_credentials_and_a2p_voice_proof",
+    "apple_signing_distribution_evidence",
+    "android_release_signing_distribution_evidence",
+    "publication_and_tenant_domain_owner_release"
+  ]
+}
