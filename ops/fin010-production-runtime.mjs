@@ -34,6 +34,12 @@ export const FIN010_WORKER_ENVIRONMENT_PATH =
   `${FIN010_PRODUCTION_ROOT}/run/workers.env.${FIN010_CANDIDATE_COMMIT}`;
 export const FIN010_WRAPPER_PATH =
   `${FIN010_PRODUCTION_ROOT}/run/api-and-tenant.${FIN010_CANDIDATE_COMMIT}.sh`;
+export const FIN010_INSTALLED_HOSTED_ENVIRONMENT_PATH =
+  `/etc/sitesourcery/hosted.env.${FIN010_CANDIDATE_COMMIT}`;
+export const FIN010_INSTALLED_WORKER_ENVIRONMENT_PATH =
+  `/etc/sitesourcery/workers.env.${FIN010_CANDIDATE_COMMIT}`;
+export const FIN010_INSTALLED_WRAPPER_PATH =
+  `/etc/sitesourcery/api-and-tenant.${FIN010_CANDIDATE_COMMIT}.sh`;
 export const FIN010_CADDY_CONFIG_PATH =
   "/home/simtech/.config/sitesourcery-cloudflare/Caddyfile";
 export const FIN010_PUBLICATION_SOCKET =
@@ -695,13 +701,16 @@ ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 Type=simple
 WorkingDirectory=${FIN010_RELEASE_ROOT}
 Environment=NODE_ENV=production
-EnvironmentFile=${FIN010_HOSTED_ENVIRONMENT_PATH}
+EnvironmentFile=${FIN010_INSTALLED_HOSTED_ENVIRONMENT_PATH}
 ExecStartPre=${FIN010_NODE} ${FIN010_RELEASE_ROOT}/server/hosted/assert-runtime.mjs
 # The user-manager mount namespace maps host UID 0 to the overflow UID. Run
 # only this immutable read-only verifier outside that namespace so it can
-# enforce the root-owned evidence policy; the runtime remains fully sandboxed.
+# enforce the root-owned evidence policy.
 ExecStartPre=+${verify}
-ExecStart=${FIN010_WRAPPER_PATH}
+# The server repeats that ownership check. Its code, Node binary, environment,
+# and wrapper are installed root-owned and non-writable by the service user;
+# run it in the host ownership view while retaining the non-filesystem guards.
+ExecStart=+${FIN010_INSTALLED_WRAPPER_PATH}
 Restart=on-failure
 RestartSec=3
 TimeoutStartSec=45
@@ -766,7 +775,7 @@ ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 Type=simple
 WorkingDirectory=${FIN010_RELEASE_ROOT}
 Environment=NODE_ENV=production
-EnvironmentFile=${FIN010_WORKER_ENVIRONMENT_PATH}
+EnvironmentFile=${FIN010_INSTALLED_WORKER_ENVIRONMENT_PATH}
 ExecStartPre=${FIN010_NODE} ${FIN010_RELEASE_ROOT}/server/hosted/assert-runtime.mjs
 ExecStart=${FIN010_NODE} ${FIN010_RELEASE_ROOT}/server/hosted/bin/worker.mjs
 Restart=on-failure
