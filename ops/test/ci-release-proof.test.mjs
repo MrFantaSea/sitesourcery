@@ -69,6 +69,8 @@ const projectRoot = path.resolve(
 );
 const executeFile = promisify(execFile);
 const canonicalTemporaryRoot = await realpath(os.tmpdir());
+const PATH_WAIT_TIMEOUT_MS = 30_000;
+const PATH_WAIT_POLL_MS = 10;
 
 function protectedImplementationPaths(workflow) {
   const selected = workflow.match(
@@ -120,13 +122,14 @@ async function gitSecurityFixture() {
 }
 
 async function waitForPath(selected) {
-  for (let attempt = 0; attempt < 500; attempt += 1) {
+  const deadline = Date.now() + PATH_WAIT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
     try {
       await access(selected);
       return;
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, PATH_WAIT_POLL_MS));
     }
   }
   throw new Error(`Timed out waiting for ${selected}.`);
