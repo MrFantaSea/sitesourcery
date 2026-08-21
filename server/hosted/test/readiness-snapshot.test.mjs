@@ -171,6 +171,10 @@ test("readiness snapshot has no direct database or provider imports", async () =
 
 test("readiness snapshot rejects unbounded timing policies", () => {
   const check = async () => ({ ready: true });
+  assert.doesNotThrow(() => createReadinessSnapshot({
+    check,
+    timeoutMs: 12_000
+  }));
   assert.throws(
     () => createReadinessSnapshot({
       check,
@@ -181,7 +185,7 @@ test("readiness snapshot rejects unbounded timing policies", () => {
   assert.throws(
     () => createReadinessSnapshot({
       check,
-      timeoutMs: 5_001
+      timeoutMs: 12_001
     }),
     /timeoutMs is invalid/u
   );

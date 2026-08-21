@@ -315,12 +315,12 @@ import {
 
 const PRODUCTION_READINESS_POLICY = Object.freeze({
   ttlMs: 1_000,
-  timeoutMs: 5_000,
+  timeoutMs: 12_000,
   staleAfterMs: 15_000
 });
 const PRODUCTION_CAPABILITIES_POLICY = Object.freeze({
   ttlMs: 1_000,
-  timeoutMs: 5_000
+  timeoutMs: 12_000
 });
 
 const moduleRoot = path.resolve(

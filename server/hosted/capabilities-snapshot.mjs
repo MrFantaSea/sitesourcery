@@ -24,7 +24,7 @@ export function createCapabilitiesSnapshot({
     throw new TypeError("load is required");
   }
   requireDuration(ttlMs, "ttlMs", 1, 30_000);
-  requireDuration(timeoutMs, "timeoutMs", 1, 5_000);
+  requireDuration(timeoutMs, "timeoutMs", 1, 12_000);
   if (
     typeof now !== "function" ||
     typeof timers?.setTimeout !== "function" ||

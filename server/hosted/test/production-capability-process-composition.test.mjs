@@ -195,11 +195,11 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
   assert.match(source, /capabilityProcessMatrix,/u);
   assert.match(
     source,
-    /const PRODUCTION_READINESS_POLICY = Object[.]freeze\(\{\s*ttlMs: 1_000,\s*timeoutMs: 5_000,\s*staleAfterMs: 15_000\s*\}\);/u
+    /const PRODUCTION_READINESS_POLICY = Object[.]freeze\(\{\s*ttlMs: 1_000,\s*timeoutMs: 12_000,\s*staleAfterMs: 15_000\s*\}\);/u
   );
   assert.match(
     source,
-    /const PRODUCTION_CAPABILITIES_POLICY = Object[.]freeze\(\{\s*ttlMs: 1_000,\s*timeoutMs: 5_000\s*\}\);/u
+    /const PRODUCTION_CAPABILITIES_POLICY = Object[.]freeze\(\{\s*ttlMs: 1_000,\s*timeoutMs: 12_000\s*\}\);/u
   );
   assert.match(
     source,

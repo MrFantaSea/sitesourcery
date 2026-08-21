@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { createCapabilitiesSnapshot } from "../capabilities-snapshot.mjs";
 import { createHostedApi } from "../http.mjs";
 
 const ORIGIN = "https://staging.sitesourcery.com";
@@ -208,6 +209,21 @@ const EXPECTED = Object.freeze({
   domains: FULL_DOMAIN_READINESS,
   domainPurchase: true,
   publishing: true
+});
+
+test("capabilities snapshot admits the bounded field-jitter budget only", () => {
+  const load = async () => ({});
+  assert.doesNotThrow(() => createCapabilitiesSnapshot({
+    load,
+    timeoutMs: 12_000
+  }));
+  assert.throws(
+    () => createCapabilitiesSnapshot({
+      load,
+      timeoutMs: 12_001
+    }),
+    /timeoutMs is invalid/u
+  );
 });
 
 function deferred() {
