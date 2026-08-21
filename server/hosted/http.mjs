@@ -949,9 +949,24 @@ export function createHostedApi(
   const release = runtimeReleaseIdentity(
     releaseIdentity
   );
+  let serviceReadinessInFlight = null;
+  function loadServiceReadiness() {
+    if (serviceReadinessInFlight !== null) {
+      return serviceReadinessInFlight;
+    }
+    const selected = Promise.resolve().then(() => service.readiness());
+    serviceReadinessInFlight = selected;
+    const clear = () => {
+      if (serviceReadinessInFlight === selected) {
+        serviceReadinessInFlight = null;
+      }
+    };
+    selected.then(clear, clear);
+    return selected;
+  }
   const readinessBoundary =
     createReadinessSnapshot({
-      check: () => service.readiness(),
+      check: loadServiceReadiness,
       ...(readinessPolicy ?? {})
     });
   const downloadBoundary =
@@ -1661,7 +1676,7 @@ export function createHostedApi(
           adjacentIntegrationReadiness,
           capabilityProcessMatrixSnapshot
         ] = await Promise.all([
-          service.readiness(),
+          loadServiceReadiness(),
           typeof downloadBoundary.readiness === "function"
             ? downloadBoundary.readiness()
             : {
