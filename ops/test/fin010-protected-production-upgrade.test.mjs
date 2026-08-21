@@ -7,6 +7,9 @@ import {
   FIN010_PREDECESSOR_COMMIT
 } from "../fin010-production-runtime.mjs";
 import {
+  collectFin008MigrationInventory
+} from "../fin008-data-convergence.mjs";
+import {
   FIN010_MIGRATION_MANIFEST_SHA256,
   FIN010_PREDECESSOR_ARTIFACT_MANIFEST_SHA256,
   FIN010_PREDECESSOR_SCHEMA_SHA256,
@@ -22,6 +25,13 @@ import {
 const NOW = Date.parse("2026-08-21T12:00:00.000Z");
 const BEFORE_ROWS = "1".repeat(64);
 const AFTER_ROWS = "2".repeat(64);
+
+test("FIN-010 binds the actual FIN-008 byte inventory rather than the origin manifest domain", async () => {
+  const actual = await collectFin008MigrationInventory();
+  assert.equal(actual.count, 95);
+  assert.equal(actual.delta.count, 37);
+  assert.equal(actual.manifestSha256, FIN010_MIGRATION_MANIFEST_SHA256);
+});
 
 function control(overrides = {}) {
   const value = {

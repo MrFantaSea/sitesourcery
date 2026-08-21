@@ -37,8 +37,11 @@ export const FIN010_PREDECESSOR_SCHEMA_SHA256 =
   "e5d1efe881766fc201335e125f26fdb3c9c7cf27de61873b6f0b62201c0231a2";
 export const FIN010_SUCCESSOR_SCHEMA_SHA256 =
   "de7a4d476899db85d0d4bf2e93c9f54210f39bc77c416586a8b960cf0e5a397a";
+// This is collectFin008MigrationInventory().manifestSha256: the canonical
+// byte-inventory digest consumed by this upgrader. The separately retained
+// origin file-manifest digest uses a different domain/schema and is 1c19acd….
 export const FIN010_MIGRATION_MANIFEST_SHA256 =
-  "1c19acd918ecdd9a223d6e28f1501c6b1cb762132be65bc2f988491f0994a991";
+  "8e5a5a8b52432335ffb05d7d83bf5e88836af2c9e12149547ff037b4009d9880";
 export const FIN010_PREDECESSOR_ARTIFACT_MANIFEST_SHA256 =
   "b28ff784a9205096094a53a0fdbcedc5a20878b2b640e545cacd43ff61fd4359";
 export const FIN010_PUBLIC_PLACEHOLDER_SHA256 =
