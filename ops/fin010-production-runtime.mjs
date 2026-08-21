@@ -682,7 +682,7 @@ export function createFin010Caddyfile() {
 }
 
 export function createFin010UserUnitSet() {
-  const verify = `${FIN010_NODE} ${FIN010_RELEASE_ROOT}/ops/verify-final-release-epoch-v2.mjs --epoch \${SITESOURCERY_RELEASE_EPOCH_FILE} --epoch-sha256 \${SITESOURCERY_RELEASE_EPOCH_SHA256} --origin-seal \${SITESOURCERY_ORIGIN_SEAL_FILE} --origin-seal-sha256 \${SITESOURCERY_ORIGIN_SEAL_FILE_SHA256} --installed-readback \${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE} --installed-readback-sha256 \${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE_SHA256}`;
+  const verify = `${FIN010_NODE} ${FIN010_RELEASE_ROOT}/ops/verify-final-release-epoch-v2.mjs --epoch ${FIN010_EVIDENCE.epoch.path} --epoch-sha256 ${FIN010_EVIDENCE.epoch.sha256} --origin-seal ${FIN010_EVIDENCE.originSeal.path} --origin-seal-sha256 ${FIN010_EVIDENCE.originSeal.sha256} --installed-readback ${FIN010_EVIDENCE.installedReadback.path} --installed-readback-sha256 ${FIN010_EVIDENCE.installedReadback.sha256}`;
   const runtime = `[Unit]
 Description=Site Sourcery FIN-010 exact production-held API and tenant runtime
 After=network-online.target sitesourcery-production-db-tunnel.service
