@@ -16,6 +16,7 @@ import {
   FIN010_INSTALLED_HOSTED_ENVIRONMENT_PATH,
   FIN010_INSTALLED_WORKER_ENVIRONMENT_PATH,
   FIN010_INSTALLED_WRAPPER_PATH,
+  FIN010_LEGACY_REDIRECTS,
   FIN010_PREDECESSOR_COMMIT,
   FIN010_PRODUCTION_ROOT,
   FIN010_PUBLICATION_SOCKET,
@@ -32,6 +33,7 @@ import {
 } from "../fin010-production-runtime.mjs";
 import { createPublicationCommandConfiguration } from
   "../../server/hosted/publication-command-transport.mjs";
+import { LEGACY_REDIRECTS } from "../../scripts/check-routes.mjs";
 
 const candidateEnvironmentUrl = new URL(
   "../hosted.env.example",
@@ -308,6 +310,22 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8899/u);
   assert.equal(caddy.includes("/opt/sitesourcery/current"), false);
   assert.match(caddy, /not host sitesourcery\.com www\.sitesourcery\.com/u);
+  assert.deepEqual(
+    FIN010_LEGACY_REDIRECTS,
+    Object.fromEntries(
+      Object.entries(LEGACY_REDIRECTS)
+        .map(([source, target]) => [`/${source}`, target])
+    )
+  );
+  for (const [source, target] of Object.entries(FIN010_LEGACY_REDIRECTS)) {
+    assert.match(
+      caddy,
+      new RegExp(
+        `^  redir ${source.replaceAll(".", "\\.")} https://sitesourcery\\.com${target.replaceAll(".", "\\.")} 308$`,
+        "mu"
+      )
+    );
+  }
 });
 
 test("FIN-010 runbook freezes the paired rollback and two-stage Cloudflare cutover", async () => {
