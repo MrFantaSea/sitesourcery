@@ -203,6 +203,10 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   ]);
   assert.match(units["sitesourcery-production.service"], new RegExp(FIN010_CANDIDATE_COMMIT, "u"));
   assert.match(units["sitesourcery-production.service"], /verify-final-release-epoch-v2\.mjs/u);
+  assert.match(
+    units["sitesourcery-production.service"],
+    /^ExecStartPre=\+.*verify-final-release-epoch-v2\.mjs/mu
+  );
   assert.equal(units["sitesourcery-production.service"].includes("${SITESOURCERY_"), false);
   for (const evidence of Object.values(FIN010_EVIDENCE)) {
     assert.match(units["sitesourcery-production.service"], new RegExp(evidence.path, "u"));
