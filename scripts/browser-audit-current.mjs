@@ -38,6 +38,7 @@ const EXPECTED_BROWSER =
   "Google Chrome for Testing 149.0.7827.55";
 const CDP_COMMAND_TIMEOUT_MS = 10000;
 const CDP_NAVIGATION_TIMEOUT_MS = 30000;
+const CDP_NAVIGATION_ATTEMPTS = 2;
 const BROWSER_CANDIDATES = Object.freeze([
   process.env.SITESOURCERY_CHROMIUM,
   "/private/tmp/sitesourcery-chrome-149.0.7827.55-mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell",
@@ -2336,6 +2337,27 @@ async function waitFor(cdp, expression, timeoutMs = 8000) {
   );
 }
 
+async function sendPageNavigation(cdp, url) {
+  for (let attempt = 1; attempt <= CDP_NAVIGATION_ATTEMPTS; attempt += 1) {
+    try {
+      return await cdp.send("Page.navigate", { url });
+    } catch (error) {
+      const timedOut = error.message ===
+        `Page.navigate: timed out after ${CDP_NAVIGATION_TIMEOUT_MS}ms`;
+      if (!timedOut || attempt === CDP_NAVIGATION_ATTEMPTS) throw error;
+      try {
+        if (await evaluate(cdp, `location.href === ${JSON.stringify(url)}`)) {
+          return { recoveredAfterResponseTimeout: true };
+        }
+      } catch {
+        // The execution context can be unavailable while a navigation stalls.
+      }
+      await cdp.send("Page.stopLoading");
+    }
+  }
+  throw new Error("Unreachable navigation attempt state.");
+}
+
 async function setViewport(cdp, viewport) {
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: viewport.width,
@@ -2352,7 +2374,7 @@ async function setViewport(cdp, viewport) {
 }
 
 async function navigate(cdp, url) {
-  await cdp.send("Page.navigate", { url });
+  await sendPageNavigation(cdp, url);
   await waitFor(
     cdp,
     `document.readyState === "complete" && location.href === ${JSON.stringify(url)}`,
@@ -2376,7 +2398,7 @@ async function navigate(cdp, url) {
 }
 
 async function navigateWithoutPageScript(cdp, url) {
-  const navigation = await cdp.send("Page.navigate", { url });
+  const navigation = await sendPageNavigation(cdp, url);
   if (navigation.errorText) {
     throw new Error(
       `No-script navigation failed for ${url}: ${navigation.errorText}`,
@@ -2435,7 +2457,7 @@ async function isolatePaidJourney(cdp) {
       error.message !== "Page.stopLoading: Not attached to an active page"
     ) throw error;
   }
-  await cdp.send("Page.navigate", { url: "about:blank" });
+  await sendPageNavigation(cdp, "about:blank");
   await waitFor(
     cdp,
     `document.readyState === "complete" && location.href === "about:blank"`,
@@ -4804,7 +4826,7 @@ try {
     const expectedRequestUrl = new URL(expectedUrl);
     expectedRequestUrl.hash = "";
     const priorDocumentCount = documentNavigations.length;
-    await cdp.send("Page.navigate", { url: inputUrl });
+    await sendPageNavigation(cdp, inputUrl);
     await waitFor(
       cdp,
       `location.href === ${JSON.stringify(expectedUrl)}`,
