@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
-  FIN010_CANDIDATE_COMMIT,
-  FIN010_CANDIDATE_TREE,
+  FIN010_DATA_CANDIDATE_COMMIT,
+  FIN010_DATA_CANDIDATE_TREE,
   FIN010_PREDECESSOR_COMMIT
 } from "../fin010-production-runtime.mjs";
 import {
@@ -41,8 +41,8 @@ function control(overrides = {}) {
     expiresAt: "2026-08-21T12:20:00.000Z",
     source: {
       predecessorCommitSha: FIN010_PREDECESSOR_COMMIT,
-      candidateCommitSha: FIN010_CANDIDATE_COMMIT,
-      candidateTreeSha: FIN010_CANDIDATE_TREE
+      candidateCommitSha: FIN010_DATA_CANDIDATE_COMMIT,
+      candidateTreeSha: FIN010_DATA_CANDIDATE_TREE
     },
     database: {
       name: FIN010_PRODUCTION_DATABASE,

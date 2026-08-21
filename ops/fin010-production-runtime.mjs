@@ -15,11 +15,18 @@ import { canonicalJson } from "./immutable-evidence.mjs";
 export const FIN010_RUNTIME_SCHEMA =
   "sitesourcery.fin010-production-runtime/v1";
 export const FIN010_CANDIDATE_COMMIT =
-  "26b07202d91000b9a7ae0de36471c7979f9482a1";
+  "e8862278eb66e87d3536b4e084dc9647c996d993";
 export const FIN010_CANDIDATE_TREE =
-  "00f648e39931a3e62445bc6c1d441087c69a8136";
+  "ac53f6a59feb9ab7b6e05cb8e03d9c8bcc810eb2";
 export const FIN010_CONTROL_COMMIT =
-  "804b9a57922f14eed673fe5a1b66a8f42afad4ce";
+  "b05fcfb624f49265190c66b8d8941e33c42e35bb";
+// The data epoch was protected-upgraded from the earlier accepted runtime.
+// Keep that historical receipt identity separate from the final runtime
+// candidate so a runtime-only correction cannot rewrite completed DB proof.
+export const FIN010_DATA_CANDIDATE_COMMIT =
+  "26b07202d91000b9a7ae0de36471c7979f9482a1";
+export const FIN010_DATA_CANDIDATE_TREE =
+  "00f648e39931a3e62445bc6c1d441087c69a8136";
 export const FIN010_PREDECESSOR_COMMIT =
   "84aca6b757a806b428ae0cce8115c12dcc6486cd";
 export const FIN010_PRODUCTION_ROOT =
@@ -50,19 +57,19 @@ export const FIN010_BACKUP_QUIESCE_PATH =
 
 export const FIN010_EVIDENCE = Object.freeze({
   epoch: Object.freeze({
-    path: "/etc/sitesourcery/final-release-epoch-v2.json",
+    path: "/etc/sitesourcery/fin010-e886227-final-release-epoch-v2.json",
     sha256:
-      "935cb082bcc279bbb5361ff9997a2222bb1cc8313eeb2a1f43a3465cbb3c928c"
+      "802915b31a81fbf0ff436def90eeaa05e49f7952b2221ee3ea30d1a5129b52c6"
   }),
   originSeal: Object.freeze({
-    path: "/etc/sitesourcery/origin-seal.json",
+    path: "/etc/sitesourcery/fin010-e886227-origin-seal.json",
     sha256:
-      "ee5be28b62ab0ba951e689a9dfbaed7a4a55bf7b7136b5b55be501aa827b3b47"
+      "155acdafc854b1966bc42fe2e9633bd85abb55665e5e38eb68800d23114edace"
   }),
   installedReadback: Object.freeze({
-    path: "/etc/sitesourcery/origin-installed-readback.json",
+    path: "/etc/sitesourcery/fin010-e886227-origin-installed-readback.json",
     sha256:
-      "f07adff3f67aafcbee0a83da785fb4c124d9c7b6fe3744cdc31830a3f2e7c77d"
+      "f09f30fe5539d9709e6db862e2e5270203f3159da323908c8b1ef8468ccd18a6"
   })
 });
 

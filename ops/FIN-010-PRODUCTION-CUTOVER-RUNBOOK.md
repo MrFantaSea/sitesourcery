@@ -5,9 +5,17 @@ remain independently gated until their exact steps below pass.
 
 ## Frozen identities
 
-- Accepted source: `26b07202d91000b9a7ae0de36471c7979f9482a1`, tree
-  `00f648e39931a3e62445bc6c1d441087c69a8136`.
-- Accepted control: `804b9a57922f14eed673fe5a1b66a8f42afad4ce`.
+- Accepted runtime source: `e8862278eb66e87d3536b4e084dc9647c996d993`,
+  tree `ac53f6a59feb9ab7b6e05cb8e03d9c8bcc810eb2`.
+- Accepted held-proof control: `b05fcfb624f49265190c66b8d8941e33c42e35bb`.
+- Protected held-proof run `32496652189` issued exact final receipt digest
+  `72be365aa1da3db93ed549d15f095c18c322eb7bc4ef280713ff1a410521b7e1`.
+- Installed held final-epoch digest:
+  `5f20788e3b619694604822f1127dcbdea9966a916e2572fb909390e7e568fc6e`.
+- Completed protected data-upgrade source: `26b07202d91000b9a7ae0de36471c7979f9482a1`,
+  tree `00f648e39931a3e62445bc6c1d441087c69a8136`. This remains the historical
+  identity in the immutable database-upgrade receipt; the final runtime-only
+  readiness correction does not alter the successor schema.
 - Verified GitHub main before FIN-010:
   `8b83af7360375c0f8b8cd82113abb1a60f00fcb2`, tree
   `1cb09f874a2a1bf4a36ecb287065236eaa9fa8bc`.
@@ -28,7 +36,7 @@ remain independently gated until their exact steps below pass.
   HTTP 404.
 
 The production release path is
-`/home/simtech/sitesourcery-production/releases/26b07202d91000b9a7ae0de36471c7979f9482a1`.
+`/home/simtech/sitesourcery-production/releases/e8862278eb66e87d3536b4e084dc9647c996d993`.
 The existing predecessor release, environment, unit bytes, GitHub Pages
 placeholder, databases, archives, and evidence are retained for at least 30
 days after cutover. Nothing is auto-retired at day 30.
@@ -68,21 +76,22 @@ each remaining blocker is named above.
    loopback listeners only, and the exact predecessor artifact manifest.
 4. Verify the root-owned accepted evidence files before using them:
 
-   - `/etc/sitesourcery/final-release-epoch-v2.json`:
-     `935cb082bcc279bbb5361ff9997a2222bb1cc8313eeb2a1f43a3465cbb3c928c`
-   - `/etc/sitesourcery/origin-seal.json`:
-     `ee5be28b62ab0ba951e689a9dfbaed7a4a55bf7b7136b5b55be501aa827b3b47`
-   - `/etc/sitesourcery/origin-installed-readback.json`:
-     `f07adff3f67aafcbee0a83da785fb4c124d9c7b6fe3744cdc31830a3f2e7c77d`
+   - `/etc/sitesourcery/fin010-e886227-final-release-epoch-v2.json`:
+     `802915b31a81fbf0ff436def90eeaa05e49f7952b2221ee3ea30d1a5129b52c6`
+   - `/etc/sitesourcery/fin010-e886227-origin-seal.json`:
+     `155acdafc854b1966bc42fe2e9633bd85abb55665e5e38eb68800d23114edace`
+   - `/etc/sitesourcery/fin010-e886227-origin-installed-readback.json`:
+     `f09f30fe5539d9709e6db862e2e5270203f3159da323908c8b1ef8468ccd18a6`
 
-5. Copy the accepted release from retained FIN-009 staging into the absent
-   production release path with archive/checksum semantics. Verify every file,
-   byte count, mode, 118-file hosted artifact manifest, source commit/tree,
-   migration inventory, and locked dependency tree before using it.
+5. Fetch the accepted release from protected GitHub into the absent production
+   release path and detach at its exact commit. Verify every file, byte count,
+   mode, 118-file hosted artifact manifest, source commit/tree, migration
+   inventory, and locked dependency tree before using it. Retained FIN-009
+   staging remains evidence and is not promoted into this final release path.
 6. Install the separately committed FIN-010 operations-control tree under
    `/home/simtech/sitesourcery-production/control/COMMIT_SHA` and verify that
    commit/tree before running its tools. Never copy FIN-010 control files into
-   or modify the immutable accepted `26b0720...` runtime release.
+   or modify the immutable accepted `e886227...` runtime release.
 7. Preserve immutable rollback copies of the predecessor user units, current
    private environment, Caddyfile, tunnel configuration, and service-state
    inventory. Never log or hash the environment values.
