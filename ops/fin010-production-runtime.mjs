@@ -54,6 +54,22 @@ export const FIN010_PUBLICATION_SOCKET =
   `${FIN010_RUNTIME_DIRECTORY}/publication-command-v1.sock`;
 export const FIN010_BACKUP_QUIESCE_PATH =
   `${FIN010_RUNTIME_DIRECTORY}/BACKUP_QUIESCE`;
+export const FIN010_LEGACY_REDIRECTS = Object.freeze({
+  "/about.html": "/about/",
+  "/alacazam/index.html": "/alakazam/",
+  "/automation.html": "/hive/",
+  "/contact.html": "/contact/",
+  "/faq.html": "/faq/",
+  "/how-it-works.html": "/custom/process/",
+  "/pricing.html": "/custom/scope/",
+  "/privacy.html": "/legal/privacy/",
+  "/terms.html": "/legal/website-terms/",
+  "/thanks.html": "/contact/",
+  "/the-difference.html": "/about/#the-difference",
+  "/the-meter.html": "/custom/process/#scope",
+  "/the-moat.html": "/about/#the-difference",
+  "/the-responder.html": "/responder/"
+});
 
 export const FIN010_EVIDENCE = Object.freeze({
   epoch: Object.freeze({
@@ -625,6 +641,10 @@ export function createFin010TmpfilesConfiguration() {
 }
 
 export function createFin010Caddyfile() {
+  const legacyRedirects = Object.entries(FIN010_LEGACY_REDIRECTS)
+    .map(([source, target]) =>
+      `  redir ${source} https://sitesourcery.com${target} 308`)
+    .join("\n");
   return `# FIN-010 loopback origin. Public authority remains a separate DNS gate.
 {
   admin off
@@ -660,6 +680,8 @@ export function createFin010Caddyfile() {
     header -Server
     respond 421
   }
+
+${legacyRedirects}
 
   @sitesourcery_internal path /_sitesourcery /_sitesourcery/*
   handle @sitesourcery_internal {
