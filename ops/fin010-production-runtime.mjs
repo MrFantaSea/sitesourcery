@@ -42,8 +42,11 @@ export const FIN010_INSTALLED_WRAPPER_PATH =
   `/etc/sitesourcery/api-and-tenant.${FIN010_CANDIDATE_COMMIT}.sh`;
 export const FIN010_CADDY_CONFIG_PATH =
   "/home/simtech/.config/sitesourcery-cloudflare/Caddyfile";
+export const FIN010_RUNTIME_DIRECTORY = "/run/sitesourcery";
 export const FIN010_PUBLICATION_SOCKET =
-  "/run/user/1000/sitesourcery-production/publication-command-v1.sock";
+  `${FIN010_RUNTIME_DIRECTORY}/publication-command-v1.sock`;
+export const FIN010_BACKUP_QUIESCE_PATH =
+  `${FIN010_RUNTIME_DIRECTORY}/BACKUP_QUIESCE`;
 
 export const FIN010_EVIDENCE = Object.freeze({
   epoch: Object.freeze({
@@ -585,7 +588,9 @@ stop_children() {
 }
 trap stop_children EXIT INT TERM
 
-install -d -m 0700 /run/user/1000/sitesourcery-production
+test -d "${FIN010_RUNTIME_DIRECTORY}"
+test ! -L "${FIN010_RUNTIME_DIRECTORY}"
+test "$(stat -c '%U:%G:%a' "${FIN010_RUNTIME_DIRECTORY}")" = "root:simtech:770"
 "$node" "$release/server/hosted/bin/server.mjs" &
 api_pid=$!
 for _attempt in $(seq 1 300); do
@@ -606,6 +611,10 @@ wait -n "$api_pid" "$tenant_pid"
 status=$?
 exit "$status"
 `;
+}
+
+export function createFin010TmpfilesConfiguration() {
+  return `d ${FIN010_RUNTIME_DIRECTORY} 0770 root simtech -\n`;
 }
 
 export function createFin010Caddyfile() {
@@ -695,7 +704,7 @@ After=network-online.target sitesourcery-production-db-tunnel.service
 Wants=network-online.target
 Requires=sitesourcery-production-db-tunnel.service
 ConditionPathExists=${FIN010_PRODUCTION_ROOT}/run/RUNTIME_APPROVED
-ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
+ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}
 
 [Service]
 Type=simple
@@ -729,7 +738,7 @@ LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 ReadOnlyPaths=${FIN010_RELEASE_ROOT} ${FIN010_NODE.replace(/\/bin\/node$/u, "")} /etc/sitesourcery
-ReadWritePaths=${FIN010_PRODUCTION_ROOT}/state ${FIN010_PRODUCTION_ROOT}/run /run/user/1000/sitesourcery-production
+ReadWritePaths=${FIN010_PRODUCTION_ROOT}/state ${FIN010_PRODUCTION_ROOT}/run ${FIN010_RUNTIME_DIRECTORY}
 LimitNOFILE=8192
 TasksMax=256
 
@@ -769,7 +778,7 @@ Wants=network-online.target
 Requires=sitesourcery-production.service
 ConditionPathExists=${FIN010_PRODUCTION_ROOT}/run/WORKERS_APPROVED
 ConditionPathExists=!${FIN010_PRODUCTION_ROOT}/run/WORKERS_HOLD
-ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
+ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}
 
 [Service]
 Type=simple
@@ -795,7 +804,7 @@ LockPersonality=true
 CapabilityBoundingSet=
 AmbientCapabilities=
 ReadOnlyPaths=${FIN010_RELEASE_ROOT} ${FIN010_NODE.replace(/\/bin\/node$/u, "")} /etc/sitesourcery ${FIN010_PRODUCTION_ROOT}/state/tenant-runtime
-ReadWritePaths=${FIN010_PRODUCTION_ROOT}/state/private-exports ${FIN010_PRODUCTION_ROOT}/run
+ReadWritePaths=${FIN010_PRODUCTION_ROOT}/state/private-exports ${FIN010_PRODUCTION_ROOT}/run ${FIN010_RUNTIME_DIRECTORY}
 LimitNOFILE=4096
 TasksMax=64
 

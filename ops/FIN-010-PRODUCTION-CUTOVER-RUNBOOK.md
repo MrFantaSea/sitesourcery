@@ -114,6 +114,12 @@ each remaining blocker is named above.
     user-manager identity; the non-filesystem guards remain in force, and the
     repeated server ownership check continues to validate the real root-owned
     evidence instead of accepting a remapped surrogate.
+11. Install a root-owned `/etc/tmpfiles.d/sitesourcery-fin010.conf` from
+    `createFin010TmpfilesConfiguration()`, run `systemd-tmpfiles --create` for
+    that exact file, and verify `/run/sitesourcery` is a non-symlink directory
+    owned by `root:simtech` at mode `0770`. The generated runtime and worker use
+    this root-managed directory for the private publication socket and the
+    shared `BACKUP_QUIESCE` fence; neither may fall back to a per-user path.
 
 ## Phase B — fresh paired backup and protected data epoch
 

@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   FIN010_CANDIDATE_COMMIT,
   FIN010_CANDIDATE_TREE,
+  FIN010_BACKUP_QUIESCE_PATH,
   FIN010_CADDY_CONFIG_PATH,
   FIN010_EVIDENCE,
   FIN010_HOSTED_ENVIRONMENT_PATH,
@@ -17,14 +18,18 @@ import {
   FIN010_PRODUCTION_ROOT,
   FIN010_PUBLICATION_SOCKET,
   FIN010_RELEASE_ROOT,
+  FIN010_RUNTIME_DIRECTORY,
   Fin010RuntimeFailure,
   createFin010Caddyfile,
   createFin010ProductionEnvironments,
+  createFin010TmpfilesConfiguration,
   createFin010UserUnitSet,
   createFin010Wrapper,
   parseFin010EnvironmentFile,
   prepareFin010ProductionFiles
 } from "../fin010-production-runtime.mjs";
+import { createPublicationCommandConfiguration } from
+  "../../server/hosted/publication-command-transport.mjs";
 
 const candidateEnvironmentUrl = new URL(
   "../hosted.env.example",
@@ -195,10 +200,30 @@ test("FIN-010 writes new secret-bearing environments exclusively at mode 0600", 
 test("FIN-010 unit and wrapper bytes select only the exact candidate and keep workers held", () => {
   const wrapper = createFin010Wrapper();
   const caddy = createFin010Caddyfile();
+  const tmpfiles = createFin010TmpfilesConfiguration();
   const units = createFin010UserUnitSet();
   assert.match(wrapper, new RegExp(FIN010_CANDIDATE_COMMIT, "u"));
   assert.equal(wrapper.includes(FIN010_PREDECESSOR_COMMIT), false);
   assert.match(wrapper, /wait -n "\$api_pid" "\$tenant_pid"/u);
+  assert.match(wrapper, /root:simtech:770/u);
+  assert.equal(wrapper.includes("/run/user/1000/sitesourcery-production"), false);
+  assert.equal(
+    tmpfiles,
+    `d ${FIN010_RUNTIME_DIRECTORY} 0770 root simtech -\n`
+  );
+  assert.deepEqual(
+    createPublicationCommandConfiguration({
+      socketPath: FIN010_PUBLICATION_SOCKET,
+      token: Buffer.alloc(32, 9).toString("base64url")
+    }),
+    {
+      socketPath: FIN010_PUBLICATION_SOCKET,
+      token: Buffer.alloc(32, 9).toString("base64url"),
+      maximumBodyBytes: 16 * 1024 * 1024,
+      deadlineMs: 15_000,
+      allowedSocketRoot: FIN010_RUNTIME_DIRECTORY
+    }
+  );
   assert.deepEqual(Object.keys(units).sort(), [
     "sitesourcery-production-static.service",
     "sitesourcery-production-worker.service",
@@ -219,12 +244,28 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
     new RegExp(`^ExecStart=\\+${FIN010_INSTALLED_WRAPPER_PATH}$`, "mu")
   );
   assert.equal(units["sitesourcery-production.service"].includes("${SITESOURCERY_"), false);
+  assert.match(
+    units["sitesourcery-production.service"],
+    new RegExp(`^ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}$`, "mu")
+  );
+  assert.match(
+    units["sitesourcery-production.service"],
+    new RegExp(`^ReadWritePaths=.* ${FIN010_RUNTIME_DIRECTORY}$`, "mu")
+  );
   for (const evidence of Object.values(FIN010_EVIDENCE)) {
     assert.match(units["sitesourcery-production.service"], new RegExp(evidence.path, "u"));
     assert.match(units["sitesourcery-production.service"], new RegExp(evidence.sha256, "u"));
   }
   assert.match(units["sitesourcery-production-worker.service"], /ConditionPathExists=.*WORKERS_APPROVED/u);
   assert.match(units["sitesourcery-production-worker.service"], /ConditionPathExists=!.*WORKERS_HOLD/u);
+  assert.match(
+    units["sitesourcery-production-worker.service"],
+    new RegExp(`^ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}$`, "mu")
+  );
+  assert.match(
+    units["sitesourcery-production-worker.service"],
+    new RegExp(`^ReadWritePaths=.* ${FIN010_RUNTIME_DIRECTORY}$`, "mu")
+  );
   assert.match(
     units["sitesourcery-production-worker.service"],
     new RegExp(`^EnvironmentFile=${FIN010_INSTALLED_WORKER_ENVIRONMENT_PATH}$`, "mu")
