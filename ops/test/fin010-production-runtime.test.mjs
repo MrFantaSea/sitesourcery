@@ -270,6 +270,10 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   );
   assert.match(
     units["sitesourcery-production.service"],
+    /^SuccessExitStatus=143$/mu
+  );
+  assert.match(
+    units["sitesourcery-production.service"],
     new RegExp(`^ReadWritePaths=.* ${FIN010_RUNTIME_DIRECTORY}$`, "mu")
   );
   for (const evidence of Object.values(FIN010_EVIDENCE)) {
