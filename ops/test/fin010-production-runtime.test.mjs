@@ -226,6 +226,7 @@ test("FIN-010 runbook freezes the paired rollback and two-stage Cloudflare cutov
   for (const value of [
     FIN010_CANDIDATE_COMMIT,
     FIN010_CANDIDATE_TREE,
+    FIN010_RELEASE_ROOT,
     FIN010_PREDECESSOR_COMMIT,
     "jasmine.ns.cloudflare.com",
     "nash.ns.cloudflare.com",
