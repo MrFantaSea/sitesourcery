@@ -712,6 +712,7 @@ Wants=network-online.target
 Requires=sitesourcery-production-db-tunnel.service
 ConditionPathExists=${FIN010_PRODUCTION_ROOT}/run/RUNTIME_APPROVED
 ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}
+ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 
 [Service]
 Type=simple
@@ -786,6 +787,7 @@ Requires=sitesourcery-production.service
 ConditionPathExists=${FIN010_PRODUCTION_ROOT}/run/WORKERS_APPROVED
 ConditionPathExists=!${FIN010_PRODUCTION_ROOT}/run/WORKERS_HOLD
 ConditionPathExists=!${FIN010_BACKUP_QUIESCE_PATH}
+ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 
 [Service]
 Type=simple
