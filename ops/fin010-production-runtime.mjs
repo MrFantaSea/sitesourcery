@@ -57,17 +57,17 @@ export const FIN010_BACKUP_QUIESCE_PATH =
 
 export const FIN010_EVIDENCE = Object.freeze({
   epoch: Object.freeze({
-    path: "/etc/sitesourcery/fin010-e886227-final-release-epoch-v2.json",
+    path: "/etc/sitesourcery/final-release-epoch-v2.json",
     sha256:
       "802915b31a81fbf0ff436def90eeaa05e49f7952b2221ee3ea30d1a5129b52c6"
   }),
   originSeal: Object.freeze({
-    path: "/etc/sitesourcery/fin010-e886227-origin-seal.json",
+    path: "/etc/sitesourcery/origin-seal.json",
     sha256:
       "155acdafc854b1966bc42fe2e9633bd85abb55665e5e38eb68800d23114edace"
   }),
   installedReadback: Object.freeze({
-    path: "/etc/sitesourcery/fin010-e886227-origin-installed-readback.json",
+    path: "/etc/sitesourcery/origin-installed-readback.json",
     sha256:
       "f09f30fe5539d9709e6db862e2e5270203f3159da323908c8b1ef8468ccd18a6"
   })
