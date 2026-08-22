@@ -1239,16 +1239,23 @@ export function verifyCredentialTopology(
   });
 }
 
-export function verifyStripeCredentialReadiness(
+function verifyStripeCredentialReadinessInternal(
   value,
   {
     now,
     purpose = null,
     environment = "production",
     livemode = true,
-    runtimeFingerprint
+    runtimeFingerprint,
+    requireFreshScopeEvidence
   } = {}
 ) {
+  if (typeof requireFreshScopeEvidence !== "boolean") {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_FRESHNESS_INVALID",
+      "Stripe credential readiness requires an exact scope-evidence freshness policy."
+    );
+  }
   const topology = normalizeCredentialTopology(value);
   const nowMs =
     typeof now === "string" &&
@@ -1402,8 +1409,9 @@ export function verifyStripeCredentialReadiness(
     instants.provisionerRevocationProven > nowMs ||
     instants.standardRevocationProven > nowMs ||
     instants.runtimeScopeProven > nowMs ||
-    nowMs - instants.runtimeScopeProven >
-      STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS
+    (requireFreshScopeEvidence &&
+      nowMs - instants.runtimeScopeProven >
+        STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS)
   ) {
     fail(
       "CREDENTIAL_TOPOLOGY_STRIPE_SCOPE_STALE",
@@ -1436,6 +1444,71 @@ export function verifyStripeCredentialReadiness(
     provisionerRevoked: true,
     compromisedStandardRevoked: true,
     domainsHeld: true
+  });
+}
+
+export function verifyStripeCredentialReadiness(
+  value,
+  options = {}
+) {
+  return verifyStripeCredentialReadinessInternal(value, {
+    ...options,
+    requireFreshScopeEvidence: true
+  });
+}
+
+export function createStripeCredentialReadinessLease(
+  value,
+  {
+    now,
+    environment = "production",
+    livemode = true,
+    runtimeFingerprint
+  } = {}
+) {
+  const topology = normalizeCredentialTopology(value);
+  const activation =
+    verifyStripeCredentialReadinessInternal(topology, {
+      now,
+      environment,
+      livemode,
+      runtimeFingerprint,
+      requireFreshScopeEvidence: true
+    });
+  const activationMs = Date.parse(now);
+  return deepFreeze({
+    schema:
+      "sitesourcery.stripe-credential-readiness-lease/v1",
+    activatedAt: now,
+    activation,
+    readiness({ now: checkedAt, purpose = null } = {}) {
+      const checkedAtMs =
+        typeof checkedAt === "string" &&
+        Number.isFinite(Date.parse(checkedAt)) &&
+        new Date(checkedAt).toISOString() === checkedAt
+          ? Date.parse(checkedAt)
+          : fail(
+              "CREDENTIAL_TOPOLOGY_CLOCK_INVALID",
+              "Stripe credential readiness requires an exact UTC clock."
+            );
+      if (checkedAtMs < activationMs) {
+        fail(
+          "CREDENTIAL_TOPOLOGY_STRIPE_CLOCK_ROLLBACK",
+          "Stripe credential readiness cannot move behind its verified process activation."
+        );
+      }
+      return verifyStripeCredentialReadinessInternal(
+        topology,
+        {
+          now: checkedAt,
+          purpose,
+          environment,
+          livemode,
+          runtimeFingerprint,
+          requireFreshScopeEvidence: false
+        }
+      );
+    }
   });
 }
 

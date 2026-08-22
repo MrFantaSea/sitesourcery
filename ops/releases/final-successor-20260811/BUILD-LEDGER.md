@@ -312,3 +312,17 @@ Stripe, Domains, Twilio, publication, and native-distribution effects remain
 installed and held behind their exact named gates. FIN-010 evidence is
 `FIN-010-PRODUCTION-CUTOVER-PROVENANCE.md` and
 `fin010-production-cutover-receipt.json`, SHA-256 `7812b780...`.
+
+FIN-012 Download activation mapping found and corrected one long-running Stripe
+readiness defect before any provider or customer effect. Implementation
+`7321d1d190d0ace46100b15d1b8feeec6aeb5bb7`, tree
+`82afbfc4208902ae2890bec98f970d08b8afcc01`, requires a fresh exact restricted-
+key scope proof at process construction and then retains an immutable process
+lease without weakening fingerprint, purpose, chronology, future-evidence, clock-
+rollback, or recurring provider-object checks. Focused proof passed 137/137; the
+complete clean Node 24.18.0 ladder exited zero, including 887 product tests,
+1,087 hosted-service passes with 15 intentional PostgreSQL skips, 239/239
+operations tests, and 24 routes across all six pinned-browser widths. Production
+remained exact FIN-012 runtime `14ca61bd...`, with Stripe and Download held and no
+provider/customer effect. Exact evidence is recorded in
+`ops/releases/fin012-stripe-download-release/FIN-012-STRIPE-DOWNLOAD-PROVENANCE.md`.

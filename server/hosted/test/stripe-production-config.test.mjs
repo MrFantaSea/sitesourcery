@@ -55,6 +55,8 @@ const COMPLETE_ALAKAZAM_CAPABILITIES = [
 ];
 const SECRET_KEY = "rk_live_do-not-log-this";
 const WEBHOOK_SECRET = "whsec_do-not-log-this";
+const TEST_RUNTIME_SCOPE_PROVEN_AT =
+  new Date().toISOString();
 const WEBHOOK_ROTATION_METADATA = Object.freeze({
   schema:
     "sitesourcery.stripe-webhook-rotation-metadata/v1",
@@ -132,7 +134,7 @@ function credentialTopology({
   Object.assign(runtime, {
     rotationState: "active",
     materialPresent: true,
-    lastProvenAt: "2026-08-11T16:00:00.000Z",
+    lastProvenAt: TEST_RUNTIME_SCOPE_PROVEN_AT,
     evidenceDigest: evidence("runtime-scope"),
     scopes: runtimeScopes,
     providerBinding: {
