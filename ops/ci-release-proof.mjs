@@ -237,6 +237,7 @@ export async function writeCiReleaseSuccessorInputAnchored({
   projectRoot,
   relativePath,
   successorInput,
+  expectedExistingEntries = [],
   postWriteCheck,
   testControl
 }) {
@@ -251,9 +252,18 @@ export async function writeCiReleaseSuccessorInputAnchored({
     selected: path.join(absoluteRoot, ...relativeDirectory.split("/")),
     label: "CI anchored output root"
   });
-  if ((await readdir(outputRoot)).length !== 0) {
-    fail("CI anchored output root must be empty.");
+  const retainedEntries = exactOutputEntries(
+    expectedExistingEntries,
+    "CI anchored retained output inventory"
+  );
+  if (retainedEntries.includes(filename)) {
+    fail("CI anchored successor output already exists.");
   }
+  await requireOutputInventory({
+    outputRoot,
+    expectedEntries: retainedEntries,
+    label: "CI anchored retained output inventory"
+  });
   const bytes = Buffer.from(`${canonicalJson(successorInput)}\n`, "utf8");
   const scratch = await mkdtemp(path.join(os.tmpdir(), "ss-ci-openat-writer-"));
   try {
@@ -299,6 +309,12 @@ export async function writeCiReleaseSuccessorInputAnchored({
       }
     }
     await writer.completion;
+    await requireOutputInventory({
+      outputRoot,
+      expectedEntries: [...retainedEntries, filename]
+        .sort((left, right) => left.localeCompare(right)),
+      label: "CI anchored completed output inventory"
+    });
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
@@ -337,7 +353,59 @@ async function regularMarker(selected, label) {
   }
 }
 
-async function requireEmptyOutputDirectory({ projectRoot, selected }) {
+function exactOutputEntries(entries, label) {
+  if (!Array.isArray(entries)) {
+    fail(`${label} must be an exact array.`);
+  }
+  const selected = [...entries];
+  const sorted = [...selected].sort((left, right) => left.localeCompare(right));
+  if (
+    JSON.stringify(selected) !== JSON.stringify(sorted) ||
+    new Set(selected).size !== selected.length ||
+    selected.some((entry) => (
+      typeof entry !== "string" ||
+      entry.length === 0 ||
+      entry === "." ||
+      entry === ".." ||
+      entry.includes("/") ||
+      entry.includes("\\")
+    ))
+  ) {
+    fail(`${label} must be sorted unique filenames.`);
+  }
+  return selected;
+}
+
+async function requireOutputInventory({
+  outputRoot,
+  expectedEntries,
+  label
+}) {
+  const expected = exactOutputEntries(expectedEntries, label);
+  const observed = (await readdir(outputRoot))
+    .sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(observed) !== JSON.stringify(expected)) {
+    fail(`${label} drifted from its exact retained files.`);
+  }
+  for (const entry of observed) {
+    const selected = path.join(outputRoot, entry);
+    const metadata = await lstat(selected);
+    if (
+      !metadata.isFile() ||
+      metadata.isSymbolicLink() ||
+      metadata.nlink !== 1
+    ) {
+      fail(`${label} must contain only single-link regular files.`);
+    }
+  }
+  return observed;
+}
+
+async function requireSuccessorOutputDirectory({
+  projectRoot,
+  selected,
+  expectedEntries
+}) {
   try {
     const metadata = await lstat(selected);
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
@@ -357,9 +425,11 @@ async function requireEmptyOutputDirectory({ projectRoot, selected }) {
     selected,
     label: "CI successor output root"
   });
-  if ((await readdir(outputRoot)).length !== 0) {
-    fail("CI successor output root must be empty before generation.");
-  }
+  await requireOutputInventory({
+    outputRoot,
+    expectedEntries,
+    label: "CI successor retained output inventory"
+  });
   return outputRoot;
 }
 
@@ -509,9 +579,12 @@ export async function runCiReleaseProofCli({
       projectRoot,
       ...generated.relativePath.split("/")
     );
-    const outputRoot = await requireEmptyOutputDirectory({
+    const existingEntries = generated.existingInputPaths
+      .map((entry) => path.posix.basename(entry));
+    const outputRoot = await requireSuccessorOutputDirectory({
       projectRoot,
-      selected: path.dirname(outputPath)
+      selected: path.dirname(outputPath),
+      expectedEntries: existingEntries
     });
     await verifyCiReleaseGenerationState({
       projectRoot,
@@ -522,6 +595,7 @@ export async function runCiReleaseProofCli({
       projectRoot,
       relativePath: generated.relativePath,
       successorInput: generated.successorInput,
+      expectedExistingEntries: existingEntries,
       postWriteCheck: () => verifyCiReleaseGeneratedOutput({
         projectRoot,
         candidateSha: generated.candidateSha,
@@ -529,12 +603,12 @@ export async function runCiReleaseProofCli({
         relativePath: generated.relativePath
       })
     });
-    if (
-      JSON.stringify(await readdir(outputRoot)) !==
-        JSON.stringify([path.basename(outputPath)])
-    ) {
-      fail("CI successor generation emitted an unexpected output inventory.");
-    }
+    await requireOutputInventory({
+      outputRoot,
+      expectedEntries: [...existingEntries, path.basename(outputPath)]
+        .sort((left, right) => left.localeCompare(right)),
+      label: "CI successor completed output inventory"
+    });
     writeOutput(`${JSON.stringify({
       path: generated.relativePath,
       sha256: written.sha256,

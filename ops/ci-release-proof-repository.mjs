@@ -222,6 +222,39 @@ function lines(value) {
   return value === "" ? [] : value.split("\n");
 }
 
+function exactSuccessorInputPaths(entries, label) {
+  const prefix = `${CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY}/`;
+  const selected = [...entries];
+  const sorted = [...selected].sort((left, right) => left.localeCompare(right));
+  if (
+    JSON.stringify(selected) !== JSON.stringify(sorted) ||
+    new Set(selected).size !== selected.length ||
+    selected.some((entry) => (
+      !entry.startsWith(prefix) ||
+      !COMMIT_SHA.test(entry.slice(prefix.length, -".json".length)) ||
+      !entry.endsWith(".json") ||
+      entry.slice(prefix.length, -".json".length).length !== 40
+    ))
+  ) {
+    fail(`${label} must contain only sorted candidate-SHA JSON paths.`);
+  }
+  return selected;
+}
+
+async function requireSuccessorInputFiles(projectRoot, entries, label) {
+  for (const entry of entries) {
+    const selected = inside(
+      projectRoot,
+      path.join(projectRoot, ...entry.split("/")),
+      label
+    );
+    const metadata = await regularFile(selected, label);
+    if (metadata.nlink !== 1) {
+      fail(`${label} files must have exactly one hard link.`);
+    }
+  }
+}
+
 function nulEntries(value) {
   return value === "" ? [] : value.split("\0").filter(Boolean);
 }
@@ -478,15 +511,32 @@ export async function verifyCiReleaseSuccessorControl({
   if (changedPaths !== `A\t${expectedRelativePath}`) {
     fail("CI candidate-to-workflow change must add only its exact successor input.");
   }
-  if (lines(candidateInputs).length !== 0) {
-    fail("CI candidate must contain zero successor-input files.");
+  const candidateInputPaths = exactSuccessorInputPaths(
+    lines(candidateInputs),
+    "CI candidate successor-input inventory"
+  );
+  const workflowInputPaths = exactSuccessorInputPaths(
+    lines(workflowInputs),
+    "CI workflow successor-input inventory"
+  );
+  if (candidateInputPaths.includes(expectedRelativePath)) {
+    fail("CI candidate already contains its candidate-named successor input.");
   }
+  const expectedWorkflowInputPaths = [
+    ...candidateInputPaths,
+    expectedRelativePath
+  ].sort((left, right) => left.localeCompare(right));
   if (
-    lines(workflowInputs).length !== 1 ||
-    lines(workflowInputs)[0] !== expectedRelativePath
+    JSON.stringify(workflowInputPaths) !==
+      JSON.stringify(expectedWorkflowInputPaths)
   ) {
-    fail("CI workflow must contain only the exact candidate successor input.");
+    fail("CI workflow must retain every historical input and add only the exact candidate input.");
   }
+  await requireSuccessorInputFiles(
+    controlRoot,
+    workflowInputPaths,
+    "CI workflow successor input"
+  );
 
   const successorInput = await readCiReleaseSuccessorInput({
     inputPath: expectedInputPath,
@@ -541,13 +591,24 @@ export async function verifyCiReleaseGenerationState({
   if (path.resolve(repositoryRoot) !== checkout.projectRoot) {
     fail("CI successor generation requires the exact candidate root.");
   }
-  if (lines(existingInputs).length !== 0) {
-    fail("CI successor generation requires zero candidate successor-input files.");
+  const existingInputPaths = exactSuccessorInputPaths(
+    lines(existingInputs),
+    "CI candidate successor-input inventory"
+  );
+  await requireSuccessorInputFiles(
+    checkout.projectRoot,
+    existingInputPaths,
+    "CI retained successor input"
+  );
+  const candidateInputPath = ciReleaseSuccessorInputRelativePath(checkout.head);
+  if (existingInputPaths.includes(candidateInputPath)) {
+    fail("CI successor generation refuses a candidate-named input collision.");
   }
   return Object.freeze({
     projectRoot: checkout.projectRoot,
     head: checkout.head,
-    tree: checkout.tree
+    tree: checkout.tree,
+    existingInputPaths: Object.freeze([...existingInputPaths])
   });
 }
 
@@ -699,6 +760,7 @@ export async function createCiReleaseSuccessorInputFromRepository({
   return Object.freeze({
     candidateSha: initial.head,
     candidateTreeSha: initial.tree,
+    existingInputPaths: initial.existingInputPaths,
     rollbackArtifactManifestSha256: rollbackArtifact.sha256,
     relativePath: ciReleaseSuccessorInputRelativePath(initial.head),
     successorInput
