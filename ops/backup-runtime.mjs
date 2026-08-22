@@ -654,8 +654,17 @@ export async function runBackupAttempt({
 }
 
 export async function loadVerifiedBackupAttempt(
-  attemptRoot
+  attemptRoot,
+  {
+    artifactSha256 = sha256File
+  } = {}
 ) {
+  if (typeof artifactSha256 !== "function") {
+    fail(
+      "BACKUP_ARTIFACT_VERIFIER_INVALID",
+      "Backup artifact verification requires a SHA-256 implementation."
+    );
+  }
   const startedEvidence =
     await loadVerifiedAttemptEvidence({
       attemptRoot,
@@ -841,7 +850,7 @@ export async function loadVerifiedBackupAttempt(
       artifactPath
     ).catch(() => null);
     const actual = metadata?.isFile()
-      ? await sha256File(artifactPath).catch(
+      ? await artifactSha256(artifactPath).catch(
           () => null
         )
       : null;

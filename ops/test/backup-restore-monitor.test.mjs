@@ -51,6 +51,7 @@ import {
   runOperationsMonitor
 } from "../monitor-runtime.mjs";
 import {
+  createRemoteBackupArtifactSha256,
   createProductionMonitoringProbes
 } from "../monitor-ports.mjs";
 import {
@@ -1541,6 +1542,66 @@ test("production backup monitoring fully verifies only the newest timestamp-boun
   } finally {
     await production.close();
   }
+});
+
+test("remote backup hashing maps only exact attempt artifacts and returns the verified Zen digest", async () => {
+  const calls = [];
+  const expected = "a".repeat(64);
+  const remoteRoot =
+    "/home/zentech/.local/state/sitesourcery-backups";
+  const attempt =
+    "2026-08-22T081757695Z-54a3b27a-8aa9-4916-9f02-0d42b013f73f";
+  const hash = createRemoteBackupArtifactSha256({
+    localRoot: "/home/simtech/sitesourcery-production/off-machine",
+    remoteRoot,
+    remoteHost: "zen",
+    identityFile:
+      "/home/simtech/.ssh/id_ed25519_fantasea_mesh",
+    knownHostsFile:
+      "/home/simtech/.ssh/known_hosts",
+    execFileImpl: async (...args) => {
+      calls.push(args);
+      return {
+        stdout:
+          `${expected}  ${remoteRoot}/attempts/${attempt}/app_state.age\n`,
+        stderr: ""
+      };
+    }
+  });
+  assert.equal(
+    await hash(
+      `/home/simtech/sitesourcery-production/off-machine/attempts/${attempt}/app_state.age`
+    ),
+    expected
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], "/usr/bin/ssh");
+  assert.deepEqual(
+    calls[0][1].slice(-3),
+    [
+      "/usr/bin/sha256sum",
+      "--",
+      `${remoteRoot}/attempts/${attempt}/app_state.age`
+    ]
+  );
+  assert.equal(
+    calls[0][2].env.PATH,
+    "/usr/bin:/bin"
+  );
+  await assert.rejects(
+    hash("/etc/passwd"),
+    (error) =>
+      error.code ===
+      "BACKUP_REMOTE_HASH_PATH_INVALID"
+  );
+  await assert.rejects(
+    hash(
+      `/home/simtech/sitesourcery-production/off-machine/attempts/${attempt}/unknown.age`
+    ),
+    (error) =>
+      error.code ===
+      "BACKUP_REMOTE_HASH_PATH_INVALID"
+  );
 });
 
 function healthyProbes(

@@ -1,4 +1,5 @@
 import { X509Certificate } from "node:crypto";
+import { execFile } from "node:child_process";
 import {
   access,
   readFile,
@@ -6,6 +7,7 @@ import {
   statfs
 } from "node:fs/promises";
 import path from "node:path";
+import { promisify } from "node:util";
 
 import pg from "pg";
 
@@ -21,6 +23,148 @@ import {
 } from "./probe-runtime.mjs";
 
 const { Pool } = pg;
+const execFileAsync = promisify(execFile);
+const SHA256 = /^[a-f0-9]{64}$/u;
+const SAFE_REMOTE_HOST =
+  /^[A-Za-z0-9][A-Za-z0-9.-]{0,254}$/u;
+const SAFE_REMOTE_ROOT =
+  /^\/[A-Za-z0-9._/-]+$/u;
+const SAFE_ATTEMPT_ID =
+  /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/u;
+const BACKUP_ARTIFACT_FILES = new Set([
+  "app_state.age",
+  "postgresql.age"
+]);
+
+function remoteHashError(code, message) {
+  const error = new Error(message);
+  error.name = "RemoteBackupArtifactHashError";
+  error.code = code;
+  return error;
+}
+
+export function createRemoteBackupArtifactSha256({
+  localRoot,
+  remoteRoot,
+  remoteHost,
+  identityFile,
+  knownHostsFile,
+  timeoutMs = 30_000,
+  execFileImpl = execFileAsync
+}) {
+  const normalizedRemoteRoot =
+    typeof remoteRoot === "string"
+      ? path.posix.normalize(remoteRoot)
+      : null;
+  if (
+    typeof localRoot !== "string" ||
+    !path.isAbsolute(localRoot) ||
+    typeof identityFile !== "string" ||
+    !path.isAbsolute(identityFile) ||
+    typeof knownHostsFile !== "string" ||
+    !path.isAbsolute(knownHostsFile) ||
+    typeof remoteHost !== "string" ||
+    !SAFE_REMOTE_HOST.test(remoteHost) ||
+    normalizedRemoteRoot !== remoteRoot ||
+    !SAFE_REMOTE_ROOT.test(remoteRoot) ||
+    !Number.isSafeInteger(timeoutMs) ||
+    timeoutMs < 1_000 ||
+    timeoutMs > 120_000 ||
+    typeof execFileImpl !== "function"
+  ) {
+    throw remoteHashError(
+      "BACKUP_REMOTE_HASH_CONFIGURATION_INVALID",
+      "Remote backup hashing configuration is invalid."
+    );
+  }
+  const normalizedLocalRoot = path.resolve(localRoot);
+
+  return async function remoteBackupArtifactSha256(
+    artifactPath
+  ) {
+    if (
+      typeof artifactPath !== "string" ||
+      !path.isAbsolute(artifactPath)
+    ) {
+      throw remoteHashError(
+        "BACKUP_REMOTE_HASH_PATH_INVALID",
+        "Remote backup hashing requires an absolute artifact path."
+      );
+    }
+    const relative = path.relative(
+      normalizedLocalRoot,
+      path.resolve(artifactPath)
+    );
+    const components = relative.split(path.sep);
+    if (
+      components.length !== 3 ||
+      components[0] !== "attempts" ||
+      !SAFE_ATTEMPT_ID.test(components[1]) ||
+      !BACKUP_ARTIFACT_FILES.has(components[2])
+    ) {
+      throw remoteHashError(
+        "BACKUP_REMOTE_HASH_PATH_INVALID",
+        "Remote backup hashing refused an artifact outside the exact attempt layout."
+      );
+    }
+    const remotePath = path.posix.join(
+      remoteRoot,
+      ...components
+    );
+    let output;
+    try {
+      const result = await execFileImpl(
+        "/usr/bin/ssh",
+        [
+          "-o", "BatchMode=yes",
+          "-o", "ConnectTimeout=15",
+          "-o", "IdentitiesOnly=yes",
+          "-o", "StrictHostKeyChecking=yes",
+          "-o", `UserKnownHostsFile=${knownHostsFile}`,
+          "-i", identityFile,
+          remoteHost,
+          "/usr/bin/sha256sum",
+          "--",
+          remotePath
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            LANG: "C",
+            LC_ALL: "C",
+            PATH: "/usr/bin:/bin"
+          },
+          killSignal: "SIGKILL",
+          maxBuffer: 1_024,
+          timeout: timeoutMs
+        }
+      );
+      output = result.stdout;
+    } catch {
+      throw remoteHashError(
+        "BACKUP_REMOTE_HASH_UNAVAILABLE",
+        "The remote backup artifact hash could not be read."
+      );
+    }
+    const match =
+      typeof output === "string"
+        ? /^([a-f0-9]{64})  ([^\n]+)\n?$/u.exec(
+            output
+          )
+        : null;
+    if (
+      !match ||
+      !SHA256.test(match[1]) ||
+      match[2] !== remotePath
+    ) {
+      throw remoteHashError(
+        "BACKUP_REMOTE_HASH_RESPONSE_INVALID",
+        "The remote backup artifact hash response was invalid."
+      );
+    }
+    return match[1];
+  };
+}
 
 function number(value, field) {
   const selected = Number(value);
@@ -52,6 +196,7 @@ export function createProductionMonitoringProbes({
   certificateFile,
   certificateHostname,
   expectedOperationsState,
+  backupArtifactSha256,
   apiPort = 8788,
   tenantPort = 8080,
   timeoutMs = 3000,
@@ -188,7 +333,13 @@ export function createProductionMonitoringProbes({
           path.join(
             attemptsRoot,
             latestAttemptId
-          )
+          ),
+          backupArtifactSha256 === undefined
+            ? undefined
+            : {
+                artifactSha256:
+                  backupArtifactSha256
+              }
         );
       if (
         latest.manifest
