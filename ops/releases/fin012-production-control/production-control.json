@@ -1,0 +1,69 @@
+{
+  "schema": "sitesourcery.fin012-production-control/v1",
+  "state": "prepared_held_no_live_authority",
+  "source": {
+    "candidateCommitSha": "14ca61bd0991c0d326699311e380c29c621931df",
+    "candidateTreeSha": "b953a3fbfd5853b29f3e72f0f05c7f75e04eba4d",
+    "heldControlCommitSha": "0cd27a13b2e6ad74829c8700c6bc0dec577f3a73",
+    "heldControlTreeSha": "1f9a0945c86111100b8eac9b4e6bb422909f443d",
+    "predecessorCommitSha": "e8862278eb66e87d3536b4e084dc9647c996d993",
+    "predecessorTreeSha": "ac53f6a59feb9ab7b6e05cb8e03d9c8bcc810eb2"
+  },
+  "proof": {
+    "successorInputFileSha256": "498823fb09da83c4cfc628a3d34fd3c08bd1462b3d4f507a5919f520bf923329",
+    "successorInputDigest": "00c505c21f447d667b0fa23dffd10a30232a8bbc9e13d4df1d12cd489f70d67e",
+    "ciFinalReceiptFileSha256": "c249f6893eee9265c2c60cbbd14590e26f216565578a96b06902bb4806a1a037",
+    "ciFinalReceiptDigest": "1c73c2bc46c4f69c6da606307abf1489fe12b80058d9a9488c40b7e4dd5ff89b",
+    "ciRunId": "32592799297",
+    "ciRunAttempt": "1",
+    "originSealSha256": "990acbec0547cf386a1c365f72bb3f328f9d667bce197f4c245b0e6f3b62ee9d"
+  },
+  "database": {
+    "name": "sitesourcery_production",
+    "postgresMajor": 16,
+    "beforeTableCount": 287,
+    "beforeSchemaSha256": "de7a4d476899db85d0d4bf2e93c9f54210f39bc77c416586a8b960cf0e5a397a",
+    "afterTableCount": 294,
+    "afterSchemaSha256": "c6531a8817870b1dbbe4b488948e8513a3a07fd64b6076597a102316ca68d3e3",
+    "migrationCountBefore": 95,
+    "migrationCountAfter": 96,
+    "migrationName": "202608220143_download_protection_v1.sql",
+    "migrationSha256": "c1fec8ada5d393b1e7cecef03e7b6de674f75d64251e91ef8c2ff325e75b3d5c"
+  },
+  "runtime": {
+    "host": "simbiotech",
+    "serviceUser": "simtech",
+    "productionRoot": "/home/simtech/sitesourcery-production",
+    "releaseRoot": "/home/simtech/sitesourcery-production/releases/14ca61bd0991c0d326699311e380c29c621931df",
+    "node": "/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node",
+    "managedUnits": [
+      "sitesourcery-production.service",
+      "sitesourcery-production-static.service"
+    ],
+    "retainedUnits": [
+      "sitesourcery-origin.service",
+      "sitesourcery-cloudflared.service",
+      "sitesourcery-production-backup.timer",
+      "sitesourcery-production-monitor.timer"
+    ]
+  },
+  "requiredLiveGates": [
+    "exact_owner_cutover_authorization",
+    "exact_candidate_parallel_install_readback",
+    "fresh_encrypted_zen_backup_with_clean_recovery",
+    "all_customer_runtime_connections_quiesced",
+    "one_migration_database_receipt",
+    "candidate_runtime_and_static_health_readback",
+    "public_edge_and_browser_acceptance",
+    "rollback_pair_retained"
+  ],
+  "authority": {
+    "parallelInstallAuthorized": false,
+    "databaseMigrationAuthorized": false,
+    "publicRuntimeCutoverAuthorized": false,
+    "providerEffectsAuthorized": false,
+    "paymentEffectsAuthorized": false,
+    "dnsEffectsAuthorized": false,
+    "retirementAuthorized": false
+  }
+}
