@@ -359,7 +359,9 @@ function publicDownloadEntitlements(
         status: "paid",
         provider: "stripe",
         receiptId: row.download_receipt_id,
-        amountMinor: 500,
+        amountMinor: Number(
+          row.download_amount_minor
+        ),
         taxMinor: Number(
           row.download_tax_minor
         ),
@@ -1161,6 +1163,8 @@ function createCanonicalPostgresRuntime({
          download_entitlement.accepted_disclosure_digest
            as download_accepted_disclosure_digest,
          download_receipt.id as download_receipt_id,
+         download_receipt.amount_minor
+           as download_amount_minor,
          download_receipt.tax_minor
            as download_tax_minor,
          download_receipt.total_minor

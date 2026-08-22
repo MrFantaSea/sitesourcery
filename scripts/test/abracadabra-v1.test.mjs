@@ -450,7 +450,7 @@ test("the Abracadabra lane has a plain HTML door into the maker", () => {
     /<a class="vessel-link" href="\/abracadabra\/app\/#workroom"[^>]*><\/a>/u,
   );
   assert.match(landingHtml, /Click[\s\S]*to[\s\S]*Conjure/u);
-  assert.match(landingHtml, /Free to See-\$5 Download Coming-Alakazam Plans Held/u);
+  assert.match(landingHtml, /Free to See-\$20 Download Coming-Alakazam Plans Held/u);
   assert.match(landingHtml, /the account and download path are not open yet/u);
   assert.match(
     landingHtml,
@@ -470,7 +470,7 @@ test("guest data-loss truth stays visible in both artifacts and hosted controls 
     hostedHeroMarkup,
     /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*Made versions may survive a refresh in this tab\.[\s\S]*clearing its session storage before saving ordinarily means starting over/u,
   );
-  assert.match(hostedHeroMarkup, /Sign in for the \$5 Download\./u);
+  assert.match(hostedHeroMarkup, /Sign in for the \$20 Download\./u);
   assert.match(
     hostedHeroMarkup,
     /Alakazam subscriptions and hosting activation remain held\./u,
@@ -622,9 +622,9 @@ test("the local test adapter stays isolated and captures delayed drafts to their
   }
 });
 
-test("the current hosted customer room keeps domains and publishing outside the $5 Download", () => {
+test("the current hosted customer room keeps domains and publishing outside the $20 Download", () => {
   assert.match(hostedControlMarkup, /Need publishing or a domain too\?/u);
-  assert.match(hostedControlMarkup, /Those are separate from the \$5 file Download\./u);
+  assert.match(hostedControlMarkup, /Those are separate from the \$20 file Download\./u);
   assert.doesNotMatch(
     hostedControlMarkup,
     /data-domain-stage|data-domain-submit|data-publish|Register domain|Publish this version/iu,
@@ -709,9 +709,9 @@ test("held maker keeps canonical identity while pricing stays on account-aware s
   );
   assert.match(
     landingHtml,
-    /A one-time \$5 download of the file is planned; the account and download path are not open yet/u,
+    /A one-time \$20 download of the file is planned; the account and download path are not open yet/u,
   );
-  assert.match(hostedControlMarkup, /<strong>\$5 once<\/strong>/u);
+  assert.match(hostedControlMarkup, /<strong>\$20 once<\/strong>/u);
   assert.equal(
     pageHtml.split("https://buy.stripe.com/8x2cN7e9y0wu6OW4fO7kc00").length - 1,
     0,

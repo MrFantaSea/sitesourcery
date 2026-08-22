@@ -7,7 +7,7 @@
  * Site Sourcery's Stripe account (`acct_1Tx2eoPi1bfFonRc`, configured
  * 2026-07-28) was set up for **Invoicing + ACH**. That is the correct rail for a
  * quoted build or an assessment: a real invoice, net terms, low fee on a large
- * amount. It is the wrong rail for the two self-serve products — ACH on a $5
+ * amount. It is the wrong rail for the two self-serve products — ACH on a $20
  * charge costs more than it collects, and Invoicing alone cannot bill $25 every
  * month. Those need Checkout and Billing on the SAME account.
  *
@@ -29,6 +29,9 @@
  */
 
 import { invariant } from "../domain/errors.mjs";
+import {
+  DOWNLOAD_PRICE_MINOR
+} from "../commerce-v2/constants.mjs";
 
 /** The Site Sourcery merchant of record. The legal seller is never the DBA. */
 export const MERCHANT = Object.freeze({
@@ -104,15 +107,15 @@ export const SELLABLE = Object.freeze([
     id: "abracadabra.preview",
     label: "Abracadabra Download",
     rail: "checkout_session",
-    amountCents: 500,
+    amountCents: DOWNLOAD_PRICE_MINOR,
     availability: OFFER_AVAILABILITY.ACCOUNT_ONLY,
     creditsForward: "alacazam.hosting",
     taxTreatment: "review_required",
     note:
-      "ACCOUNT ONLY. Seeing the preview is free; $5 buys Download once for "
+      "ACCOUNT ONLY. Seeing the preview is free; $20 buys Download once for "
       + "one retained editor project. The authenticated server creates and "
       + "settles the exact Checkout. No public Payment Link is authorized. "
-      + "The approved one-use credit toward a later eligible Alakazam payment "
+      + "The approved full $20 one-use credit toward the first eligible Alakazam invoice "
       + "remains dormant while Alakazam is held."
   }),
   rail({

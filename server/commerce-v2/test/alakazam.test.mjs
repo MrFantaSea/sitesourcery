@@ -136,16 +136,16 @@ test("Alakazam Checkout dispatch derives exact start credit and fixed upgrade pu
     ...base,
     changeKind: "start",
     targetTierId: "alakazam_25",
-    dueNowSubtotalMinor: 2000,
+    dueNowSubtotalMinor: 500,
     downloadCredit: {
       entitlementId:
         "60000000-0000-4000-8000-000000000001",
-      amountMinor: 500
+      amountMinor: 2000
     }
   });
   assert.equal(start.mode, "subscription_start");
-  assert.equal(start.expectedSubtotalMinor, 2000);
-  assert.equal(start.expectedCreditMinor, 500);
+  assert.equal(start.expectedSubtotalMinor, 500);
+  assert.equal(start.expectedCreditMinor, 2000);
   assert.equal(start.purpose.targetAmountMinor, 2500);
   assert.equal(start.purpose.currentSubscription, null);
   assert.equal(
@@ -277,9 +277,9 @@ test("an authorized quote binds the reviewed tax mode without adding provider au
 
 test("the project Download purchase applies exactly once to the first subscription invoice", () => {
   for (const [targetTierId, amountMinor] of [
-    ["alakazam_25", 2000],
-    ["alakazam_35", 3000],
-    ["alakazam_50", 4500]
+    ["alakazam_25", 500],
+    ["alakazam_35", 1500],
+    ["alakazam_50", 3000]
   ]) {
     const result = quote({
       targetTierId,
@@ -292,7 +292,7 @@ test("the project Download purchase applies exactly once to the first subscripti
     });
     assert.equal(result.dueNow.subtotalMinor, amountMinor);
     assert.equal(result.appliedValue.kind, "download_purchase");
-    assert.equal(result.appliedValue.amountMinor, 500);
+    assert.equal(result.appliedValue.amountMinor, 2000);
     assert.equal(
       result.nextRenewal.amountMinor,
       resolveAlakazamTier(targetTierId).price.amountMinor
@@ -400,7 +400,7 @@ test("Download credit is project authority for entry only, never an active-tier 
           entitlementId: "download_entitlement_1",
           state: "active",
           available: true,
-          amountMinor: 500
+          amountMinor: 2000
         }
       }),
     (error) => error.code === "alakazam_credit_not_applicable"
@@ -412,7 +412,7 @@ test("Download credit is project authority for entry only, never an active-tier 
           entitlementId: "download_entitlement_1",
           state: "revoked",
           available: true,
-          amountMinor: 500
+          amountMinor: 2000
         }
       }),
     (error) => error.code === "alakazam_credit_unavailable"

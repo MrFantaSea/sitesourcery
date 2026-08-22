@@ -243,7 +243,7 @@ test("held offers cannot return through the landing, home, or flyer", async () =
     readFile(path.join(ROOT, "flyer.html"), "utf8"),
   ]);
 
-  assert.match(landing, /Free to See-\$5 Download Coming-Alakazam Plans Held/u);
+  assert.match(landing, /Free to See-\$20 Download Coming-Alakazam Plans Held/u);
   assert.match(home, /Three ways to start: make a free preview/u);
   assert.match(home, /Neither of these is for sale yet\./u);
   assert.match(flyer, /Alakazam and The Responder remain held\./u);

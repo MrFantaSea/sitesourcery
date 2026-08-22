@@ -1275,7 +1275,7 @@
             || String(quote.project && quote.project.projectId || "") !== projectId
             || String(quote.version && quote.version.versionId || "") !== selectedVersionId
             || !quote.price
-            || Number(quote.price.amountMinor) !== 500
+            || Number(quote.price.amountMinor) !== 2000
             || String(quote.price.currency || "").toUpperCase() !== "USD"
             || String(quote.price.billing || "") !== "one_time"
             || String(quote.disclosureDigest || "").length !== 64
@@ -1285,7 +1285,7 @@
           ) {
             throw new ControlError({
               code: "DOWNLOAD_QUOTE_RESPONSE_INVALID",
-              message: "The $5 Download quote could not be verified. Try again."
+              message: "The $20 Download quote could not be verified. Try again."
             });
           }
           state.downloadQuote = quote;
@@ -1318,7 +1318,7 @@
       ) {
         return Promise.reject(new ControlError({
           code: "DOWNLOAD_QUOTE_REVIEW_REQUIRED",
-          message: "Review the current $5 Download quote before continuing."
+          message: "Review the current $20 Download quote before continuing."
         }));
       }
       var key = idempotencyFactory();
@@ -1331,7 +1331,8 @@
             quoteId,
             {
               acceptedDisclosureDigest:
-                acceptedDisclosureDigest
+                acceptedDisclosureDigest,
+              purchaseTermsAccepted: true
             },
             { idempotencyKey: key }
           );

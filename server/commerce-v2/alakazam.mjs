@@ -7,6 +7,9 @@ import {
   requiredIso,
   requiredText
 } from "./canonical.mjs";
+import {
+  DOWNLOAD_ALAKAZAM_CREDIT_MINOR
+} from "./constants.mjs";
 
 export const ALAKAZAM_CATALOG_SCHEMA =
   "sitesourcery.alakazam-private-tier-catalog.v1";
@@ -38,7 +41,8 @@ export const ALAKAZAM_CATALOG_VERSION =
   "alakazam.2026-08-02.v1";
 export const ALAKAZAM_TERMS_VERSION =
   "alakazam-owner-contract.2026-08-02.v1";
-export const ALAKAZAM_DOWNLOAD_CREDIT_MINOR = 500;
+export const ALAKAZAM_DOWNLOAD_CREDIT_MINOR =
+  DOWNLOAD_ALAKAZAM_CREDIT_MINOR;
 
 const CURRENCY = "USD";
 const MONTH = "month";
@@ -508,7 +512,7 @@ export function createAlakazamCheckoutDispatch({
           downloadCredit.amountMinor ===
             ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
         "invalid_input",
-        "Alakazam Download credit must be exactly $5"
+        "Alakazam Download credit must be exactly $20"
       );
       credit = {
         entitlementId: requiredText(

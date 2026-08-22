@@ -1,6 +1,7 @@
 import {
   isPotentialAlakazamStripeEvent,
   isDownloadStripeEvent,
+  isPotentialDownloadEarlyFraudWarningEvent,
   isPotentialDownloadReversalEvent
 } from "../commerce-v2/index.mjs";
 import {
@@ -153,6 +154,19 @@ export function createStripeWebhookRouter({
         );
       }
       if (isPotentialDownloadReversalEvent(event)) {
+        const result =
+          await downloadCommerce.ingestStripeEvent(
+            event
+          );
+        if (result?.status !== "not_download") {
+          return result;
+        }
+      }
+      if (
+        isPotentialDownloadEarlyFraudWarningEvent(
+          event
+        )
+      ) {
         const result =
           await downloadCommerce.ingestStripeEvent(
             event

@@ -2,6 +2,8 @@ import {
   CATALOG_VERSION,
   CHECKOUT_COMMAND_SCHEMA,
   CHECKOUT_PURPOSE_SCHEMA,
+  PURCHASE_ACCEPTANCE_SCHEMA,
+  PURCHASE_ACCEPTANCE_STATEMENT,
   QUOTE_DISCLOSURE_SCHEMA,
   QUOTE_SNAPSHOT_SCHEMA,
   QUOTE_TTL_MS,
@@ -367,6 +369,24 @@ export function createCommerceV2Service(
         input?.acceptedDisclosureDigest,
         "acceptedDisclosureDigest"
       );
+      invariant(
+        input?.purchaseTermsAccepted === true,
+        "purchase_terms_not_accepted",
+        "Accept the exact Download delivery, final-sale, and credit terms before continuing."
+      );
+      const acceptanceRequestId = requiredText(
+        input?.requestId,
+        "requestId"
+      );
+      const acceptanceClientAddress = requiredText(
+        input?.clientAddress,
+        "clientAddress",
+        80
+      );
+      const acceptanceUserAgentDigest = requiredDigest(
+        input?.userAgentDigest,
+        "userAgentDigest"
+      );
       const now = requiredIso(
         ports.clock.now(),
         "clock.now"
@@ -397,6 +417,7 @@ export function createCommerceV2Service(
         acceptedDisclosureDigest,
         offerId: quote.offerId,
         entitlementKind: quote.entitlementKind,
+        purchaseTermsAccepted: true,
         price: clone(quote.price)
       });
       const purposeDigest = digest(purpose);
@@ -415,6 +436,16 @@ export function createCommerceV2Service(
         command,
         "commitCheckoutCommand",
         async () => {
+          const acceptance = deepFreeze({
+            schema: PURCHASE_ACCEPTANCE_SCHEMA,
+            statement: PURCHASE_ACCEPTANCE_STATEMENT,
+            acceptedAt: now,
+            requestId: acceptanceRequestId,
+            clientAddress: acceptanceClientAddress,
+            userAgentDigest: acceptanceUserAgentDigest,
+            acceptedDisclosureDigest,
+            termsVersion: quote.termsVersion
+          });
           const preparation = deepFreeze({
             schema: CHECKOUT_COMMAND_SCHEMA,
             commandId: command.commandId,
@@ -428,6 +459,7 @@ export function createCommerceV2Service(
             dispatchAuthorized: false,
             provider: null,
             preparedAt: now,
+            acceptance,
             purpose,
             purposeDigest
           });

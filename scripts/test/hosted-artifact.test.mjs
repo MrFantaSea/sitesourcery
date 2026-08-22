@@ -439,7 +439,7 @@ test("held Alakazam copy fragments and customer UI fail closed before release", 
   assert.equal(assertHostedAlakazamUiHeld(customerControl), true);
 });
 
-test("one hosted build emits approved Legal V5, the exact $5 Download contract, customer controls, and no retired product", async (t) => {
+test("one hosted build emits sealed Legal V5, the exact $20 Download product copy, customer controls, and no retired product", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-hosted-artifact-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
   const output = path.join(temporary, "artifact");
@@ -564,6 +564,7 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
   }
   const dollars = publicDollarValues(allText);
   assert.ok(dollars.length > 0);
+  assert.ok(dollars.some(({ value }) => value === "20" || value === "20.00"));
   assert.ok(dollars.some(({ value }) => value === "5" || value === "5.00"));
   const emails = publicEmails(allText);
   assert.ok(emails.length > 0);
@@ -637,8 +638,9 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
     app,
     /name="acceptedProjectTerms"[\s\S]*I accept the <a href="\/legal\/website-terms\/"[^>]*>website terms<\/a>, including the <a href="\/legal\/website-terms\/#self-service"[^>]*>self-service product terms<\/a>, and acknowledge the <a href="\/legal\/privacy\/"[^>]*>privacy notice<\/a> for this project\./u,
   );
-  assert.match(app, /\$5 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
-  assert.match(app, /Sign in for the \$5 Download\./u);
+  assert.match(app, /\$20 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
+  assert.match(app, /Full \$20 project credit/u);
+  assert.match(app, /Sign in for the \$20 Download\./u);
   assert.match(
     app,
     /Alakazam subscriptions and hosting activation remain held\./u,
@@ -650,14 +652,18 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
 
   const landing = sources.get("abracadabra/index.html");
   assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Free preview\. \$5 Download\. Alakazam plans held\./u);
+  assert.match(landing, /Free preview\. \$20 Download\. Alakazam plans held\./u);
   assert.match(
     landing,
-    /A signed-in account can save the project and buy its HTML Download once for \$5\./u,
+    /A signed-in account can save the project and buy its HTML Download once for \$20\./u,
   );
   assert.match(
     landing,
-    /Repeat downloads from that retained project do not require another Site Sourcery payment\./u,
+    /Repeat downloads from that retained project do not require another Site Sourcery payment/u,
+  );
+  assert.match(
+    landing,
+    /the full \$20 is a one-time non-cash credit toward that account and project's first separately released Alakazam invoice\./u,
   );
   assert.match(
     landing,
@@ -674,7 +680,7 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
   assert.doesNotMatch(guide, /http-equiv="refresh"/u);
   assert.match(guide, /rel="canonical" href="https:\/\/sitesourcery\.com\/abracadabra\/how\/"/u);
   assert.match(guide, /Make your preview in six short steps\./u);
-  assert.match(guide, /Looking is free\. Download is \$5 once per saved editor project\./u);
+  assert.match(guide, /Looking is free\. Download is \$20 once per saved editor project/u);
 
   const faq = sources.get("faq/index.html");
   for (const anchor of [

@@ -3,12 +3,16 @@ import { randomUUID as systemRandomUUID } from "node:crypto";
 import {
   CATALOG_VERSION,
   CHECKOUT_COMMAND_SCHEMA,
+  DOWNLOAD_PRICE_MINOR,
+  PURCHASE_ACCEPTANCE_SCHEMA,
+  PURCHASE_ACCEPTANCE_STATEMENT,
   QUOTE_SNAPSHOT_SCHEMA,
   TERMS_VERSION
 } from "../commerce-v2/constants.mjs";
 import {
   CommerceV2Error,
   clone,
+  digest,
   invariant,
   requiredDigest,
   requiredIso,
@@ -172,7 +176,7 @@ function exactQuote(command, quote) {
       quote.entitlementKind === "spark_download" &&
       quote.state === "held" &&
       quote.dispatchAuthorized === false &&
-      quote.price?.amountMinor === 500 &&
+      quote.price?.amountMinor === DOWNLOAD_PRICE_MINOR &&
       quote.price?.currency === "USD" &&
       quote.price?.billing === "one_time" &&
       quote.price?.interval === null &&
@@ -251,12 +255,28 @@ function exactPreparation(command, preparation) {
       purpose?.offerId === "spark_download" &&
       purpose?.entitlementKind ===
         "spark_download" &&
-      purpose?.price?.amountMinor === 500 &&
+      purpose?.purchaseTermsAccepted === true &&
+      purpose?.price?.amountMinor === DOWNLOAD_PRICE_MINOR &&
       purpose?.price?.currency === "USD" &&
       purpose?.price?.billing === "one_time" &&
       purpose?.price?.interval === null,
     "repository_conflict",
     "the checkout preparation is not held and provider-free",
+    { status: 500 }
+  );
+  const acceptance = preparation.acceptance;
+  invariant(
+    acceptance?.schema ===
+      PURCHASE_ACCEPTANCE_SCHEMA &&
+      acceptance.statement ===
+        PURCHASE_ACCEPTANCE_STATEMENT &&
+      acceptance.acceptedAt ===
+        preparation.preparedAt &&
+      acceptance.acceptedDisclosureDigest ===
+        purpose.acceptedDisclosureDigest &&
+      acceptance.termsVersion === TERMS_VERSION,
+    "repository_conflict",
+    "the checkout purchase acceptance is invalid",
     { status: 500 }
   );
   return Object.freeze({
@@ -295,6 +315,26 @@ function exactPreparation(command, preparation) {
       purpose.quoteSnapshotDigest,
       "preparation.purpose.quoteSnapshotDigest"
     ),
+    acceptanceSchema: acceptance.schema,
+    acceptanceStatement: acceptance.statement,
+    acceptedAt: requiredIso(
+      acceptance.acceptedAt,
+      "preparation.acceptance.acceptedAt"
+    ),
+    acceptanceRequestId: requiredText(
+      acceptance.requestId,
+      "preparation.acceptance.requestId"
+    ),
+    acceptanceClientAddress: requiredText(
+      acceptance.clientAddress,
+      "preparation.acceptance.clientAddress",
+      80
+    ),
+    acceptanceUserAgentDigest: requiredDigest(
+      acceptance.userAgentDigest,
+      "preparation.acceptance.userAgentDigest"
+    ),
+    acceptanceDigest: digest(acceptance),
     snapshot: JSON.stringify(preparation)
   });
 }
@@ -426,7 +466,7 @@ export function createPostgresCommerceV2Repository({
                ) values (
                  $1, $2, $3, $4, $5, $6, $7,
                  'spark_download', 'spark_download',
-                 500, 'USD', 'one_time',
+                 2000, 'USD', 'one_time',
                  'held', false, $8, $9, $10, $11,
                  $12, $13, $14, $15::jsonb
                )`,
@@ -514,13 +554,22 @@ export function createPostgresCommerceV2Repository({
                  state, hold_reason, dispatch_authorized,
                  prepared_at, purpose_digest,
                  accepted_disclosure_digest,
-                 quote_snapshot_digest, preparation
+                 quote_snapshot_digest,
+                 purchase_acceptance_schema,
+                 purchase_acceptance_statement,
+                 purchase_accepted_at,
+                 acceptance_request_id,
+                 acceptance_client_address,
+                 acceptance_user_agent_digest,
+                 acceptance_digest,
+                 preparation
                ) values (
                  $1, $2, $3, $4, $5, $6, $7,
                  'spark_download', 'spark_download',
                  'held', 'provider_dispatch_not_authorized',
                  false, $8, $9, $10, $11,
-                 $12::jsonb
+                 $12, $13, $14, $15, $16,
+                 $17, $18, $19::jsonb
                )`,
               [
                 stored.tenantId,
@@ -534,6 +583,13 @@ export function createPostgresCommerceV2Repository({
                 stored.purposeDigest,
                 stored.acceptedDisclosureDigest,
                 stored.quoteSnapshotDigest,
+                stored.acceptanceSchema,
+                stored.acceptanceStatement,
+                stored.acceptedAt,
+                stored.acceptanceRequestId,
+                stored.acceptanceClientAddress,
+                stored.acceptanceUserAgentDigest,
+                stored.acceptanceDigest,
                 stored.snapshot
               ]
             );

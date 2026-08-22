@@ -646,7 +646,7 @@
     var empty = keep && versions.length === 0;
     maker.classList.toggle("is-keep", keep);
     maker.classList.toggle("is-empty", empty);
-    /* Owner ruling: the $5 payer is still in ABRACADABRA's world (page +
+    /* Owner ruling: the $20 payer is still in ABRACADABRA's world (page +
        download). Only the $25 service is the hall of Alakazam. */
     root.classList.toggle("ss-keep-room", live && currentStep === "preview");
     var emptyRoom = maker.querySelector("[data-empty-room]");

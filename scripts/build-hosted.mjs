@@ -107,8 +107,8 @@ const FIN007_HOSTED_TRUTH_REQUIREMENTS = Object.freeze({
   ),
   "abracadabra/how/index.html": Object.freeze([
     "Make your preview in six short steps.",
-    "Looking is free. Download is $5 once per saved editor project.",
-    "Sign in only when you want to save the project, review its exact one-time $5 quote, and download the accepted HTML after payment.",
+    "Looking is free. Download is $20 once per saved editor project",
+    "Sign in only when you want to save the project, review its exact one-time $20 quote and delivery terms, and download the accepted HTML after payment.",
     "Start building",
   ]),
 });
@@ -117,9 +117,9 @@ const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   "abracadabra/app/abracadabra-api.js":
     "fa70dea571e5ef436cafe7902fa1d77b332bdefde679ce6296579bc56bc2eedc",
   "abracadabra/app/abracadabra-hosted-control.js":
-    "f20d12a7de39e3232be3b2a2a42d1ba0c3bebcb7e0a18cdf88ff5e2054b1582b",
+    "cc3336358e99f252a4694d08d307dc37550525c7cf8ebf4e9c00e96fba5a6274",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "cc607525255d4e5167bfc913c42bc6080faeb4be28da530e329dbbd42a1777a6",
+    "9fd0a34054361598287c6e45c16b483e0ccb26dda0d8a396b92327604ab9bbd3",
 });
 
 function lexical(left, right) {

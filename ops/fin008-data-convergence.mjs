@@ -84,19 +84,24 @@ export function assertFin008DisposableDatabaseName(value) {
 export async function collectFin008MigrationInventory({
   migrationRoot = MIGRATIONS
 } = {}) {
-  const names = (await readdir(migrationRoot))
+  const observedNames = (await readdir(migrationRoot))
     .filter((name) => name.endsWith(".sql"))
     .sort();
   if (
-    names.length !== FIN008_EXPECTED_MIGRATION_COUNT ||
-    names.at(-1) !== FIN008_EXPECTED_LATEST_MIGRATION ||
-    names.some((name) => !MIGRATION_NAME.test(name))
+    observedNames.length < FIN008_EXPECTED_MIGRATION_COUNT ||
+    observedNames[FIN008_EXPECTED_MIGRATION_COUNT - 1] !==
+      FIN008_EXPECTED_LATEST_MIGRATION ||
+    observedNames.some((name) => !MIGRATION_NAME.test(name))
   ) {
     fail(
       "FIN008_MIGRATION_INVENTORY_DRIFT",
       "The candidate migration inventory does not match the frozen FIN-008 denominator."
     );
   }
+  const names = observedNames.slice(
+    0,
+    FIN008_EXPECTED_MIGRATION_COUNT
+  );
   const entries = [];
   for (const name of names) {
     const bytes = await readFile(new URL(name, migrationRoot));

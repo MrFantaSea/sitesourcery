@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import "./stripe-webhook-rotation.test.mjs";
@@ -23,7 +24,7 @@ const DISCLOSURE_DIGEST = "a".repeat(64);
 const CANCELLATION_DIGEST = "b".repeat(64);
 const ALAKAZAM_PRODUCT_ID = "prod_alakazam";
 const ALAKAZAM_COUPON_ID =
-  "alakazam_download_credit_500";
+  "alakazam_download_credit_2000";
 const ALAKAZAM_PORTAL_CONFIGURATION_ID =
   "bpc_alakazam_restricted";
 const ALAKAZAM_PRICE_IDS = Object.freeze({
@@ -348,14 +349,75 @@ function downloadPurpose(overrides = {}) {
     acceptedDisclosureDigest: "d".repeat(64),
     offerId: "spark_download",
     entitlementKind: "spark_download",
+    purchaseTermsAccepted: true,
     taxMode: "disabled_by_owner",
     price: {
-      amountMinor: 500,
+      amountMinor: 2000,
       currency: "USD",
       billing: "one_time",
       interval: null
     },
     ...overrides
+  };
+}
+
+function downloadCheckoutIdentity() {
+  const email = "owner@example.com";
+  return {
+    verified: true,
+    userId:
+      "20000000-0000-4000-8000-000000000001",
+    email,
+    emailDigest: createHash("sha256")
+      .update(email, "utf8")
+      .digest("hex"),
+    accountCreatedAt:
+      "2026-07-27T12:00:00.000Z",
+    activatedAt:
+      "2026-07-27T12:05:00.000Z",
+    possessionEvidenceDigest: "e".repeat(64)
+  };
+}
+
+function downloadBillingIdentity() {
+  return {
+    email: "owner@example.com",
+    name: "Owner Example",
+    address: {
+      city: "Mickleton",
+      country: "US",
+      line1: "1 Main St",
+      line2: null,
+      postal_code: "08056",
+      state: "NJ"
+    }
+  };
+}
+
+function downloadCharge(totalMinor) {
+  return {
+    id: "ch_test_download_1",
+    livemode: false,
+    status: "succeeded",
+    paid: true,
+    currency: "usd",
+    amount: totalMinor,
+    payment_intent: "pi_test_download_1",
+    payment_method_details: {
+      card: {
+        three_d_secure: {
+          result: "authenticated",
+          authentication_flow: "challenge",
+          version: "2.2.0",
+          electronic_commerce_indicator: "05",
+          transaction_id: "three_ds_transaction_1"
+        }
+      }
+    },
+    outcome: {
+      risk_level: "normal",
+      risk_score: 12
+    }
   };
 }
 
@@ -366,6 +428,7 @@ function downloadRequest(overrides = {}) {
   return {
     idempotencyKey:
       "download:checkout-command-1",
+    checkoutIdentity: downloadCheckoutIdentity(),
     purpose,
     purposeDigest: digest(purpose),
     ...Object.fromEntries(
@@ -378,7 +441,7 @@ function downloadRequest(overrides = {}) {
 
 function downloadMetadata(purpose = downloadPurpose()) {
   return {
-    schema: "sitesourcery_download_checkout_v2",
+    schema: "sitesourcery_download_checkout_v3",
     tenant_id: purpose.tenantId,
     customer_id: purpose.customerId,
     project_id: purpose.projectId,
@@ -1136,7 +1199,7 @@ function alakazamPurpose({
       ? {
           entitlementId:
             "70000000-0000-4000-8000-000000000001",
-          amountMinor: 500
+          amountMinor: 2000
         }
       : null,
   overrides = {}
@@ -1369,7 +1432,7 @@ function fakeStripe({
             id,
             valid: true,
             livemode: false,
-            amount_off: 500,
+            amount_off: 2000,
             currency: "usd",
             duration: "once",
             duration_in_months: null,
@@ -1739,25 +1802,7 @@ function fakeStripe({
             application: null,
             api_version: STRIPE_API_VERSION,
             enabled_events: [
-              "charge.dispute.closed",
-              "charge.dispute.created",
-              "charge.dispute.funds_reinstated",
-              "charge.dispute.funds_withdrawn",
-              "charge.dispute.updated",
-              "charge.refunded",
-              "checkout.session.completed",
-              "customer.subscription.created",
-              "customer.subscription.deleted",
-              "customer.subscription.updated",
-              "invoice.finalization_failed",
-              "invoice.finalized",
-              "invoice.paid",
-              "invoice.payment_action_required",
-              "invoice.payment_failed",
-              "invoice.payment_succeeded",
-              "refund.created",
-              "refund.failed",
-              "refund.updated"
+              ...STRIPE_REQUIRED_WEBHOOK_EVENTS
             ],
             livemode: false,
             status: "enabled",
@@ -3042,7 +3087,7 @@ test("readiness fails closed when Stripe Price readback drifts", async () => {
   assert.equal(fake.calls.checkouts.length, 0);
 });
 
-test("Alakazam readiness proves all three Product-bound Prices, the exact $5 Coupon, and a restricted Portal", async () => {
+test("Alakazam readiness proves all three Product-bound Prices, the exact $20 Coupon, and a restricted Portal", async () => {
   const config = alakazamConfiguration();
   const fake = fakeStripe({ config });
   const { adapter } = adapterFixture({ config, fake });
@@ -3331,7 +3376,7 @@ test("Alakazam Customer transport or post-create readback uncertainty never subm
   }
 });
 
-test("Alakazam start Checkout uses one monthly Price and only the pinned one-invoice $5 credit", async () => {
+test("Alakazam start Checkout uses one monthly Price and only the pinned one-invoice $20 credit", async () => {
   const config = alakazamConfiguration();
   const fake = fakeStripe({ config });
   const { adapter, calls } = adapterFixture({
@@ -3472,9 +3517,9 @@ test("Alakazam start settlement reads back the paid Invoice, PaymentIntent, one-
   assert.equal(result.changeKind, "start");
   assert.equal(result.targetTierId, "alakazam_25");
   assert.equal(result.listSubtotalMinor, 2500);
-  assert.equal(result.providerDiscountMinor, 500);
-  assert.equal(result.netSubtotalMinor, 2000);
-  assert.equal(result.totalMinor, 2000);
+  assert.equal(result.providerDiscountMinor, 2000);
+  assert.equal(result.netSubtotalMinor, 500);
+  assert.equal(result.totalMinor, 500);
   assert.equal(
     result.stripeInvoiceId,
     "in_alakazam_start_1"
@@ -4601,7 +4646,7 @@ test("one-time website purchase uses payment mode and PaymentIntent metadata", a
   );
 });
 
-test("one-time Download creates only the exact server-priced $5 Checkout", async () => {
+test("one-time Download creates only the exact server-priced $20 Checkout", async () => {
   const { adapter, calls } = adapterFixture();
   const request = downloadRequest();
   const result =
@@ -4623,7 +4668,7 @@ test("one-time Download creates only the exact server-priced $5 Checkout", async
     {
       price_data: {
         currency: "usd",
-        unit_amount: 500,
+        unit_amount: 2000,
         tax_behavior: "exclusive",
         product_data: {
           name: "Abracadabra Download",
@@ -4652,7 +4697,18 @@ test("one-time Download creates only the exact server-priced $5 Checkout", async
     params.metadata
   );
   assert.equal(params.customer_creation, "always");
+  assert.equal(
+    params.customer_email,
+    downloadCheckoutIdentity().email
+  );
   assert.equal(params.customer, undefined);
+  assert.equal(
+    params.billing_address_collection,
+    "required"
+  );
+  assert.deepEqual(params.payment_method_options, {
+    card: { request_three_d_secure: "any" }
+  });
   assert.equal(params.automatic_tax.enabled, false);
   assert.match(
     requestOptions.idempotencyKey,
@@ -4671,9 +4727,12 @@ test("one-time Download reuses the account's bound Stripe Customer", async () =>
   assert.equal(params.customer_creation, undefined);
   assert.equal(
     params.billing_address_collection,
-    undefined
+    "required"
   );
-  assert.equal(params.customer_update, undefined);
+  assert.deepEqual(params.customer_update, {
+    address: "auto",
+    name: "auto"
+  });
 });
 
 test("assessment invoice creates one exact automatic-tax $350 Checkout", async () => {
@@ -6865,23 +6924,25 @@ test("Download settlement reads back one exact paid Checkout and expanded Paymen
       status: "complete",
       payment_status: "paid",
       currency: "usd",
-      amount_subtotal: 500,
-      amount_total: 500,
+      amount_subtotal: 2000,
+      amount_total: 2000,
       automatic_tax: {
         enabled: false,
         status: null
       },
       customer: "cus_test_download_1",
+      customer_details: downloadBillingIdentity(),
       metadata,
       payment_intent: {
         id: "pi_test_download_1",
         livemode: false,
         status: "succeeded",
         currency: "usd",
-        amount: 500,
-        amount_received: 500,
+        amount: 2000,
+        amount_received: 2000,
         amount_capturable: 0,
-        metadata
+        metadata,
+        latest_charge: downloadCharge(2000)
       }
     }
   });
@@ -6893,7 +6954,8 @@ test("Download settlement reads back one exact paid Checkout and expanded Paymen
     await adapter.retrieveDownloadCheckout({
       checkoutSessionId: "cs_test_download_1",
       purpose,
-      purposeDigest: digest(purpose)
+      purposeDigest: digest(purpose),
+      checkoutIdentity: downloadCheckoutIdentity()
     });
   assert.deepEqual(facts, {
     schema:
@@ -6903,17 +6965,66 @@ test("Download settlement reads back one exact paid Checkout and expanded Paymen
     paymentIntentId: "pi_test_download_1",
     customerId: "cus_test_download_1",
     paymentStatus: "paid",
-    amountMinor: 500,
+    amountMinor: 2000,
     taxMinor: 0,
-    totalMinor: 500,
+    totalMinor: 2000,
     taxMode: "disabled_by_owner",
     currency: "USD",
-    purposeDigest: digest(purpose)
+    purposeDigest: digest(purpose),
+    verifiedEmailDigest:
+      downloadCheckoutIdentity().emailDigest,
+    accountCreatedAt:
+      downloadCheckoutIdentity().accountCreatedAt,
+    accountActivatedAt:
+      downloadCheckoutIdentity().activatedAt,
+    possessionEvidenceDigest:
+      downloadCheckoutIdentity()
+        .possessionEvidenceDigest,
+    billingIdentity: {
+      email: "owner@example.com",
+      name: "Owner Example",
+      address: {
+        city: "Mickleton",
+        country: "US",
+        line1: "1 Main St",
+        line2: null,
+        postalCode: "08056",
+        state: "NJ"
+      }
+    },
+    billingIdentityDigest: digest({
+      email: "owner@example.com",
+      name: "Owner Example",
+      address: {
+        city: "Mickleton",
+        country: "US",
+        line1: "1 Main St",
+        line2: null,
+        postalCode: "08056",
+        state: "NJ"
+      }
+    }),
+    threeDS: {
+      requested: "any",
+      supported: true,
+      result: "authenticated",
+      authenticationFlow: "challenge",
+      version: "2.2.0",
+      electronicCommerceIndicator: "05",
+      transactionIdDigest: createHash("sha256")
+        .update("three_ds_transaction_1", "utf8")
+        .digest("hex")
+    },
+    chargeId: "ch_test_download_1",
+    riskLevel: "normal",
+    riskScore: 12
   });
   assert.deepEqual(calls.checkoutReads, [
     {
       id: "cs_test_download_1",
-      params: { expand: ["payment_intent"] }
+      params: {
+        expand: ["payment_intent.latest_charge"]
+      }
     }
   ]);
 });
@@ -6931,7 +7042,7 @@ test("expired Download Checkout readback proves unpaid before another payment ca
       status: "expired",
       payment_status: "unpaid",
       currency: "usd",
-      amount_subtotal: 500,
+      amount_subtotal: 2000,
       automatic_tax: {
         enabled: false,
         status: null
@@ -6979,8 +7090,8 @@ test("automatic tax Download collects an address and reconciles item, tax, and t
       status: "complete",
       payment_status: "paid",
       currency: "usd",
-      amount_subtotal: 500,
-      amount_total: 533,
+      amount_subtotal: 2000,
+      amount_total: 2033,
       automatic_tax: {
         enabled: true,
         status: "complete"
@@ -6991,16 +7102,18 @@ test("automatic tax Download collects an address and reconciles item, tax, and t
         amount_tax: 33
       },
       customer: "cus_test_download_1",
+      customer_details: downloadBillingIdentity(),
       metadata,
       payment_intent: {
         id: "pi_test_download_1",
         livemode: false,
         status: "succeeded",
         currency: "usd",
-        amount: 533,
-        amount_received: 533,
+        amount: 2033,
+        amount_received: 2033,
         amount_capturable: 0,
-        metadata
+        metadata,
+        latest_charge: downloadCharge(2033)
       }
     }
   });
@@ -7027,13 +7140,15 @@ test("automatic tax Download collects an address and reconciles item, tax, and t
     "required"
   );
   assert.deepEqual(params.customer_update, {
-    address: "auto"
+    address: "auto",
+    name: "auto"
   });
   assert.deepEqual(
     await adapter.retrieveDownloadCheckout({
       checkoutSessionId: "cs_test_download_1",
       purpose,
-      purposeDigest: digest(purpose)
+      purposeDigest: digest(purpose),
+      checkoutIdentity: downloadCheckoutIdentity()
     }),
     {
       schema:
@@ -7043,12 +7158,62 @@ test("automatic tax Download collects an address and reconciles item, tax, and t
       paymentIntentId: "pi_test_download_1",
       customerId: "cus_test_download_1",
       paymentStatus: "paid",
-      amountMinor: 500,
+      amountMinor: 2000,
       taxMinor: 33,
-      totalMinor: 533,
+      totalMinor: 2033,
       taxMode: "automatic",
       currency: "USD",
-      purposeDigest: digest(purpose)
+      purposeDigest: digest(purpose),
+      verifiedEmailDigest:
+        downloadCheckoutIdentity().emailDigest,
+      accountCreatedAt:
+        downloadCheckoutIdentity().accountCreatedAt,
+      accountActivatedAt:
+        downloadCheckoutIdentity().activatedAt,
+      possessionEvidenceDigest:
+        downloadCheckoutIdentity()
+          .possessionEvidenceDigest,
+      billingIdentity: {
+        email: "owner@example.com",
+        name: "Owner Example",
+        address: {
+          city: "Mickleton",
+          country: "US",
+          line1: "1 Main St",
+          line2: null,
+          postalCode: "08056",
+          state: "NJ"
+        }
+      },
+      billingIdentityDigest: digest({
+        email: "owner@example.com",
+        name: "Owner Example",
+        address: {
+          city: "Mickleton",
+          country: "US",
+          line1: "1 Main St",
+          line2: null,
+          postalCode: "08056",
+          state: "NJ"
+        }
+      }),
+      threeDS: {
+        requested: "any",
+        supported: true,
+        result: "authenticated",
+        authenticationFlow: "challenge",
+        version: "2.2.0",
+        electronicCommerceIndicator: "05",
+        transactionIdDigest: createHash("sha256")
+          .update(
+            "three_ds_transaction_1",
+            "utf8"
+          )
+          .digest("hex")
+      },
+      chargeId: "ch_test_download_1",
+      riskLevel: "normal",
+      riskScore: 12
     }
   );
 });
@@ -7067,13 +7232,14 @@ test("Download settlement rejects signed-event money without matching Stripe rea
       status: "complete",
       payment_status: "paid",
       currency: "usd",
-      amount_subtotal: 500,
+      amount_subtotal: 2000,
       amount_total: 1,
       automatic_tax: {
         enabled: false,
         status: null
       },
       customer: "cus_test_download_1",
+      customer_details: downloadBillingIdentity(),
       metadata,
       payment_intent: {
         id: "pi_test_download_1",
@@ -7083,7 +7249,8 @@ test("Download settlement rejects signed-event money without matching Stripe rea
         amount: 1,
         amount_received: 1,
         amount_capturable: 0,
-        metadata
+        metadata,
+        latest_charge: downloadCharge(1)
       }
     }
   });
@@ -7095,7 +7262,8 @@ test("Download settlement rejects signed-event money without matching Stripe rea
     adapter.retrieveDownloadCheckout({
       checkoutSessionId: "cs_test_download_1",
       purpose,
-      purposeDigest: digest(purpose)
+      purposeDigest: digest(purpose),
+      checkoutIdentity: downloadCheckoutIdentity()
     }),
     (error) =>
       error.code ===

@@ -483,10 +483,11 @@ test("PostgreSQL Alakazam start quote locks one project and applies one unused D
   assert.equal(quote.changeKind, "start");
   assert.equal(quote.appliedValue.kind, "download_purchase");
   assert.equal(quote.appliedValue.sourceId, ENTITLEMENT_ID);
-  assert.equal(quote.dueNow.subtotalMinor, 2000);
+  assert.equal(quote.appliedValue.amountMinor, 2000);
+  assert.equal(quote.dueNow.subtotalMinor, 500);
   assert.equal(quote.nextRenewal.amountMinor, 2500);
   assert.equal(quote.dueNow.taxMinor, 0);
-  assert.equal(quote.dueNow.totalMinor, 2000);
+  assert.equal(quote.dueNow.totalMinor, 500);
   assert.equal(context.state.insertCount, 1);
   assert.deepEqual(context.serviceCalls, [
     {

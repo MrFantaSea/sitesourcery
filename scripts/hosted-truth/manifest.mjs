@@ -26,7 +26,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "8d847cabb4ed3c5a855df8614ca4dcd099a187b05d2125d6f153f4057f84ea5d",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-how-download-copy.html",
-    hostedSha256: "cb5f87fd8a060ef4a611b343070006103b68197fe829b2f3cd6fb9b77b636a2f",
+    hostedSha256: "57058b69555aea53804b5e0d71b5198150c7e8595afaf35af8f3edc17dbf1775",
   }),
   slot({
     id: "abracadabra-how-download-state",
@@ -34,79 +34,79 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "2fba5a3a807a4afe3c4a72dcfbf8ea81d0f89921aeecf3e04f9299e0ddd52279",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-how-download-state.html",
-    hostedSha256: "caa853ea1946a30baac4c506ecfe51e4373c29670c20c965ce2b435608ac49d2",
+    hostedSha256: "fdea5b159cf882d731db79da2b83b18afd89fb919aaa9ee5edf288491184769c",
   }),
   slot({
     id: "abracadabra-how-head",
     file: "abracadabra/how/index.html",
     kind: "html",
-    sourceSha256: "0f9b34951b502b73fde427d78b8ecad24cc84d00d5bfac234a5151d60cefdf5c",
+    sourceSha256: "d03eec3d4985b9f73969851469cbd8ca93f8529ba798d92302a3790e289c6ee8",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-how-head.html",
-    hostedSha256: "7b4176ec1579dd361a55a5e63c64c4f03fe5d0a5a52400dab5fcc3546b37c82e",
+    hostedSha256: "02772e026119b3a8d42e2501101e58960657669e08bb09dd8c19e91d03f7fcc0",
   }),
   slot({
     id: "abracadabra-landing-download-copy",
     file: "abracadabra/index.html",
     kind: "html",
-    sourceSha256: "2170dfa702627c0171a55904cf1c4c205bb46cdbac14e5639ff785217cb2d173",
+    sourceSha256: "60124bb14dcf843851ec004fdebb30a850b084623a86afce8fd6d424df9f6305",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-landing-download-copy.html",
-    hostedSha256: "ea6d004876b899c209d155e447a5dad5b6733d8d853e2bd94aefc84b4bdf67e7",
+    hostedSha256: "b5c43b7b9e186302c3e5e8a37dc6975fa1f90a1782edadc6ff5e064890c3add0",
   }),
   slot({
     id: "abracadabra-landing-head",
     file: "abracadabra/index.html",
     kind: "html",
-    sourceSha256: "d29989b06251273a2dfe7a55d65908b2e33e932ff9817f64c142a3197fac975f",
+    sourceSha256: "fba8b2b899999d11318e6e8269cc85dd600f65d9661623d71e73f2ec14253f45",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-landing-head.html",
-    hostedSha256: "67ff8a9a6851a1f18efccc13736fed4d1e67eebb9199e47684eba3aac7e6bb73",
+    hostedSha256: "688333e4a4dc95a30eb8c475281a5176ee66d9271616ade246b1786f1bfe7cff",
   }),
   slot({
     id: "abracadabra-landing-hero-state",
     file: "abracadabra/index.html",
     kind: "html",
-    sourceSha256: "10697e993c30c3ce098b2c8d5b86a624edb98bbcb2a99b613ca7842c643d5964",
+    sourceSha256: "10e072e7a87f09db9291b11a325e6ea6bc58194e6ff65f5781ab322d2f13b165",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-landing-hero-state.html",
-    hostedSha256: "5d8fa9719f9116fa61603be910a4577b9a0d56178d0c0b9aab7ac3a5595e2fc1",
+    hostedSha256: "406027440d09e43dc2df65b9861ecdf367b58201d622fc411eba4e51f0f78240",
   }),
   slot({
     id: "contact-download-availability",
     file: "contact/index.html",
     kind: "html",
-    sourceSha256: "7e5ca205422c009748f594b4a13c5534b3091bd75b3a81d04a7b89a28bd25b77",
+    sourceSha256: "1d77d21083b022c24ea78cc9c4910185050049d0a987cd28f195acef9dcf9cb9",
     hostedFragment: "scripts/hosted-truth/fragments/contact-download-availability.html",
-    hostedSha256: "d850ece83b2f40ce1e49dc6d854135227fc141dac294c3fc569a01548de0d0f6",
+    hostedSha256: "ac2d488c89f1cd73be33674b40c80ed410b0cf9ec6aa728b4ee526ac3c421e51",
   }),
   slot({
     id: "faq-abracadabra-now",
     file: "faq/index.html",
     kind: "html",
-    sourceSha256: "df67d1ffa6323f0b46b90273dcbaf445e2a18c57554b7629fed1efdf6a3336e3",
+    sourceSha256: "d98629b5534a687e9396b7d4064767ac242ff5df82b5a19e2d178312c888fdc6",
     hostedFragment: "scripts/hosted-truth/fragments/faq-abracadabra-now.html",
-    hostedSha256: "1f8a9819a0e22675a888dba2e2dda99b4c55cfb66751c02709a091262f89715e",
+    hostedSha256: "8b0a151e6b4cff2371e6079187e1a68983420693c34f8d055b7769ba48bf3e31",
   }),
   slot({
     id: "faq-address-choices",
     file: "faq/index.html",
     kind: "html",
-    sourceSha256: "03f69ad37b85c53bb86c2d75331c41d05ef44ae6b7e8f957f14b0664f38d60a2",
+    sourceSha256: "c3047f9cd4dfe6d2f6fd949e95c9c7dd1ab1c21b14150e4f5097bd0af2bcad74",
     hostedFragment: "scripts/hosted-truth/fragments/faq-address-choices.html",
-    hostedSha256: "6c878981bdf46078f95a1b670e94042b67c1b781269f96eb669781c08202c297",
+    hostedSha256: "364c939b1dccd59ae4f0ca6f384d7f12278b2b62dd2c121dc8868c1b11e7f8f5",
   }),
   slot({
     id: "faq-missed-payment",
     file: "faq/index.html",
     kind: "html",
-    sourceSha256: "9e61107359c31d6e05907058f01ee7130940634ecf46ba153c3837d1fcd9f690",
+    sourceSha256: "0bf3a3b609f2e01eb5d3ce0d659f391fd7b96d763c65eb5ef51853d77bc99958",
     hostedFragment: "scripts/hosted-truth/fragments/faq-missed-payment.html",
-    hostedSha256: "6c5daac54a11b686b3756330adaeec55730e6c1923bc464635dabddea4a176e7",
+    hostedSha256: "6fc7b27576b30268960da31a32597efd504d3cc2ceb3ed9640703eb2da5cfd11",
   }),
   slot({
     id: "faq-paths",
     file: "faq/index.html",
     kind: "html",
-    sourceSha256: "bab675f1af4bcaad108d23e9c6376eb13c59f64dbdccbdc919c10fc4ee9ccc58",
+    sourceSha256: "3bd88c861c427ce0b4de3f251aa369d4bd25060a9ce7372502d96679a1a3bff0",
     hostedFragment: "scripts/hosted-truth/fragments/faq-paths.html",
-    hostedSha256: "197c10656603f6735f690524882183d1b2f8ecef218322a8d8b152d6eaa1c764",
+    hostedSha256: "b2a9c06ec04cf179fd25923b44b1b397e6564d05ea638a9ff92c495ed4a345f5",
   }),
   slot({
     id: "faq-private-sites",
@@ -120,9 +120,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "home-download-availability",
     file: "index.html",
     kind: "html",
-    sourceSha256: "23bdd17a1460dd1501d9b345de96148e72ae9a67876731b8a8488712512db636",
+    sourceSha256: "6269d5742102bae0ac6a47c3c4583e1e4a1bd7f57ff0af95412f3c9932a18fb7",
     hostedFragment: "scripts/hosted-truth/fragments/home-download-availability.html",
-    hostedSha256: "9f8c0784d11deb02ef5596db20655e23d14092f5329413b1a099f9c91c239c9c",
+    hostedSha256: "e57c27227e586e9a45d576f0aa343f90c185af95f5041cbdfb70b5b965639454",
   }),
   slot({
     id: "abracadabra-app-head",
@@ -130,7 +130,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "63a855616417377a82ac6e009de7843615aa11638bda2bc0c5944b23f34b627b",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-head.html",
-    hostedSha256: "15fd09ee2c727b5163c8ef63190ab384b7bb1871f1df5e3fc9c6cefc13ffaf74",
+    hostedSha256: "54e0867be617d1137ba88c0d63ae9e06e5db28e8ba78f2018f5d8173a2e7d7a6",
   }),
   slot({
     id: "abracadabra-app-scripts",
@@ -154,7 +154,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "1090d9d9850c1e94af44c55aecabbc01347d4c0f6885743b4d6e45cf33f9f3a1",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
-    hostedSha256: "b78c8f894ec0ab2cee71b4bc212561e736f597d17ea0c1401c3dcc49faafb283",
+    hostedSha256: "c8a49165d39fe68a03ac798c89f3bf5198b50a015a8b5de6085074fce47d838a",
   }),
   slot({
     id: "abracadabra-app-control",
@@ -162,7 +162,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "b98809417c0240085bf70f2a1127f0b622c1514651737e7e4ffac4b39e4da17e",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-customer-control.html",
-    hostedSha256: "9b81a13b7eb6c345356d25898869dea6027a04747f4a34af75580c33ee7ed6f1",
+    hostedSha256: "5bcbdc7caae33db95e8902bde42f9fd6c0b2da69b488e11735ec17cbb5db7d34",
   }),
   slot({
     id: "abracadabra-app-noscript",
@@ -178,7 +178,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "1ad7d9be7b53fd00b835ec3adbacfa693a2f41d63ab5870fd17f5a42200aa745",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-save-gate.html",
-    hostedSha256: "fd6c526a83d6611d270ff8d5396a0c027a4262af2651bfcb3fd8f7ee5d928bbc",
+    hostedSha256: "13b0e8118539398244b17a5a2553f24ffb4c8b2b045faa3c033ac6b74db7b2ec",
   }),
   slot({
     id: "legal-center-head",
@@ -244,7 +244,7 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-alakazam-retained-premium.js":
     "5cc58c5211c0983be18bd4645702bdc13bfb4d4d7008b605624560120ebe22d1",
   "abracadabra/app/abracadabra-api.js":
-    "7dabc7016a35f4db432a2deccc59091ab15b4e22521d3d5f6bd2f6bf59ec522a",
+    "fa70dea571e5ef436cafe7902fa1d77b332bdefde679ce6296579bc56bc2eedc",
   "abracadabra/app/abracadabra-billing-views.js":
     "3bd32e18c5ef2a9592eee0acea35cf17c4a3071e64e5ed95e7edf1dca1c5c486",
   "abracadabra/app/abracadabra-care-surfaces.css":
@@ -254,9 +254,9 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "cc607525255d4e5167bfc913c42bc6080faeb4be28da530e329dbbd42a1777a6",
+    "9fd0a34054361598287c6e45c16b483e0ccb26dda0d8a396b92327604ab9bbd3",
   "abracadabra/app/abracadabra-hosted-control.js":
-    "8a0801d41bec47cbd71f5f0adf0d9a4716296621167d3e1667da9b39ce12477b",
+    "cc3336358e99f252a4694d08d307dc37550525c7cf8ebf4e9c00e96fba5a6274",
   "abracadabra/app/abracadabra-responder-surfaces.css":
     "f087bd1da001450a7a522be70c0840df66037fb0d83e08dfe29f5f1f0399fd4f",
   "abracadabra/app/abracadabra-responder-surfaces.js":
@@ -275,31 +275,31 @@ export const hostedStagingAssetSha256 = Object.freeze({
  */
 export const heldAlakazamCopyFragmentSha256 = Object.freeze({
   "scripts/hosted-truth/fragments/abracadabra-how-head.html":
-    "7b4176ec1579dd361a55a5e63c64c4f03fe5d0a5a52400dab5fcc3546b37c82e",
+    "02772e026119b3a8d42e2501101e58960657669e08bb09dd8c19e91d03f7fcc0",
   "scripts/hosted-truth/fragments/abracadabra-how-main.html":
-    "3078fd4a1b278127ed9f6e3885176ba9e9478d4a04c5b41c1315cd9337ca8dd2",
+    "6d58b2e4265279a49206e84a9f14fa632e63a0717ddbd64a2130d9a2497af21f",
   "scripts/hosted-truth/fragments/abracadabra-landing-head.html":
-    "67ff8a9a6851a1f18efccc13736fed4d1e67eebb9199e47684eba3aac7e6bb73",
+    "688333e4a4dc95a30eb8c475281a5176ee66d9271616ade246b1786f1bfe7cff",
   "scripts/hosted-truth/fragments/abracadabra-landing-main.html":
-    "274a88bddb8832b10596647bd807749963aa93f1efd57991342c0d0dd6e3cd37",
+    "4ac47d96ea77d74307a5bac054a9e9507f69a215aa203f97e2275fd427f9120e",
   "scripts/hosted-truth/fragments/faq-abracadabra-now.html":
-    "1f8a9819a0e22675a888dba2e2dda99b4c55cfb66751c02709a091262f89715e",
+    "8b0a151e6b4cff2371e6079187e1a68983420693c34f8d055b7769ba48bf3e31",
   "scripts/hosted-truth/fragments/faq-address-choices.html":
-    "6c878981bdf46078f95a1b670e94042b67c1b781269f96eb669781c08202c297",
+    "364c939b1dccd59ae4f0ca6f384d7f12278b2b62dd2c121dc8868c1b11e7f8f5",
   "scripts/hosted-truth/fragments/faq-missed-payment.html":
-    "6c5daac54a11b686b3756330adaeec55730e6c1923bc464635dabddea4a176e7",
+    "6fc7b27576b30268960da31a32597efd504d3cc2ceb3ed9640703eb2da5cfd11",
   "scripts/hosted-truth/fragments/faq-paths.html":
-    "197c10656603f6735f690524882183d1b2f8ecef218322a8d8b152d6eaa1c764",
+    "b2a9c06ec04cf179fd25923b44b1b397e6564d05ea638a9ff92c495ed4a345f5",
   "scripts/hosted-truth/fragments/faq-private-sites.html":
     "7c2fc996ea1d5ea252abbb9bf98d9e8580a969a2ec449218ee1b444a96e212dd",
   "scripts/hosted-truth/fragments/home-abracadabra-card.html":
-    "37d6f12fcb8ec1476c903b878c190bc84fc443046e111c4864245dd0285bf0fd",
+    "c47d978e09756f7db41aaf24512907171ed386b6552ca4128d9a2ae64e6f1527",
   "scripts/hosted-truth/fragments/home-abracadabra-intro.html":
-    "7dd6774efa26740d94eebf8a1d3269c30042bca4c47511c6bacd0c260ebffc0e",
+    "e12d90fabdbbf03a57c31c67ac08c69a051ae305ee341533e6e83b2ec06f4092",
   "scripts/hosted-truth/fragments/home-abracadabra-proof.html":
-    "87b96709f9ab949e28551f9d3cc4ad6268d61283528297ef68cd531e2cb56eba",
+    "868abaa284b15583a7b61dee96d2f849a13392919b54bcf165cd4fb7dcb1694d",
   "scripts/hosted-truth/fragments/start-recommendation-abracadabra.js":
-    "bfe3a4a4fe7f69c7a7687ce520bfa1a2c2945d1c44c66bdd5ca3c860f08b5bf8",
+    "aea3cad87399143068ba7028c1ec22aa554953ad037bb0887239399b1983d3d8",
 });
 
 export const heldAlakazamCustomerArtifactFiles = Object.freeze([
@@ -389,12 +389,13 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "vnext.js": Object.freeze([
     "Build and preview privately for free.",
-    "Download is $5 once per editor project, not per click or version.",
+    "Download is $20 once per editor project, not per click or version.",
+    "The full $20 is a one-time non-cash credit toward the same account and project's first separately released Alakazam invoice.",
     "The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   ]),
   "abracadabra/index.html": Object.freeze([
     "Abracadabra Alakazam",
-    "Free to See-$5 Download Coming-Alakazam Plans Held",
+    "Free to See-$20 Download Coming-Alakazam Plans Held",
     "the account and download path are not open yet",
     "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
@@ -414,10 +415,11 @@ export const heldTruthRequirements = Object.freeze({
   ]),
   "faq/index.html": Object.freeze([
     "the account and payment path are not open yet",
-    "When it opens, Download will be $5 once per editor project",
+    "When it opens, Download will be $20 once per editor project",
+    "The full $20 will be a one-time non-cash credit toward the same account and project's first separately released Alakazam invoice.",
     "The planned $25, $35, and $50 Alakazam plans are not available.",
     "No Alakazam subscription, hosting activation, publication, or tier feature is offered.",
-    "the downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
+    "The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "this page cannot quote or start setup",
   ]),
   "legal/index.html": Object.freeze([
@@ -473,52 +475,56 @@ export const hostedTruthRequirements = Object.freeze({
     "Your source for websites.",
     "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350.",
     "Make a preview — free.",
-    "Free preview · $5 Download",
+    "Free preview · $20 Download",
+    "The full $20 is a one-time non-cash credit toward that account and project's first separately released Alakazam invoice.",
     "Account required only to save and buy",
     "Neither of these is for sale yet.",
     "Check and ask about a domain",
   ]),
   "vnext.js": Object.freeze([
-    "Download is $5 once per editor project, not per click or version.",
+    "Download is $20 once per editor project, not per click or version.",
+    "The full $20 is a one-time non-cash credit toward the same account and project's first separately released Alakazam invoice.",
     "The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
   ]),
   "abracadabra/index.html": Object.freeze([
     "Abracadabra Alakazam",
-    "Free preview. $5 Download. Alakazam plans held.",
-    "A signed-in account can save the project and buy its HTML Download once for $5.",
-    "Repeat downloads from that retained project do not require another Site Sourcery payment.",
+    "Free preview. $20 Download. Alakazam plans held.",
+    "A signed-in account can save the project and buy its HTML Download once for $20.",
+    "Repeat downloads from that retained project do not require another Site Sourcery payment",
+    "the full $20 is a one-time non-cash credit toward that account and project's first separately released Alakazam invoice.",
     "Alakazam plans are in development. Public subscriptions and hosting activation are held",
   ]),
   "abracadabra/how/index.html": Object.freeze([
     "Make your preview in six short steps.",
-    "Looking is free. Download is $5 once per saved editor project.",
-    "Sign in only when you want to save the project, review its exact one-time $5 quote, and download the accepted HTML after payment.",
+    "Looking is free. Download is $20 once per saved editor project",
+    "Sign in only when you want to save the project, review its exact one-time $20 quote and delivery terms, and download the accepted HTML after payment.",
     "Start building",
   ]),
   "abracadabra/app/index.html": Object.freeze([
     "Build, preview, and download with Abracadabra",
     "Your guest preview is not saved yet.",
     "Made versions may survive a refresh in this tab.",
-    "Sign in for the $5 Download.",
+    "Sign in for the $20 Download.",
     "Alakazam subscriptions and hosting activation remain held.",
     "Create an account or sign in.",
-    "A new project has its own one-time $5 Download unlock.",
-    "Get the exact $5 quote",
+    "A new project has its own one-time $20 Download unlock.",
+    "Get the exact $20 quote",
     "Download HTML",
   ]),
   "abracadabra/app/abracadabra-app.js": Object.freeze([
     "Abracadabra ready. Guest work stays only in this tab until you save it to your account.",
   ]),
   "faq/index.html": Object.freeze([
-    "Download is $5 once per editor project.",
-    "A signed-in customer may buy Download for $5 once per editor project",
+    "Download is $20 once per editor project.",
+    "A signed-in customer may buy Download for $20 once per editor project",
+    "The full $20 is a one-time non-cash credit toward the same account and project's first separately released Alakazam invoice.",
     "An incomplete checkout creates no Download entitlement, delivers no file, and creates no charge.",
     "Alakazam subscription sales and hosting activation remain held.",
     "Downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
     "this page cannot quote or start setup",
   ]),
   "contact/index.html": Object.freeze([
-    "Sign in only when you want to save the project and buy its HTML Download once for $5.",
+    "Sign in only when you want to save the project and buy its HTML Download once for $20.",
   ]),
   "legal/index.html": Object.freeze([
     "Privacy and terms for saved editor projects and Download.",

@@ -197,7 +197,7 @@ function fixture(
 
 test("shared webhook router verifies raw bytes once and sends Download metadata only to v2", async () => {
   const selected = event({
-    schema: "sitesourcery_download_checkout_v2"
+    schema: "sitesourcery_download_checkout_v3"
   });
   const context = fixture(selected);
   assert.deepEqual(

@@ -19,6 +19,10 @@ const PROJECT_ID = "project_download_a";
 const VERSION_ID = "version_download_a";
 const QUOTE_ID = "quote_download_a";
 const COMMAND_ID = "checkout_download_a";
+const VERIFIED_EMAIL = "owner@example.com";
+const VERIFIED_EMAIL_DIGEST = createHash("sha256")
+  .update(VERIFIED_EMAIL, "utf8")
+  .digest("hex");
 const HTML = Buffer.from(
   "<!doctype html><title>Paid Download</title>",
   "utf8"
@@ -39,8 +43,9 @@ function preparation() {
     acceptedDisclosureDigest: "b".repeat(64),
     offerId: "spark_download",
     entitlementKind: "spark_download",
+    purchaseTermsAccepted: true,
     price: {
-      amountMinor: 500,
+      amountMinor: 2000,
       currency: "USD",
       billing: "one_time",
       interval: null
@@ -59,6 +64,19 @@ function preparation() {
     dispatchAuthorized: false,
     provider: null,
     preparedAt: NOW,
+    acceptance: {
+      schema:
+        "sitesourcery.abracadabra-purchase-acceptance.v1",
+      statement:
+        "accepted_exact_download_quote_delivery_final_sale_and_credit_terms",
+      acceptedAt: NOW,
+      requestId: "request_download_a",
+      clientAddress: "192.0.2.10",
+      userAgentDigest: "c".repeat(64),
+      acceptedDisclosureDigest: "b".repeat(64),
+      termsVersion:
+        "spark-download-protection.2026-08-22.v2"
+    },
     purpose,
     purposeDigest: digest(purpose)
   };
@@ -66,7 +84,7 @@ function preparation() {
 
 function metadata(selected = preparation()) {
   return {
-    schema: "sitesourcery_download_checkout_v2",
+    schema: "sitesourcery_download_checkout_v3",
     tenant_id: TENANT_ID,
     customer_id: CUSTOMER_ID,
     project_id: PROJECT_ID,
@@ -101,7 +119,7 @@ function verifiedEvent(overrides = {}) {
 
 function refundEvent({
   eventId = "evt_download_refund_1",
-  amountRefunded = 500
+  amountRefunded = 2000
 } = {}) {
   return {
     id: eventId,
@@ -115,9 +133,9 @@ function refundEvent({
         payment_intent:
           "pi_test_download_1",
         currency: "usd",
-        amount: 500,
+        amount: 2000,
         amount_refunded: amountRefunded,
-        refunded: amountRefunded === 500
+        refunded: amountRefunded === 2000
       }
     }
   };
@@ -139,8 +157,30 @@ function disputeEvent({
         payment_intent:
           "pi_test_download_1",
         currency: "usd",
-        amount: 500,
+        amount: 2000,
         status
+      }
+    }
+  };
+}
+
+function earlyFraudWarningEvent({
+  eventId = "evt_download_early_fraud_1",
+  actionable = true
+} = {}) {
+  return {
+    id: eventId,
+    type: "radar.early_fraud_warning.created",
+    livemode: false,
+    created: 1785672600,
+    data: {
+      object: {
+        id: "issfr_test_download_1",
+        livemode: false,
+        actionable,
+        fraud_type: "card_never_received",
+        charge: "ch_test_download_1",
+        payment_intent: "pi_test_download_1"
       }
     }
   };
@@ -164,7 +204,9 @@ function fixture({
     abandoned: [],
     expired: [],
     settlements: [],
-    reversals: []
+    reversals: [],
+    fraudWarnings: [],
+    accesses: []
   };
   let dispatch = null;
   let entitlement = null;
@@ -172,6 +214,22 @@ function fixture({
   const events = new Map();
   let sequence = 0;
   const repository = {
+    async findVerifiedCheckoutIdentity(input) {
+      assert.equal(input.tenantId, TENANT_ID);
+      assert.equal(input.customerId, CUSTOMER_ID);
+      return {
+        verified: true,
+        userId: CUSTOMER_ID,
+        email: VERIFIED_EMAIL,
+        emailDigest: VERIFIED_EMAIL_DIGEST,
+        accountCreatedAt:
+          "2026-08-01T10:00:00.000Z",
+        activatedAt:
+          "2026-08-01T10:05:00.000Z",
+        possessionEvidenceDigest:
+          "d".repeat(64)
+      };
+    },
     async findStripeCustomer(input) {
       assert.equal(input.tenantId, TENANT_ID);
       assert.equal(input.customerId, CUSTOMER_ID);
@@ -308,7 +366,10 @@ function fixture({
         expiresAt: null,
         acceptedDisclosureDigest:
           preparation().purpose
-            .acceptedDisclosureDigest
+            .acceptedDisclosureDigest,
+        payment: {
+          receiptId: input.receiptId
+        }
       };
       receipt = {
         receiptId: input.receiptId,
@@ -319,7 +380,7 @@ function fixture({
         entitlementState: "active",
         paymentIntentId:
           input.payment.paymentIntentId,
-        amountMinor: 500,
+        amountMinor: 2000,
         taxMinor: input.payment.taxMinor,
         totalMinor: input.payment.totalMinor,
         currency: "USD"
@@ -364,6 +425,29 @@ function fixture({
         entitlementId: entitlement.entitlementId,
         entitlementState: entitlement.state,
         reason: input.decision.reason
+      };
+    },
+    async applyEarlyFraudWarning(input) {
+      calls.fraudWarnings.push(
+        structuredClone(input)
+      );
+      return {
+        status: "processed",
+        actionable: input.warning.actionable,
+        projectId: PROJECT_ID,
+        entitlementId: entitlement.entitlementId,
+        entitlementState: entitlement.state,
+        checkoutGate:
+          input.warning.actionable
+            ? "held"
+            : "unchanged"
+      };
+    },
+    async recordDownloadAccess(input) {
+      calls.accesses.push(structuredClone(input));
+      return {
+        recorded: true,
+        accessEventId: "access_download_1"
       };
     },
     async resolveDownloadArtifact(input) {
@@ -425,14 +509,54 @@ function fixture({
         paymentIntentId: "pi_test_download_1",
         customerId: "cus_test_download_1",
         paymentStatus: "paid",
-        amountMinor: 500,
+        amountMinor: 2000,
         taxMinor:
           taxMode === "automatic" ? 33 : 0,
         totalMinor:
-          taxMode === "automatic" ? 533 : 500,
+          taxMode === "automatic" ? 2033 : 2000,
         taxMode,
         currency: "USD",
-        purposeDigest: preparation().purposeDigest
+        purposeDigest: preparation().purposeDigest,
+        verifiedEmailDigest:
+          VERIFIED_EMAIL_DIGEST,
+        accountCreatedAt:
+          "2026-08-01T10:00:00.000Z",
+        accountActivatedAt:
+          "2026-08-01T10:05:00.000Z",
+        possessionEvidenceDigest:
+          "d".repeat(64),
+        billingIdentity: {
+          email: VERIFIED_EMAIL,
+          name: "Owner",
+          address: {
+            city: "Mickleton",
+            country: "US",
+            line1: "1 Main St",
+            line2: null,
+            postalCode: "08056",
+            state: "NJ"
+          }
+        },
+        billingIdentityDigest: digest({
+          email: VERIFIED_EMAIL,
+          name: "Owner",
+          address: {
+            city: "Mickleton",
+            country: "US",
+            line1: "1 Main St",
+            line2: null,
+            postalCode: "08056",
+            state: "NJ"
+          }
+        }),
+        threeDS: {
+          requested: "any",
+          supported: true,
+          result: "authenticated"
+        },
+        chargeId: "ch_test_download_1",
+        riskLevel: "normal",
+        riskScore: 10
       };
     },
     async retrieveDownloadCheckoutLifecycle(input) {
@@ -463,6 +587,18 @@ function fixture({
   });
   return {
     calls,
+    checkoutIdentity: {
+      verified: true,
+      userId: CUSTOMER_ID,
+      email: VERIFIED_EMAIL,
+      emailDigest: VERIFIED_EMAIL_DIGEST,
+      accountCreatedAt:
+        "2026-08-01T10:00:00.000Z",
+      activatedAt:
+        "2026-08-01T10:05:00.000Z",
+      possessionEvidenceDigest:
+        "d".repeat(64)
+    },
     get dispatch() {
       return dispatch;
     },
@@ -493,7 +629,7 @@ test("Download payment remains held without the explicit release", async () => {
   assert.equal(context.calls.create.length, 0);
 });
 
-test("automatic tax is a valid exact $5 item-plus-tax contract", async () => {
+test("automatic tax is a valid exact $20 item-plus-tax contract", async () => {
   const context = fixture({ taxMode: "automatic" });
   assert.deepEqual(await context.service.readiness(), {
     ready: true,
@@ -515,7 +651,7 @@ test("automatic tax is a valid exact $5 item-plus-tax contract", async () => {
   );
   assert.equal(
     context.calls.settlements[0].payment.totalMinor,
-    533
+    2033
   );
 });
 
@@ -535,6 +671,7 @@ test("one durable Download dispatch replays one Stripe Checkout without a second
   assert.deepEqual(replay, first);
   assert.equal(context.calls.create.length, 1);
   assert.deepEqual(context.calls.create[0], {
+    checkoutIdentity: context.checkoutIdentity,
     idempotencyKey: COMMAND_ID,
     purpose: preparation().purpose,
     purposeDigest: preparation().purposeDigest
@@ -577,6 +714,7 @@ test("Download Checkout reuses the organization's bound Stripe Customer", async 
   });
   await context.service.dispatch(preparation());
   assert.deepEqual(context.calls.create[0], {
+    checkoutIdentity: context.checkoutIdentity,
     idempotencyKey: COMMAND_ID,
     purpose: preparation().purpose,
     purposeDigest: preparation().purposeDigest,
@@ -690,7 +828,10 @@ test("active project entitlement delivers only the exact accepted artifact and d
     tenantId: TENANT_ID,
     customerId: CUSTOMER_ID,
     projectId: PROJECT_ID,
-    versionId: VERSION_ID
+    versionId: VERSION_ID,
+    requestId: "request_download_1",
+    clientAddress: "192.0.2.10",
+    userAgentDigest: "e".repeat(64)
   };
   const first = await context.service.download(input);
   const repeat = await context.service.download(input);
@@ -729,7 +870,10 @@ test("a full Stripe refund revokes Download and duplicate delivery is idempotent
       tenantId: TENANT_ID,
       customerId: CUSTOMER_ID,
       projectId: PROJECT_ID,
-      versionId: VERSION_ID
+      versionId: VERSION_ID,
+      requestId: "request_download_refund",
+      clientAddress: "192.0.2.10",
+      userAgentDigest: "e".repeat(64)
     }),
     (error) =>
       error.code === "entitlement_unavailable"
@@ -755,6 +899,36 @@ test("a partial refund or open dispute suspends Download pending owner review", 
       "suspended"
     );
   }
+});
+
+test("an actionable Stripe early fraud warning enters owner review without trusting browser claims", async () => {
+  const context = fixture();
+  await context.service.dispatch(preparation());
+  await context.service.ingestStripeEvent(
+    verifiedEvent()
+  );
+  const result = await context.service.ingestStripeEvent(
+    earlyFraudWarningEvent()
+  );
+  assert.deepEqual(result, {
+    status: "processed",
+    actionable: true,
+    projectId: PROJECT_ID,
+    entitlementId: context.entitlement.entitlementId,
+    entitlementState: "active",
+    checkoutGate: "held"
+  });
+  assert.equal(context.calls.fraudWarnings.length, 1);
+  assert.deepEqual(
+    context.calls.fraudWarnings[0].warning,
+    {
+      warningId: "issfr_test_download_1",
+      chargeId: "ch_test_download_1",
+      paymentIntentId: "pi_test_download_1",
+      actionable: true,
+      fraudType: "card_never_received"
+    }
+  );
 });
 
 test("a reversal for another PaymentIntent falls through to canonical commerce", async () => {

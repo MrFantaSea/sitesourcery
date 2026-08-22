@@ -12,7 +12,7 @@ test("Download payment defaults held and requires one exact approval mode", () =
   });
   assert.equal(held.mode, "held");
   assert.equal(held.release.approved, false);
-  assert.equal(held.release.amountMinor, 500);
+  assert.equal(held.release.amountMinor, 2000);
   assert.equal(held.release.currency, "USD");
   assert.throws(
     () =>

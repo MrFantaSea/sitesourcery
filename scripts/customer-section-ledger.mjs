@@ -123,7 +123,7 @@ const HOME_UNITS = [
     ordinal: 1,
   }),
   unit({
-    copy: "$5 to see it",
+    copy: "$20 Download",
     evidence: "public-choice-boundaries",
     id: "home-trust-proof",
     job: "understand-what-stays-true",
@@ -131,7 +131,7 @@ const HOME_UNITS = [
   }),
   // The sort routes straight to the two real destinations and carries the live
   // Abracadabra showcase, so the visitor sees an actual generated page in the
-  // same breath as the price. A separate "$5 preview" section used to sit below
+  // same breath as the price. A separate paid-preview section used to sit below
   // this one repeating the same offer and the same button; it is gone.
   top({
     action: primaryHref("/abracadabra/"),
@@ -568,7 +568,7 @@ const ABRACADABRA_LANDING_HELD = [
   ...abracadabraGridStages(MAKER_STAGE_JOBS),
   top({
     copy: "Preview for free. Download only when you want the file.",
-    evidence: "one-time-five-dollar-download-boundary",
+    evidence: "one-time-twenty-dollar-download-boundary",
     id: "abracadabra-landing-download-choice",
     job: "compare-free-preview-and-paid-download",
     ordinal: 4,
@@ -644,8 +644,8 @@ const ABRACADABRA_HOW_HELD = [
   }),
   ...HELP_FLOW_STAGES,
   top({
-    copy: "The private preview is free. Download is $5 once per editor project.",
-    evidence: "one-time-five-dollar-download-boundary",
+    copy: "The private preview is free. Download is $20 once per editor project.",
+    evidence: "one-time-twenty-dollar-download-boundary",
     fallback: "native-disclosure",
     id: "abracadabra-how-custody",
     job: "understand-preview-download-and-file-rights",
