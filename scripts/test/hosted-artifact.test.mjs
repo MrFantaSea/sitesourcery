@@ -252,7 +252,7 @@ function publicEmails(sources) {
 }
 
 test("reviewed truth inputs are unique, exact, and held mode exposes no hosted account surface", async () => {
-  assert.equal(hostedTruthSlots.length, 13);
+  assert.equal(hostedTruthSlots.length, 26);
   assert.equal(
     new Set(hostedTruthSlots.map(({ id }) => id)).size,
     hostedTruthSlots.length,
@@ -650,8 +650,15 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
 
   const landing = sources.get("abracadabra/index.html");
   assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Free to See-\$5 Download Coming-Alakazam Plans Held/u);
-  assert.match(landing, /the account and download path are not open yet/u);
+  assert.match(landing, /Free preview\. \$5 Download\. Alakazam plans held\./u);
+  assert.match(
+    landing,
+    /A signed-in account can save the project and buy its HTML Download once for \$5\./u,
+  );
+  assert.match(
+    landing,
+    /Repeat downloads from that retained project do not require another Site Sourcery payment\./u,
+  );
   assert.match(
     landing,
     /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,
@@ -667,6 +674,7 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
   assert.doesNotMatch(guide, /http-equiv="refresh"/u);
   assert.match(guide, /rel="canonical" href="https:\/\/sitesourcery\.com\/abracadabra\/how\/"/u);
   assert.match(guide, /Make your preview in six short steps\./u);
+  assert.match(guide, /Looking is free\. Download is \$5 once per saved editor project\./u);
 
   const faq = sources.get("faq/index.html");
   for (const anchor of [
@@ -680,11 +688,7 @@ test("one hosted build emits approved Legal V5, the exact $5 Download contract, 
   }
   assert.match(
     faq,
-    /The planned \$25, \$35, and \$50 Alakazam plans are not available\./u,
-  );
-  assert.match(
-    faq,
-    /No Alakazam subscription, hosting activation, publication, or tier feature is offered\./u,
+    /Alakazam subscription sales and hosting activation remain held\./u,
   );
   assert.doesNotMatch(faq, /complete three-plan ladder is approved/iu);
   assert.match(faq, /The Responder is also held: it sends no messages and this page cannot quote or start setup\./u);
