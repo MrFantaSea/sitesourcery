@@ -326,3 +326,12 @@ operations tests, and 24 routes across all six pinned-browser widths. Production
 remained exact FIN-012 runtime `14ca61bd...`, with Stripe and Download held and no
 provider/customer effect. Exact evidence is recorded in
 `ops/releases/fin012-stripe-download-release/FIN-012-STRIPE-DOWNLOAD-PROVENANCE.md`.
+
+Protected-main Site quality for merge `4097d153...` subsequently exposed a
+paid-fixture browser-audit teardown race after every non-browser suite passed;
+Controlled Pages was green. Audit correction `029f7ea653e2ae6a8c78c35db42c8278ce9094ae`,
+tree `fa364b9055e6fac43fe7bb343ab06e23e36ed473`, blanks the live paid fixture page
+before deleting its authentication cookie and does not suppress genuine `404`
+errors. That exact clean commit passed a standalone complete browser audit and
+the complete Node 24.18.0 ladder, including a second complete browser audit.
+Production and every provider/customer effect remained unchanged and held.

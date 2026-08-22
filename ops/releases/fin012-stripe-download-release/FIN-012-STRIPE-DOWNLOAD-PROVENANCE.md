@@ -61,3 +61,31 @@ Alakazam, Domains, Twilio, publication, workers, and native distribution remain
 held. Activation still requires an unpaid live Checkout proof and a public
 readiness proof after the 15-minute boundary. No self-purchase or completed charge
 is authorized by this record.
+
+## Protected-main browser-audit correction
+
+Recorded: 2026-08-22T19:42:45-0400 EDT
+
+The protected-main Site quality run for merge commit
+`4097d153ffd17586e91fe77eb9e2a75e91299204` reached the final browser gate after
+all product, hosted-service, and operations tests passed. The browser gate then
+reported one unauthenticated `404` for the paid-fixture change-invoice read. The
+same commit's Controlled Pages deployment passed.
+
+The failed request was an audit teardown race, not a product or Stripe failure.
+Each paid journey deleted its fixture cookie while its page was still live. A
+page's final asynchronous read could therefore arrive after authentication was
+removed and fall through the fixture server's deliberate unknown-route `404`.
+The correction in implementation commit
+`029f7ea653e2ae6a8c78c35db42c8278ce9094ae`, tree
+`fa364b9055e6fac43fe7bb343ab06e23e36ed473`, moves the browser to
+`about:blank` and waits for completion before deleting the paid-fixture cookie.
+It intentionally does not allowlist `404`, so a real missing route remains a
+release failure.
+
+The corrected exact commit passed a standalone 24-route by six-width browser
+audit and then the complete clean Node 24.18.0 `npm test` ladder: 887 product
+tests with zero failures; 1,087 hosted-service passes, 15 intentional PostgreSQL
+skips, and zero failures; 239/239 operations tests; deterministic Pages and
+hosted builds; and a second complete 24-route by six-width browser audit. No
+provider, customer, payment, deployment, DNS, or production effect occurred.
