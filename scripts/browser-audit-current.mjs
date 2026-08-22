@@ -2464,6 +2464,14 @@ async function isolatePaidJourney(cdp) {
   );
 }
 
+async function releasePaidJourney(cdp, server) {
+  await isolatePaidJourney(cdp);
+  await cdp.send("Network.deleteCookies", {
+    name: PAID_FIXTURE_COOKIE,
+    url: `${server.origin}/`,
+  });
+}
+
 async function openHostedAccount(cdp) {
   const hasButton = await evaluate(
     cdp,
@@ -3079,10 +3087,7 @@ async function projectLegalJourney(cdp, server, viewport) {
       && entry.method === "GET"
       && entry.pathname === "/api/v1/legal/project-authority",
   ).length;
-  await cdp.send("Network.deleteCookies", {
-    name: PAID_FIXTURE_COOKIE,
-    url: `${server.origin}/`,
-  });
+  await releasePaidJourney(cdp, server);
   return {
     afterStale,
     authorityReadsAfterCapture,
@@ -3419,10 +3424,7 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
       };
     })()`,
   );
-  await cdp.send("Network.deleteCookies", {
-    name: PAID_FIXTURE_COOKIE,
-    url: `${server.origin}/`,
-  });
+  await releasePaidJourney(cdp, server);
   return { initial, retained, retainedChange };
 }
 
@@ -3588,10 +3590,7 @@ async function alakazamPublicationJourney(cdp, server, viewport) {
       ),
     });
   }
-  await cdp.send("Network.deleteCookies", {
-    name: PAID_FIXTURE_COOKIE,
-    url: `${server.origin}/`,
-  });
+  await releasePaidJourney(cdp, server);
   return { actions, initial };
 }
 
@@ -3929,10 +3928,7 @@ async function customBuildChangePaymentJourney(
     };
   }
 
-  await cdp.send("Network.deleteCookies", {
-    name: PAID_FIXTURE_COOKIE,
-    url: `${server.origin}/`,
-  });
+  await releasePaidJourney(cdp, server);
   return { action, initial };
 }
 
@@ -4276,10 +4272,7 @@ async function customBuildFinalHandoffJourney(
       };
     })()`,
   );
-  await cdp.send("Network.deleteCookies", {
-    name: PAID_FIXTURE_COOKIE,
-    url: `${server.origin}/`,
-  });
+  await releasePaidJourney(cdp, server);
   return {
     customer,
     documentBusy,
@@ -4525,10 +4518,7 @@ async function customBuildFinalAuthorityRaceJourney(
       && entry.method === "POST"
       && !entry.expectedWrite,
   ).length - priorUnexpectedMutationWrites;
-  await cdp.send("Network.deleteCookies", {
-    name: PAID_FIXTURE_COOKIE,
-    url: `${server.origin}/`,
-  });
+  await releasePaidJourney(cdp, server);
   return {
     mutationWrites,
     open,
