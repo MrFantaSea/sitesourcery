@@ -12,6 +12,7 @@ import {
   createPersistentOperationsAlertAdapter
 } from "./alert-state.mjs";
 import {
+  createRemoteBackupArtifactSha256,
   createProductionMonitoringProbes
 } from "./monitor-ports.mjs";
 import {
@@ -146,6 +147,49 @@ export async function monitorFromEnvironment(
     await alertAdapterFromEnvironment(
       environment
     );
+  const backupDestinationRoot = absolute(
+    environment,
+    "SITESOURCERY_BACKUP_DESTINATION_ROOT"
+  );
+  const backupHashMode =
+    environment
+      .SITESOURCERY_MONITOR_BACKUP_HASH_MODE ??
+    "mounted";
+  if (
+    backupHashMode !== "mounted" &&
+    backupHashMode !== "remote_ssh"
+  ) {
+    throw new Error(
+      "SITESOURCERY_MONITOR_BACKUP_HASH_MODE is invalid."
+    );
+  }
+  const backupArtifactSha256 =
+    backupHashMode === "remote_ssh"
+      ? createRemoteBackupArtifactSha256({
+          localRoot: backupDestinationRoot,
+          remoteRoot: required(
+            environment,
+            "SITESOURCERY_MONITOR_BACKUP_REMOTE_ROOT"
+          ),
+          remoteHost: required(
+            environment,
+            "SITESOURCERY_MONITOR_BACKUP_REMOTE_HOST"
+          ),
+          identityFile: absolute(
+            environment,
+            "SITESOURCERY_MONITOR_BACKUP_SSH_IDENTITY_FILE"
+          ),
+          knownHostsFile: absolute(
+            environment,
+            "SITESOURCERY_MONITOR_BACKUP_SSH_KNOWN_HOSTS_FILE"
+          ),
+          timeoutMs: integer(
+            environment,
+            "SITESOURCERY_MONITOR_BACKUP_HASH_TIMEOUT_MS",
+            30_000
+          )
+        })
+      : undefined;
   const production =
     createProductionMonitoringProbes({
       databaseUrl: required(
@@ -156,10 +200,8 @@ export async function monitorFromEnvironment(
         environment,
         "SITESOURCERY_DATA_ROOT"
       ),
-      backupDestinationRoot: absolute(
-        environment,
-        "SITESOURCERY_BACKUP_DESTINATION_ROOT"
-      ),
+      backupDestinationRoot,
+      backupArtifactSha256,
       sourceFailureDomainId,
       certificateFile: edgeIsExactlyHeld
         ? null
