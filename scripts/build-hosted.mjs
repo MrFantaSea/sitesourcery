@@ -107,7 +107,8 @@ const FIN007_HOSTED_TRUTH_REQUIREMENTS = Object.freeze({
   ),
   "abracadabra/how/index.html": Object.freeze([
     "Make your preview in six short steps.",
-    "Looking is free. The private Download and Alakazam payment paths remain held",
+    "Looking is free. Download is $5 once per saved editor project.",
+    "Sign in only when you want to save the project, review its exact one-time $5 quote, and download the accepted HTML after payment.",
     "Start building",
   ]),
 });
