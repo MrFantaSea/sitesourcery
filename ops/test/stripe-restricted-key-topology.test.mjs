@@ -7,6 +7,7 @@ import {
   STRIPE_RESTRICTED_KEY_CONTRACT,
   STRIPE_RUNTIME_API_OPERATIONS_BY_PURPOSE,
   STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE,
+  createStripeCredentialReadinessLease,
   createHeldCredentialTopologyTemplate,
   normalizeCredentialTopology,
   verifyStripeCredentialReadiness
@@ -354,6 +355,60 @@ test("stale or unrevoked provisioner evidence cannot authorize readiness", () =>
       readiness(topology(), {
         now: "2026-08-11T16:15:00.001Z"
       })
+  );
+});
+
+test("one fresh process activation lease remains valid after 15 minutes without weakening purpose or clock fences", () => {
+  const lease = createStripeCredentialReadinessLease(
+    topology(),
+    {
+      now: NOW,
+      environment: "production",
+      livemode: true,
+      runtimeFingerprint: evidence(
+        "runtime-fingerprint"
+      )
+    }
+  );
+  assert.equal(lease.activation.ready, true);
+  assert.equal(lease.activatedAt, NOW);
+  assert.equal(
+    lease.readiness({
+      now: "2026-08-12T16:10:00.000Z",
+      purpose: "download"
+    }).ready,
+    true
+  );
+  code(
+    "CREDENTIAL_TOPOLOGY_STRIPE_PURPOSE_HELD",
+    () =>
+      lease.readiness({
+        now: "2026-08-12T16:10:00.000Z",
+        purpose: "serviceAssessment"
+      })
+  );
+  code(
+    "CREDENTIAL_TOPOLOGY_STRIPE_CLOCK_ROLLBACK",
+    () =>
+      lease.readiness({
+        now: "2026-08-11T16:09:59.999Z",
+        purpose: "download"
+      })
+  );
+  code(
+    "CREDENTIAL_TOPOLOGY_STRIPE_SCOPE_STALE",
+    () =>
+      createStripeCredentialReadinessLease(
+        topology(),
+        {
+          now: "2026-08-11T16:15:00.001Z",
+          environment: "production",
+          livemode: true,
+          runtimeFingerprint: evidence(
+            "runtime-fingerprint"
+          )
+        }
+      )
   );
 });
 

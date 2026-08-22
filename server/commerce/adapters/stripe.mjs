@@ -4,8 +4,8 @@ import Stripe from "stripe";
 
 import {
   CREDENTIAL_TOPOLOGY_VERIFICATION_SCHEMA,
-  normalizeCredentialTopology,
-  verifyStripeCredentialReadiness
+  createStripeCredentialReadinessLease,
+  normalizeCredentialTopology
 } from "../../../ops/credential-topology.mjs";
 
 import {
@@ -6542,7 +6542,32 @@ export function createStripeProviderAdapter(options = {}) {
       { status: 500 }
     );
   }
+  const credentialReadinessLease =
+    config.credentialTopologyExplicit
+      ? createStripeCredentialReadinessLease(
+          config.credentialTopology,
+          {
+            now: clock.now(),
+            environment:
+              approval?.environment ?? "production",
+            livemode: config.livemode,
+            runtimeFingerprint:
+              OFFICIAL_CLIENTS.get(selectedClient)
+                ?.fingerprint
+          }
+        )
+      : null;
   const client = validateClient(selectedClient);
+  function credentialTopologyReadiness(
+    purpose = null
+  ) {
+    return credentialReadinessLease === null
+      ? null
+      : credentialReadinessLease.readiness({
+          now: clock.now(),
+          purpose
+        });
+  }
   function requireCapability(capability) {
     invariant(
       capabilities.has(capability),
@@ -7674,21 +7699,7 @@ export function createStripeProviderAdapter(options = {}) {
         clock.now()
       );
     const credentialTopology =
-      config.credentialTopologyExplicit
-        ? verifyStripeCredentialReadiness(
-            config.credentialTopology,
-            {
-              now: clock.now(),
-              purpose,
-              environment:
-                approval?.environment ?? "production",
-              livemode: config.livemode,
-              runtimeFingerprint:
-                OFFICIAL_CLIENTS.get(selectedClient)
-                  ?.fingerprint
-            }
-          )
-        : null;
+      credentialTopologyReadiness(purpose);
     invariant(
       purpose === "domainRegistration" ||
         webhookRotation.ready,
@@ -7744,19 +7755,7 @@ export function createStripeProviderAdapter(options = {}) {
         { status: 500 }
       );
       if (config.credentialTopologyExplicit) {
-        verifyStripeCredentialReadiness(
-          config.credentialTopology,
-          {
-            now: clock.now(),
-            purpose,
-            environment:
-              approval?.environment ?? "production",
-            livemode: config.livemode,
-            runtimeFingerprint:
-              OFFICIAL_CLIENTS.get(selectedClient)
-                ?.fingerprint
-          }
-        );
+        credentialTopologyReadiness(purpose);
       }
       if (purpose === "domainRegistration") {
         invariant(
@@ -7811,18 +7810,7 @@ export function createStripeProviderAdapter(options = {}) {
     async readiness() {
       try {
         if (config.credentialTopologyExplicit) {
-          verifyStripeCredentialReadiness(
-            config.credentialTopology,
-            {
-              now: clock.now(),
-              environment:
-                approval?.environment ?? "production",
-              livemode: config.livemode,
-              runtimeFingerprint:
-                OFFICIAL_CLIENTS.get(selectedClient)
-                  ?.fingerprint
-            }
-          );
+          credentialTopologyReadiness();
         }
         await verifyWebhookEndpoint();
         if (config.alakazam) {
