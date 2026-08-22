@@ -16,6 +16,12 @@ const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
   "faq/index.html",
   "legal/website-terms/index.html",
 ]);
+const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
+  "legal/privacy/index.html",
+  "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
+  "legal/website-terms/index.html",
+  "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
+]);
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
 const {
   OFFER_AVAILABILITY,
@@ -466,14 +472,19 @@ if (
     }
   }
   const invalidDisplays = observedDisplays.filter((entry) => {
-    const amount = entry.slice(entry.lastIndexOf(":") + 1).replace(/[$,]/gu, "");
+    const separator = entry.lastIndexOf(":");
+    const file = entry.slice(0, separator);
+    const amount = entry.slice(separator + 1).replace(/[$,]/gu, "");
+    if (Number(amount) === 5 && SEALED_FIVE_DOLLAR_LEGAL_V5_FILES.has(file)) {
+      return false;
+    }
     return !allowedDollarDisplays.has(Number(amount));
   });
   if (invalidDisplays.length > 0) {
     errors.push(`public HTML dollar displays must match the current catalog; received ${JSON.stringify(invalidDisplays.sort())}`);
   }
-  if (!files["abracadabra/index.html"].includes("$5")) {
-    errors.push("abracadabra/index.html: missing the reviewed $5 project Download proposition");
+  if (!files["abracadabra/index.html"].includes("$20")) {
+    errors.push("abracadabra/index.html: missing the reviewed $20 project Download proposition");
   }
 }
 

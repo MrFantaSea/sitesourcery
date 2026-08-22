@@ -4346,7 +4346,16 @@ export function createHostedApi(
             await downloadBoundary.download(
               actor,
               route[0],
-              route[1]
+              route[1],
+              {
+                requestId,
+                clientAddress:
+                  identityContext.clientAddress,
+                userAgentDigest:
+                  digestUserAgent(
+                    request.headers.get("user-agent")
+                  ) ?? digest("unavailable")
+              }
             );
           return new Response(download.bytes, {
             status: 200,
@@ -4695,7 +4704,16 @@ export function createHostedApi(
               actor,
               route[0],
               route[1],
-              write
+              {
+                ...write,
+                requestId,
+                clientAddress:
+                  identityContext.clientAddress,
+                userAgentDigest:
+                  digestUserAgent(
+                    request.headers.get("user-agent")
+                  ) ?? digest("unavailable")
+              }
             );
           status = 201;
         } else if (

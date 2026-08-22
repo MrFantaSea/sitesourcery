@@ -52,6 +52,12 @@ const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
   "faq/index.html",
   "legal/website-terms/index.html",
 ]);
+const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
+  "legal/privacy/index.html",
+  "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
+  "legal/website-terms/index.html",
+  "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
+]);
 
 /**
  * Root-level HTML that is not a route folder: the 404 page, the print flyer,
@@ -76,7 +82,7 @@ const ALLOWED_EXTERNAL = new Set([
 ]);
 
 /**
- * Direct public Payment Links are forbidden. The $5 Download uses authenticated
+ * Direct public Payment Links are forbidden. The $20 Download uses authenticated
  * server Checkout, while Alakazam remains held. Keep the origin constant only
  * so malformed lookalike links and any accidental public release fail loudly.
  */
@@ -212,6 +218,9 @@ function checkPrices(page, source, allowed) {
   }
   for (const raw of priceSource.match(PRICE) ?? []) {
     const amount = Number(raw.replace(/[^\d.]/gu, ""));
+    if (amount === 5 && SEALED_FIVE_DOLLAR_LEGAL_V5_FILES.has(page)) {
+      continue;
+    }
     if (!allowed.has(amount)) {
       fail(
         page,

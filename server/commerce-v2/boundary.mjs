@@ -121,9 +121,13 @@ export function createCommerceV2Boundary(service) {
       if (action === "prepare_checkout") {
         const input = exactBody(body, [
           "acceptedDisclosureDigest",
+          "clientAddress",
           "commandId",
           "projectId",
-          "quoteId"
+          "purchaseTermsAccepted",
+          "quoteId",
+          "requestId",
+          "userAgentDigest"
         ]);
         return service.prepareCheckout({
           ...actor,

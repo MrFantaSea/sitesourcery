@@ -272,7 +272,7 @@ test("customer control accepts only exact activation fragments, quotes, and Stri
     offerId: "spark_download",
     entitlementKind: "spark_download",
     price: {
-      amountMinor: 500,
+      amountMinor: 2000,
       currency: "USD",
       billing: "one_time",
       interval: null,
@@ -293,12 +293,12 @@ test("customer control accepts only exact activation fragments, quotes, and Stri
     "version_1",
     Date.parse("2099-07-01T00:00:00.000Z"),
   );
-  assert.equal(view.price, "$5.00 USD");
+  assert.equal(view.price, "$20.00 USD");
   assert.equal(
     customerControl.verifiedDownloadQuote(
       {
         ...quote,
-        price: { ...quote.price, amountMinor: 501 },
+        price: { ...quote.price, amountMinor: 2001 },
       },
       "project_1",
       "version_1",
@@ -332,7 +332,7 @@ test("Download readiness requires exact project, version, settlement, and same-o
         status: "paid",
         provider: "stripe",
         receiptId: "receipt_1",
-        amountMinor: 500,
+        amountMinor: 2000,
         currency: "USD",
         settledAt:
           "2026-07-30T12:00:00.000Z",
@@ -774,7 +774,7 @@ test("hosted DOM copy is plain, benefit-led, and free of internal launch jargon"
     "Create an account or sign in.",
     "Save this preview as a project.",
     "Review Download for this project.",
-    "$5 once",
+    "$20 once",
     "No renewal",
     "Your HTML file",
     "Continue to secure payment",
@@ -1583,7 +1583,7 @@ test("checkout is held without an offer, then requires an exact server quote and
   assert.equal(Object.hasOwn(checkoutCall, "priceId"), false);
 });
 
-test("the accepted $5 Download path binds one saved version and invalidates a stale quote", async () => {
+test("the accepted $20 Download path binds one saved version and invalidates a stale quote", async () => {
   const calls = [];
   const digest = "d".repeat(64);
   const control = await selectedControl({
@@ -1601,7 +1601,7 @@ test("the accepted $5 Download path binds one saved version and invalidates a st
         offerId: "spark_download",
         entitlementKind: "spark_download",
         price: {
-          amountMinor: 500,
+          amountMinor: 2000,
           currency: "USD",
           billing: "one_time",
           interval: null,
@@ -1642,7 +1642,7 @@ test("the accepted $5 Download path binds one saved version and invalidates a st
   );
 
   const quote = await control.quoteDownload();
-  assert.equal(quote.price.amountMinor, 500);
+  assert.equal(quote.price.amountMinor, 2000);
   assert.equal(control.getState().downloadQuote.quoteId, "download_quote_1");
   assert.deepEqual(calls[0], [
     "quote",
@@ -1657,7 +1657,10 @@ test("the accepted $5 Download path binds one saved version and invalidates a st
     "checkout",
     "project_1",
     "download_quote_1",
-    { acceptedDisclosureDigest: digest },
+    {
+      acceptedDisclosureDigest: digest,
+      purchaseTermsAccepted: true,
+    },
     { idempotencyKey: "download_idem_2" },
   ]);
 

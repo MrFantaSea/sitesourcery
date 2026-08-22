@@ -177,7 +177,7 @@ function databaseHarness() {
           "insert into ss.commerce_v2_checkout_preparations"
         )
       ) {
-        const snapshot = JSON.parse(values[11]);
+        const snapshot = JSON.parse(values[18]);
         preparations.set(
           `${values[0]}:${values[1]}`,
           snapshot
@@ -409,7 +409,7 @@ test("Download quote and held checkout preparation survive repository recreation
     );
   assert.equal(quote.quoteId, QUOTE_ID);
   assert.equal(quote.offerId, "spark_download");
-  assert.equal(quote.price.amountMinor, 500);
+  assert.equal(quote.price.amountMinor, 2000);
   assert.equal(quote.state, "held");
   assert.equal(quote.dispatchAuthorized, false);
   assert.equal(harness.quotes.size, 1);
@@ -482,7 +482,11 @@ test("Download quote and held checkout preparation survive repository recreation
       {
         acceptedDisclosureDigest:
           quote.disclosureDigest,
-        commandId: "checkout-command-1"
+        commandId: "checkout-command-1",
+        purchaseTermsAccepted: true,
+        requestId: "request-checkout-1",
+        clientAddress: "192.0.2.30",
+        userAgentDigest: "f".repeat(64)
       }
     );
   assert.equal(preparation.state, "held");
@@ -506,7 +510,11 @@ test("Download quote and held checkout preparation survive repository recreation
       {
         acceptedDisclosureDigest:
           quote.disclosureDigest,
-        commandId: "checkout-command-1"
+        commandId: "checkout-command-1",
+        purchaseTermsAccepted: true,
+        requestId: "request-checkout-replay",
+        clientAddress: "192.0.2.31",
+        userAgentDigest: "e".repeat(64)
       }
     ),
     preparation

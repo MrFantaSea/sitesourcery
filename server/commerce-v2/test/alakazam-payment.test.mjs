@@ -70,13 +70,13 @@ function reservation({ changeKind = "start" } = {}) {
         ? "alakazam_35"
         : "alakazam_25",
     dueNowSubtotalMinor:
-      changeKind === "upgrade" ? 1000 : 2000,
+      changeKind === "upgrade" ? 1000 : 500,
     taxMode: "disabled_by_owner",
     downloadCredit:
       changeKind === "start"
         ? {
             entitlementId: DOWNLOAD_ENTITLEMENT_ID,
-            amountMinor: 500
+            amountMinor: 2000
           }
         : null,
     claimedAt: CLAIMED_AT
@@ -143,7 +143,7 @@ function paymentFacts(selected) {
     stripePaymentIntentId: "pi_alakazam_payment_1",
     targetTierId: selected.purpose.targetTierId,
     listSubtotalMinor: start ? 2500 : 1000,
-    providerDiscountMinor: start ? 500 : 0,
+    providerDiscountMinor: start ? 2000 : 0,
     netSubtotalMinor: selected.purpose.dueNowSubtotalMinor,
     taxMinor: 0,
     totalMinor: selected.purpose.dueNowSubtotalMinor,
@@ -341,7 +341,7 @@ test("Alakazam start payment binds exact event, provider readback, and durable I
   assert.equal(settlement.event.stripeEventId, event.id);
   assert.equal(
     settlement.payment.providerDiscountMinor,
-    500
+    2000
   );
   assert.deepEqual(calls.ids, [
     "alakazam_payment_event",

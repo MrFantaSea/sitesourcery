@@ -195,7 +195,7 @@
           {
             key: "abracadabra",
             label: "Let me build one page",
-            note: "I will enter the facts and shape a private preview myself. Download is $5 once per editor project."
+            note: "I will enter the facts and shape a private preview myself. Download is $20 once per editor project."
           },
           {
             key: "website-unsure",
@@ -305,7 +305,7 @@
       },
       abracadabra: {
         title: "Build one page yourself",
-        copy: "Build and preview privately for free. Download is $5 once per editor project, not per click or version. The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
+        copy: "Build and preview privately for free. Download is $20 once per editor project, not per click or version. The full $20 is a one-time non-cash credit toward the same account and project's first separately released Alakazam invoice. The downloaded HTML may be modified and hosted anywhere you choose without repaying Site Sourcery.",
         action: "See the one-page maker",
         href: "/abracadabra/"
       },

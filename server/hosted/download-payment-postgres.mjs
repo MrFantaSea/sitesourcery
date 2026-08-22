@@ -1,13 +1,19 @@
+import { createHash } from "node:crypto";
+
 import {
   CHECKOUT_COMMAND_SCHEMA,
   CHECKOUT_DISPATCH_SCHEMA,
   CHECKOUT_PURPOSE_SCHEMA,
+  DOWNLOAD_PRICE_MINOR,
   ENTITLEMENT_SCHEMA,
-  PAYMENT_RECEIPT_SCHEMA
+  PAYMENT_RECEIPT_SCHEMA,
+  PURCHASE_ACCEPTANCE_SCHEMA,
+  PURCHASE_ACCEPTANCE_STATEMENT
 } from "../commerce-v2/constants.mjs";
 import {
   CommerceV2Error,
   clone,
+  digest,
   invariant,
   requiredDigest,
   requiredIso,
@@ -22,6 +28,8 @@ const STRIPE_CUSTOMER_ID = /^cus_[A-Za-z0-9_]+$/u;
 const EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
 const REVERSAL_OBJECT_ID =
   /^(?:ch|dp|du)_[A-Za-z0-9_]+$/u;
+const CHARGE_ID = /^ch_[A-Za-z0-9_]+$/u;
+const FRAUD_WARNING_ID = /^issfr_[A-Za-z0-9_]+$/u;
 const SAFE_CODE = /^[A-Za-z0-9._:-]{1,200}$/u;
 const REVERSAL_EVENT_TYPES = new Set([
   "charge.refunded",
@@ -122,12 +130,26 @@ function exactPreparation(value) {
       purpose.quoteId === value.quoteId &&
       purpose.offerId === "spark_download" &&
       purpose.entitlementKind === "spark_download" &&
-      purpose.price?.amountMinor === 500 &&
+      purpose.purchaseTermsAccepted === true &&
+      purpose.price?.amountMinor === DOWNLOAD_PRICE_MINOR &&
       purpose.price?.currency === "USD" &&
       purpose.price?.billing === "one_time" &&
       purpose.price?.interval === null,
     "repository_conflict",
     "the Download preparation is invalid",
+    { status: 500 }
+  );
+  invariant(
+    value.acceptance?.schema ===
+      PURCHASE_ACCEPTANCE_SCHEMA &&
+      value.acceptance.statement ===
+        PURCHASE_ACCEPTANCE_STATEMENT &&
+      value.acceptance.acceptedAt ===
+        value.preparedAt &&
+      value.acceptance.acceptedDisclosureDigest ===
+        purpose.acceptedDisclosureDigest,
+    "repository_conflict",
+    "the Download purchase acceptance is invalid",
     { status: 500 }
   );
   return Object.freeze({
@@ -166,6 +188,11 @@ function exactPreparation(value) {
     quoteSnapshotDigest: requiredDigest(
       purpose.quoteSnapshotDigest,
       "preparation.purpose.quoteSnapshotDigest"
+    ),
+    acceptanceClientAddress: requiredText(
+      value.acceptance.clientAddress,
+      "preparation.acceptance.clientAddress",
+      80
     ),
     purpose: clone(purpose)
   });
@@ -269,7 +296,7 @@ function publicEntitlement(row, customerId) {
       status: "paid",
       provider: "stripe",
       receiptId: row.receipt_id,
-      amountMinor: 500,
+      amountMinor: Number(row.amount_minor),
       taxMinor: Number(row.tax_minor),
       totalMinor: Number(row.total_minor),
       taxMode: row.tax_mode,
@@ -289,6 +316,7 @@ function entitlementQuery() {
             entitlement.accepted_disclosure_digest,
             entitlement.activated_at,
             receipt.id as receipt_id,
+            receipt.amount_minor,
             receipt.tax_minor,
             receipt.total_minor,
             receipt.tax_mode,
@@ -303,6 +331,195 @@ function entitlementQuery() {
            and entitlement.kind = 'spark_download'
            and entitlement.scope = 'editor_project'
            and entitlement.state = 'active'`;
+}
+
+async function holdDownloadCheckoutGate(
+  client,
+  {
+    signalType,
+    signalId,
+    evidenceDigest,
+    reason,
+    changedAt
+  }
+) {
+  const gate = await client.query(
+    `select state, revision
+       from ss.commerce_v2_download_checkout_gate
+      where singleton = true
+      for update`
+  );
+  invariant(
+    gate.rowCount === 1,
+    "repository_conflict",
+    "the Download Checkout circuit breaker is unavailable",
+    { status: 500 }
+  );
+  if (gate.rows[0].state === "held") {
+    return false;
+  }
+  await client.query(
+    `insert into ss.commerce_v2_download_gate_transitions (
+       prior_state, resulting_state, reason,
+       signal_type, signal_id, evidence_digest,
+       changed_by_user_id, changed_at
+     ) values (
+       'open', 'held', $1, $2, $3, $4,
+       null, $5
+     )`,
+    [
+      reason,
+      signalType,
+      signalId,
+      evidenceDigest,
+      changedAt
+    ]
+  );
+  const updated = await client.query(
+    `update ss.commerce_v2_download_checkout_gate
+        set state = 'held',
+            reason = $1,
+            signal_type = $2,
+            signal_id = $3,
+            evidence_digest = $4,
+            state_changed_at = $5,
+            revision = revision + 1
+      where singleton = true
+        and state = 'open'
+      returning revision`,
+    [
+      reason,
+      signalType,
+      signalId,
+      evidenceDigest,
+      changedAt
+    ]
+  );
+  invariant(
+    updated.rowCount === 1,
+    "repository_conflict",
+    "the Download Checkout circuit breaker did not hold",
+    { status: 500 }
+  );
+  return true;
+}
+
+async function storeDownloadDisputeDossier(
+  client,
+  {
+    receiptId,
+    tenantId,
+    projectId,
+    entitlementId,
+    triggerEventId,
+    triggerType,
+    providerCreatedAt,
+    payloadDigest
+  }
+) {
+  const evidence = await client.query(
+    `select receipt.facts as receipt_facts,
+            prep.preparation,
+            quote.snapshot as quote_snapshot,
+            entitlement.state as entitlement_state,
+            entitlement.state_reason,
+            entitlement.activated_at,
+            coalesce((
+              select jsonb_agg(
+                jsonb_build_object(
+                  'accessEventId', access.id,
+                  'artifactDigest', access.artifact_digest,
+                  'byteCount', access.byte_count,
+                  'clientAddress', access.client_address,
+                  'requestId', access.request_id,
+                  'responseIssuedAt', access.response_issued_at,
+                  'state', access.state,
+                  'userAgentDigest', access.user_agent_digest,
+                  'versionId', access.version_id
+                ) order by access.response_issued_at, access.id
+              )
+              from ss.commerce_v2_download_access_events access
+              where access.organization_id = receipt.organization_id
+                and access.receipt_id = receipt.id
+            ), '[]'::jsonb) as access_events
+       from ss.commerce_v2_download_payment_receipts receipt
+       join ss.commerce_v2_project_entitlements entitlement
+         on entitlement.organization_id = receipt.organization_id
+        and entitlement.id = $4
+        and entitlement.source_receipt_id = receipt.id
+       join ss.commerce_v2_download_dispatches dispatch
+         on dispatch.organization_id = receipt.organization_id
+        and dispatch.preparation_command_id =
+            receipt.preparation_command_id
+       join ss.commerce_v2_checkout_preparations prep
+         on prep.organization_id = dispatch.organization_id
+        and prep.command_id = dispatch.preparation_command_id
+       join ss.commerce_v2_download_quotes quote
+         on quote.organization_id = receipt.organization_id
+        and quote.id = receipt.quote_id
+      where receipt.id = $1
+        and receipt.organization_id = $2
+        and receipt.project_id = $3`,
+    [receiptId, tenantId, projectId, entitlementId]
+  );
+  invariant(
+    evidence.rowCount === 1,
+    "repository_conflict",
+    "the private Download dispute dossier evidence is incomplete",
+    { status: 500 }
+  );
+  const row = evidence.rows[0];
+  const dossier = {
+    schema:
+      "sitesourcery.download-private-dispute-dossier/v1",
+    createdAt: providerCreatedAt,
+    trigger: {
+      eventId: triggerEventId,
+      eventType: triggerType,
+      payloadDigest
+    },
+    scope: {
+      tenantId,
+      projectId,
+      receiptId,
+      entitlementId
+    },
+    quote: clone(row.quote_snapshot),
+    purchaseAcceptance: clone(row.preparation),
+    payment: clone(row.receipt_facts),
+    entitlement: {
+      state: row.entitlement_state,
+      stateReason: row.state_reason,
+      activatedAt: new Date(
+        row.activated_at
+      ).toISOString()
+    },
+    accessEvents: clone(row.access_events)
+  };
+  const dossierDigest = digest(dossier);
+  await client.query(
+    `insert into ss.commerce_v2_download_dispute_dossiers (
+       organization_id, project_id, receipt_id,
+       entitlement_id, trigger_event_id, trigger_type,
+       dossier, dossier_digest, created_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9
+     )
+     on conflict (trigger_type, trigger_event_id)
+     do nothing`,
+    [
+      tenantId,
+      projectId,
+      receiptId,
+      entitlementId,
+      triggerEventId,
+      triggerType,
+      JSON.stringify(dossier),
+      dossierDigest,
+      providerCreatedAt
+    ]
+  );
+  return dossierDigest;
 }
 
 export function createPostgresDownloadPaymentRepository({
@@ -357,6 +574,76 @@ export function createPostgresDownloadPaymentRepository({
               { status: 500 }
             );
             return selected;
+          }
+        )
+      );
+    },
+
+    async findVerifiedCheckoutIdentity(input) {
+      if (
+        !UUID.test(String(input?.tenantId ?? "")) ||
+        !UUID.test(String(input?.customerId ?? ""))
+      ) {
+        return null;
+      }
+      return translated(() =>
+        database.service(
+          {
+            userId: input.customerId,
+            organizationId: input.tenantId,
+            readOnly: true
+          },
+          async (client) => {
+            const result = await client.query(
+              `select principal.id as user_id,
+                      lower(principal.email) as email,
+                      principal.created_at as account_created_at,
+                      registration.activated_at,
+                      registration.possession_evidence_digest
+                 from auth.users principal
+                 join ss.organization_memberships membership
+                   on membership.user_id = principal.id
+                  and membership.organization_id = $1
+                  and membership.state = 'active'
+                  and membership.role = any($3::text[])
+                 join ss.organizations organization
+                   on organization.id = membership.organization_id
+                  and organization.state = 'active'
+                 join ss.hosted_registration_requests registration
+                   on registration.activated_user_id = principal.id
+                  and registration.activated_organization_id = $1
+                  and registration.state = 'activated'
+                  and registration.activated_at is not null
+                  and registration.possession_proven_at =
+                      registration.activated_at
+                  and registration.possession_evidence_digest is not null
+                where principal.id = $2
+                  and principal.disabled_at is null`,
+              [
+                input.tenantId,
+                input.customerId,
+                PROJECT_ROLES
+              ]
+            );
+            if (result.rowCount !== 1) return null;
+            const row = result.rows[0];
+            const email = row.email;
+            return Object.freeze({
+              verified: true,
+              userId: row.user_id,
+              email,
+              emailDigest: createHash("sha256")
+                .update(email, "utf8")
+                .digest("hex"),
+              accountCreatedAt: new Date(
+                row.account_created_at
+              ).toISOString(),
+              activatedAt: new Date(
+                row.activated_at
+              ).toISOString(),
+              possessionEvidenceDigest:
+                row.possession_evidence_digest
+            });
           }
         )
       );
@@ -637,6 +924,147 @@ export function createPostgresDownloadPaymentRepository({
                 return { status: "pending" };
               }
             }
+
+            const priorAttempt = await client.query(
+              `select outcome
+                 from ss.commerce_v2_download_checkout_attempts
+                where organization_id = $1
+                  and preparation_command_id = $2`,
+              [
+                preparation.tenantId,
+                preparation.commandId
+              ]
+            );
+            if (priorAttempt.rowCount === 1) {
+              return {
+                status: priorAttempt.rows[0].outcome
+              };
+            }
+
+            const gate = await client.query(
+              `select state, revision
+                 from ss.commerce_v2_download_checkout_gate
+                where singleton = true
+                for update`
+            );
+            invariant(
+              gate.rowCount === 1,
+              "repository_conflict",
+              "the Download Checkout circuit breaker is unavailable",
+              { status: 500 }
+            );
+            if (gate.rows[0].state === "held") {
+              await client.query(
+                `insert into ss.commerce_v2_download_checkout_attempts (
+                   organization_id, preparation_command_id,
+                   quote_id, customer_user_id, project_id,
+                   client_address, accepted_disclosure_digest,
+                   purpose_digest, outcome, gate_revision,
+                   attempted_at
+                 ) values (
+                   $1, $2, $3, $4, $5, $6, $7, $8,
+                   'risk_held', $9, $10
+                 )`,
+                [
+                  preparation.tenantId,
+                  preparation.commandId,
+                  preparation.quoteId,
+                  preparation.customerId,
+                  preparation.projectId,
+                  preparation.acceptanceClientAddress,
+                  preparation.acceptedDisclosureDigest,
+                  preparation.purposeDigest,
+                  Number(gate.rows[0].revision),
+                  now
+                ]
+              );
+              return { status: "risk_held" };
+            }
+
+            const velocity = await client.query(
+              `select
+                 count(*) filter (
+                   where customer_user_id = $1
+                     and attempted_at > $3::timestamptz - interval '1 hour'
+                 ) as account_attempts,
+                 count(*) filter (
+                   where client_address = $2
+                     and attempted_at > $3::timestamptz - interval '1 hour'
+                 ) as address_attempts,
+                 count(*) filter (
+                   where attempted_at > $3::timestamptz - interval '5 minutes'
+                 ) as global_attempts
+                from ss.commerce_v2_download_checkout_attempts
+               where attempted_at > $3::timestamptz - interval '1 hour'`,
+              [
+                preparation.customerId,
+                preparation.acceptanceClientAddress,
+                now
+              ]
+            );
+            const counts = velocity.rows[0];
+            if (
+              Number(counts.account_attempts) >= 6 ||
+              Number(counts.address_attempts) >= 12 ||
+              Number(counts.global_attempts) >= 120
+            ) {
+              await client.query(
+                `insert into ss.commerce_v2_download_checkout_attempts (
+                   organization_id, preparation_command_id,
+                   quote_id, customer_user_id, project_id,
+                   client_address, accepted_disclosure_digest,
+                   purpose_digest, outcome, gate_revision,
+                   attempted_at
+                 ) values (
+                   $1, $2, $3, $4, $5, $6, $7, $8,
+                   'rate_limited', $9, $10
+                 )`,
+                [
+                  preparation.tenantId,
+                  preparation.commandId,
+                  preparation.quoteId,
+                  preparation.customerId,
+                  preparation.projectId,
+                  preparation.acceptanceClientAddress,
+                  preparation.acceptedDisclosureDigest,
+                  preparation.purposeDigest,
+                  Number(gate.rows[0].revision),
+                  now
+                ]
+              );
+              return { status: "rate_limited" };
+            }
+
+            await client.query(
+              `insert into ss.commerce_v2_download_checkout_attempts (
+                 organization_id,
+                 preparation_command_id,
+                 quote_id,
+                 customer_user_id,
+                 project_id,
+                 client_address,
+                 accepted_disclosure_digest,
+                 purpose_digest,
+                 outcome,
+                 gate_revision,
+                 attempted_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7, $8,
+                 'claimed', $9, $10
+               )`,
+              [
+                preparation.tenantId,
+                preparation.commandId,
+                preparation.quoteId,
+                preparation.customerId,
+                preparation.projectId,
+                preparation.acceptanceClientAddress,
+                preparation.acceptedDisclosureDigest,
+                preparation.purposeDigest,
+                Number(gate.rows[0].revision),
+                now
+              ]
+            );
 
             const inserted = await client.query(
               `insert into ss.commerce_v2_download_dispatches (
@@ -1065,12 +1493,12 @@ export function createPostgresDownloadPaymentRepository({
           ) &&
           STRIPE_CUSTOMER_ID.test(payment.customerId) &&
           payment.paymentStatus === "paid" &&
-          payment.amountMinor === 500 &&
+          payment.amountMinor === DOWNLOAD_PRICE_MINOR &&
           Number.isSafeInteger(payment.taxMinor) &&
           payment.taxMinor >= 0 &&
           Number.isSafeInteger(payment.totalMinor) &&
           payment.totalMinor ===
-            500 + payment.taxMinor &&
+            DOWNLOAD_PRICE_MINOR + payment.taxMinor &&
           [
             "automatic",
             "disabled_by_owner"
@@ -1129,13 +1557,14 @@ export function createPostgresDownloadPaymentRepository({
           status: "paid",
           provider: "stripe",
           receiptId,
-          amountMinor: 500,
+          amountMinor: DOWNLOAD_PRICE_MINOR,
           taxMinor: payment.taxMinor,
           totalMinor: payment.totalMinor,
           taxMode: payment.taxMode,
           currency: "USD",
           settledAt
-        }
+        },
+        providerEvidence: clone(payment)
       };
       return translated(() =>
         database.service({}, async (client) => {
@@ -1236,7 +1665,7 @@ export function createPostgresDownloadPaymentRepository({
              ) values (
                $1, $2, $3, $4, $5, $6, $7, $8,
                'stripe', $9, $10, $11,
-               'paid', 500, $12, $13, $14,
+               'paid', 2000, $12, $13, $14,
                'USD', $15, $16, $17,
                $18::jsonb
              )`,
@@ -1320,6 +1749,250 @@ export function createPostgresDownloadPaymentRepository({
             "the Download payment did not settle durably",
             { status: 500 }
           );
+          return result;
+        })
+      );
+    },
+
+    async applyEarlyFraudWarning(input) {
+      const event = Object.freeze({
+        eventId: requiredText(
+          input?.event?.eventId,
+          "event.eventId"
+        ),
+        eventType: requiredText(
+          input?.event?.eventType,
+          "event.eventType"
+        ),
+        livemode: input?.event?.livemode,
+        providerCreatedAt: requiredIso(
+          input?.event?.providerCreatedAt,
+          "event.providerCreatedAt"
+        ),
+        payloadDigest: requiredDigest(
+          input?.event?.payloadDigest,
+          "event.payloadDigest"
+        )
+      });
+      const receipt = Object.freeze({
+        receiptId: exactUuid(
+          input?.receipt?.receiptId,
+          "receipt.receiptId"
+        ),
+        tenantId: exactUuid(
+          input?.receipt?.tenantId,
+          "receipt.tenantId"
+        ),
+        customerId: exactUuid(
+          input?.receipt?.customerId,
+          "receipt.customerId"
+        ),
+        projectId: exactUuid(
+          input?.receipt?.projectId,
+          "receipt.projectId"
+        ),
+        entitlementId: exactUuid(
+          input?.receipt?.entitlementId,
+          "receipt.entitlementId"
+        ),
+        paymentIntentId: requiredText(
+          input?.receipt?.paymentIntentId,
+          "receipt.paymentIntentId"
+        )
+      });
+      const warning = Object.freeze({
+        warningId: requiredText(
+          input?.warning?.warningId,
+          "warning.warningId"
+        ),
+        chargeId: requiredText(
+          input?.warning?.chargeId,
+          "warning.chargeId"
+        ),
+        paymentIntentId: requiredText(
+          input?.warning?.paymentIntentId,
+          "warning.paymentIntentId"
+        ),
+        actionable: input?.warning?.actionable,
+        fraudType: requiredText(
+          input?.warning?.fraudType,
+          "warning.fraudType"
+        )
+      });
+      invariant(
+        EVENT_ID.test(event.eventId) &&
+          [
+            "radar.early_fraud_warning.created",
+            "radar.early_fraud_warning.updated"
+          ].includes(event.eventType) &&
+          typeof event.livemode === "boolean" &&
+          FRAUD_WARNING_ID.test(warning.warningId) &&
+          CHARGE_ID.test(warning.chargeId) &&
+          PAYMENT_INTENT_ID.test(
+            warning.paymentIntentId
+          ) &&
+          warning.paymentIntentId ===
+            receipt.paymentIntentId &&
+          typeof warning.actionable === "boolean" &&
+          /^[a-z_]{2,80}$/u.test(warning.fraudType),
+        "stripe_fraud_warning_binding_invalid",
+        "the Download early fraud warning evidence is invalid",
+        { status: 400 }
+      );
+      return translated(() =>
+        database.service({}, async (client) => {
+          const locked = await client.query(
+            `select receipt.id,
+                    entitlement.state,
+                    entitlement.state_reason
+               from ss.commerce_v2_download_payment_receipts receipt
+               join ss.commerce_v2_project_entitlements entitlement
+                 on entitlement.organization_id = receipt.organization_id
+                and entitlement.id = $4
+                and entitlement.source_receipt_id = receipt.id
+              where receipt.id = $1
+                and receipt.organization_id = $2
+                and receipt.project_id = $3
+                and receipt.customer_user_id = $5
+                and receipt.payment_intent_id = $6
+              for update of entitlement`,
+            [
+              receipt.receiptId,
+              receipt.tenantId,
+              receipt.projectId,
+              receipt.entitlementId,
+              receipt.customerId,
+              receipt.paymentIntentId
+            ]
+          );
+          invariant(
+            locked.rowCount === 1,
+            "stripe_fraud_warning_binding_invalid",
+            "the early fraud warning receipt changed",
+            { status: 409 }
+          );
+          const priorState = locked.rows[0].state;
+          const resultingState =
+            warning.actionable && priorState === "active"
+              ? "suspended"
+              : priorState;
+          const reason =
+            resultingState === priorState
+              ? locked.rows[0].state_reason
+              : "early_fraud_warning_review";
+          const result = {
+            status: "processed",
+            actionable: warning.actionable,
+            projectId: receipt.projectId,
+            entitlementId: receipt.entitlementId,
+            entitlementState: resultingState,
+            checkoutGate:
+              warning.actionable ? "held" : "unchanged"
+          };
+          const inserted = await client.query(
+            `insert into ss.commerce_v2_download_fraud_warning_events (
+               id, organization_id, project_id, receipt_id,
+               entitlement_id, warning_id, charge_id,
+               payment_intent_id, event_type, actionable,
+               fraud_type, livemode, payload_digest,
+               provider_created_at, result, completed_at
+             ) values (
+               $1, $2, $3, $4, $5, $6, $7, $8,
+               $9, $10, $11, $12, $13, $14,
+               $15::jsonb, clock_timestamp()
+             )
+             on conflict (id) do nothing
+             returning id`,
+            [
+              event.eventId,
+              receipt.tenantId,
+              receipt.projectId,
+              receipt.receiptId,
+              receipt.entitlementId,
+              warning.warningId,
+              warning.chargeId,
+              warning.paymentIntentId,
+              event.eventType,
+              warning.actionable,
+              warning.fraudType,
+              event.livemode,
+              event.payloadDigest,
+              event.providerCreatedAt,
+              JSON.stringify(result)
+            ]
+          );
+          if (inserted.rowCount === 0) {
+            const replay = await client.query(
+              `select result
+                 from ss.commerce_v2_download_fraud_warning_events
+                where id = $1
+                  and organization_id = $2
+                  and receipt_id = $3
+                  and payload_digest = $4`,
+              [
+                event.eventId,
+                receipt.tenantId,
+                receipt.receiptId,
+                event.payloadDigest
+              ]
+            );
+            invariant(
+              replay.rowCount === 1,
+              "stripe_event_conflict",
+              "the early fraud warning event ID conflicts with different evidence",
+              { status: 409 }
+            );
+            return clone(replay.rows[0].result);
+          }
+          if (resultingState !== priorState) {
+            const updated = await client.query(
+              `update ss.commerce_v2_project_entitlements
+                  set state = 'suspended',
+                      state_changed_at = greatest(
+                        state_changed_at + interval '1 microsecond',
+                        $3::timestamptz
+                      ),
+                      state_reason = $4
+                where organization_id = $1
+                  and id = $2
+                  and state = $5
+                returning id`,
+              [
+                receipt.tenantId,
+                receipt.entitlementId,
+                event.providerCreatedAt,
+                reason,
+                priorState
+              ]
+            );
+            invariant(
+              updated.rowCount === 1,
+              "repository_conflict",
+              "the early fraud warning suspension did not settle durably",
+              { status: 500 }
+            );
+          }
+          if (warning.actionable) {
+            await holdDownloadCheckoutGate(client, {
+              signalType: event.eventType,
+              signalId: event.eventId,
+              evidenceDigest: event.payloadDigest,
+              reason:
+                "stripe_actionable_early_fraud_warning",
+              changedAt: event.providerCreatedAt
+            });
+            await storeDownloadDisputeDossier(client, {
+              receiptId: receipt.receiptId,
+              tenantId: receipt.tenantId,
+              projectId: receipt.projectId,
+              entitlementId: receipt.entitlementId,
+              triggerEventId: event.eventId,
+              triggerType: event.eventType,
+              providerCreatedAt:
+                event.providerCreatedAt,
+              payloadDigest: event.payloadDigest
+            });
+          }
           return result;
         })
       );
@@ -1409,7 +2082,7 @@ export function createPostgresDownloadPaymentRepository({
             decision.providerObjectId
           ) &&
           Number.isSafeInteger(receipt.totalMinor) &&
-          receipt.totalMinor >= 500 &&
+          receipt.totalMinor >= DOWNLOAD_PRICE_MINOR &&
           receipt.currency === "USD" &&
           Number.isSafeInteger(decision.amountMinor) &&
           decision.amountMinor > 0 &&
@@ -1605,8 +2278,164 @@ export function createPostgresDownloadPaymentRepository({
               { status: 500 }
             );
           }
+          if (event.eventType === "charge.dispute.created") {
+            await holdDownloadCheckoutGate(client, {
+              signalType: event.eventType,
+              signalId: event.eventId,
+              evidenceDigest: event.payloadDigest,
+              reason: "stripe_download_dispute_created",
+              changedAt: event.providerCreatedAt
+            });
+          }
+          if (event.eventType.startsWith("charge.dispute.")) {
+            await storeDownloadDisputeDossier(client, {
+              receiptId: receipt.receiptId,
+              tenantId: receipt.tenantId,
+              projectId: receipt.projectId,
+              entitlementId: receipt.entitlementId,
+              triggerEventId: event.eventId,
+              triggerType: event.eventType,
+              providerCreatedAt:
+                event.providerCreatedAt,
+              payloadDigest: event.payloadDigest
+            });
+          }
           return result;
         })
+      );
+    },
+
+    async recordDownloadAccess(input) {
+      const evidence = Object.freeze({
+        tenantId: exactUuid(input?.tenantId, "tenantId"),
+        customerId: exactUuid(
+          input?.customerId,
+          "customerId"
+        ),
+        projectId: exactUuid(
+          input?.projectId,
+          "projectId"
+        ),
+        versionId: exactUuid(
+          input?.versionId,
+          "versionId"
+        ),
+        entitlementId: exactUuid(
+          input?.entitlementId,
+          "entitlementId"
+        ),
+        receiptId: exactUuid(
+          input?.receiptId,
+          "receiptId"
+        ),
+        artifactDigest: requiredDigest(
+          input?.artifactDigest,
+          "artifactDigest"
+        ),
+        byteCount: input?.byteCount,
+        requestId: requiredText(
+          input?.requestId,
+          "requestId"
+        ),
+        clientAddress: requiredText(
+          input?.clientAddress,
+          "clientAddress",
+          80
+        ),
+        userAgentDigest: requiredDigest(
+          input?.userAgentDigest,
+          "userAgentDigest"
+        ),
+        state: input?.state,
+        responseIssuedAt: requiredIso(
+          input?.responseIssuedAt,
+          "responseIssuedAt"
+        )
+      });
+      invariant(
+        Number.isSafeInteger(evidence.byteCount) &&
+          evidence.byteCount > 0 &&
+          evidence.state === "response_issued",
+        "repository_conflict",
+        "the Download access evidence is invalid",
+        { status: 500 }
+      );
+      return translated(() =>
+        database.service(
+          {
+            userId: evidence.customerId,
+            organizationId: evidence.tenantId
+          },
+          async (client) => {
+            const inserted = await client.query(
+              `insert into ss.commerce_v2_download_access_events (
+                 organization_id, project_id, version_id,
+                 customer_user_id, entitlement_id, receipt_id,
+                 artifact_digest, byte_count, request_id,
+                 client_address, user_agent_digest, state,
+                 response_issued_at
+               ) values (
+                 $1, $2, $3, $4, $5, $6, $7,
+                 $8, $9, $10, $11, $12, $13
+               )
+               on conflict (request_id) do nothing
+               returning id`,
+              [
+                evidence.tenantId,
+                evidence.projectId,
+                evidence.versionId,
+                evidence.customerId,
+                evidence.entitlementId,
+                evidence.receiptId,
+                evidence.artifactDigest,
+                evidence.byteCount,
+                evidence.requestId,
+                evidence.clientAddress,
+                evidence.userAgentDigest,
+                evidence.state,
+                evidence.responseIssuedAt
+              ]
+            );
+            if (inserted.rowCount === 0) {
+              const replay = await client.query(
+                `select *
+                   from ss.commerce_v2_download_access_events
+                  where request_id = $1`,
+                [evidence.requestId]
+              );
+              const row = replay.rows[0];
+              invariant(
+                replay.rowCount === 1 &&
+                  row.organization_id === evidence.tenantId &&
+                  row.project_id === evidence.projectId &&
+                  row.version_id === evidence.versionId &&
+                  row.customer_user_id === evidence.customerId &&
+                  row.entitlement_id === evidence.entitlementId &&
+                  row.receipt_id === evidence.receiptId &&
+                  row.artifact_digest === evidence.artifactDigest &&
+                  Number(row.byte_count) === evidence.byteCount &&
+                  row.client_address === evidence.clientAddress &&
+                  row.user_agent_digest === evidence.userAgentDigest &&
+                  row.state === evidence.state &&
+                  new Date(row.response_issued_at).toISOString() ===
+                    evidence.responseIssuedAt,
+                "repository_conflict",
+                "the Download access request ID conflicts with different evidence",
+                { status: 409 }
+              );
+              return Object.freeze({
+                recorded: true,
+                replay: true,
+                accessEventId: row.id
+              });
+            }
+            return Object.freeze({
+              recorded: true,
+              replay: false,
+              accessEventId: inserted.rows[0].id
+            });
+          }
+        )
       );
     },
 

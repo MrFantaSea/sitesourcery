@@ -4,6 +4,7 @@ import {
   ALAKAZAM_CATALOG_VERSION,
   ALAKAZAM_CHECKOUT_DISPATCH_SCHEMA,
   ALAKAZAM_CUSTOMER_PROVIDER_FACTS_SCHEMA,
+  ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
   ALAKAZAM_DOWNGRADE_APPLICATION_SCHEMA,
   ALAKAZAM_PAYMENT_PROVIDER_FACTS_SCHEMA,
   ALAKAZAM_PROVIDER_METADATA_SCHEMA,
@@ -6272,7 +6273,8 @@ export function createPostgresAlakazamRepository({
                     entitlements.rows[0].id,
                   state: "active",
                   available: true,
-                  amountMinor: 500
+                  amountMinor:
+                    ALAKAZAM_DOWNLOAD_CREDIT_MINOR
                 };
               }
             }
@@ -8972,7 +8974,8 @@ export function createPostgresAlakazamRepository({
               downloadCredit = {
                 entitlementId:
                   quoteRow.download_entitlement_id,
-                amountMinor: 500
+                amountMinor:
+                  ALAKAZAM_DOWNLOAD_CREDIT_MINOR
               };
             }
 

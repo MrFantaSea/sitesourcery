@@ -17,6 +17,7 @@ export {
   createDownloadPaymentRelease,
   createDownloadPaymentService,
   isDownloadStripeEvent,
+  isPotentialDownloadEarlyFraudWarningEvent,
   isPotentialDownloadReversalEvent
 } from "./payment.mjs";
 export {

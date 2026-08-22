@@ -522,7 +522,8 @@ test("ready Download payment returns only a Stripe destination and entitlement-g
       {
         body: {
           acceptedDisclosureDigest:
-            quote.disclosureDigest
+            quote.disclosureDigest,
+          purchaseTermsAccepted: true
         },
         idempotencyKey:
           "download-checkout-ready"
@@ -570,18 +571,38 @@ test("ready Download payment returns only a Stripe destination and entitlement-g
     await download.text(),
     "<!doctype html><title>Download</title>"
   );
-  assert.deepEqual(paymentCalls.download, [
+  assert.equal(paymentCalls.download.length, 1);
+  assert.deepEqual(
+    {
+      tenantId: paymentCalls.download[0].tenantId,
+      customerId:
+        paymentCalls.download[0].customerId,
+      actorId: paymentCalls.download[0].actorId,
+      projectId: paymentCalls.download[0].projectId,
+      versionId: paymentCalls.download[0].versionId,
+      clientAddress:
+        paymentCalls.download[0].clientAddress
+    },
     {
       tenantId: TENANT_ID,
       customerId: ACTOR.userId,
       actorId: ACTOR.userId,
       projectId: PROJECT_A,
-      versionId: VERSION_A
+      versionId: VERSION_A,
+      clientAddress: "unavailable"
     }
-  ]);
+  );
+  assert.equal(
+    paymentCalls.download[0].requestId,
+    "request_4"
+  );
+  assert.match(
+    paymentCalls.download[0].userAgentDigest,
+    /^[a-f0-9]{64}$/u
+  );
 });
 
-test("Download quote route exposes only the exact held $5 snapshot", async () => {
+test("Download quote route exposes only the exact held $20 snapshot", async () => {
   const context = createContext();
   const response =
     await createDownloadQuote(context);
@@ -589,7 +610,7 @@ test("Download quote route exposes only the exact held $5 snapshot", async () =>
   const quote = await response.json();
   assert.equal(quote.offerId, "spark_download");
   assert.deepEqual(quote.price, {
-    amountMinor: 500,
+    amountMinor: 2000,
     currency: "USD",
     billing: "one_time",
     interval: null
@@ -643,7 +664,8 @@ test("checkout-command route prepares one exact held command and never dispatche
     writeRequest(path, {
       body: {
         acceptedDisclosureDigest:
-          quote.disclosureDigest
+          quote.disclosureDigest,
+        purchaseTermsAccepted: true
       },
       idempotencyKey:
         "download-checkout-command-a"
@@ -689,7 +711,8 @@ test("checkout-command route prepares one exact held command and never dispatche
     writeRequest(path, {
       body: {
         acceptedDisclosureDigest:
-          quote.disclosureDigest
+          quote.disclosureDigest,
+        purchaseTermsAccepted: true
       },
       idempotencyKey:
         "download-checkout-command-a"
@@ -790,7 +813,8 @@ test("Download quote and command identity cannot cross projects", async () => {
       {
         body: {
           acceptedDisclosureDigest:
-            quoteA.disclosureDigest
+            quoteA.disclosureDigest,
+          purchaseTermsAccepted: true
         },
         idempotencyKey: "cross-project-command"
       }
@@ -815,7 +839,8 @@ test("Download quote and command identity cannot cross projects", async () => {
       {
         body: {
           acceptedDisclosureDigest:
-            quoteA.disclosureDigest
+            quoteA.disclosureDigest,
+          purchaseTermsAccepted: true
         },
         idempotencyKey: "shared-checkout-command"
       }
@@ -837,7 +862,8 @@ test("Download quote and command identity cannot cross projects", async () => {
       {
         body: {
           acceptedDisclosureDigest:
-            quoteB.disclosureDigest
+            quoteB.disclosureDigest,
+          purchaseTermsAccepted: true
         },
         idempotencyKey: "shared-checkout-command"
       }

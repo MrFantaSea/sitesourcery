@@ -167,6 +167,10 @@ async function prepareCheckout(
       acceptedDisclosureDigest:
         quote.disclosureDigest,
       commandId: "checkout_command_a",
+      purchaseTermsAccepted: true,
+      requestId: "request_checkout_a",
+      clientAddress: "192.0.2.20",
+      userAgentDigest: "d".repeat(64),
       ...overrides
     }
   });
@@ -186,7 +190,7 @@ test("private held catalog defines only the action-based Spark offers", () => {
     catalog.offers.map(
       (offer) => offer.price.amountMinor
     ),
-    [500]
+    [2000]
   );
   assert.deepEqual(
     catalog.offers.map(
@@ -274,7 +278,7 @@ test("quote snapshot binds exact server money, project, version, disclosure, and
     "spark_download"
   );
   assert.deepEqual(quote.price, {
-    amountMinor: 500,
+    amountMinor: 2000,
     currency: "USD",
     billing: "one_time",
     interval: null
@@ -423,7 +427,7 @@ test("checkout preparation is exact, idempotent, provider-neutral, and held", as
     "spark_download"
   );
   assert.deepEqual(first.purpose.price, {
-    amountMinor: 500,
+    amountMinor: 2000,
     currency: "USD",
     billing: "one_time",
     interval: null

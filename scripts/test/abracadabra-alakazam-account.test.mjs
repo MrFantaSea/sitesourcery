@@ -84,7 +84,7 @@ function catalog() {
       scope: "one_editor_project",
     },
     ladder: {
-      downloadCreditMinor: 500,
+      downloadCreditMinor: 2000,
       upgradeRule: "fixed_target_minus_current_tier",
       downgradeRule: "renewal_boundary_no_refund_or_proration",
       premiumConfiguration: "preserved_when_inactive",
@@ -275,7 +275,7 @@ function account(overrides = {}) {
     catalog: selectedCatalog,
     downloadCredit: {
       available: selectedSubscription === null,
-      amountMinor: selectedSubscription === null ? 500 : 0,
+      amountMinor: selectedSubscription === null ? 2000 : 0,
       currency: "USD",
     },
     subscription: selectedSubscription,
@@ -374,7 +374,7 @@ function startQuote(
     (candidate) => candidate.tierId === targetTierId
   );
   const appliedValue = snapshot.downloadCredit.available
-    ? { kind: "download_purchase", amountMinor: 500 }
+    ? { kind: "download_purchase", amountMinor: 2000 }
     : { kind: "none", amountMinor: 0 };
   const dueNow = {
     subtotalMinor:
@@ -1099,9 +1099,9 @@ test("start quotes and Checkout destinations are exact, credit-aware, and projec
   const snapshot = account();
   const observedAt = "2026-08-04T18:10:00.000Z";
   for (const [tierId, dueNowMinor] of [
-    ["alakazam_25", 2000],
-    ["alakazam_35", 3000],
-    ["alakazam_50", 4500],
+    ["alakazam_25", 500],
+    ["alakazam_35", 1500],
+    ["alakazam_50", 3000],
   ]) {
     const quote = startQuote(snapshot, tierId);
     const verified =
@@ -1115,7 +1115,7 @@ test("start quotes and Checkout destinations are exact, credit-aware, and projec
     assert.equal(verified.targetTier.tierId, tierId);
     assert.equal(
       verified.appliedValue.amountMinor,
-      500
+      2000
     );
     assert.equal(
       verified.dueNow.subtotalMinor,
@@ -2038,7 +2038,7 @@ test("the customer projection fails closed on cross-project, schema, action, mon
         subscription: subscription(catalog().tiers[1]),
         downloadCredit: {
           available: true,
-          amountMinor: 500,
+          amountMinor: 2000,
           currency: "USD",
         },
       }),
@@ -2064,7 +2064,7 @@ test("the customer projection fails closed on cross-project, schema, action, mon
       ...source,
       downloadCredit: {
         available: false,
-        amountMinor: 500,
+        amountMinor: 2000,
         currency: "USD",
       },
     },

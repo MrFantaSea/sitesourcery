@@ -20,7 +20,7 @@
     "check:site": "node scripts/check-site.mjs",
     "check:authority": "node scripts/checker-authority.mjs",
     "check:html": "html-validate \"*.html\" \"**/index.html\" \"!node_modules/**\" \"!_site/**\" \"!_hosted/**\"",
-    "check:legal-copy": "node scripts/check-legal-copy.mjs",
+    "check:legal-copy": "node scripts/check-legal-copy.mjs && node --test scripts/test/joint-legal-v6.test.mjs",
     "check:catalog": "node scripts/check-pricing.mjs",
     "build:hosted": "node scripts/build-hosted.mjs",
     "check:hosted": "node scripts/build-hosted.mjs && html-validate \"_hosted/**/*.html\"",

@@ -41,7 +41,7 @@ export function assertApprovedDownloadPaymentReady(
   ) {
     throw configurationError(
       "DOWNLOAD_PAYMENT_NOT_READY",
-      "Approved $5 Download payment is not ready; inspect the private payment configuration."
+      "Approved $20 Download payment is not ready; inspect the private payment configuration."
     );
   }
   return readiness;

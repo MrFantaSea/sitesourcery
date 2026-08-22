@@ -302,7 +302,8 @@ export function createHostedDownloadCommerce({
     async download(
       actor,
       projectId,
-      versionId
+      versionId,
+      evidence = {}
     ) {
       return translated(async () => {
         invariant(
@@ -321,6 +322,20 @@ export function createHostedDownloadCommerce({
           versionId: requiredText(
             versionId,
             "versionId"
+          ),
+          requestId: requiredText(
+            evidence?.requestId,
+            "requestId"
+          ),
+          clientAddress: requiredText(
+            evidence?.clientAddress,
+            "clientAddress",
+            80
+          ),
+          userAgentDigest: requiredText(
+            evidence?.userAgentDigest,
+            "userAgentDigest",
+            64
           )
         });
       });

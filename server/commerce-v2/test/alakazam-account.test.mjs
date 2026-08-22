@@ -138,7 +138,7 @@ test("an account without Alakazam exposes only the held catalog and available Do
   );
   assert.deepEqual(result.downloadCredit, {
     available: true,
-    amountMinor: 500,
+    amountMinor: 2000,
     currency: "USD"
   });
   assert.equal(result.subscription, null);

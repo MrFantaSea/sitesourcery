@@ -32,6 +32,9 @@ import {
   createAlakazamProviderMetadata
 } from "../../commerce-v2/alakazam.mjs";
 import {
+  DOWNLOAD_PRICE_MINOR
+} from "../../commerce-v2/constants.mjs";
+import {
   ALAKAZAM_CANCELLATION_FACTS_SCHEMA
 } from "../../commerce-v2/alakazam-lifecycle-cancellation.mjs";
 import {
@@ -113,7 +116,9 @@ export const STRIPE_REQUIRED_WEBHOOK_EVENTS = Object.freeze([
   "invoice.payment_succeeded",
   "refund.created",
   "refund.failed",
-  "refund.updated"
+  "refund.updated",
+  "radar.early_fraud_warning.created",
+  "radar.early_fraud_warning.updated"
 ].sort());
 
 const LIVE_ENVIRONMENTS = new Set(["staging", "production"]);
@@ -154,7 +159,7 @@ const OFFICIAL_CLIENTS = new WeakMap();
 const DOWNLOAD_CHECKOUT_PURPOSE_SCHEMA =
   "sitesourcery.abracadabra-checkout-purpose.v2";
 const DOWNLOAD_CHECKOUT_METADATA_SCHEMA =
-  "sitesourcery_download_checkout_v2";
+  "sitesourcery_download_checkout_v3";
 const DOWNLOAD_CHECKOUT_LIFECYCLE_SCHEMA =
   "sitesourcery.stripe-download-checkout-lifecycle/v2";
 export const STRIPE_SERVICE_ASSESSMENT_PURPOSE_SCHEMA =
@@ -2165,7 +2170,7 @@ function validateAlakazamPurpose(
           purpose.downloadCredit.amountMinor ===
             ALAKAZAM_DOWNLOAD_CREDIT_MINOR,
         "stripe_alakazam_purpose_invalid",
-        "Alakazam Download credit must be exactly $5",
+        "Alakazam Download credit must be exactly $20",
         { status: 500 }
       );
       downloadCredit = Object.freeze({
@@ -2267,16 +2272,23 @@ function alakazamReturnUrl(template, validated) {
 
 function validateDownloadPurpose(
   request,
-  { retrieval = false } = {}
+  {
+    retrieval = false,
+    identityRequired = !retrieval
+  } = {}
 ) {
   const requestFields = retrieval
     ? [
         "checkoutSessionId",
+        ...(identityRequired
+          ? ["checkoutIdentity"]
+          : []),
         "purpose",
         "purposeDigest"
       ]
     : [
         "idempotencyKey",
+        "checkoutIdentity",
         "purpose",
         "purposeDigest",
         ...(request?.stripeCustomerId === undefined
@@ -2295,6 +2307,7 @@ function validateDownloadPurpose(
         "offerId",
         "price",
         "projectId",
+        "purchaseTermsAccepted",
         "quoteId",
         "quoteSnapshotDigest",
         "schema",
@@ -2326,19 +2339,20 @@ function validateDownloadPurpose(
     purpose.schema === DOWNLOAD_CHECKOUT_PURPOSE_SCHEMA &&
       identity.offerId === "spark_download" &&
       identity.entitlementKind === "spark_download" &&
+      purpose.purchaseTermsAccepted === true &&
       exactObjectKeys(purpose.price, [
         "amountMinor",
         "billing",
         "currency",
         "interval"
       ]) &&
-      purpose.price.amountMinor === 500 &&
+      purpose.price.amountMinor === DOWNLOAD_PRICE_MINOR &&
       purpose.price.currency === "USD" &&
       purpose.price.billing === "one_time" &&
       purpose.price.interval === null &&
       STRIPE_TAX_PURPOSE_MODES.has(purpose.taxMode),
     "stripe_download_checkout_invalid",
-    "Download Checkout permits only the reviewed one-time $5 offer",
+    "Download Checkout permits only the reviewed one-time $20 offer",
     { status: 500 }
   );
   const acceptedDisclosureDigest = safeMetadataValue(
@@ -2364,12 +2378,66 @@ function validateDownloadPurpose(
     "Download Checkout purpose digest changed",
     { status: 500 }
   );
+  let checkoutIdentity = null;
+  if (identityRequired) {
+    const selected = request.checkoutIdentity;
+    invariant(
+      exactObjectKeys(selected, [
+        "accountCreatedAt",
+        "activatedAt",
+        "email",
+        "emailDigest",
+        "possessionEvidenceDigest",
+        "userId",
+        "verified"
+      ]),
+      "stripe_download_checkout_invalid",
+      "Download Checkout requires the exact verified account identity",
+      { status: 500 }
+    );
+    const email = requiredText(
+      selected.email,
+      "checkoutIdentity.email",
+      320
+    );
+    const emailDigest = requiredText(
+      selected.emailDigest,
+      "checkoutIdentity.emailDigest",
+      64
+    );
+    invariant(
+      selected.verified === true &&
+        selected.userId === identity.customerId &&
+        email === email.toLowerCase() &&
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) &&
+        SHA256.test(emailDigest) &&
+        createHash("sha256")
+          .update(email, "utf8")
+          .digest("hex") === emailDigest &&
+        SHA256.test(
+          selected.possessionEvidenceDigest
+        ) &&
+        new Date(selected.accountCreatedAt)
+          .toISOString() === selected.accountCreatedAt &&
+        new Date(selected.activatedAt)
+          .toISOString() === selected.activatedAt,
+      "stripe_download_checkout_invalid",
+      "Download Checkout verified identity is invalid",
+      { status: 500 }
+    );
+    checkoutIdentity = Object.freeze({
+      ...selected,
+      email,
+      emailDigest
+    });
+  }
   return Object.freeze({
     purpose,
     identity,
     acceptedDisclosureDigest,
     quoteSnapshotDigest,
     purposeDigest,
+    checkoutIdentity,
     stripeCustomerId:
       retrieval ||
       request.stripeCustomerId === undefined
@@ -4494,7 +4562,7 @@ function downloadCheckoutFacts(
         99_999_999
       )
     : 0;
-  const totalMinor = 500 + taxMinor;
+  const totalMinor = DOWNLOAD_PRICE_MINOR + taxMinor;
   invariant(
     checkoutId === checkoutSessionId &&
       value.client_reference_id ===
@@ -4504,7 +4572,7 @@ function downloadCheckoutFacts(
       value.status === "complete" &&
       value.payment_status === "paid" &&
       value.currency === "usd" &&
-      value.amount_subtotal === 500 &&
+      value.amount_subtotal === DOWNLOAD_PRICE_MINOR &&
       value.amount_total === totalMinor &&
       value.automatic_tax?.enabled === automaticTax &&
       (
@@ -4518,7 +4586,7 @@ function downloadCheckoutFacts(
             )
       ),
     "stripe_download_checkout_response_invalid",
-    "Stripe did not confirm the exact paid $5 Download Checkout",
+    "Stripe did not confirm the exact paid $20 Download Checkout",
     { status: 502 }
   );
   const intent = expandedProviderObject(
@@ -4538,9 +4606,89 @@ function downloadCheckoutFacts(
       intent.amount_received === totalMinor &&
       intent.amount_capturable === 0,
     "stripe_download_checkout_response_invalid",
-    "Stripe did not confirm the exact succeeded $5 Download payment",
+    "Stripe did not confirm the exact succeeded $20 Download payment",
     { status: 502 }
   );
+  const charge = expandedProviderObject(
+    intent.latest_charge,
+    "ch",
+    "Stripe Download Charge"
+  );
+  invariant(
+    charge.livemode === config.livemode &&
+      charge.status === "succeeded" &&
+      charge.paid === true &&
+      charge.currency === "usd" &&
+      charge.amount === totalMinor &&
+      charge.payment_intent === intent.id,
+    "stripe_download_checkout_response_invalid",
+    "Stripe did not confirm the exact succeeded Download Charge",
+    { status: 502 }
+  );
+  const expectedIdentity = validated.checkoutIdentity;
+  invariant(
+    expectedIdentity !== null,
+    "stripe_download_checkout_response_invalid",
+    "Stripe Download identity authority is unavailable",
+    { status: 502 }
+  );
+  const billing = value.customer_details;
+  const billingEmail = String(
+    billing?.email ?? ""
+  ).trim().toLowerCase();
+  const billingIdentity = Object.freeze({
+    email: billingEmail,
+    name:
+      typeof billing?.name === "string" &&
+      billing.name.trim().length > 0
+        ? billing.name.trim()
+        : null,
+    address: Object.freeze({
+      city: billing?.address?.city ?? null,
+      country: billing?.address?.country ?? null,
+      line1: billing?.address?.line1 ?? null,
+      line2: billing?.address?.line2 ?? null,
+      postalCode:
+        billing?.address?.postal_code ?? null,
+      state: billing?.address?.state ?? null
+    })
+  });
+  invariant(
+    billingEmail === expectedIdentity.email &&
+      createHash("sha256")
+        .update(billingEmail, "utf8")
+        .digest("hex") ===
+          expectedIdentity.emailDigest &&
+      typeof billingIdentity.address.country ===
+        "string" &&
+      billingIdentity.address.country.length === 2,
+    "stripe_download_checkout_response_invalid",
+    "Stripe Download billing identity did not match the verified account",
+    { status: 502 }
+  );
+  const threeDSRaw =
+    charge.payment_method_details?.card
+      ?.three_d_secure ?? null;
+  const threeDS = Object.freeze({
+    requested: "any",
+    supported: threeDSRaw !== null,
+    result: threeDSRaw?.result ?? "unavailable",
+    authenticationFlow:
+      threeDSRaw?.authentication_flow ?? null,
+    version: threeDSRaw?.version ?? null,
+    electronicCommerceIndicator:
+      threeDSRaw?.electronic_commerce_indicator ??
+      null,
+    transactionIdDigest:
+      typeof threeDSRaw?.transaction_id === "string"
+        ? createHash("sha256")
+            .update(
+              threeDSRaw.transaction_id,
+              "utf8"
+            )
+            .digest("hex")
+        : null
+  });
   return Object.freeze({
     schema:
       "sitesourcery.stripe-download-payment-facts/v2",
@@ -4553,12 +4701,29 @@ function downloadCheckoutFacts(
       "Stripe Download Customer ID"
     ),
     paymentStatus: "paid",
-    amountMinor: 500,
+    amountMinor: DOWNLOAD_PRICE_MINOR,
     taxMinor,
     totalMinor,
     taxMode,
     currency: "USD",
-    purposeDigest: validated.purposeDigest
+    purposeDigest: validated.purposeDigest,
+    verifiedEmailDigest:
+      expectedIdentity.emailDigest,
+    accountCreatedAt:
+      expectedIdentity.accountCreatedAt,
+    accountActivatedAt:
+      expectedIdentity.activatedAt,
+    possessionEvidenceDigest:
+      expectedIdentity.possessionEvidenceDigest,
+    billingIdentity,
+    billingIdentityDigest: digest(billingIdentity),
+    threeDS,
+    chargeId: charge.id,
+    riskLevel: charge.outcome?.risk_level ?? null,
+    riskScore:
+      Number.isSafeInteger(charge.outcome?.risk_score)
+        ? charge.outcome.risk_score
+        : null
   });
 }
 
@@ -4955,7 +5120,7 @@ function downloadCheckoutLifecycle(
       value.mode === "payment" &&
       value.livemode === config.livemode &&
       value.currency === "usd" &&
-      value.amount_subtotal === 500 &&
+      value.amount_subtotal === DOWNLOAD_PRICE_MINOR &&
       value.automatic_tax?.enabled ===
         (validated.purpose.taxMode === "automatic"),
     "stripe_download_checkout_response_invalid",
@@ -8689,7 +8854,7 @@ export function createStripeProviderAdapter(options = {}) {
           {
             price_data: {
               currency: "usd",
-              unit_amount: 500,
+              unit_amount: DOWNLOAD_PRICE_MINOR,
               tax_behavior: "exclusive",
               product_data: {
                 name: "Abracadabra Download",
@@ -8711,21 +8876,25 @@ export function createStripeProviderAdapter(options = {}) {
         automatic_tax: {
           enabled: automaticTax
         },
+        billing_address_collection: "required",
+        payment_method_options: {
+          card: {
+            request_three_d_secure: "any"
+          }
+        },
         ...(validated.stripeCustomerId
-          ? { customer: validated.stripeCustomerId }
-          : { customer_creation: "always" }),
-        ...(automaticTax
           ? {
-              billing_address_collection: "required",
-              ...(validated.stripeCustomerId
-                ? {
-                    customer_update: {
-                      address: "auto"
-                    }
-                  }
-                : {})
+              customer: validated.stripeCustomerId,
+              customer_update: {
+                address: "auto",
+                name: "auto"
+              }
             }
-          : {}),
+          : {
+              customer_creation: "always",
+              customer_email:
+                validated.checkoutIdentity.email
+            }),
         payment_intent_data: {
           metadata: providerMetadata
         }
@@ -9617,7 +9786,10 @@ export function createStripeProviderAdapter(options = {}) {
       requireCapability("checkout:create");
       const validated = validateDownloadPurpose(
         request,
-        { retrieval: true }
+        {
+          retrieval: true,
+          identityRequired: true
+        }
       );
       const checkoutSessionId = providerId(
         request.checkoutSessionId,
@@ -9636,7 +9808,11 @@ export function createStripeProviderAdapter(options = {}) {
         response =
           await client.checkout.sessions.retrieve(
             checkoutSessionId,
-            { expand: ["payment_intent"] }
+            {
+              expand: [
+                "payment_intent.latest_charge"
+              ]
+            }
           );
       } catch {
         throw noEffect(

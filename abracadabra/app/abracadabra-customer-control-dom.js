@@ -677,7 +677,7 @@
           "upgradeRule"
         ]
       )
-      || value.ladder.downloadCreditMinor !== 500
+      || value.ladder.downloadCreditMinor !== 2000
       || value.ladder.upgradeRule !==
         "fixed_target_minus_current_tier"
       || value.ladder.downgradeRule !==
@@ -15026,7 +15026,7 @@
         quote.version && quote.version.versionId
       ) !== text(versionId)
       || !quote.price
-      || Number(quote.price.amountMinor) !== 500
+      || Number(quote.price.amountMinor) !== 2000
       || text(quote.price.currency).toUpperCase()
         !== "USD"
       || text(quote.price.billing) !== "one_time"
@@ -15041,15 +15041,23 @@
       quoteId: idOf(quote),
       projectId: text(projectId),
       versionId: text(versionId),
-      price: "$5.00 USD",
+      price: "$20.00 USD",
       expiresAt: quote.expiresAt,
       disclosure:
-        text(
-          quote.disclosure
-          && quote.disclosure.terms
-          && quote.disclosure.terms.projectScope
-        )
-        || "One Download entitlement applies to this editor project and is not used up by another click."
+        [
+          "delivery",
+          "finalSale",
+          "credit",
+          "renewal",
+          "projectScope"
+        ].map(function (field) {
+          return text(
+            quote.disclosure
+            && quote.disclosure.terms
+            && quote.disclosure.terms[field]
+          );
+        }).filter(Boolean).join(" ")
+        || "The $20 one-time payment unlocks this project's accepted HTML. The sale is final after authenticated access except where applicable law requires otherwise, and the full $20 is a non-cash credit toward this verified account and project's first separately released Alakazam invoice.",
     });
   }
 
@@ -15122,7 +15130,7 @@
         && text(payment.status) === "paid"
         && text(payment.provider) === "stripe"
         && text(payment.receiptId)
-        && Number(payment.amountMinor) === 500
+        && Number(payment.amountMinor) === 2000
         && text(payment.currency).toUpperCase()
           === "USD"
         && Number.isFinite(
@@ -23302,7 +23310,7 @@
             render(control.getState());
             if (!activeQuote) {
               announce(
-                "That quote expired. Get a new exact $5 quote before continuing."
+                "That quote expired. Get a new exact $20 quote before continuing."
               );
             }
           },
@@ -23388,7 +23396,7 @@
       );
       if (!capabilities.downloadQuote) {
         downloadCopy.textContent =
-          "The $5 quote service is not open yet. Nothing can be charged.";
+          "The $20 quote service is not open yet. Nothing can be charged.";
       } else if (
         !state.project
         || !state.selectedVersionId
@@ -23783,7 +23791,7 @@
           function () {
             return control.quoteDownload();
           },
-          "Exact $5 quote ready."
+          "Exact $20 quote ready."
         ).then(function () {
           var review =
             one("[data-download-quote-review]");
@@ -23815,7 +23823,7 @@
             ).checked
           ) {
             throw new Error(
-              "Review and accept the current $5 quote first."
+              "Review and accept the current $20 quote first."
             );
           }
           return control

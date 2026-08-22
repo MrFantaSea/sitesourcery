@@ -5,8 +5,11 @@ import {
   CHECKOUT_COMMAND_SCHEMA,
   CHECKOUT_DISPATCH_SCHEMA,
   CHECKOUT_PURPOSE_SCHEMA,
+  DOWNLOAD_PRICE_MINOR,
   DOWNLOAD_PAYMENT_RELEASE_SCHEMA,
-  ENTITLEMENT_SCHEMA
+  ENTITLEMENT_SCHEMA,
+  PURCHASE_ACCEPTANCE_SCHEMA,
+  PURCHASE_ACCEPTANCE_STATEMENT
 } from "./constants.mjs";
 import {
   clone,
@@ -20,12 +23,17 @@ import {
 import { authorizeProjectEntitlement } from "./entitlement.mjs";
 
 const DOWNLOAD_METADATA_SCHEMA =
-  "sitesourcery_download_checkout_v2";
+  "sitesourcery_download_checkout_v3";
 const CHECKOUT_ID = /^cs_[A-Za-z0-9_]+$/u;
 const EVENT_ID = /^evt_[A-Za-z0-9_]+$/u;
 const PAYMENT_INTENT_ID = /^pi_[A-Za-z0-9_]+$/u;
 const CHARGE_ID = /^ch_[A-Za-z0-9_]+$/u;
 const DISPUTE_ID = /^(?:dp|du)_[A-Za-z0-9_]+$/u;
+const FRAUD_WARNING_ID = /^issfr_[A-Za-z0-9_]+$/u;
+const DOWNLOAD_EARLY_FRAUD_WARNING_EVENTS = new Set([
+  "radar.early_fraud_warning.created",
+  "radar.early_fraud_warning.updated"
+]);
 const DOWNLOAD_REVERSAL_EVENT_TYPES = new Set([
   "charge.refunded",
   "charge.dispute.created",
@@ -50,7 +58,7 @@ export function createDownloadPaymentRelease({
     offerId: "spark_download",
     entitlementKind: "spark_download",
     scope: "editor_project",
-    amountMinor: 500,
+    amountMinor: DOWNLOAD_PRICE_MINOR,
     currency: "USD",
     billing: "one_time",
     provider: "stripe"
@@ -65,7 +73,7 @@ function exactRelease(value) {
     value &&
       JSON.stringify(value) === JSON.stringify(expected),
     "invalid_configuration",
-    "Download payment release does not match the reviewed $5 contract",
+    "Download payment release does not match the reviewed $20 contract",
     { status: 500 }
   );
   return expected;
@@ -86,9 +94,12 @@ function validatePorts({ repository, provider, clock, ids }) {
         "findPaymentReceiptByIntent",
         "findProjectEntitlement",
         "findStripeCustomer",
+        "findVerifiedCheckoutIdentity",
         "markDispatchUnknown",
+        "recordDownloadAccess",
         "resolveDownloadArtifact",
         "applyPaymentReversal",
+        "applyEarlyFraudWarning",
         "settleStripeEvent"
       ]
     ],
@@ -137,7 +148,8 @@ function exactPreparation(value) {
       purpose.quoteId === value.quoteId &&
       purpose.offerId === "spark_download" &&
       purpose.entitlementKind === "spark_download" &&
-      purpose.price?.amountMinor === 500 &&
+      purpose.purchaseTermsAccepted === true &&
+      purpose.price?.amountMinor === DOWNLOAD_PRICE_MINOR &&
       purpose.price?.currency === "USD" &&
       purpose.price?.billing === "one_time" &&
       purpose.price?.interval === null &&
@@ -168,7 +180,84 @@ function exactPreparation(value) {
   );
   requiredDigest(value.purposeDigest, "purposeDigest");
   requiredIso(value.preparedAt, "preparedAt");
+  invariant(
+    value.acceptance?.schema ===
+      PURCHASE_ACCEPTANCE_SCHEMA &&
+      value.acceptance.statement ===
+        PURCHASE_ACCEPTANCE_STATEMENT &&
+      value.acceptance.acceptedAt ===
+        value.preparedAt &&
+      value.acceptance.acceptedDisclosureDigest ===
+        purpose.acceptedDisclosureDigest &&
+      value.acceptance.termsVersion,
+    "invalid_preparation",
+    "Download payment requires exact server-recorded purchase acceptance",
+    { status: 500 }
+  );
+  requiredIso(
+    value.acceptance.acceptedAt,
+    "acceptance.acceptedAt"
+  );
+  requiredText(
+    value.acceptance.requestId,
+    "acceptance.requestId"
+  );
+  requiredText(
+    value.acceptance.clientAddress,
+    "acceptance.clientAddress",
+    80
+  );
+  requiredDigest(
+    value.acceptance.userAgentDigest,
+    "acceptance.userAgentDigest"
+  );
   return value;
+}
+
+function exactCheckoutIdentity(value, preparation) {
+  const email = requiredText(
+    value?.email,
+    "checkoutIdentity.email",
+    320
+  );
+  const emailDigest = requiredDigest(
+    value?.emailDigest,
+    "checkoutIdentity.emailDigest"
+  );
+  invariant(
+    value?.verified === true &&
+      value.userId === preparation.purpose.customerId &&
+      email === email.toLowerCase() &&
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) &&
+      createHash("sha256")
+        .update(email, "utf8")
+        .digest("hex") === emailDigest,
+    "verified_identity_unavailable",
+    "The verified account identity could not be bound to Checkout.",
+    { status: 409 }
+  );
+  requiredIso(
+    value.accountCreatedAt,
+    "checkoutIdentity.accountCreatedAt"
+  );
+  requiredIso(
+    value.activatedAt,
+    "checkoutIdentity.activatedAt"
+  );
+  requiredDigest(
+    value.possessionEvidenceDigest,
+    "checkoutIdentity.possessionEvidenceDigest"
+  );
+  return Object.freeze({
+    verified: true,
+    userId: value.userId,
+    email,
+    emailDigest,
+    accountCreatedAt: value.accountCreatedAt,
+    activatedAt: value.activatedAt,
+    possessionEvidenceDigest:
+      value.possessionEvidenceDigest
+  });
 }
 
 function checkoutUrl(value) {
@@ -370,6 +459,23 @@ export function isPotentialDownloadReversalEvent(
   );
 }
 
+export function isPotentialDownloadEarlyFraudWarningEvent(
+  event
+) {
+  return (
+    DOWNLOAD_EARLY_FRAUD_WARNING_EVENTS.has(
+      event?.type
+    ) &&
+    PAYMENT_INTENT_ID.test(
+      String(
+        providerId(
+          event?.data?.object?.payment_intent
+        ) ?? ""
+      )
+    )
+  );
+}
+
 function exactReversalDecision(event, receipt) {
   const object = event.data.object;
   const paymentIntentId = requiredText(
@@ -381,7 +487,7 @@ function exactReversalDecision(event, receipt) {
       receipt?.paymentIntentId === paymentIntentId &&
       receipt.currency === "USD" &&
       Number.isSafeInteger(receipt.totalMinor) &&
-      receipt.totalMinor >= 500,
+      receipt.totalMinor >= DOWNLOAD_PRICE_MINOR,
     "stripe_reversal_binding_invalid",
     "The Stripe reversal does not match one Download payment",
     { status: 400 }
@@ -516,6 +622,7 @@ function exactDispatchForEvent(value, checkoutSessionId) {
 }
 
 function exactPaymentFacts(value, dispatch) {
+  const billingIdentity = value?.billingIdentity;
   invariant(
     value?.schema ===
         "sitesourcery.stripe-download-payment-facts/v2" &&
@@ -527,11 +634,12 @@ function exactPaymentFacts(value, dispatch) {
       ) &&
       /^cus_[A-Za-z0-9_]+$/u.test(value.customerId) &&
       value.paymentStatus === "paid" &&
-      value.amountMinor === 500 &&
+      value.amountMinor === DOWNLOAD_PRICE_MINOR &&
       Number.isSafeInteger(value.taxMinor) &&
       value.taxMinor >= 0 &&
       Number.isSafeInteger(value.totalMinor) &&
-      value.totalMinor === 500 + value.taxMinor &&
+      value.totalMinor ===
+        DOWNLOAD_PRICE_MINOR + value.taxMinor &&
       [
         "automatic",
         "disabled_by_owner"
@@ -541,9 +649,31 @@ function exactPaymentFacts(value, dispatch) {
         value.taxMinor === 0
       ) &&
       value.currency === "USD" &&
-      value.purposeDigest === dispatch.purposeDigest,
+      value.purposeDigest === dispatch.purposeDigest &&
+      /^[a-f0-9]{64}$/u.test(
+        value.verifiedEmailDigest
+      ) &&
+      /^[a-f0-9]{64}$/u.test(
+        value.possessionEvidenceDigest
+      ) &&
+      requiredIso(
+        value.accountCreatedAt,
+        "payment.accountCreatedAt"
+      ) &&
+      requiredIso(
+        value.accountActivatedAt,
+        "payment.accountActivatedAt"
+      ) &&
+      billingIdentity?.email &&
+      billingIdentity.address?.country &&
+      value.billingIdentityDigest ===
+        digest(billingIdentity) &&
+      value.threeDS?.requested === "any" &&
+      typeof value.threeDS.supported === "boolean" &&
+      typeof value.threeDS.result === "string" &&
+      CHARGE_ID.test(value.chargeId),
     "stripe_payment_invalid",
-    "Stripe did not prove the exact $5 Download payment",
+    "Stripe did not prove the exact $20 Download payment",
     { status: 502 }
   );
   return value;
@@ -725,7 +855,7 @@ export function createDownloadPaymentService({
           invariant(
             false,
             "checkout_expired",
-            "Request and review a new $5 quote before continuing.",
+            "Request and review a new $20 quote before continuing.",
             { status: 409 }
           );
         }
@@ -754,7 +884,7 @@ export function createDownloadPaymentService({
       invariant(
         claim?.status !== "expired",
         "checkout_expired",
-        "Request and review a new $5 quote before continuing.",
+        "Request and review a new $20 quote before continuing.",
         { status: 409 }
       );
       invariant(
@@ -764,6 +894,18 @@ export function createDownloadPaymentService({
         { status: 409 }
       );
       invariant(
+        claim?.status !== "risk_held",
+        "download_checkout_held",
+        "New Download payment pages are temporarily held while a payment-risk signal is reviewed.",
+        { status: 503 }
+      );
+      invariant(
+        claim?.status !== "rate_limited",
+        "download_checkout_rate_limited",
+        "Too many Download payment attempts were started. Wait before trying again.",
+        { status: 429 }
+      );
+      invariant(
         claim?.status === "claimed",
         "repository_conflict",
         "The Download payment reservation is invalid",
@@ -771,6 +913,17 @@ export function createDownloadPaymentService({
       );
       let providerEffectReturned = false;
       try {
+        const checkoutIdentity =
+          exactCheckoutIdentity(
+            await ports.repository
+              .findVerifiedCheckoutIdentity({
+                tenantId:
+                  preparation.purpose.tenantId,
+                customerId:
+                  preparation.purpose.customerId
+              }),
+            preparation
+          );
         const stripeCustomerId =
           await ports.repository.findStripeCustomer({
             tenantId:
@@ -785,6 +938,7 @@ export function createDownloadPaymentService({
             purpose: preparation.purpose,
             purposeDigest:
               preparation.purposeDigest,
+            checkoutIdentity,
             ...(stripeCustomerId
               ? { stripeCustomerId }
               : {})
@@ -837,6 +991,68 @@ export function createDownloadPaymentService({
 
     async ingestStripeEvent(input) {
       const event = exactEvent(input);
+      if (
+        isPotentialDownloadEarlyFraudWarningEvent(
+          event
+        )
+      ) {
+        const object = event.data.object;
+        const paymentIntentId = providerId(
+          object.payment_intent
+        );
+        const receipt =
+          await ports.repository
+            .findPaymentReceiptByIntent({
+              paymentIntentId
+            });
+        if (!receipt) {
+          return deepFreeze({ status: "not_download" });
+        }
+        invariant(
+          FRAUD_WARNING_ID.test(object.id) &&
+            CHARGE_ID.test(
+              providerId(object.charge)
+            ) &&
+            typeof object.actionable === "boolean" &&
+            typeof object.fraud_type === "string" &&
+            /^[a-z_]{2,80}$/u.test(
+              object.fraud_type
+            ) &&
+            object.livemode === event.livemode,
+          "stripe_fraud_warning_binding_invalid",
+          "The Stripe early fraud warning facts are invalid",
+          { status: 400 }
+        );
+        return deepFreeze(
+          clone(
+            await ports.repository
+              .applyEarlyFraudWarning({
+                event: {
+                  eventId: event.id,
+                  eventType: event.type,
+                  livemode: event.livemode,
+                  providerCreatedAt: new Date(
+                    event.created * 1000
+                  ).toISOString(),
+                  payloadDigest: createHash("sha256")
+                    .update(
+                      JSON.stringify(event),
+                      "utf8"
+                    )
+                    .digest("hex")
+                },
+                receipt,
+                warning: {
+                  warningId: object.id,
+                  chargeId: providerId(object.charge),
+                  paymentIntentId,
+                  actionable: object.actionable,
+                  fraudType: object.fraud_type
+                }
+              })
+          )
+        );
+      }
       if (isPotentialDownloadReversalEvent(event)) {
         const paymentIntentId = providerId(
           event.data.object.payment_intent
@@ -944,11 +1160,25 @@ export function createDownloadPaymentService({
       );
       let payment;
       try {
+        const checkoutIdentity =
+          exactCheckoutIdentity(
+            await ports.repository
+              .findVerifiedCheckoutIdentity({
+                tenantId:
+                  dispatch.purpose.tenantId,
+                customerId:
+                  dispatch.purpose.customerId
+              }),
+            dispatch.preparation ?? {
+              purpose: dispatch.purpose
+            }
+          );
         payment = exactPaymentFacts(
           await ports.provider.retrieveDownloadCheckout({
             checkoutSessionId,
             purpose: dispatch.purpose,
-            purposeDigest: dispatch.purposeDigest
+            purposeDigest: dispatch.purposeDigest,
+            checkoutIdentity
           }),
           dispatch
         );
@@ -995,6 +1225,19 @@ export function createDownloadPaymentService({
         input?.versionId,
         "versionId"
       );
+      const requestId = requiredText(
+        input?.requestId,
+        "requestId"
+      );
+      const clientAddress = requiredText(
+        input?.clientAddress,
+        "clientAddress",
+        80
+      );
+      const userAgentDigest = requiredDigest(
+        input?.userAgentDigest,
+        "userAgentDigest"
+      );
       const resolved =
         await ports.repository.resolveDownloadArtifact({
           tenantId,
@@ -1035,6 +1278,26 @@ export function createDownloadPaymentService({
         "The accepted Download artifact failed integrity verification",
         { status: 500 }
       );
+      await ports.repository.recordDownloadAccess({
+        tenantId,
+        customerId,
+        projectId,
+        versionId,
+        entitlementId:
+          resolved.entitlement.entitlementId,
+        receiptId:
+          resolved.entitlement.payment.receiptId,
+        artifactDigest: observedDigest,
+        byteCount: resolved.htmlBytes.byteLength,
+        requestId,
+        clientAddress,
+        userAgentDigest,
+        state: "response_issued",
+        responseIssuedAt: requiredIso(
+          ports.clock.now(),
+          "clock.now"
+        )
+      });
       return Object.freeze({
         bytes: Buffer.from(resolved.htmlBytes),
         filename:
