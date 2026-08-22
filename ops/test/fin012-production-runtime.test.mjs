@@ -13,6 +13,10 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
+  buildHostedArtifact
+} from "../../scripts/build-hosted.mjs";
+
+import {
   FIN012_ACTIVE_EVIDENCE,
   FIN012_CANDIDATE_COMMIT,
   FIN012_CANDIDATE_TREE,
@@ -35,6 +39,15 @@ const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../.."
 );
+let hostedArtifactPromise;
+
+function ensureHostedArtifact() {
+  hostedArtifactPromise ??= buildHostedArtifact({
+    root: projectRoot,
+    output: path.join(projectRoot, "_hosted")
+  });
+  return hostedArtifactPromise;
+}
 
 function predecessorEnvironment(extra = []) {
   return [
@@ -164,6 +177,7 @@ test("FIN-012 units select only the exact candidate and exact root-owned evidenc
 });
 
 test("FIN-012 composes one exact held production bundle from the protected candidate and CI receipt", async () => {
+  await ensureHostedArtifact();
   const bundle = await createFin012ProductionBundle({
     controlRoot: projectRoot,
     candidateRoot: projectRoot,
@@ -190,6 +204,7 @@ test("FIN-012 composes one exact held production bundle from the protected candi
 });
 
 test("FIN-012 writes one exclusive least-privilege staging bundle without secret-derived output", async () => {
+  await ensureHostedArtifact();
   const temporary = await mkdtemp(path.join(os.tmpdir(), "ss-fin012-bundle-"));
   try {
     const environmentPath = path.join(temporary, "predecessor.env");
