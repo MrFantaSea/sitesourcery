@@ -5658,8 +5658,7 @@ function checkoutResponse(
     !CHECKOUT_HOSTS.has(url.hostname) ||
     url.port ||
     url.username ||
-    url.password ||
-    url.hash
+    url.password
   ) {
     throw ambiguous(
       "stripe_checkout_response_invalid",

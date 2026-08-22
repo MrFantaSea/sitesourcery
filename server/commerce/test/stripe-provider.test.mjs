@@ -7826,6 +7826,21 @@ test("Checkout transport failures and unsafe post-effect responses stay ambiguou
   }
 });
 
+test("Checkout preserves Stripe's provider-owned URL fragment", async () => {
+  const config = configuration();
+  const url =
+    "https://checkout.stripe.com/c/pay/test_1#provider-fragment";
+  const fake = fakeStripe({
+    config,
+    checkoutResponse: { url }
+  });
+  const { adapter } = adapterFixture({ config, fake });
+  const checkout = await adapter.createCheckout(
+    checkoutRequest()
+  );
+  assert.equal(checkout.url, url);
+});
+
 test("billing portal is exact and unsafe post-effect responses are ambiguous", async () => {
   const { adapter, calls } = adapterFixture();
   assert.deepEqual(
