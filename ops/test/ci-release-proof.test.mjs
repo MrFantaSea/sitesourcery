@@ -145,6 +145,9 @@ const SOURCE_COMMIT = "a".repeat(40);
 const SOURCE_TREE = "b".repeat(40);
 const PREDECESSOR_COMMIT = "c".repeat(40);
 const PREDECESSOR_TREE = "d".repeat(40);
+const HISTORICAL_INPUT_SHA = "9".repeat(40);
+const HISTORICAL_INPUT_PATH =
+  `ops/releases/ci-successor-inputs/${HISTORICAL_INPUT_SHA}.json`;
 const snapshot = await collectOriginRepositorySnapshot({
   projectRoot,
   layout
@@ -569,6 +572,161 @@ test("generation-state verifier rejects head and status drift", async () => {
   }
 });
 
+test("generation-state verifier preserves tracked historical successor inputs", async () => {
+  const fixture = await gitSecurityFixture();
+  try {
+    const historicalPath = path.join(fixture.root, HISTORICAL_INPUT_PATH);
+    const historicalBytes = Buffer.from("historical successor input\n", "utf8");
+    await mkdir(path.dirname(historicalPath), { recursive: true });
+    await writeFile(historicalPath, historicalBytes);
+    await git(fixture.root, ["add", HISTORICAL_INPUT_PATH]);
+    await git(fixture.root, ["commit", "-m", "retain historical input"]);
+    const head = await git(fixture.root, ["rev-parse", "HEAD"]);
+    const tree = await git(fixture.root, ["rev-parse", "HEAD^{tree}"]);
+
+    const proof = await verifyCiReleaseGenerationState({
+      projectRoot: fixture.root,
+      expectedHead: head,
+      expectedTree: tree
+    });
+    assert.deepEqual(proof.existingInputPaths, [HISTORICAL_INPUT_PATH]);
+    assert.deepEqual(await readFile(historicalPath), historicalBytes);
+
+    await writeFile(
+      path.join(path.dirname(historicalPath), "unexpected.txt"),
+      "unexpected\n",
+      "utf8"
+    );
+    await assert.rejects(
+      verifyCiReleaseGenerationState({
+        projectRoot: fixture.root,
+        expectedHead: head,
+        expectedTree: tree
+      }),
+      /checkout identity or status drifted/u
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("generation-state verifier rejects a tracked successor-input symlink", async () => {
+  const fixture = await gitSecurityFixture();
+  try {
+    const historicalPath = path.join(fixture.root, HISTORICAL_INPUT_PATH);
+    await mkdir(path.dirname(historicalPath), { recursive: true });
+    await symlink(path.join(fixture.root, "tracked.txt"), historicalPath);
+    await git(fixture.root, ["add", HISTORICAL_INPUT_PATH]);
+    await git(fixture.root, ["commit", "-m", "tracked symlink fixture"]);
+    await assert.rejects(
+      verifyCiReleaseGenerationState({
+        projectRoot: fixture.root,
+        expectedHead: await git(fixture.root, ["rev-parse", "HEAD"]),
+        expectedTree: await git(fixture.root, ["rev-parse", "HEAD^{tree}"])
+      }),
+      /regular non-symlink file/u
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+test("anchored writer preserves exact retained successor inputs", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-anchored-retained-")
+  );
+  const outputRoot = path.join(fixture, "ops/releases/ci-successor-inputs");
+  const retainedName = `${HISTORICAL_INPUT_SHA}.json`;
+  const retainedPath = path.join(outputRoot, retainedName);
+  const relativePath =
+    `ops/releases/ci-successor-inputs/${SOURCE_COMMIT}.json`;
+  const retainedBytes = Buffer.from("retained bytes\n", "utf8");
+  try {
+    await mkdir(outputRoot, { recursive: true });
+    await writeFile(retainedPath, retainedBytes);
+    await writeCiReleaseSuccessorInputAnchored({
+      projectRoot: fixture,
+      relativePath,
+      successorInput: { authority: "held" },
+      expectedExistingEntries: [retainedName],
+      postWriteCheck: async () => {}
+    });
+    assert.deepEqual(await readFile(retainedPath), retainedBytes);
+    assert.equal(
+      JSON.parse(await readFile(path.join(fixture, relativePath), "utf8"))
+        .authority,
+      "held"
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("anchored writer rejects unexpected inventory and target collision", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-anchored-inventory-")
+  );
+  const outputRoot = path.join(fixture, "ops/releases/ci-successor-inputs");
+  const relativePath =
+    `ops/releases/ci-successor-inputs/${SOURCE_COMMIT}.json`;
+  const outputName = path.basename(relativePath);
+  try {
+    await mkdir(outputRoot, { recursive: true });
+    await writeFile(path.join(outputRoot, "unexpected.txt"), "unexpected\n");
+    await assert.rejects(
+      writeCiReleaseSuccessorInputAnchored({
+        projectRoot: fixture,
+        relativePath,
+        successorInput: { authority: "held" }
+      }),
+      /drifted from its exact retained files/u
+    );
+    await rm(path.join(outputRoot, "unexpected.txt"));
+    await writeFile(path.join(outputRoot, outputName), "collision\n");
+    await assert.rejects(
+      writeCiReleaseSuccessorInputAnchored({
+        projectRoot: fixture,
+        relativePath,
+        successorInput: { authority: "held" },
+        expectedExistingEntries: [outputName]
+      }),
+      /successor output already exists/u
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("anchored writer rejects retained successor-input symlinks", async () => {
+  const fixture = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-anchored-symlink-")
+  );
+  const outside = await mkdtemp(
+    path.join(canonicalTemporaryRoot, "ss-ci-anchored-symlink-target-")
+  );
+  const outputRoot = path.join(fixture, "ops/releases/ci-successor-inputs");
+  const retainedName = `${HISTORICAL_INPUT_SHA}.json`;
+  try {
+    await mkdir(outputRoot, { recursive: true });
+    const outsideFile = path.join(outside, "outside.json");
+    await writeFile(outsideFile, "outside\n");
+    await symlink(outsideFile, path.join(outputRoot, retainedName));
+    await assert.rejects(
+      writeCiReleaseSuccessorInputAnchored({
+        projectRoot: fixture,
+        relativePath:
+          `ops/releases/ci-successor-inputs/${SOURCE_COMMIT}.json`,
+        successorInput: { authority: "held" },
+        expectedExistingEntries: [retainedName]
+      }),
+      /single-link regular files/u
+    );
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  }
+});
+
 test("anchored writer removes output when an approved ancestor is swapped", async () => {
   const fixture = await mkdtemp(
     path.join(canonicalTemporaryRoot, "ss-ci-anchored-swap-")
@@ -643,11 +801,13 @@ test("successor control requires the exact one-file C2-to-K2 graph", async () =>
   const candidateSha = SOURCE_COMMIT;
   const workflowSha = "1".repeat(40);
   const expectedPath = ciReleaseSuccessorInputRelativePath(candidateSha);
+  const historicalPath = HISTORICAL_INPUT_PATH;
   const inputPath = path.join(fixture, ...expectedPath.split("/"));
   const input = successorInput();
   const bytes = Buffer.from(`${canonicalJson(input)}\n`, "utf8");
   await mkdir(path.dirname(inputPath), { recursive: true });
   await writeFile(inputPath, bytes);
+  await writeFile(path.join(fixture, historicalPath), "historical\n", "utf8");
 
   const baseline = Object.freeze({
     head: workflowSha,
@@ -695,6 +855,12 @@ test("successor control requires the exact one-file C2-to-K2 graph", async () =>
     assert.equal(proof.inputPath, expectedPath);
     assert.equal(proof.successorInput.digest, input.digest);
 
+    const retainedProof = await verify({
+      candidateInputs: historicalPath,
+      workflowInputs: `${historicalPath}\n${expectedPath}`
+    });
+    assert.equal(retainedProof.inputPath, expectedPath);
+
     await assert.rejects(
       verify({ parents: `${workflowSha} ${candidateSha} ${"2".repeat(40)}` }),
       /exact candidate as its sole parent/u
@@ -708,13 +874,27 @@ test("successor control requires the exact one-file C2-to-K2 graph", async () =>
         candidateInputs:
           "ops/releases/ci-successor-inputs/stale-candidate.json"
       }),
-      /candidate must contain zero successor-input files/u
+      /sorted candidate-SHA JSON paths/u
     );
     await assert.rejects(
       verify({
         workflowInputs: `${expectedPath}\nops/releases/ci-successor-inputs/stale-workflow.json`
       }),
-      /workflow must contain only the exact candidate successor input/u
+      /sorted candidate-SHA JSON paths/u
+    );
+    await assert.rejects(
+      verify({
+        candidateInputs: historicalPath,
+        workflowInputs: expectedPath
+      }),
+      /retain every historical input/u
+    );
+    await assert.rejects(
+      verify({
+        candidateInputs: expectedPath,
+        workflowInputs: expectedPath
+      }),
+      /already contains its candidate-named successor input/u
     );
     await assert.rejects(
       verifyCiReleaseSuccessorControl({
