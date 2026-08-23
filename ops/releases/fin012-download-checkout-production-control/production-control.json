@@ -1,0 +1,73 @@
+{
+  "schema": "sitesourcery.fin012-download-checkout-production-control/v1",
+  "state": "prepared_existing_download_authority_no_install",
+  "source": {
+    "candidateCommitSha": "469091e4e7432282758e74e484a5ab5087e977b8",
+    "candidateTreeSha": "a6a9239fc11be5c7f7de2a2f3401dbaa87a165cf",
+    "heldControlCommitSha": "df8cb22705fd4adde7b55280a3f9340b67f9734d",
+    "heldControlTreeSha": "50e5f7df3669d42c8707fb0d04baa52913ef7e39",
+    "predecessorCommitSha": "787bb678d73994a44b8e911080e0a9996160c184",
+    "predecessorTreeSha": "e94a44d3750d341f84efa2d4e31bf7116fa8652d"
+  },
+  "proof": {
+    "successorInputFileSha256": "fc799d840d1e795f9d9e88a4fd480bfbc9faf3aa8f0f87586d90773270f280d8",
+    "successorInputDigest": "f087b9ce2fe7d498b7b881783743d2de6d03deb7a19fdafd3bdb59481b4fb269",
+    "ciFinalReceiptFileSha256": "8c674b41c29f1eb3107779e21ced57c91145a368becf119a03a85d978d49fa0f",
+    "ciFinalReceiptDigest": "d5c81b4d3f6224690ba1aec1217f596364c3cb620aaff18aea2c988e88dfec58",
+    "ciRunId": "32647761068",
+    "ciRunAttempt": "1",
+    "originSealSha256": "f2594ae0a55f2332cfba0e8553f2e3a644ba67b960c24a21bed1733c7574978a"
+  },
+  "database": {
+    "name": "sitesourcery_production",
+    "postgresMajor": 16,
+    "tableCount": 294,
+    "schemaSha256": "c6531a8817870b1dbbe4b488948e8513a3a07fd64b6076597a102316ca68d3e3",
+    "migrationCount": 96,
+    "latestMigration": "202608220143_download_protection_v1.sql",
+    "latestMigrationSha256": "c1fec8ada5d393b1e7cecef03e7b6de674f75d64251e91ef8c2ff325e75b3d5c",
+    "candidateMigrationManifestSha256": "2589e3a259b24739b5c4b1c05a0cfb74d15f051d7ab58a9fcc5d580d429b9a62",
+    "migrationRequired": false,
+    "databaseMutationAuthorized": false
+  },
+  "runtime": {
+    "host": "simbiotech",
+    "serviceUser": "simtech",
+    "productionRoot": "/home/simtech/sitesourcery-production",
+    "releaseRoot": "/home/simtech/sitesourcery-production/releases/469091e4e7432282758e74e484a5ab5087e977b8",
+    "node": "/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node",
+    "predecessorEnvironmentAssignmentCount": 122,
+    "predecessorEnvironmentSha256Recorded": false,
+    "retainedLiveAuthority": "download_only",
+    "managedUnits": [
+      "sitesourcery-production.service",
+      "sitesourcery-production-static.service"
+    ],
+    "retainedUnits": [
+      "sitesourcery-origin.service",
+      "sitesourcery-cloudflared.service",
+      "sitesourcery-production-backup.timer",
+      "sitesourcery-production-monitor.timer"
+    ]
+  },
+  "requiredLiveGates": [
+    "exact_candidate_parallel_install_readback",
+    "current_download_only_environment_name_and_mode_readback",
+    "current_schema_and_migration_identity_readback",
+    "zero_database_mutation_proof",
+    "candidate_runtime_and_static_health_readback",
+    "public_edge_and_browser_acceptance",
+    "one_unpaid_twenty_dollar_checkout_without_card_entry",
+    "provider_session_reconciliation_without_charge",
+    "post_fifteen_minute_readiness",
+    "rollback_pair_retained"
+  ],
+  "authority": {
+    "existingDownloadAuthorityRetained": true,
+    "newProviderMutationAuthorized": false,
+    "newPaymentMutationAuthorized": false,
+    "databaseMutationAuthorized": false,
+    "dnsEffectsAuthorized": false,
+    "retirementAuthorized": false
+  }
+}

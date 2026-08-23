@@ -9,10 +9,9 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { after, test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { buildHostedArtifact } from "../../scripts/build-hosted.mjs";
 import {
   FIN012_STRIPE_DOWNLOAD_ACTIVE_EVIDENCE,
   FIN012_STRIPE_DOWNLOAD_CANDIDATE_COMMIT,
@@ -30,20 +29,44 @@ import {
   createFin012StripeDownloadWrapper,
   prepareFin012StripeDownloadProductionBundle
 } from "../fin012-stripe-download-production-runtime.mjs";
+import {
+  materializeHistoricalCandidate
+} from "./historical-candidate-fixture.mjs";
 
 const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../.."
 );
 let hostedArtifactPromise;
+let candidateFixturePromise;
 
 function ensureHostedArtifact() {
-  hostedArtifactPromise ??= buildHostedArtifact({
-    root: projectRoot,
-    output: path.join(projectRoot, "_hosted")
+  candidateFixturePromise ??= materializeHistoricalCandidate({
+    projectRoot,
+    commitSha: FIN012_STRIPE_DOWNLOAD_CANDIDATE_COMMIT,
+    treeSha: FIN012_STRIPE_DOWNLOAD_CANDIDATE_TREE,
+    label: "fin012-stripe-download-candidate"
+  });
+  hostedArtifactPromise ??= candidateFixturePromise.then(async (fixture) => {
+    const moduleUrl = pathToFileURL(path.join(
+      fixture.candidateRoot,
+      "scripts/build-hosted.mjs"
+    ));
+    const { buildHostedArtifact } = await import(moduleUrl.href);
+    await buildHostedArtifact({
+      root: fixture.candidateRoot,
+      output: path.join(fixture.candidateRoot, "_hosted")
+    });
+    return fixture.candidateRoot;
   });
   return hostedArtifactPromise;
 }
+
+after(async () => {
+  if (candidateFixturePromise) {
+    await (await candidateFixturePromise).cleanup();
+  }
+});
 
 function predecessorEnvironment(extra = []) {
   return [
@@ -167,10 +190,10 @@ test("FIN-012 Stripe Download wrapper and units select only the exact successor"
 });
 
 test("FIN-012 Stripe Download composes the exact held code-only successor bundle", async () => {
-  await ensureHostedArtifact();
+  const candidateRoot = await ensureHostedArtifact();
   const bundle = await createFin012StripeDownloadProductionBundle({
     controlRoot: projectRoot,
-    candidateRoot: projectRoot,
+    candidateRoot,
     predecessorEnvironmentText: predecessorEnvironment(),
     observedAt: "2026-08-23T00:30:00.000Z",
     gitRunner: candidateGit
@@ -203,7 +226,7 @@ test("FIN-012 Stripe Download composes the exact held code-only successor bundle
 });
 
 test("FIN-012 Stripe Download writes one exclusive no-effect staging bundle", async () => {
-  await ensureHostedArtifact();
+  const candidateRoot = await ensureHostedArtifact();
   const temporary = await mkdtemp(
     path.join(os.tmpdir(), "ss-fin012-stripe-download-bundle-")
   );
@@ -213,7 +236,7 @@ test("FIN-012 Stripe Download writes one exclusive no-effect staging bundle", as
     await writeFile(environmentPath, predecessorEnvironment(), { mode: 0o600 });
     const summary = await prepareFin012StripeDownloadProductionBundle({
       controlRoot: projectRoot,
-      candidateRoot: projectRoot,
+      candidateRoot,
       predecessorEnvironmentPath: environmentPath,
       outputPath,
       observedAt: "2026-08-23T00:30:00.000Z",
@@ -233,7 +256,7 @@ test("FIN-012 Stripe Download writes one exclusive no-effect staging bundle", as
     await assert.rejects(
       () => prepareFin012StripeDownloadProductionBundle({
         controlRoot: projectRoot,
-        candidateRoot: projectRoot,
+        candidateRoot,
         predecessorEnvironmentPath: environmentPath,
         outputPath,
         observedAt: "2026-08-23T00:30:00.000Z",

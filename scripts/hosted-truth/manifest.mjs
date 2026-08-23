@@ -244,7 +244,7 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-alakazam-retained-premium.js":
     "5cc58c5211c0983be18bd4645702bdc13bfb4d4d7008b605624560120ebe22d1",
   "abracadabra/app/abracadabra-api.js":
-    "fa70dea571e5ef436cafe7902fa1d77b332bdefde679ce6296579bc56bc2eedc",
+    "d9946f089312119a04d504fe87ed166f0f35efd9cfe81eb926d4dd017a17b1a9",
   "abracadabra/app/abracadabra-billing-views.js":
     "3bd32e18c5ef2a9592eee0acea35cf17c4a3071e64e5ed95e7edf1dca1c5c486",
   "abracadabra/app/abracadabra-care-surfaces.css":
