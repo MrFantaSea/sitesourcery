@@ -6329,6 +6329,12 @@
     function prepareDownloadCheckout(projectId, quoteId, input, requestOptions) {
       var source = isObject(input) ? input : {};
       rejectClaimedAuthority(source);
+      if (source.purchaseTermsAccepted !== true) {
+        throw new APIError({
+          code: "INVALID_INPUT",
+          message: "The exact Download purchase terms must be accepted before secure payment."
+        });
+      }
       return request(
         "POST",
         "/projects/" + segment(projectId, "Project ID")
@@ -6340,7 +6346,8 @@
               source.acceptedDisclosureDigest,
               "Accepted Download quote digest",
               100
-            )
+            ),
+            purchaseTermsAccepted: true
           },
           idempotencyKey: requestOptions && requestOptions.idempotencyKey
         }
