@@ -308,6 +308,14 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
   assert.equal(FIN010_CADDY_CONFIG_PATH.endsWith("/Caddyfile"), true);
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8788/u);
   assert.match(caddy, /reverse_proxy 127\.0\.0\.1:8899/u);
+  assert.match(caddy, /@not_found status 404/u);
+  assert.match(caddy, /handle_response @not_found/u);
+  assert.match(
+    caddy,
+    new RegExp(`root \\* ${FIN010_RELEASE_ROOT}/_hosted`, "u")
+  );
+  assert.match(caddy, /rewrite \* \/404\.html/u);
+  assert.match(caddy, /file_server \{\s+status 404\s+\}/u);
   assert.match(caddy, /Cache-Control "no-store, no-transform"/u);
   assert.equal(
     [...caddy.matchAll(/Cache-Control "no-store, no-transform"/gu)].length,
@@ -329,6 +337,26 @@ test("FIN-010 unit and wrapper bytes select only the exact candidate and keep wo
         `^  redir ${source.replaceAll(".", "\\.")} https://sitesourcery\\.com${target.replaceAll(".", "\\.")} 308$`,
         "mu"
       )
+    );
+  }
+});
+
+test("FIN-010 custom 404 gateway selects only an exact immutable hosted root", () => {
+  const successorRoot =
+    `${FIN010_PRODUCTION_ROOT}/releases/${"a".repeat(40)}/_hosted`;
+  const caddy = createFin010Caddyfile({ staticRoot: successorRoot });
+  assert.match(caddy, new RegExp(`root \\* ${successorRoot}`, "u"));
+  for (const staticRoot of [
+    `${FIN010_PRODUCTION_ROOT}/releases/current/_hosted`,
+    `${FIN010_PRODUCTION_ROOT}/releases/${"a".repeat(40)}/../_hosted`,
+    `/private/tmp/${"a".repeat(40)}/_hosted`,
+    `${successorRoot}\nrespond 200`
+  ]) {
+    assert.throws(
+      () => createFin010Caddyfile({ staticRoot }),
+      (error) =>
+        error instanceof Fin010RuntimeFailure &&
+        error.code === "FIN010_STATIC_ROOT_INVALID"
     );
   }
 });

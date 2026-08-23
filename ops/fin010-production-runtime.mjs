@@ -91,6 +91,10 @@ export const FIN010_EVIDENCE = Object.freeze({
 
 const ENVIRONMENT_NAME = /^[A-Z][A-Z0-9_]*$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
+const IMMUTABLE_HOSTED_ROOT = new RegExp(
+  `^${FIN010_PRODUCTION_ROOT}/releases/[a-f0-9]{40}/_hosted$`,
+  "u"
+);
 // systemd EnvironmentFile accepts any unquoted value without whitespace,
 // quotes, or backslashes. Production database URLs may legitimately contain
 // URL-safe punctuation such as "=" or "#", so do not narrow this parser to
@@ -640,7 +644,18 @@ export function createFin010TmpfilesConfiguration() {
   return `d ${FIN010_RUNTIME_DIRECTORY} 0770 root simtech -\n`;
 }
 
-export function createFin010Caddyfile() {
+export function createFin010Caddyfile({
+  staticRoot = `${FIN010_RELEASE_ROOT}/_hosted`
+} = {}) {
+  if (
+    typeof staticRoot !== "string" ||
+    !IMMUTABLE_HOSTED_ROOT.test(staticRoot)
+  ) {
+    fail(
+      "FIN010_STATIC_ROOT_INVALID",
+      "FIN-010 static root must select one exact immutable production release artifact."
+    );
+  }
   const legacyRedirects = Object.entries(FIN010_LEGACY_REDIRECTS)
     .map(([source, target]) =>
       `  redir ${source} https://sitesourcery.com${target} 308`)
@@ -719,6 +734,14 @@ ${legacyRedirects}
       health_uri /
       health_interval 15s
       health_timeout 3s
+      @not_found status 404
+      handle_response @not_found {
+        root * ${staticRoot}
+        rewrite * /404.html
+        file_server {
+          status 404
+        }
+      }
     }
   }
 }
