@@ -1,0 +1,69 @@
+{
+  "schema": "sitesourcery.fin012-stripe-download-production-control/v1",
+  "state": "prepared_held_no_live_authority",
+  "source": {
+    "candidateCommitSha": "787bb678d73994a44b8e911080e0a9996160c184",
+    "candidateTreeSha": "e94a44d3750d341f84efa2d4e31bf7116fa8652d",
+    "heldControlCommitSha": "a79182c6e624c2585525c524d7416fd57d7ce52d",
+    "heldControlTreeSha": "fd66a88b43f55bdbe14d6b34f38a12b757369b69",
+    "predecessorCommitSha": "14ca61bd0991c0d326699311e380c29c621931df",
+    "predecessorTreeSha": "b953a3fbfd5853b29f3e72f0f05c7f75e04eba4d"
+  },
+  "proof": {
+    "successorInputFileSha256": "5fe7070738908c1971643af6ef29e3c7c6437b53a9d6dd7c526373b4aa722da4",
+    "successorInputDigest": "7bb0b82962fa2abe7aae50e0f1cae99a4ec7758735b262f7b9b05d0a83e09b49",
+    "ciFinalReceiptFileSha256": "c59b793f086c45b6a3dd01c528c417a10e893a27e3afede45ab053cb3fbdbd2c",
+    "ciFinalReceiptDigest": "29c0cf2ceff8a424c7b2dff56b1f46214f00c9632c3639a84feda58d554e630f",
+    "ciRunId": "32607286113",
+    "ciRunAttempt": "1",
+    "originSealSha256": "f9b387638485835a2dce19cc7af5c1cd6709a36ac1ec0ee3a58cc40e747f6baa"
+  },
+  "database": {
+    "name": "sitesourcery_production",
+    "postgresMajor": 16,
+    "tableCount": 294,
+    "schemaSha256": "c6531a8817870b1dbbe4b488948e8513a3a07fd64b6076597a102316ca68d3e3",
+    "migrationCount": 96,
+    "latestMigration": "202608220143_download_protection_v1.sql",
+    "latestMigrationSha256": "c1fec8ada5d393b1e7cecef03e7b6de674f75d64251e91ef8c2ff325e75b3d5c",
+    "candidateMigrationManifestSha256": "2589e3a259b24739b5c4b1c05a0cfb74d15f051d7ab58a9fcc5d580d429b9a62",
+    "migrationRequired": false,
+    "databaseMutationAuthorized": false
+  },
+  "runtime": {
+    "host": "simbiotech",
+    "serviceUser": "simtech",
+    "productionRoot": "/home/simtech/sitesourcery-production",
+    "releaseRoot": "/home/simtech/sitesourcery-production/releases/787bb678d73994a44b8e911080e0a9996160c184",
+    "node": "/home/simtech/sitesourcery-production/toolchain/node-v24.18.0-linux-x64/bin/node",
+    "managedUnits": [
+      "sitesourcery-production.service",
+      "sitesourcery-production-static.service"
+    ],
+    "retainedUnits": [
+      "sitesourcery-origin.service",
+      "sitesourcery-cloudflared.service",
+      "sitesourcery-production-backup.timer",
+      "sitesourcery-production-monitor.timer"
+    ]
+  },
+  "requiredLiveGates": [
+    "exact_owner_zero_dollar_code_cutover_authorization",
+    "exact_candidate_parallel_install_readback",
+    "fresh_encrypted_zen_backup_with_clean_recovery",
+    "current_schema_and_migration_identity_readback",
+    "zero_database_mutation_proof",
+    "candidate_runtime_and_static_health_readback",
+    "public_edge_and_browser_acceptance",
+    "rollback_pair_retained"
+  ],
+  "authority": {
+    "parallelInstallAuthorized": false,
+    "databaseMutationAuthorized": false,
+    "publicRuntimeCutoverAuthorized": false,
+    "providerEffectsAuthorized": false,
+    "paymentEffectsAuthorized": false,
+    "dnsEffectsAuthorized": false,
+    "retirementAuthorized": false
+  }
+}
