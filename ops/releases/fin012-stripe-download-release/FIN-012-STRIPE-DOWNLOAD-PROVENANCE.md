@@ -89,3 +89,50 @@ tests with zero failures; 1,087 hosted-service passes, 15 intentional PostgreSQL
 skips, and zero failures; 239/239 operations tests; deterministic Pages and
 hosted builds; and a second complete 24-route by six-width browser audit. No
 provider, customer, payment, deployment, DNS, or production effect occurred.
+
+## Protected candidate, held proof, and successor production control
+
+Recorded: 2026-08-22T20:25:00-0400 EDT
+
+PR #29 passed protected Site quality and squash-merged as candidate
+`787bb678d73994a44b8e911080e0a9996160c184`, tree
+`e94a44d3750d341f84efa2d4e31bf7116fa8652d`. Exact-main Site quality run
+`32606463270` and Controlled Pages run `32606463258` passed. The candidate's
+successor input is the sole changed file in held control
+`a79182c6e624c2585525c524d7416fd57d7ce52d`, tree
+`fd66a88b43f55bdbe14d6b34f38a12b757369b69`, whose sole parent is the
+candidate. Its file SHA-256 is
+`5fe7070738908c1971643af6ef29e3c7c6437b53a9d6dd7c526373b4aa722da4`
+and internal digest is
+`7bb0b82962fa2abe7aae50e0f1cae99a4ec7758735b262f7b9b05d0a83e09b49`.
+PR #30, exact-main Site quality run `32607026791`, and Controlled Pages run
+`32607026833` all passed.
+
+Owner-dispatched held proof run `32607286113`, attempt `1`, passed in 5m1s.
+It bound the exact protected control, credential-free candidate, and manual
+input SHA; passed the full candidate suite, independent operations proof,
+deterministic Pages and hosted projections, 24-route/six-width browser evidence,
+fresh PostgreSQL 16 replay of all 96 migrations, exact cleanup, and mutation
+rejection; and issued `verified_held` receipt digest
+`29c0cf2ceff8a424c7b2dff56b1f46214f00c9632c3639a84feda58d554e630f`.
+Its authority records every capability, customer, provider, deployment, DNS,
+and enabled-capability value false or empty.
+
+The new successor production control is separate from the immutable live
+`14ca61bd...` control. It treats `14ca61bd...`/tree `b953a3fb...` as the exact
+rollback predecessor and requires zero database mutation because both releases
+bind the same 96-migration manifest
+`2589e3a259b24739b5c4b1c05a0cfb74d15f051d7ab58a9fcc5d580d429b9a62`.
+Candidate origin seal SHA-256 is
+`f9b387638485835a2dce19cc7af5c1cd6709a36ac1ec0ee3a58cc40e747f6baa`.
+The runtime generator reuses the already proved FIN-012 held-environment and
+unit templates only through exact counted predecessor-to-successor replacements,
+then rejects any residual predecessor release identity. It admits no Stripe or
+Twilio secret while held and generates an exclusive eight-file candidate bundle
+with no database, provider, payment, public, DNS, or retirement authority.
+
+Focused successor production-control proof passed 5/5. Installation and public
+selection remain unperformed at this record. The later Download-only activation
+still requires fresh 15-minute restricted-key evidence, exact live object
+readback, one unpaid `$20` Checkout Session, reconciliation, and post-15-minute
+public readiness. A completed payment or self-purchase remains unauthorized.

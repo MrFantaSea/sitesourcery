@@ -335,3 +335,21 @@ before deleting its authentication cookie and does not suppress genuine `404`
 errors. That exact clean commit passed a standalone complete browser audit and
 the complete Node 24.18.0 ladder, including a second complete browser audit.
 Production and every provider/customer effect remained unchanged and held.
+
+FIN-012's Stripe Download correction is now sealed as protected candidate
+`787bb678d73994a44b8e911080e0a9996160c184`, tree
+`e94a44d3750d341f84efa2d4e31bf7116fa8652d`. Its exact successor-control
+commit is `a79182c6e624c2585525c524d7416fd57d7ce52d`, tree
+`fd66a88b43f55bdbe14d6b34f38a12b757369b69`, and its sole changed path is the
+candidate-specific held successor input. PR and exact-main Site quality and
+Controlled Pages gates all passed.
+
+Held workflow run `32607286113`, attempt `1`, passed the full candidate,
+operations, artifact, browser, PostgreSQL 16, cleanup, and mutation-rejection
+proofs and issued final `verified_held` digest
+`29c0cf2ceff8a424c7b2dff56b1f46214f00c9632c3639a84feda58d554e630f`.
+Every effect and capability remains false. The separate successor production
+control retains live `14ca61bd...` as rollback, requires the unchanged exact
+96-migration database, forbids database mutation, and passed its focused 5/5
+bundle proof. No install, cutover, provider, customer, payment, DNS, or
+retirement effect is claimed by this ledger entry.
