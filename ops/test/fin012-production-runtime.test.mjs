@@ -9,12 +9,8 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { test } from "node:test";
-import { fileURLToPath } from "node:url";
-
-import {
-  buildHostedArtifact
-} from "../../scripts/build-hosted.mjs";
+import { after, test } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   FIN012_ACTIVE_EVIDENCE,
@@ -34,20 +30,44 @@ import {
   createFin012Wrapper,
   prepareFin012ProductionBundle
 } from "../fin012-production-runtime.mjs";
+import {
+  materializeHistoricalCandidate
+} from "./historical-candidate-fixture.mjs";
 
 const projectRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "../.."
 );
 let hostedArtifactPromise;
+let candidateFixturePromise;
 
 function ensureHostedArtifact() {
-  hostedArtifactPromise ??= buildHostedArtifact({
-    root: projectRoot,
-    output: path.join(projectRoot, "_hosted")
+  candidateFixturePromise ??= materializeHistoricalCandidate({
+    projectRoot,
+    commitSha: FIN012_CANDIDATE_COMMIT,
+    treeSha: FIN012_CANDIDATE_TREE,
+    label: "fin012-candidate"
+  });
+  hostedArtifactPromise ??= candidateFixturePromise.then(async (fixture) => {
+    const moduleUrl = pathToFileURL(path.join(
+      fixture.candidateRoot,
+      "scripts/build-hosted.mjs"
+    ));
+    const { buildHostedArtifact } = await import(moduleUrl.href);
+    await buildHostedArtifact({
+      root: fixture.candidateRoot,
+      output: path.join(fixture.candidateRoot, "_hosted")
+    });
+    return fixture.candidateRoot;
   });
   return hostedArtifactPromise;
 }
+
+after(async () => {
+  if (candidateFixturePromise) {
+    await (await candidateFixturePromise).cleanup();
+  }
+});
 
 function predecessorEnvironment(extra = []) {
   return [
@@ -177,10 +197,10 @@ test("FIN-012 units select only the exact candidate and exact root-owned evidenc
 });
 
 test("FIN-012 composes one exact held production bundle from the protected candidate and CI receipt", async () => {
-  await ensureHostedArtifact();
+  const candidateRoot = await ensureHostedArtifact();
   const bundle = await createFin012ProductionBundle({
     controlRoot: projectRoot,
-    candidateRoot: projectRoot,
+    candidateRoot,
     predecessorEnvironmentText: predecessorEnvironment(),
     observedAt: "2026-08-22T20:00:00.000Z",
     gitRunner: candidateGit
@@ -204,7 +224,7 @@ test("FIN-012 composes one exact held production bundle from the protected candi
 });
 
 test("FIN-012 writes one exclusive least-privilege staging bundle without secret-derived output", async () => {
-  await ensureHostedArtifact();
+  const candidateRoot = await ensureHostedArtifact();
   const temporary = await mkdtemp(path.join(os.tmpdir(), "ss-fin012-bundle-"));
   try {
     const environmentPath = path.join(temporary, "predecessor.env");
@@ -212,7 +232,7 @@ test("FIN-012 writes one exclusive least-privilege staging bundle without secret
     await writeFile(environmentPath, predecessorEnvironment(), { mode: 0o600 });
     const summary = await prepareFin012ProductionBundle({
       controlRoot: projectRoot,
-      candidateRoot: projectRoot,
+      candidateRoot,
       predecessorEnvironmentPath: environmentPath,
       outputPath,
       observedAt: "2026-08-22T20:00:00.000Z",
@@ -231,7 +251,7 @@ test("FIN-012 writes one exclusive least-privilege staging bundle without secret
     await assert.rejects(
       () => prepareFin012ProductionBundle({
         controlRoot: projectRoot,
-        candidateRoot: projectRoot,
+        candidateRoot,
         predecessorEnvironmentPath: environmentPath,
         outputPath,
         observedAt: "2026-08-22T20:00:00.000Z",
