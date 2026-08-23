@@ -577,7 +577,7 @@ test("commerce uses only an offer ID, an exact server quote, and its disclosure 
   }
 });
 
-test("Download commerce sends only the accepted version and the reviewed server digest", async () => {
+test("Download commerce sends only the accepted version, reviewed server digest, and explicit purchase-term acceptance", async () => {
   const calls = [];
   const client = createClient({
     fetch: async (url, options) => {
@@ -603,10 +603,23 @@ test("Download commerce sends only the accepted version and the reviewed server 
   await client.createDownloadQuote("project_1", {
     versionId: "version_1"
   });
+  assert.throws(
+    () => client.prepareDownloadCheckout(
+      "project_1",
+      "download_quote_1",
+      { acceptedDisclosureDigest: "d".repeat(64) }
+    ),
+    (error) =>
+      error instanceof APIError
+      && error.code === "INVALID_INPUT"
+  );
   await client.prepareDownloadCheckout(
     "project_1",
     "download_quote_1",
-    { acceptedDisclosureDigest: "d".repeat(64) }
+    {
+      acceptedDisclosureDigest: "d".repeat(64),
+      purchaseTermsAccepted: true
+    }
   );
 
   const writes = calls.filter(({ url }) => url !== "/api/v1/csrf");
@@ -622,7 +635,8 @@ test("Download commerce sends only the accepted version and the reviewed server 
     "/api/v1/projects/project_1/download-quotes/download_quote_1/checkout-command"
   );
   assert.deepEqual(JSON.parse(writes[1].options.body), {
-    acceptedDisclosureDigest: "d".repeat(64)
+    acceptedDisclosureDigest: "d".repeat(64),
+    purchaseTermsAccepted: true
   });
   for (const call of writes) {
     assert.equal(
