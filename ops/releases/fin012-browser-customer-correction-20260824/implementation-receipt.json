@@ -1,0 +1,39 @@
+{
+  "schema": "sitesourcery.fin012-browser-customer-correction/v1",
+  "recordedAt": "2026-08-24T18:03:18.000Z",
+  "state": "implementation_proved_not_deployed",
+  "parentCommit": "dd7efcb3c19a65b83561abf5bfc8f77a10f943c8",
+  "implementationCommit": "f56ea55ae70f984213df2672af025399ef3b0056",
+  "implementationTree": "b7aab3890ff9d49af97e5cfe2edfe8dc7c7e759a",
+  "diffSha256": "ff1284955a0648e09398f5b3b134cb1d9c7d4e47620e7bb134abb8045a61dc7b",
+  "files": {
+    "abracadabra/app/abracadabra-customer-control-dom.js": "fec69c6174482ac42749317312c8f01437688f3ba8ad833d955521971c697257",
+    "scripts/build-hosted.mjs": "d5f74028773d82efb12050de06b2408e90f4f0b27dc1b82f77cfd99003808e02",
+    "scripts/hosted-truth/manifest.mjs": "bfd684195358c2b4689645b22f50f6441dd5ca1a458782210d106561713935a4",
+    "scripts/test/abracadabra-customer-controls.test.mjs": "7db7e94a8f74a701d71b8088f0d3f25d9cf0d64bfa591f568e89c4b9976eed86"
+  },
+  "proof": {
+    "nodeVersion": "24.18.0",
+    "focused": { "passed": 105, "failed": 0 },
+    "hostedArtifact": { "passed": 91, "failed": 0 },
+    "completeProduct": { "passed": 889, "failed": 0 },
+    "loopbackRestrictedRerun": { "passed": 8, "failed": 0 },
+    "deterministicHostedBuild": true,
+    "diffCheck": true
+  },
+  "effects": {
+    "checkoutSessionCreated": false,
+    "stripeMutation": false,
+    "payment": false,
+    "spend": false,
+    "databaseMutation": false,
+    "customerDataMutation": false,
+    "provider": false,
+    "deployment": false,
+    "publicBytes": false,
+    "dns": false,
+    "publication": false,
+    "serviceMutation": false
+  },
+  "nextGate": "protected_review_without_deployment"
+}

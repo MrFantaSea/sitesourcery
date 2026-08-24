@@ -769,6 +769,31 @@
         > Date.parse(value.currentPeriod.startsAt);
   }
 
+  function customerAlakazamRetainedPremiumIsRelevant(subscription) {
+    var tierId = text(
+      subscription
+      && subscription.tier
+      && subscription.tier.tierId
+    );
+    return Boolean(
+      subscription
+      && [
+        "active",
+        "grace",
+        "suspended",
+        "cancelled",
+        "ended"
+      ].includes(subscription.status)
+      && [
+        "alakazam_25",
+        "alakazam_35",
+        "alakazam_50"
+      ].includes(tierId)
+      && Number.isSafeInteger(subscription.revision)
+      && subscription.revision > 0
+    );
+  }
+
   function verifiedAlakazamPendingChange(value, catalog) {
     if (value === null) return true;
     return exactKeys(
@@ -5408,6 +5433,15 @@
     return visit(value);
   }
 
+  function customerCustomBuildFinalIsZeroBalance(value) {
+    return Boolean(
+      value
+      && value.obligation
+      && value.obligation.amount
+      && value.obligation.amount.amountMinor === 0
+    );
+  }
+
   function exactCustomBuildWorkmanship(value, handedOffAt) {
     return exactKeys(
       value,
@@ -8862,7 +8896,7 @@
     );
 
     function renderInvoice(snapshot, busy) {
-      var zeroBalance = snapshot.obligation.amount.amountMinor === 0;
+      var zeroBalance = customerCustomBuildFinalIsZeroBalance(snapshot);
       var section = accountElement(
         documentRef,
         "section",
@@ -9085,11 +9119,7 @@
         read.snapshot,
         read.projectId
       );
-      var zeroBalance = Boolean(
-        snapshot
-        && snapshot.obligation
-        && snapshot.obligation.amount.amountMinor === 0
-      );
+      var zeroBalance = customerCustomBuildFinalIsZeroBalance(snapshot);
       heading.textContent = zeroBalance
         ? "Delivery and workmanship"
         : "Final payment, delivery, and workmanship";
@@ -20429,11 +20459,8 @@
             retained
           )
         : null;
-      var retainedZeroBalance = Boolean(
-        retained
-        && retained.obligation
-        && retained.obligation.amount.amountMinor === 0
-      );
+      var retainedZeroBalance =
+        customerCustomBuildFinalIsZeroBalance(retained);
       customBuildFinalRead = {
         accountId: selectedAccountId,
         projectId: selectedProjectId,
@@ -20472,9 +20499,7 @@
             "The delivery and handoff response could not be verified."
           );
         }
-        if (
-          snapshot.obligation.amount.amountMinor === 0
-        ) {
+        if (customerCustomBuildFinalIsZeroBalance(snapshot)) {
           customerCheckoutNotice =
             customerCheckoutExperiencePresentation(
               "no_charge",
@@ -21269,6 +21294,9 @@
       if (
         !selectedProjectId
         || !accountId
+        || !customerAlakazamRetainedPremiumIsRelevant(
+          subscription
+        )
         || !module
         || typeof module.mount !== "function"
       ) {
@@ -24157,6 +24185,10 @@
       customerCheckoutExperiencePresentation,
     customerCheckoutSuccessFromLocation:
       customerCheckoutSuccessFromLocation,
+    customerAlakazamRetainedPremiumIsRelevant:
+      customerAlakazamRetainedPremiumIsRelevant,
+    customerCustomBuildFinalIsZeroBalance:
+      customerCustomBuildFinalIsZeroBalance,
     locationWithoutDownloadCheckoutReturn:
       locationWithoutDownloadCheckoutReturn,
     locationWithoutCheckoutReturn:

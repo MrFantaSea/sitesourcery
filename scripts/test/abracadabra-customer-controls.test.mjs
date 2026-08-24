@@ -8,6 +8,8 @@ const { createClient } = require(
   "../../abracadabra/app/abracadabra-api.js"
 );
 const {
+  customerAlakazamRetainedPremiumIsRelevant,
+  customerCustomBuildFinalIsZeroBalance,
   customerCustomBuildCompletionEvidenceUrl,
   currentOwnerCustomBuildCompletionEvidence,
   prepareCustomBuildCompletionEvidenceFile,
@@ -24,6 +26,77 @@ const {
 } = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
+
+test("irrelevant final-payment and retained-premium controls stay hidden without errors", async () => {
+  assert.equal(
+    customerCustomBuildFinalIsZeroBalance({
+      state: "completion_required",
+      obligation: null
+    }),
+    false
+  );
+  assert.equal(
+    customerCustomBuildFinalIsZeroBalance({
+      state: "cleared_no_balance_handoff_pending",
+      obligation: { amount: { amountMinor: 0, currency: "USD" } }
+    }),
+    true
+  );
+  assert.equal(customerAlakazamRetainedPremiumIsRelevant(null), false);
+  assert.equal(
+    customerAlakazamRetainedPremiumIsRelevant({
+      revision: 1,
+      status: "pending",
+      tier: { tierId: "alakazam_50" }
+    }),
+    false
+  );
+  for (const status of [
+    "active",
+    "grace",
+    "suspended",
+    "cancelled",
+    "ended"
+  ]) {
+    assert.equal(
+      customerAlakazamRetainedPremiumIsRelevant({
+        revision: 1,
+        status,
+        tier: { tierId: "alakazam_50" }
+      }),
+      true,
+      status
+    );
+  }
+
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  const finalRefresh = source.slice(
+    source.indexOf("function requestCustomerCustomBuildFinal"),
+    source.indexOf("function requestCustomerCustomBuildFinalCheckout")
+  );
+  assert.match(
+    finalRefresh,
+    /customerCustomBuildFinalIsZeroBalance\(snapshot\)/u
+  );
+  assert.doesNotMatch(
+    finalRefresh,
+    /snapshot\.obligation\.amount\.amountMinor/u
+  );
+  const retainedMount = source.slice(
+    source.indexOf("function syncAlakazamRetainedPremiumPanel"),
+    source.indexOf("function resetAlakazamCommand")
+  );
+  assert.match(
+    retainedMount,
+    /!customerAlakazamRetainedPremiumIsRelevant\(\s*subscription\s*\)/u
+  );
+});
 
 test("legacy project evidence stays visibly linked as accepted privacy V2", () => {
   const evidence = projectLegalEvidencePresentation({

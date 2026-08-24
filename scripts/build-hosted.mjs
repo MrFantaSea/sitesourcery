@@ -119,7 +119,7 @@ const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   "abracadabra/app/abracadabra-hosted-control.js":
     "cc3336358e99f252a4694d08d307dc37550525c7cf8ebf4e9c00e96fba5a6274",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "9fd0a34054361598287c6e45c16b483e0ccb26dda0d8a396b92327604ab9bbd3",
+    "fec69c6174482ac42749317312c8f01437688f3ba8ad833d955521971c697257",
 });
 
 function lexical(left, right) {
