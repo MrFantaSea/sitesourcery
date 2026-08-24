@@ -6553,7 +6553,10 @@ export function createStripeProviderAdapter(options = {}) {
             livemode: config.livemode,
             runtimeFingerprint:
               OFFICIAL_CLIENTS.get(selectedClient)
-                ?.fingerprint
+                ?.fingerprint,
+            activationReceipt:
+              options.credentialActivationReceipt ??
+              null
           }
         )
       : null;

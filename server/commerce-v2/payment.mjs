@@ -149,6 +149,9 @@ function exactPreparation(value) {
       purpose.offerId === "spark_download" &&
       purpose.entitlementKind === "spark_download" &&
       purpose.purchaseTermsAccepted === true &&
+      ["automatic", "disabled_by_owner"].includes(
+        purpose.taxMode
+      ) &&
       purpose.price?.amountMinor === DOWNLOAD_PRICE_MINOR &&
       purpose.price?.currency === "USD" &&
       purpose.price?.billing === "one_time" &&
@@ -764,14 +767,22 @@ export function createDownloadPaymentService({
       "Secure Download payment is not open. Nothing was charged.",
       { status: 503 }
     );
+    return status;
   }
 
   return Object.freeze({
     readiness,
 
     async dispatch(input) {
-      await requireReady();
+      const paymentAuthority = await requireReady();
       const preparation = exactPreparation(input);
+      invariant(
+        preparation.purpose.taxMode ===
+          paymentAuthority.taxMode,
+        "download_tax_authority_mismatch",
+        "The Download tax authority changed before payment. Request and review a new quote.",
+        { status: 409 }
+      );
       const entitlement =
         await ports.repository.findProjectEntitlement({
           tenantId: preparation.purpose.tenantId,

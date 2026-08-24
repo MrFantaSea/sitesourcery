@@ -453,7 +453,8 @@ test("ready Download payment returns only a Stripe destination and entitlement-g
       return {
         ready: true,
         payment: true,
-        state: "ready"
+        state: "ready",
+        taxMode: "disabled_by_owner"
       };
     },
     async dispatch(preparation) {
@@ -724,6 +725,40 @@ test("checkout-command route prepares one exact held command and never dispatche
     context.repository.inspect()
       .checkoutPreparations.length,
     1
+  );
+});
+
+test("Download checkout rejects a browser-supplied tax mode before durable preparation", async () => {
+  const context = createContext();
+  const quote = await (
+    await createDownloadQuote(context)
+  ).json();
+  const response = await context.api.fetch(
+    writeRequest(
+      `/api/v1/projects/${PROJECT_A}` +
+        `/download-quotes/${quote.quoteId}` +
+        "/checkout-command",
+      {
+        body: {
+          acceptedDisclosureDigest:
+            quote.disclosureDigest,
+          purchaseTermsAccepted: true,
+          taxMode: "automatic"
+        },
+        idempotencyKey:
+          "download-tax-authority-attack"
+      }
+    )
+  );
+  assert.equal(response.status, 400);
+  assert.equal(
+    (await response.json()).error.code,
+    "COMMERCE_V2_CLIENT_COMMERCE_AUTHORITY_REJECTED"
+  );
+  assert.equal(
+    context.repository.inspect()
+      .checkoutPreparations.length,
+    0
   );
 });
 

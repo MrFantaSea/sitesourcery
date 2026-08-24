@@ -22,6 +22,7 @@ import {
 import {
   STRIPE_RESTRICTED_KEY_CONTRACT,
   STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE,
+  createStripeCredentialActivationReceipt,
   createHeldCredentialTopologyTemplate
 } from "../../../ops/credential-topology.mjs";
 import {
@@ -300,6 +301,50 @@ function productionEnvironment(overrides = {}) {
         })
       );
   }
+  if (
+    selected.SITESOURCERY_DEPLOYMENT_ENVIRONMENT ===
+      "production" &&
+    selected[
+      "SITESOURCERY_STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_JSON"
+    ] === undefined
+  ) {
+    const topologyText =
+      selected.SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON;
+    const secretKey =
+      selected.SITESOURCERY_STRIPE_SECRET_KEY;
+    if (
+      typeof topologyText === "string" &&
+      topologyText.length > 0 &&
+      typeof secretKey === "string" &&
+      secretKey.startsWith("rk_live_")
+    ) {
+      const activatedAt =
+        TEST_RUNTIME_SCOPE_PROVEN_AT;
+      const validUntil = new Date(
+        Date.parse(activatedAt) +
+          365 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      selected[
+        "SITESOURCERY_STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_JSON"
+      ] = JSON.stringify(
+        createStripeCredentialActivationReceipt(
+          JSON.parse(topologyText),
+          {
+            now: activatedAt,
+            validUntil,
+            environment: "production",
+            livemode: true,
+            runtimeFingerprint:
+              stripeRuntimeKeyFingerprint(secretKey)
+          }
+        )
+      );
+    } else {
+      selected[
+        "SITESOURCERY_STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_JSON"
+      ] = JSON.stringify({ fixture: true });
+    }
+  }
   return selected;
 }
 
@@ -464,6 +509,10 @@ test("approved production composition passes one exact bound configuration to th
   assert.deepEqual(
     constructed.liveApproval,
     approval()
+  );
+  assert.equal(
+    constructed.credentialActivationReceipt.schema,
+    "sitesourcery.stripe-credential-activation-receipt/v1"
   );
   assert.deepEqual(
     {
@@ -788,6 +837,13 @@ test("contract_test and every mismatched approval boundary are impossible in pro
     {
       environment: productionEnvironment({
         SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON: ""
+      }),
+      code: "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED"
+    },
+    {
+      environment: productionEnvironment({
+        SITESOURCERY_STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_JSON:
+          ""
       }),
       code: "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED"
     },

@@ -251,6 +251,11 @@ export function createHostedDownloadCommerce({
     ) {
       return translated(async () => {
         invariant(
+          !Object.hasOwn(input ?? {}, "taxMode"),
+          "client_commerce_authority_rejected",
+          "Download tax authority is server-owned."
+        );
+        invariant(
           !["offerId", "projectId", "quoteId"].some(
             (field) =>
               Object.hasOwn(input ?? {}, field)
@@ -266,22 +271,26 @@ export function createHostedDownloadCommerce({
           actor,
           projectId
         );
+        const paymentStatus = payment
+          ? await payment.readiness()
+          : null;
         const preparation = await boundary.execute({
           session,
           action: "prepare_checkout",
           body: {
             ...(input ?? {}),
             projectId,
-            quoteId
+            quoteId,
+            taxMode:
+              paymentStatus?.payment === true
+                ? paymentStatus.taxMode
+                : null
           }
         });
-        if (payment) {
-          const status = await payment.readiness();
-          if (status?.payment === true) {
-            return publicDispatch(
-              await payment.dispatch(preparation)
-            );
-          }
+        if (paymentStatus?.payment === true) {
+          return publicDispatch(
+            await payment.dispatch(preparation)
+          );
         }
         return publicPreparation(preparation);
       });

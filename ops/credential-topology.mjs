@@ -13,6 +13,8 @@ const STRIPE_ACCOUNT = /^acct_[A-Za-z0-9_]{1,250}$/u;
 const SAFE_TOKEN = /^[A-Za-z0-9._:-]{1,200}$/u;
 const STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS =
   15 * 60 * 1000;
+const STRIPE_ACTIVATION_RECEIPT_MAXIMUM_LIFETIME_MS =
+  366 * 24 * 60 * 60 * 1000;
 const STRIPE_PROVISIONER_MAXIMUM_LIFETIME_MS =
   24 * 60 * 60 * 1000;
 const STRIPE_STANDARD_MAXIMUM_OVERLAP_MS =
@@ -199,6 +201,28 @@ const TOP_LEVEL_FIELDS = Object.freeze([
   "mode",
   "schema"
 ]);
+const STRIPE_ACTIVATION_RECEIPT_FIELDS = Object.freeze([
+  "accountId",
+  "activatedAt",
+  "enabledPurposes",
+  "environment",
+  "livemode",
+  "receiptDigest",
+  "runtimeFingerprint",
+  "runtimeOperationCount",
+  "runtimeOperationDigest",
+  "runtimeScopeCount",
+  "runtimeScopeDigest",
+  "runtimeVersion",
+  "schema",
+  "scopeEvidenceDigest",
+  "scopeProvenAt",
+  "state",
+  "topologyDigest",
+  "validUntil"
+]);
+export const STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_SCHEMA =
+  "sitesourcery.stripe-credential-activation-receipt/v1";
 
 const DEFINITIONS = Object.freeze([
   definition({
@@ -1457,24 +1481,255 @@ export function verifyStripeCredentialReadiness(
   });
 }
 
-export function createStripeCredentialReadinessLease(
+function exactUtc(value, code, message) {
+  return typeof value === "string" &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString() === value
+    ? value
+    : fail(code, message);
+}
+
+function activationReceiptWithoutDigest(value) {
+  const selected = { ...value };
+  delete selected.receiptDigest;
+  return selected;
+}
+
+function exactStripeCredentialActivationReceipt(value) {
+  exactObject(
+    value,
+    STRIPE_ACTIVATION_RECEIPT_FIELDS,
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID"
+  );
+  if (
+    value.schema !==
+      STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_SCHEMA ||
+    value.state !== "activated" ||
+    value.environment !== "production" ||
+    value.livemode !== true ||
+    !STRIPE_ACCOUNT.test(value.accountId) ||
+    !SAFE_TOKEN.test(value.runtimeVersion) ||
+    !SHA256.test(value.runtimeFingerprint) ||
+    !SHA256.test(value.topologyDigest) ||
+    !SHA256.test(value.runtimeScopeDigest) ||
+    !SHA256.test(value.runtimeOperationDigest) ||
+    !SHA256.test(value.scopeEvidenceDigest) ||
+    !SHA256.test(value.receiptDigest) ||
+    !Number.isSafeInteger(value.runtimeScopeCount) ||
+    value.runtimeScopeCount <= 0 ||
+    !Number.isSafeInteger(value.runtimeOperationCount) ||
+    value.runtimeOperationCount <= 0 ||
+    !Array.isArray(value.enabledPurposes) ||
+    value.enabledPurposes.length === 0 ||
+    value.enabledPurposes.some(
+      (purpose) => !STRIPE_PURPOSES.includes(purpose)
+    ) ||
+    JSON.stringify(value.enabledPurposes) !==
+      JSON.stringify(sortedUnique(value.enabledPurposes))
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+      "Stripe credential activation receipt is invalid."
+    );
+  }
+  const scopeProvenAt = exactUtc(
+    value.scopeProvenAt,
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+    "Stripe credential activation scope proof time is invalid."
+  );
+  const activatedAt = exactUtc(
+    value.activatedAt,
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+    "Stripe credential activation time is invalid."
+  );
+  const validUntil = exactUtc(
+    value.validUntil,
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+    "Stripe credential activation expiry is invalid."
+  );
+  const scopeProvenMs = Date.parse(scopeProvenAt);
+  const activatedMs = Date.parse(activatedAt);
+  const validUntilMs = Date.parse(validUntil);
+  if (
+    scopeProvenMs > activatedMs ||
+    activatedMs - scopeProvenMs >
+      STRIPE_RUNTIME_READBACK_MAXIMUM_AGE_MS ||
+    validUntilMs <= activatedMs ||
+    validUntilMs - activatedMs >
+      STRIPE_ACTIVATION_RECEIPT_MAXIMUM_LIFETIME_MS ||
+    value.receiptDigest !==
+      digest(activationReceiptWithoutDigest(value))
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+      "Stripe credential activation receipt chronology or digest is invalid."
+    );
+  }
+  return deepFreeze({ ...value });
+}
+
+export function createStripeCredentialActivationReceipt(
   value,
   {
     now,
+    validUntil,
     environment = "production",
     livemode = true,
     runtimeFingerprint
   } = {}
 ) {
   const topology = normalizeCredentialTopology(value);
-  const activation =
-    verifyStripeCredentialReadinessInternal(topology, {
+  const activation = verifyStripeCredentialReadiness(
+    topology,
+    {
       now,
       environment,
       livemode,
+      runtimeFingerprint
+    }
+  );
+  const runtime = itemByName(
+    topology,
+    "stripe.runtime.production.restricted"
+  );
+  const receipt = {
+    schema:
+      STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_SCHEMA,
+    state: "activated",
+    accountId: activation.accountId,
+    environment: activation.environment,
+    livemode: activation.livemode,
+    enabledPurposes: activation.enabledPurposes,
+    runtimeVersion: activation.runtimeVersion,
+    runtimeFingerprint: activation.runtimeFingerprint,
+    topologyDigest: activation.topologyDigest,
+    runtimeScopeCount: activation.runtimeScopeCount,
+    runtimeScopeDigest: activation.runtimeScopeDigest,
+    runtimeOperationCount:
+      activation.runtimeOperationCount,
+    runtimeOperationDigest:
+      activation.runtimeOperationDigest,
+    scopeEvidenceDigest: runtime.evidenceDigest,
+    scopeProvenAt: runtime.lastProvenAt,
+    activatedAt: exactUtc(
+      now,
+      "CREDENTIAL_TOPOLOGY_CLOCK_INVALID",
+      "Stripe credential activation requires an exact UTC clock."
+    ),
+    validUntil: exactUtc(
+      validUntil,
+      "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+      "Stripe credential activation requires an exact UTC expiry."
+    )
+  };
+  return exactStripeCredentialActivationReceipt({
+    ...receipt,
+    receiptDigest: digest(receipt)
+  });
+}
+
+export function verifyStripeCredentialActivationReceipt(
+  value,
+  receiptValue,
+  {
+    now,
+    purpose = null,
+    environment = "production",
+    livemode = true,
+    runtimeFingerprint
+  } = {}
+) {
+  const topology = normalizeCredentialTopology(value);
+  const receipt =
+    exactStripeCredentialActivationReceipt(receiptValue);
+  const checkedAt = exactUtc(
+    now,
+    "CREDENTIAL_TOPOLOGY_CLOCK_INVALID",
+    "Stripe credential readiness requires an exact UTC clock."
+  );
+  if (
+    Date.parse(receipt.activatedAt) > Date.parse(checkedAt) ||
+    Date.parse(receipt.validUntil) <= Date.parse(checkedAt)
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_EXPIRED",
+      "Stripe credential activation receipt is future-dated or expired."
+    );
+  }
+  const readiness = verifyStripeCredentialReadinessInternal(
+    topology,
+    {
+      now: checkedAt,
+      purpose,
+      environment,
+      livemode,
       runtimeFingerprint,
-      requireFreshScopeEvidence: true
-    });
+      requireFreshScopeEvidence: false
+    }
+  );
+  const runtime = itemByName(
+    topology,
+    "stripe.runtime.production.restricted"
+  );
+  if (
+    receipt.accountId !== readiness.accountId ||
+    receipt.environment !== readiness.environment ||
+    receipt.livemode !== readiness.livemode ||
+    JSON.stringify(receipt.enabledPurposes) !==
+      JSON.stringify(readiness.enabledPurposes) ||
+    receipt.runtimeVersion !== readiness.runtimeVersion ||
+    receipt.runtimeFingerprint !==
+      readiness.runtimeFingerprint ||
+    receipt.topologyDigest !== readiness.topologyDigest ||
+    receipt.runtimeScopeCount !==
+      readiness.runtimeScopeCount ||
+    receipt.runtimeScopeDigest !==
+      readiness.runtimeScopeDigest ||
+    receipt.runtimeOperationCount !==
+      readiness.runtimeOperationCount ||
+    receipt.runtimeOperationDigest !==
+      readiness.runtimeOperationDigest ||
+    receipt.scopeEvidenceDigest !==
+      runtime.evidenceDigest ||
+    receipt.scopeProvenAt !== runtime.lastProvenAt
+  ) {
+    fail(
+      "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_MISMATCH",
+      "Stripe credential activation receipt no longer matches runtime topology."
+    );
+  }
+  return readiness;
+}
+
+export function createStripeCredentialReadinessLease(
+  value,
+  {
+    now,
+    environment = "production",
+    livemode = true,
+    runtimeFingerprint,
+    activationReceipt = null
+  } = {}
+) {
+  const topology = normalizeCredentialTopology(value);
+  const activation = activationReceipt === null
+    ? verifyStripeCredentialReadinessInternal(topology, {
+        now,
+        environment,
+        livemode,
+        runtimeFingerprint,
+        requireFreshScopeEvidence: true
+      })
+    : verifyStripeCredentialActivationReceipt(
+        topology,
+        activationReceipt,
+        {
+          now,
+          environment,
+          livemode,
+          runtimeFingerprint
+        }
+      );
   const activationMs = Date.parse(now);
   return deepFreeze({
     schema:
@@ -1497,17 +1752,29 @@ export function createStripeCredentialReadinessLease(
           "Stripe credential readiness cannot move behind its verified process activation."
         );
       }
-      return verifyStripeCredentialReadinessInternal(
-        topology,
-        {
-          now: checkedAt,
-          purpose,
-          environment,
-          livemode,
-          runtimeFingerprint,
-          requireFreshScopeEvidence: false
-        }
-      );
+      return activationReceipt === null
+        ? verifyStripeCredentialReadinessInternal(
+            topology,
+            {
+              now: checkedAt,
+              purpose,
+              environment,
+              livemode,
+              runtimeFingerprint,
+              requireFreshScopeEvidence: false
+            }
+          )
+        : verifyStripeCredentialActivationReceipt(
+            topology,
+            activationReceipt,
+            {
+              now: checkedAt,
+              purpose,
+              environment,
+              livemode,
+              runtimeFingerprint
+            }
+          );
     }
   });
 }

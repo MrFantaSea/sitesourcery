@@ -127,6 +127,7 @@ export function createCommerceV2Boundary(service) {
           "purchaseTermsAccepted",
           "quoteId",
           "requestId",
+          "taxMode",
           "userAgentDigest"
         ]);
         return service.prepareCheckout({

@@ -170,6 +170,7 @@ async function prepareCheckout(
       purchaseTermsAccepted: true,
       requestId: "request_checkout_a",
       clientAddress: "192.0.2.20",
+      taxMode: null,
       userAgentDigest: "d".repeat(64),
       ...overrides
     }
@@ -432,6 +433,7 @@ test("checkout preparation is exact, idempotent, provider-neutral, and held", as
     billing: "one_time",
     interval: null
   });
+  assert.equal(first.purpose.taxMode, null);
   assert.equal(
     first.purpose.quoteSnapshotDigest,
     quote.snapshotDigest
