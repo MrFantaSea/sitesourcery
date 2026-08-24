@@ -131,6 +131,9 @@ function exactPreparation(value) {
       purpose.offerId === "spark_download" &&
       purpose.entitlementKind === "spark_download" &&
       purpose.purchaseTermsAccepted === true &&
+      ["automatic", "disabled_by_owner"].includes(
+        purpose.taxMode
+      ) &&
       purpose.price?.amountMinor === DOWNLOAD_PRICE_MINOR &&
       purpose.price?.currency === "USD" &&
       purpose.price?.billing === "one_time" &&

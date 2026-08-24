@@ -7,6 +7,7 @@ import {
   STRIPE_RESTRICTED_KEY_CONTRACT,
   STRIPE_RUNTIME_API_OPERATIONS_BY_PURPOSE,
   STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE,
+  createStripeCredentialActivationReceipt,
   createStripeCredentialReadinessLease,
   createHeldCredentialTopologyTemplate,
   normalizeCredentialTopology,
@@ -407,6 +408,95 @@ test("one fresh process activation lease remains valid after 15 minutes without 
           runtimeFingerprint: evidence(
             "runtime-fingerprint"
           )
+        }
+      )
+  );
+});
+
+test("a bound activation receipt survives restarts but expires and rejects every topology or receipt drift", () => {
+  const input = topology();
+  const receipt =
+    createStripeCredentialActivationReceipt(input, {
+      now: NOW,
+      validUntil: "2027-08-11T16:10:00.000Z",
+      environment: "production",
+      livemode: true,
+      runtimeFingerprint: evidence(
+        "runtime-fingerprint"
+      )
+    });
+  const lease = createStripeCredentialReadinessLease(
+    input,
+    {
+      now: "2026-08-12T16:10:00.000Z",
+      environment: "production",
+      livemode: true,
+      runtimeFingerprint: evidence(
+        "runtime-fingerprint"
+      ),
+      activationReceipt: receipt
+    }
+  );
+  assert.equal(lease.activation.ready, true);
+  assert.equal(
+    lease.readiness({
+      now: "2027-08-10T16:10:00.000Z",
+      purpose: "download"
+    }).ready,
+    true
+  );
+  code(
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_EXPIRED",
+    () =>
+      lease.readiness({
+        now: receipt.validUntil,
+        purpose: "download"
+      })
+  );
+
+  const drifted = topology();
+  const driftedRuntime = item(
+    drifted,
+    "stripe.runtime.production.restricted"
+  );
+  driftedRuntime.lastProvenAt =
+    "2026-08-11T16:05:00.000Z";
+  driftedRuntime.evidenceDigest = evidence(
+    "replacement-runtime-scope-readback"
+  );
+  code(
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_MISMATCH",
+    () =>
+      createStripeCredentialReadinessLease(
+        drifted,
+        {
+          now: "2026-08-12T16:10:00.000Z",
+          environment: "production",
+          livemode: true,
+          runtimeFingerprint: evidence(
+            "runtime-fingerprint"
+          ),
+          activationReceipt: receipt
+        }
+      )
+  );
+
+  code(
+    "CREDENTIAL_TOPOLOGY_STRIPE_ACTIVATION_RECEIPT_INVALID",
+    () =>
+      createStripeCredentialReadinessLease(
+        input,
+        {
+          now: "2026-08-12T16:10:00.000Z",
+          environment: "production",
+          livemode: true,
+          runtimeFingerprint: evidence(
+            "runtime-fingerprint"
+          ),
+          activationReceipt: {
+            ...receipt,
+            runtimeVersion: "tampered-runtime"
+          }
         }
       )
   );

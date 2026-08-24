@@ -31,7 +31,7 @@ const ARTIFACT_DIGEST = createHash("sha256")
   .update(HTML)
   .digest("hex");
 
-function preparation() {
+function preparation(taxMode = "disabled_by_owner") {
   const purpose = {
     schema: CHECKOUT_PURPOSE_SCHEMA,
     tenantId: TENANT_ID,
@@ -44,6 +44,7 @@ function preparation() {
     offerId: "spark_download",
     entitlementKind: "spark_download",
     purchaseTermsAccepted: true,
+    taxMode,
     price: {
       amountMinor: 2000,
       currency: "USD",
@@ -516,7 +517,8 @@ function fixture({
           taxMode === "automatic" ? 2033 : 2000,
         taxMode,
         currency: "USD",
-        purposeDigest: preparation().purposeDigest,
+        purposeDigest:
+          preparation(taxMode).purposeDigest,
         verifiedEmailDigest:
           VERIFIED_EMAIL_DIGEST,
         accountCreatedAt:
@@ -641,9 +643,15 @@ test("automatic tax is a valid exact $20 item-plus-tax contract", async () => {
   assert.deepEqual(context.calls.readinessPurposes, [
     "download"
   ]);
-  await context.service.dispatch(preparation());
+  await context.service.dispatch(
+    preparation("automatic")
+  );
   await context.service.ingestStripeEvent(
-    verifiedEvent()
+    verifiedEvent({
+      metadata: metadata(
+        preparation("automatic")
+      )
+    })
   );
   assert.equal(
     context.calls.settlements[0].payment.taxMinor,
@@ -653,6 +661,18 @@ test("automatic tax is a valid exact $20 item-plus-tax contract", async () => {
     context.calls.settlements[0].payment.totalMinor,
     2033
   );
+});
+
+test("Download dispatch rejects tax authority drift before claiming or contacting Stripe", async () => {
+  const context = fixture({ taxMode: "automatic" });
+  await assert.rejects(
+    context.service.dispatch(preparation()),
+    (error) =>
+      error.code ===
+      "download_tax_authority_mismatch"
+  );
+  assert.equal(context.calls.create.length, 0);
+  assert.equal(context.calls.abandoned.length, 0);
 });
 
 test("one durable Download dispatch replays one Stripe Checkout without a second effect", async () => {

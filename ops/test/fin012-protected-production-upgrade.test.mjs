@@ -1,4 +1,9 @@
 import assert from "node:assert/strict";
+import {
+  fileURLToPath,
+  pathToFileURL
+} from "node:url";
+import path from "node:path";
 import { test } from "node:test";
 
 import {
@@ -25,6 +30,9 @@ import {
   validateFin012UpgradeControl,
   verifyFin012DownloadProtectionInvariants
 } from "../fin012-protected-production-upgrade.mjs";
+import {
+  materializeHistoricalCandidate
+} from "./historical-candidate-fixture.mjs";
 
 const NOW = Date.parse("2026-08-22T20:00:00.000Z");
 const BEFORE_ROWS = "1".repeat(64);
@@ -168,11 +176,37 @@ function fakePool({ otherConnectionCount = 0 } = {}) {
 }
 
 test("FIN-012 binds the exact 95-to-96 one-file migration inventory", async () => {
-  const actual = await collectFin012MigrationInventory();
-  assert.equal(actual.predecessor.count, 95);
-  assert.equal(actual.successor.count, 96);
-  assert.equal(actual.successor.sha256, FIN012_SUCCESSOR_MIGRATION_MANIFEST_SHA256);
-  assert.equal(actual.selected.sha256, FIN012_MIGRATION_SHA256);
+  const fixture = await materializeHistoricalCandidate({
+    projectRoot: fileURLToPath(
+      new URL("../..", import.meta.url)
+    ),
+    commitSha: FIN012_CANDIDATE_COMMIT,
+    treeSha: FIN012_CANDIDATE_TREE,
+    label: "fin012-protected-upgrade"
+  });
+  try {
+    const actual = await collectFin012MigrationInventory({
+      projectRoot: fixture.candidateRoot,
+      migrationRoot: pathToFileURL(
+        `${path.join(
+          fixture.candidateRoot,
+          "server/data-plane/supabase/migrations"
+        )}${path.sep}`
+      )
+    });
+    assert.equal(actual.predecessor.count, 95);
+    assert.equal(actual.successor.count, 96);
+    assert.equal(
+      actual.successor.sha256,
+      FIN012_SUCCESSOR_MIGRATION_MANIFEST_SHA256
+    );
+    assert.equal(
+      actual.selected.sha256,
+      FIN012_MIGRATION_SHA256
+    );
+  } finally {
+    await fixture.cleanup();
+  }
 });
 
 test("FIN-012 upgrade control binds fresh backup, quiesced services, held providers, and no retirement", () => {

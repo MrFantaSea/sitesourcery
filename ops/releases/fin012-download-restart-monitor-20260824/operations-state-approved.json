@@ -1,0 +1,21 @@
+{
+  "schema": "sitesourcery.operations-state-approval/v1",
+  "approvalId": "download-payment-readiness-20260824",
+  "state": "approved",
+  "sourceFailureDomainId": "dell-sitesourcery-production-01",
+  "consumers": [
+    "backup",
+    "monitor"
+  ],
+  "expectedOperationsState": {
+    "stripeMode": "approved_live",
+    "registrationMailMode": "production",
+    "recoveryMailMode": "production",
+    "publication": "held",
+    "domainRuntime": "held",
+    "dns": "held"
+  },
+  "approvedAt": "2026-08-24T12:55:00.000Z",
+  "expiresAt": "2027-08-24T12:55:00.000Z",
+  "digest": "2f0254a5025c913f790285b5c6c1f568affd27d5689b81375c7425fe90870d80"
+}

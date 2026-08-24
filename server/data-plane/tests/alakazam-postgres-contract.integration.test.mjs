@@ -1803,6 +1803,7 @@ test(
         }),
         clock: { now: () => workerNow },
         ids: { next: () => randomUUID() },
+        enabled: true,
         workerId: "alakazam-postgres-contract-worker"
       });
       const live = await worker.runOnce();

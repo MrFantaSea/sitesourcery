@@ -387,6 +387,15 @@ export function createCommerceV2Service(
         input?.userAgentDigest,
         "userAgentDigest"
       );
+      const taxMode = input?.taxMode;
+      invariant(
+        taxMode === null ||
+          ["automatic", "disabled_by_owner"].includes(
+            taxMode
+          ),
+        "tax_mode_invalid",
+        "Download Checkout tax authority is invalid"
+      );
       const now = requiredIso(
         ports.clock.now(),
         "clock.now"
@@ -418,6 +427,7 @@ export function createCommerceV2Service(
         offerId: quote.offerId,
         entitlementKind: quote.entitlementKind,
         purchaseTermsAccepted: true,
+        taxMode,
         price: clone(quote.price)
       });
       const purposeDigest = digest(purpose);

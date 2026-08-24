@@ -687,6 +687,28 @@ export function createConfiguredStripeProvider({
       : normalizeCredentialTopology(
           suppliedCredentialTopology
         );
+  const credentialActivationReceipt = optionalJson(
+    environment,
+    "SITESOURCERY_STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_JSON"
+  );
+  if (
+    deployment === "production" &&
+    credentialActivationReceipt === null
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_CONFIGURATION_REQUIRED",
+      "SITESOURCERY_STRIPE_CREDENTIAL_ACTIVATION_RECEIPT_JSON is required for restart-safe production Stripe composition."
+    );
+  }
+  if (
+    deployment === "staging" &&
+    credentialActivationReceipt !== null
+  ) {
+    fail(
+      "STRIPE_PRODUCTION_KEY_TOPOLOGY_MISMATCH",
+      "Production Stripe activation receipt cannot authorize staging."
+    );
+  }
   const config = {
     apiVersion,
     livemode,
@@ -750,6 +772,9 @@ export function createConfiguredStripeProvider({
     mode: "approved_live",
     secretKey: keyForMode(environment, livemode),
     liveApproval: approval,
+    ...(credentialActivationReceipt === null
+      ? {}
+      : { credentialActivationReceipt }),
     config
   });
   return Object.freeze({
