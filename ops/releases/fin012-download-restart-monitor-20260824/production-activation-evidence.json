@@ -1,0 +1,188 @@
+{
+  "schema": "sitesourcery.fin012-download-restart-production-activation/v1",
+  "observedAt": "2026-08-24T17:00:45.000Z",
+  "release": {
+    "candidateCommit": "dd159061ce94c62c10b635f21732a0be326f643b",
+    "candidateTree": "49a80dbe1bf67cedd3210b1d05a2e629f25149a4",
+    "protectedControlCommit": "6decab5b422d8eae2134e7839701a5273fee5557",
+    "protectedControlTree": "028f8ff6b1f43e3bebe50fd3d121357155163759",
+    "heldProofRun": 32740577042,
+    "heldProofReceiptDigest": "9de79dfe738d9446754aefbc649979f96c0b648c2d48fc8b4ebec3d944ec42d9",
+    "epochId": "fin012-download-restart-dd15906-20260824",
+    "epochDigest": "55eac7b72337fdf9f7a0269f6b452200accbb9d7b8c01f2092e29868df185692",
+    "bindingSha256": "c47a45934838b170022f1988bd0e477468ca4d7594c4a215ce14f58a6751cc1c",
+    "originSealDigest": "aa010b3d2f1bce7e866b795dfe83a2c931822d7c69006f488355bab793f5efd2",
+    "originSealSha256": "0a7268cea2bbc813154337b072c4141416c7061c96a8be7e238e26e696e5118a",
+    "installedReadbackSha256": "2b1cf02405e71624128bda456068785402258dfe9d5210a68aa1e0d7a66e3e65",
+    "finalEpochSha256": "b673e68646f76d8ee1912796175b8cb86f54b01eecb452caf8265a646b7c0539",
+    "environmentAssignmentCount": 123,
+    "environmentSha256": "c2cbcfd612dbf5dea5cfb44b0e3d070f8e789ec1faff3378d3d2502f032e87f1",
+    "runtimeWrapperSha256": "e09b1fc70a89efa554484b7aac7e23708c41c335bbae18c4ac5209b9809310d3",
+    "runtimeUnitSha256": "9825e6395362a49e5cc05673a4e7c62e0468c6e03da8cb3b1b23cf2a1be762cb",
+    "staticUnitSha256": "300f449a08cfc2602b907c94ae8d2a69b6523f33accd94737ccd94336b048103"
+  },
+  "database": {
+    "databaseName": "sitesourcery_production",
+    "postgresMajor": 16,
+    "migrationCount": 97,
+    "latestMigration": "202608240144_download_tax_authority.sql",
+    "migrationSha256": "30617833c5241f9889998b72f89a4a25413c6a1202af9744bbbfd2a253e2d22b",
+    "migrationByteCount": 3565,
+    "tableCounts": {
+      "auth": 1,
+      "ss": 293,
+      "total": 294
+    },
+    "schemaSha256": "de401833b6581fc06361df444cdb637d5b68606ce2eceac2cd8a13423c4e63f2",
+    "rowCountsSha256": "18d986b76d3407adf5a4753792751172afebe91dde0f3715f794a87f5c1a38cb",
+    "ownershipSha256": "d4d55db3e00debc22be17abba30c3a85a1ab9941d6a98f8baadeeaec90c74d28",
+    "allRelationsOwnedByDatabaseOwner": true,
+    "allRoutinesOwnedByDatabaseOwner": true,
+    "taxAuthorityObjects": {
+      "preparationConstraint": true,
+      "dispatchFunction": true,
+      "dispatchTrigger": true,
+      "receiptFunction": true,
+      "receiptTrigger": true
+    },
+    "rowLoss": false,
+    "predecessorRestartRequiresDatabaseRestore": true
+  },
+  "stripeReadiness": {
+    "mode": "approved_live",
+    "downloadPaymentMode": "approved",
+    "allOtherPaymentPurposesHeld": true,
+    "activatedAt": "2026-08-24T15:17:15.000Z",
+    "validUntil": "2027-08-24T15:17:15.000Z",
+    "activationReceiptDigest": "ce22cf3c4d5abea9acf2d757f5e1dc2b77acdfe9a2cadc74f7b2bf4bde1b41fc",
+    "credentialTopologyDigest": "63809abc2986a43e1d2dcd8c8903256d09b309c877d2c2e3c8684a89b395058b",
+    "runtimeCredentialFingerprint": "da02da0d911e524946c1901338cd705cb3144467864c943c446ce7f57fa779d4",
+    "scopeEvidenceSha256": "c102ef404ab943839597218b8375fbc477f53011aaec88fbfe4d2a0af9edb37b",
+    "enabledProviderPurposeCount": 6,
+    "domainProviderPurposeHeld": true,
+    "secretInspected": false,
+    "dashboardMutation": false
+  },
+  "restartDurability": {
+    "controlledRestart": {
+      "testedAt": "2026-08-24T16:38:48.000Z",
+      "activationAgeExceededFormerLeaseMinutes": 15,
+      "beforePid": 1703329,
+      "afterPid": 1703610,
+      "initialPublicProbe": "one_transient_503_during_normal_startup",
+      "localReadyRecovered": true,
+      "publicReadyRecovered": true,
+      "candidateIdentityPreserved": true,
+      "migrationIdentityPreserved": true
+    },
+    "postBackupRestart": {
+      "startedAt": "2026-08-24T16:53:43.000Z",
+      "pid": 1704914,
+      "systemdRestartCount": 0,
+      "localReady": true,
+      "publicReady": true,
+      "candidateIdentityPreserved": true,
+      "migrationIdentityPreserved": true
+    }
+  },
+  "operations": {
+    "approvalId": "download-payment-readiness-20260824",
+    "approvalDigest": "2f0254a5025c913f790285b5c6c1f568affd27d5689b81375c7425fe90870d80",
+    "approvalExpiresAt": "2027-08-24T12:55:00.000Z",
+    "providerEgress": "held",
+    "publication": "held",
+    "domainRuntime": "held",
+    "dns": "held",
+    "manualMonitor": {
+      "observedAt": "2026-08-24T16:46:38.872Z",
+      "ok": true,
+      "checksPassed": [
+        "backlog",
+        "backup",
+        "certificate",
+        "database",
+        "disk",
+        "runtime"
+      ],
+      "alerts": [],
+      "operationalRecoveryEmailDelivered": true
+    },
+    "postCandidateBackup": {
+      "attemptId": "2026-08-24T164705632Z-bfe20ee4-2f4b-4330-b502-f851dd8a7a77",
+      "snapshotId": "9a2eddeb-c564-43c1-ab40-1268f5c52865",
+      "startedAt": "2026-08-24T16:47:05.632Z",
+      "completedAt": "2026-08-24T16:53:39.938Z",
+      "destinationFailureDomainId": "zen-sitesourcery-backup-01",
+      "manifestSha256": "35f06540b19d6ae0266fac67a1bca653d5366bdcec2cd380f618f1534f0c8d0b",
+      "databaseCiphertextBytes": 3854552,
+      "databaseCiphertextSha256": "773de4d08f0c94e300b0d71d70c87bd71390d8723f38d34407d927ca8b866721",
+      "appStateCiphertextBytes": 136368840,
+      "appStateCiphertextSha256": "c8b25bf950776bf182efff853d893c71bb6d8f23193f540221151fe97e3c5f08",
+      "databaseWriterCount": 0,
+      "runtimeStateDuringSnapshot": "inactive",
+      "verifiedBeforeAndAfter": true,
+      "plaintextStagingRemoved": 0
+    },
+    "timers": {
+      "backup": {
+        "enabled": true,
+        "active": true,
+        "nextRun": "2026-08-25T04:17:00-04:00"
+      },
+      "monitor": {
+        "enabled": true,
+        "active": true,
+        "cadence": "five_minutes"
+      }
+    },
+    "firstScheduledMonitor": {
+      "observedAt": "2026-08-24T16:58:03.916Z",
+      "ok": true,
+      "checksPassed": [
+        "backlog",
+        "backup",
+        "certificate",
+        "database",
+        "disk",
+        "runtime"
+      ],
+      "alerts": [],
+      "deliveryAttempted": false,
+      "deliveryDelivered": false
+    }
+  },
+  "providerReconciliationBeforeCheckout": {
+    "observedAt": "2026-08-24T16:58:57.956Z",
+    "lowerBound": "2026-08-24T14:50:00.000Z",
+    "evidenceSha256": "07da2de04f34b18686b48e7fb494a13cfa784904463ef1645af87fd6b864095e",
+    "fetchedSessionCount": 0,
+    "downloadSessionCount": 0,
+    "hasMore": false,
+    "providerReadPerformed": true,
+    "providerMutation": false,
+    "paymentEffect": false
+  },
+  "liveReadiness": {
+    "observedAt": "2026-08-24T17:00:45.000Z",
+    "localReady": true,
+    "publicReady": true,
+    "candidateCommit": "dd159061ce94c62c10b635f21732a0be326f643b",
+    "candidateTree": "49a80dbe1bf67cedd3210b1d05a2e629f25149a4",
+    "migrationCount": 97,
+    "latestMigration": "202608240144_download_tax_authority.sql",
+    "startupReady": true,
+    "externalEffects": false
+  },
+  "effects": {
+    "databaseMutation": "migration_144_only",
+    "databaseRowLoss": false,
+    "stripeRead": true,
+    "stripeMutation": false,
+    "checkoutSessionCreated": false,
+    "customerEffect": false,
+    "paymentEffect": false,
+    "dnsEffect": false,
+    "publicationEffect": false,
+    "operationalMailEffect": "one_recovery_alert_to_the_existing_operations_lane"
+  }
+}

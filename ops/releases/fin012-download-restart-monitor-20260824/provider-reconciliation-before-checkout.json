@@ -1,0 +1,15 @@
+{
+  "schema": "sitesourcery.fin012-download-checkout-provider-reconciliation/v2",
+  "observedAt": "2026-08-24T16:58:57.956Z",
+  "lowerBound": "2026-08-24T14:50:00.000Z",
+  "fetchedSessionCount": 0,
+  "downloadSessionCount": 0,
+  "hasMore": false,
+  "sessions": [],
+  "providerReadPerformed": true,
+  "providerEffect": false,
+  "providerMutation": false,
+  "paymentEffect": false,
+  "secretDisclosed": false,
+  "dashboardMutation": false
+}

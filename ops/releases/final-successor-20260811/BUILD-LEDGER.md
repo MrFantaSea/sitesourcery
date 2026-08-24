@@ -353,3 +353,36 @@ control retains live `14ca61bd...` as rollback, requires the unchanged exact
 96-migration database, forbids database mutation, and passed its focused 5/5
 bundle proof. No install, cutover, provider, customer, payment, DNS, or
 retirement effect is claimed by this ledger entry.
+
+That held state is superseded for the Download lane only. Protected candidate
+`dd159061ce94c62c10b635f21732a0be326f643b`, tree
+`49a80dbe1bf67cedd3210b1d05a2e629f25149a4`, and protected control
+`6decab5b422d8eae2134e7839701a5273fee5557` are live on Dell at epoch
+`fin012-download-restart-dd15906-20260824`. Held proof run `32740577042`
+issued exact receipt digest
+`9de79dfe738d9446754aefbc649979f96c0b648c2d48fc8b4ebec3d944ec42d9`.
+Migration 144 is installed as migration 97 with all five server-owned Download
+tax-authority objects, unchanged 294-table row-count digest `18d986b7...`, and
+no row loss.
+
+The exact Stripe activation receipt survived a real restart more than 15
+minutes after activation and the later supervised-backup restart while keeping
+only Download approved and every other payment purpose held. Post-candidate
+encrypted Zen snapshot `9a2eddeb-c564-43c1-ab40-1268f5c52865` completed under
+attempt `2026-08-24T164705632Z-bfe20ee4-2f4b-4330-b502-f851dd8a7a77`; manifest
+SHA-256 is `35f06540b19d6ae0266fac67a1bca653d5366bdcec2cd380f618f1534f0c8d0b`.
+Both ciphertext artifacts were verified with zero database writers and no
+retained plaintext. Backup and monitor timers are enabled and active. Manual
+and first scheduled monitor runs passed all six checks; the manual recovery
+transition delivered one expected operational email and the scheduled run
+delivered none.
+
+Read-only Stripe reconciliation since the deployment window found zero Checkout
+Sessions, zero Download sessions, no provider mutation, and no payment effect.
+Exact evidence and its byte-identical reconciliation helper are recorded under
+`ops/releases/fin012-download-restart-monitor-20260824/`; the evidence commit's
+Node 24.18.0 operations proof passed 252/252. Live UI inspection and one freshly
+approved unpaid `$20` Checkout handoff remain unproved because the Brave
+automation bridge disconnected after these proofs. No prior Checkout approval
+may be reused and no card entry or completed charge is authorized by this
+entry.
