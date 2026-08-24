@@ -275,13 +275,13 @@ function checkoutUrl(value) {
       { status: 502 }
     );
   }
+  // Stripe owns the opaque fragment on hosted Checkout destinations.
   invariant(
     parsed.protocol === "https:" &&
       parsed.hostname === "checkout.stripe.com" &&
       !parsed.port &&
       !parsed.username &&
-      !parsed.password &&
-      !parsed.hash,
+      !parsed.password,
     "provider_response_invalid",
     "Stripe returned an unapproved Download Checkout URL",
     { status: 502 }

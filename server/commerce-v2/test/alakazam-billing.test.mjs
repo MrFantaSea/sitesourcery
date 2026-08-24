@@ -792,6 +792,23 @@ test("a ready Checkout replay returns its durable destination without another St
   assert.equal(calls.checkoutConfirms.length, 0);
 });
 
+test("Alakazam preserves Stripe's provider-owned Checkout URL fragment", async () => {
+  const url =
+    "https://checkout.stripe.com/c/pay/alakazam_checkout_1#provider-fragment";
+  const { service, calls } = fixture({
+    checkoutProviderResult: {
+      checkoutId: "cs_alakazam_checkout_1",
+      url,
+      expiresAt: EXPIRES_AT
+    }
+  });
+  const ready = await service.createCheckout(checkoutInput());
+  assert.equal(ready.checkout.url, url);
+  assert.equal(calls.checkoutCreates.length, 1);
+  assert.equal(calls.checkoutConfirms.length, 1);
+  assert.equal(calls.checkoutUnknown.length, 0);
+});
+
 test("ambiguous Stripe Checkout creation is fenced and never failed as no-effect", async () => {
   const providerError = Object.assign(
     new Error("timeout"),
