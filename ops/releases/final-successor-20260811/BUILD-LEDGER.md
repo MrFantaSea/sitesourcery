@@ -386,3 +386,24 @@ approved unpaid `$20` Checkout handoff remain unproved because the Brave
 automation bridge disconnected after these proofs. No prior Checkout approval
 may be reused and no card entry or completed charge is authorized by this
 entry.
+
+The repaired Browser bridge subsequently opened the existing signed-in
+acceptance project read-only and exposed two customer presentation defects
+before any Checkout action: canonical Custom-build `completion_required` state
+was dereferenced through its intentionally null obligation, and retained-
+premium controls mounted without a relevant Alakazam subscription.
+Implementation `f56ea55ae70f984213df2672af025399ef3b0056`, tree
+`b7aab3890ff9d49af97e5cfe2edfe8dc7c7e759a`, corrects only those two browser
+boundaries and updates their exact reviewed asset digest. Focused proof passed
+105/105, deterministic hosted and related artifact proof passed 91/91, and the
+complete exact Node 24.18.0 product/client proof passed all 889 cases; six
+sandbox-denied loopback cases separately passed in their complete 8/8 two-file
+suite. Exact evidence is in
+`ops/releases/fin012-browser-customer-correction-20260824/`.
+
+This correction is proved but not pushed, reviewed, installed, or deployed by
+this ledger entry. No Checkout Session, provider mutation, payment, spend,
+database/customer mutation, deployment, public-byte change, DNS, publication,
+or service effect occurred. Protected review without deployment is next; live
+read-only reinspection and fresh action-time confirmation remain separate later
+gates.
