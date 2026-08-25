@@ -193,6 +193,8 @@ function fixture({
   stripeCustomerId = null,
   createError = null,
   completeError = null,
+  checkoutUrl =
+    "https://checkout.stripe.com/c/pay/download_1",
   checkoutLifecycle = "expired_unpaid"
 } = {}) {
   const calls = {
@@ -493,8 +495,7 @@ function fixture({
       if (createError) throw createError;
       return {
         checkoutId: "cs_test_download_1",
-        url:
-          "https://checkout.stripe.com/c/pay/download_1",
+        url: checkoutUrl,
         expiresAt:
           "2026-08-02T12:30:00.000Z"
       };
@@ -696,6 +697,19 @@ test("one durable Download dispatch replays one Stripe Checkout without a second
     purpose: preparation().purpose,
     purposeDigest: preparation().purposeDigest
   });
+});
+
+test("Download preserves Stripe's provider-owned Checkout URL fragment", async () => {
+  const checkoutUrl =
+    "https://checkout.stripe.com/c/pay/download_1#provider-fragment";
+  const context = fixture({ checkoutUrl });
+  const first = await context.service.dispatch(preparation());
+  const replay = await context.service.dispatch(preparation());
+  assert.equal(first.checkoutUrl, checkoutUrl);
+  assert.equal(first.checkout.url, checkoutUrl);
+  assert.deepEqual(replay, first);
+  assert.equal(context.calls.create.length, 1);
+  assert.deepEqual(context.calls.unknown, []);
 });
 
 test("an expired Checkout is replaceable only after Stripe proves it stayed unpaid", async () => {

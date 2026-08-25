@@ -183,13 +183,13 @@ function exactCheckout(value) {
       { status: 503 }
     );
   }
+  // Stripe owns the opaque fragment on hosted Checkout destinations.
   invariant(
     url.protocol === "https:" &&
       url.hostname === CHECKOUT_HOST &&
       !url.port &&
       !url.username &&
-      !url.password &&
-      !url.hash,
+      !url.password,
     "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED",
     "Stripe returned an unapproved assessment payment address.",
     { status: 503 }
@@ -346,14 +346,14 @@ function safeResponse(value, input) {
   } catch {
     url = null;
   }
+  // Stripe owns the opaque fragment on hosted Checkout destinations.
   invariant(
     url &&
       url.protocol === "https:" &&
       url.hostname === CHECKOUT_HOST &&
       !url.port &&
       !url.username &&
-      !url.password &&
-      !url.hash,
+      !url.password,
     "ASSESSMENT_CHECKOUT_RECONCILIATION_REQUIRED",
     "The retained assessment payment address is invalid.",
     { status: 503 }

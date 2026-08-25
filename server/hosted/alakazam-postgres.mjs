@@ -603,12 +603,12 @@ function exactStripeCheckoutUrl(value) {
       { status: 500 }
     );
   }
+  // Stripe owns the opaque fragment on hosted Checkout destinations.
   invariant(
     parsed.protocol === "https:" &&
       parsed.hostname === "checkout.stripe.com" &&
       !parsed.username &&
-      !parsed.password &&
-      !parsed.hash,
+      !parsed.password,
     "repository_conflict",
     "the Stripe Checkout URL is invalid",
     { status: 500 }

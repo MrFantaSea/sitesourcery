@@ -192,12 +192,12 @@ function exactCheckoutUrl(value) {
       { status: 500 }
     );
   }
+  // Stripe owns the opaque fragment on hosted Checkout destinations.
   invariant(
     parsed.protocol === "https:" &&
       parsed.hostname === "checkout.stripe.com" &&
       !parsed.username &&
-      !parsed.password &&
-      !parsed.hash,
+      !parsed.password,
     "repository_conflict",
     "the durable Alakazam Checkout destination is invalid",
     { status: 500 }
