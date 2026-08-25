@@ -1,5 +1,5 @@
 export const CAPABILITY_PROCESS_MATRIX_SCHEMA =
-  "sitesourcery.capability-process-matrix/v1";
+  "sitesourcery.capability-process-matrix/v2";
 
 export const CAPABILITY_PROCESS_KEYS = Object.freeze([
   "public_successor",
@@ -47,6 +47,10 @@ const EFFECT_STATES = new Set([
   "internal",
   "static"
 ]);
+const INSTALLATION_STATES = new Set([
+  "not_installed",
+  "installed"
+]);
 const SAFE_CODE = /^[a-z][a-z0-9_]{1,79}$/u;
 
 const ROW_DEFINITIONS = Object.freeze({
@@ -79,6 +83,15 @@ const PROCESS_DEFINITIONS = Object.freeze({
   postgresql: processDefinition("durable_authority", "private_database", "internal"),
   worker: processDefinition("listener_free_worker", null, "held"),
   monitoring_deadman: processDefinition("independent_monitor", null, "held")
+});
+
+const INSTALLED_PROCESS_RUNTIME_STATES = Object.freeze({
+  public_static: "external_not_asserted",
+  hosted_api: "active",
+  tenant_runtime: "external_not_asserted",
+  postgresql: "ready",
+  worker: "held_not_asserted",
+  monitoring_deadman: "external_not_asserted"
 });
 
 function rowDefinition(startupRequired, effectState, processes) {
@@ -138,7 +151,21 @@ function validateStatus(
   return value;
 }
 
-function validateProcesses(value) {
+function releaseStateForInstallation(installationState) {
+  if (!INSTALLATION_STATES.has(installationState)) {
+    throw new TypeError("Capability process installation state is invalid.");
+  }
+  return installationState === "installed" ? "installed" : "candidate";
+}
+
+function runtimeStateForProcess(key, installationState) {
+  return installationState === "installed"
+    ? INSTALLED_PROCESS_RUNTIME_STATES[key]
+    : "not_asserted";
+}
+
+function validateProcesses(value, installationState = "not_installed") {
+  releaseStateForInstallation(installationState);
   exactObject(
     value,
     CAPABILITY_PROCESS_PROCESS_KEYS,
@@ -150,7 +177,8 @@ function validateProcesses(value) {
       `Capability process ${key}`,
       {
         effectState: PROCESS_DEFINITIONS[key].effectState,
-        engineeringState: "candidate"
+        engineeringState:
+          installationState === "installed" ? "ready" : "candidate"
       }
     );
     const definition = PROCESS_DEFINITIONS[key];
@@ -160,27 +188,32 @@ function validateProcesses(value) {
       listener: definition.listener,
       engineeringState: status.engineeringState,
       effectState: status.effectState,
-      installationState: "not_installed",
-      runtimeState: "not_asserted",
+      installationState,
+      runtimeState: runtimeStateForProcess(key, installationState),
       code: status.code
     });
   });
 }
 
-function validateRows(value) {
+function validateRows(value, installationState = "not_installed") {
+  releaseStateForInstallation(installationState);
   exactObject(value, CAPABILITY_PROCESS_KEYS, "Capability process rows");
   return CAPABILITY_PROCESS_KEYS.map((key) => {
     const status = validateStatus(
       value[key],
       `Capability row ${key}`,
-      { effectState: ROW_DEFINITIONS[key].effectState }
+      {
+        effectState: ROW_DEFINITIONS[key].effectState,
+        engineeringState:
+          installationState === "installed" ? "ready" : null
+      }
     );
     const definition = ROW_DEFINITIONS[key];
     return Object.freeze({
       key,
       engineeringState: status.engineeringState,
       effectState: status.effectState,
-      installationState: "not_installed",
+      installationState,
       startupRequired: definition.startupRequired,
       processes: definition.processes,
       code: status.code
@@ -203,11 +236,13 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
     ],
     "Capability process matrix snapshot"
   );
+  const expectedReleaseState = releaseStateForInstallation(
+    value.installationState
+  );
   if (
     value.schema !== CAPABILITY_PROCESS_MATRIX_SCHEMA ||
-    value.releaseState !== "candidate" ||
+    value.releaseState !== expectedReleaseState ||
     value.effectState !== "all_held" ||
-    value.installationState !== "not_installed" ||
     !Array.isArray(value.rows) ||
     value.rows.length !== CAPABILITY_PROCESS_KEYS_COUNT ||
     !Array.isArray(value.processes) ||
@@ -239,7 +274,7 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
       const definition = ROW_DEFINITIONS[key];
       if (
         row.key !== key ||
-        row.installationState !== "not_installed" ||
+        row.installationState !== value.installationState ||
         row.startupRequired !== definition.startupRequired ||
         JSON.stringify(row.processes) !== JSON.stringify(definition.processes)
       ) {
@@ -250,7 +285,8 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
         effectState: row.effectState,
         code: row.code
       }];
-    }))
+    })),
+    value.installationState
   );
   const processes = validateProcesses(
     Object.fromEntries(CAPABILITY_PROCESS_PROCESS_KEYS.map((key) => {
@@ -273,8 +309,11 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
         process.key !== key ||
         process.role !== definition.role ||
         process.listener !== definition.listener ||
-        process.installationState !== "not_installed" ||
-        process.runtimeState !== "not_asserted"
+        process.installationState !== value.installationState ||
+        process.runtimeState !== runtimeStateForProcess(
+          key,
+          value.installationState
+        )
       ) {
         throw new TypeError(`Capability snapshot process ${key} drifted.`);
       }
@@ -283,7 +322,8 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
         effectState: process.effectState,
         code: process.code
       }];
-    }))
+    })),
+    value.installationState
   );
   const startupReady = rows.every((row) =>
     row.startupRequired !== true || row.engineeringState === "ready"
@@ -293,9 +333,9 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
   }
   return freeze({
     schema: CAPABILITY_PROCESS_MATRIX_SCHEMA,
-    releaseState: "candidate",
+    releaseState: expectedReleaseState,
     effectState: "all_held",
-    installationState: "not_installed",
+    installationState: value.installationState,
     rows,
     processes,
     startupReady,
@@ -303,22 +343,27 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
   });
 }
 
-export function createCapabilityProcessMatrix({ loadRows, processes }) {
+export function createCapabilityProcessMatrix({
+  loadRows,
+  processes,
+  installationState = "not_installed"
+}) {
   if (typeof loadRows !== "function") {
     throw new TypeError("Capability process row loader is required.");
   }
-  const processSnapshot = validateProcesses(processes);
+  const releaseState = releaseStateForInstallation(installationState);
+  const processSnapshot = validateProcesses(processes, installationState);
   let active = null;
 
   async function snapshot() {
     if (active) return active;
     active = (async () => {
-      const rows = validateRows(await loadRows());
+      const rows = validateRows(await loadRows(), installationState);
       return validateCapabilityProcessMatrixSnapshot({
         schema: CAPABILITY_PROCESS_MATRIX_SCHEMA,
-        releaseState: "candidate",
+        releaseState,
         effectState: "all_held",
-        installationState: "not_installed",
+        installationState,
         rows,
         processes: processSnapshot,
         startupReady: rows.every((row) =>

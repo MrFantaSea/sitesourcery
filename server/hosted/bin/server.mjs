@@ -1411,10 +1411,10 @@ async function start() {
       effectState: "held",
       code: ready ? "verified_all_held" : code
     });
-  const candidateRow = (effectState = "held") => Object.freeze({
-    engineeringState: "candidate",
+  const installedRow = (effectState = "held") => Object.freeze({
+    engineeringState: "ready",
     effectState,
-    code: "candidate_not_installed"
+    code: "verified_installed_held"
   });
   const responderLocalReady =
     responderCoreReadiness.ready === true &&
@@ -1451,13 +1451,14 @@ async function start() {
     careReadiness.mailReservation?.deliveryEffects === false &&
     careCommerceReadiness.mailReservationReady === true;
   const capabilityProcessMatrix = createCapabilityProcessMatrix({
+    installationState: "installed",
     processes: {
-      public_static: candidateRow("static"),
-      hosted_api: candidateRow(),
-      tenant_runtime: candidateRow(),
-      postgresql: candidateRow("internal"),
-      worker: candidateRow(),
-      monitoring_deadman: candidateRow()
+      public_static: installedRow("static"),
+      hosted_api: installedRow(),
+      tenant_runtime: installedRow(),
+      postgresql: installedRow("internal"),
+      worker: installedRow(),
+      monitoring_deadman: installedRow()
     },
     async loadRows() {
       const publicationStorageReadiness = await publicationPort.readiness();
@@ -1467,8 +1468,8 @@ async function start() {
         publicationCommandState.state === "listening" &&
         alakazamPublicationReadiness.ready === true;
       return {
-        public_successor: candidateRow("static"),
-        hosted_browser: candidateRow("static"),
+        public_successor: installedRow("static"),
+        hosted_browser: installedRow("static"),
         accounts_recovery: heldRow(
           (
             readiness.registration?.mode !== "production" ||
@@ -1508,8 +1509,8 @@ async function start() {
         provider_reconciliation: heldRow(
           operatorProviderReconciliationReadiness.ready === true
         ),
-        backup_restore: candidateRow(),
-        monitoring_deadman: candidateRow(),
+        backup_restore: installedRow(),
+        monitoring_deadman: installedRow(),
         client_profile_hub: heldRow(adjacentLocalReady),
         dell_commercial_engine: heldRow(adjacentLocalReady),
         marketing_desk: heldRow(adjacentLocalReady),
