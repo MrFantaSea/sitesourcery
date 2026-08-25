@@ -50,6 +50,32 @@ function processes() {
   ]));
 }
 
+function installedRows() {
+  return Object.fromEntries(CAPABILITY_PROCESS_KEYS.map((key) => [
+    key,
+    {
+      engineeringState: "ready",
+      effectState: ["public_successor", "hosted_browser"].includes(key)
+        ? "static"
+        : "held",
+      code: "verified_installed_held"
+    }
+  ]));
+}
+
+function installedProcesses() {
+  return Object.fromEntries(CAPABILITY_PROCESS_PROCESS_KEYS.map((key) => [
+    key,
+    {
+      engineeringState: "ready",
+      effectState: key === "public_static"
+        ? "static"
+        : key === "postgresql" ? "internal" : "held",
+      code: "verified_installed_held"
+    }
+  ]));
+}
+
 test("freezes the exact twenty rows and six not-installed process boundaries", async () => {
   const matrix = createCapabilityProcessMatrix({
     loadRows: async () => rows(),
@@ -75,6 +101,82 @@ test("freezes the exact twenty rows and six not-installed process boundaries", a
   assert.equal(Object.isFrozen(snapshot), true);
   assert.deepEqual(validateCapabilityProcessMatrixSnapshot(snapshot), snapshot);
   assert.deepEqual(await matrix.assertStartup(snapshot), snapshot);
+});
+
+test("projects an exact installed held topology without claiming external process liveness", async () => {
+  const matrix = createCapabilityProcessMatrix({
+    loadRows: async () => installedRows(),
+    processes: installedProcesses(),
+    installationState: "installed"
+  });
+  const snapshot = await matrix.snapshot();
+  assert.equal(snapshot.releaseState, "installed");
+  assert.equal(snapshot.installationState, "installed");
+  assert.equal(
+    snapshot.rows.every((row) =>
+      row.engineeringState === "ready" &&
+      row.installationState === "installed"
+    ),
+    true
+  );
+  assert.deepEqual(
+    Object.fromEntries(snapshot.processes.map((process) => [
+      process.key,
+      process.runtimeState
+    ])),
+    {
+      public_static: "external_not_asserted",
+      hosted_api: "active",
+      tenant_runtime: "external_not_asserted",
+      postgresql: "ready",
+      worker: "held_not_asserted",
+      monitoring_deadman: "external_not_asserted"
+    }
+  );
+  assert.equal(snapshot.externalEffects, false);
+  assert.deepEqual(validateCapabilityProcessMatrixSnapshot(snapshot), snapshot);
+});
+
+test("installed truth rejects candidate engineering and invented runtime state", async () => {
+  assert.throws(
+    () => createCapabilityProcessMatrix({
+      loadRows: async () => installedRows(),
+      processes: {
+        ...installedProcesses(),
+        worker: {
+          engineeringState: "candidate",
+          effectState: "held",
+          code: "candidate_not_installed"
+        }
+      },
+      installationState: "installed"
+    }),
+    /invalid reviewed status/u
+  );
+
+  const snapshot = await createCapabilityProcessMatrix({
+    loadRows: async () => installedRows(),
+    processes: installedProcesses(),
+    installationState: "installed"
+  }).snapshot();
+  assert.throws(
+    () => validateCapabilityProcessMatrixSnapshot({
+      ...snapshot,
+      processes: snapshot.processes.map((process) =>
+        process.key === "worker"
+          ? { ...process, runtimeState: "active" }
+          : process
+      )
+    }),
+    /drifted/u
+  );
+  assert.throws(
+    () => validateCapabilityProcessMatrixSnapshot({
+      ...snapshot,
+      releaseState: "candidate"
+    }),
+    /invalid/u
+  );
 });
 
 test("required engineering drift fails startup while later candidate rows do not", async () => {

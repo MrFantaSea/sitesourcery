@@ -191,6 +191,8 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
     source,
     /const capabilityProcessMatrix = createCapabilityProcessMatrix\(\{/u
   );
+  assert.match(source, /installationState: "installed"/u);
+  assert.match(source, /const installedRow = \(effectState = "held"\)/u);
   assert.match(source, /strictCapabilityProcessMatrix: true/u);
   assert.match(source, /capabilityProcessMatrix,/u);
   assert.match(
