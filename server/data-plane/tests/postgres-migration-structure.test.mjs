@@ -55,6 +55,14 @@ test("migration 145 retains Stripe Checkout fragments and bounded Download recon
   assert.doesNotMatch(migration.sql, /checkout[^\n]*url[^\n]*!~/iu);
   assert.match(
     migration.sql,
+    /commerce_v2_download_dispatch_state_v145[\s\S]*state = 'expired'[\s\S]*checkout_url is null[\s\S]*sitesourcery\.abracadabra-checkout-expired-reconciliation\.v1/iu
+  );
+  assert.match(
+    migration.sql,
+    /commerce_v2_download_dispatch_result_v145[\s\S]*providerStatus' = 'expired'[\s\S]*paymentStatus' = 'unpaid'[\s\S]*paymentIntentPresent'[\s\S]*'false'::jsonb[\s\S]*'checkout' -> 'url' = 'null'::jsonb/iu
+  );
+  assert.match(
+    migration.sql,
     /old\.state = 'effect_unknown'[\s\S]*new\.state = 'ready'[\s\S]*provider_expires_at > clock_timestamp\(\)[\s\S]*new\.state = 'expired'[\s\S]*provider_expires_at <= clock_timestamp\(\)/iu
   );
 });
