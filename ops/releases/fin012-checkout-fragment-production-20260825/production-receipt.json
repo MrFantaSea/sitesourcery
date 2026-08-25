@@ -1,0 +1,208 @@
+{
+  "schema": "sitesourcery.fin012-checkout-fragment-production/v1",
+  "recordedAt": "2026-08-25T18:03:34.000Z",
+  "state": "production_live_expired_attempt_reconciled",
+  "git": {
+    "candidateCommit": "64a4f5b57c4e61a8449e7e79ed6f38f9fd8d7394",
+    "candidateTree": "7019779cd8c524c4a70444b0ae01a9cf9b1d7e25",
+    "reviewControlCommit": "0e3934c0c9377e5f79230cee9ac7a3cd841edd92",
+    "protectedControlCommit": "900fdbe43013635ea1f0bf861b6ad56022522681",
+    "protectedControlTree": "19993ba687bd19f41fff494612e049371a890b17",
+    "candidatePullRequest": 40,
+    "controlPullRequest": 41
+  },
+  "heldProof": {
+    "runId": 32793741361,
+    "runAttempt": 1,
+    "state": "verified_held",
+    "successorInputDigest": "f1adaa47f81f6259b4dad15d47fdb624c0bdf6ed8aa77d7d11b6ce50fe607663",
+    "receiptDigest": "1a26d200fd6c9757725404b1b2288af31f7cf3fbe2d3f5993261481785b9d665",
+    "receiptFileSha256": "1cb179f2106e39ddc611e168acb2a7f80953f42016322ac728937f6a01796e07",
+    "allowsCapabilities": false,
+    "allowsCustomerEffects": false,
+    "allowsProviderEffects": false,
+    "allowsDnsMutation": false,
+    "allowsDeployment": false
+  },
+  "installation": {
+    "epochId": "fin012-checkout-fragment-64a4f5b-20260824",
+    "bindingSha256": "f1adaa47f81f6259b4dad15d47fdb624c0bdf6ed8aa77d7d11b6ce50fe607663",
+    "runtimeStageReceiptSha256": "34fd152ab0fe78facbdc6d76aa851a28c105b19f55d49def356e3124d8663980",
+    "migrationReceiptSha256": "7d409ec6f9e091d43d2591868d403106b7608c5bf193b43d5e5cf8d1f0873d19",
+    "cutoverReceiptSha256": "4ce5816c362e5b7ca16602fcbcc316c16ebef32811a5a55489f7eb948a23a4a8",
+    "finalEpochSha256": "2de832417d551bc498442db8f75707392b9351adef40a81f340474a21e613c52",
+    "originSealSha256": "3960d1676f316aae95965c54ec25f1e379fe12593b2620a07891b14c50f9ea22",
+    "installedReadbackSha256": "74b204a6d0f4060473443dc48b0bba4e0b1f2e01f2527104f945534115af4ab7",
+    "environmentAssignmentCount": 123,
+    "environmentSha256": "23ef7ee6675ab891b36a8d6e21c08d2bcb251bcba389ebd3bdb0229f2a549b57",
+    "runtimeWrapperSha256": "0558db9d57d2622bcaae23eb7c86abbffe8d2891239b2b1662e640835d3cc487",
+    "runtimeUnitSha256": "79997f56e9bbf566806ab84e1db625083ec0a3fa593025a038f806eb7a4f8e73",
+    "staticUnitSha256": "d6bd87d9c30c792ca37bc5ac165b00f0ced1696215c87bff367944409aa45a22"
+  },
+  "guardedCutover": {
+    "preCutoverBackup": {
+      "attemptId": "2026-08-25T004625526Z-2697410e-7953-4183-8fc3-2ab6a2955a5e",
+      "snapshotId": "c973099b-32b8-459f-ae67-08b453175b86",
+      "manifestSha256": "9fc22ea8677a2c0ad2574bd7063c913ed54bf2d75b69ec5da892c3ced5f1c7ce",
+      "databaseCiphertextSha256": "312786c72c25b414522c945e1fb89765892a84473a3875b4038f4a95c9547b7e",
+      "appStateCiphertextSha256": "66f4d9692cf7546941f82b2baf47520d9b2a6a23c31186a8fe7381c6fc1c6541",
+      "artifactCount": 2,
+      "databaseWriterCount": 0,
+      "verifiedBeforeAndAfter": true,
+      "plaintextStagingRemoved": 0
+    },
+    "restoreRehearsalReceiptSha256": "d4664a41d561f790181398e268accab52832418bf02b511b52a08cfd8d5f6771",
+    "failedAttemptCount": 2,
+    "automaticExactRestoreCount": 2,
+    "firstAttempt": {
+      "failure": "finalizer_readiness_identity_shape",
+      "migrationReceiptSha256": "b04372a869a5e4aaccda0601cb6d72254a4f215a6b0b028ac08a56938febe01e",
+      "databaseRestoreReceiptSha256": "053ec0eb92bad1d1b77194564c4afcb63c09bb8e3afecf13acec633aca3bc2f9"
+    },
+    "secondAttempt": {
+      "failure": "finalizer_origin_host_header_transport",
+      "migrationReceiptSha256": "566c167543635b019a6ce32a64eaf06e3b1fcb7c59b5f05731ab2c16bd8756a1",
+      "databaseRestoreReceiptSha256": "18ad34befc4fb428051d7568d25113e2c013d7c7607bc98967b31d7ebbec2b98"
+    },
+    "thirdAttempt": {
+      "state": "candidate_selected_migration_145_live",
+      "migrationReceiptSha256": "7d409ec6f9e091d43d2591868d403106b7608c5bf193b43d5e5cf8d1f0873d19",
+      "cutoverReceiptSha256": "4ce5816c362e5b7ca16602fcbcc316c16ebef32811a5a55489f7eb948a23a4a8"
+    },
+    "failedAttemptProviderEffect": false,
+    "failedAttemptPaymentEffect": false,
+    "failedAttemptEntitlementEffect": false,
+    "failedAttemptDnsEffect": false,
+    "failedAttemptPublicationEffect": false
+  },
+  "database": {
+    "databaseName": "sitesourcery_production",
+    "postgresMajor": 16,
+    "migrationCount": 98,
+    "latestMigration": "202608240145_stripe_checkout_fragment_authority.sql",
+    "tableCounts": {
+      "auth": 1,
+      "ss": 293,
+      "total": 294
+    },
+    "schemaSha256": "2b1034e6e9ef99e27d6941b07b1fb29f8dd4ecead3637ef498850ad877ce2189",
+    "rowCountsSha256": "851c302b7dac8e0adb7420eb9fa16ee24b62e0352aa6b9c294f2f5fe45c29d23",
+    "ownershipSha256": "d4d55db3e00debc22be17abba30c3a85a1ab9941d6a98f8baadeeaec90c74d28",
+    "allRelationsOwnedByDatabaseOwner": true,
+    "allRoutinesOwnedByDatabaseOwner": true,
+    "rowLoss": false
+  },
+  "expiredCheckoutReconciliation": {
+    "providerSessionCount": 1,
+    "providerSessionIdSha256": "a719fc0b937f2527db9329a67dab02a752047592b55b4e47d87f2f8b54c682dc",
+    "purposeDigest": "1e51288c15772f1d419edfe286577a4bc0aed9706a02cfa0d11df1a58b52b9bc",
+    "providerStatus": "expired",
+    "paymentStatus": "unpaid",
+    "paymentIntentPresent": false,
+    "providerUrlPresent": false,
+    "inspectReceiptSha256": "3dadcdde24974e43171870a89a267d204d5423a813dc31acc573bbb85a71dee8",
+    "applyReceiptSha256": "175f6bec2f65ee1fff7dbd420b1aa54b7f3e1ce350e57f11c10a601c8bb5a3cf",
+    "verificationReceiptSha256": "0a50daf53fefdb973748d3bd0ad7e7df5a157687c5dc3f36e4a9cb86a2f168fe",
+    "priorDurableState": "effect_unknown",
+    "resultingDurableState": "expired",
+    "paymentEventCount": 0,
+    "paymentReceiptCount": 0,
+    "entitlementCount": 0,
+    "retryPerformed": false,
+    "secondSessionCreated": false,
+    "providerMutation": false,
+    "paymentEffect": false,
+    "entitlementEffect": false
+  },
+  "postCutoverBackup": {
+    "attemptId": "2026-08-25T174022091Z-c0441466-48a1-426e-9a85-973ebe8c3097",
+    "snapshotId": "3c1bb4e2-fc56-4787-97e0-8794188fc751",
+    "manifestSha256": "e8964a76db80e50fb17b0b93329bdba7ea16d5db936fbdce9baa06da12f973d1",
+    "databaseCiphertextSha256": "99465772681eb4088ff56776dcda56577629eba0854198ef2df618916fcc6f92",
+    "appStateCiphertextSha256": "7eb7177d92a2ca20becbc297dd44e65ca3d0c78406e0cb8093abd1754b111a6d",
+    "artifactCount": 2,
+    "databaseWriterCount": 0,
+    "verifiedBeforeAndAfter": true,
+    "dellZenHashesMatch": true,
+    "plaintextStagingRemoved": 0
+  },
+  "operations": {
+    "activeServices": [
+      "sitesourcery-production.service",
+      "sitesourcery-production-static.service",
+      "sitesourcery-origin.service",
+      "sitesourcery-cloudflared.service",
+      "sitesourcery-production-db-tunnel.service"
+    ],
+    "activeTimers": [
+      "sitesourcery-production-backup.timer",
+      "sitesourcery-production-monitor.timer"
+    ],
+    "backupCoincidentMonitorIncident": {
+      "observedAt": "2026-08-25T17:43:35.642Z",
+      "code": "RUNTIME_PROBE_UNAVAILABLE",
+      "delivered": true
+    },
+    "monitorRecovery": {
+      "observedAt": "2026-08-25T17:47:20.736Z",
+      "checksPassed": [
+        "backlog",
+        "backup",
+        "certificate",
+        "database",
+        "disk",
+        "runtime"
+      ],
+      "alerts": [],
+      "delivered": true
+    }
+  },
+  "publicVerification": {
+    "localReady": true,
+    "originReady": true,
+    "publicReady": true,
+    "externalEffects": false,
+    "publicSweepReceiptSha256": "cf1b7d43a84e43b3f4aa66de0f096f825b74868f36248ebf76aff09297e40bf6",
+    "canonicalRoutes": 24,
+    "legalVersionRoutes": 8,
+    "exactAssets": 5,
+    "legacyRedirects": 14,
+    "notFoundExact": true,
+    "wwwRedirectExact": true,
+    "exactBytes": true,
+    "browser": {
+      "home": "green",
+      "abracadabraLanding": "green",
+      "guestWorkroom": "ready",
+      "lookCount": 3,
+      "consoleWarningCount": 0,
+      "consoleErrorCount": 0,
+      "checkoutControlTouched": false
+    }
+  },
+  "rollback": {
+    "predecessorCommit": "984fa3580b47dbdc645208d58898e68adaf46903",
+    "predecessorTree": "34a19cda9958787f3d67d4ed78dd61d6d55586ec",
+    "databaseRestoreRequired": true,
+    "codeEnvironmentUnitsEvidenceRetained": true,
+    "encryptedRestoreRetained": true,
+    "retirementAuthorized": false
+  },
+  "effects": {
+    "databaseMigration": "migration_145",
+    "databaseReconciliation": "one_expired_unpaid_tombstone",
+    "providerRead": true,
+    "providerMutation": false,
+    "checkoutSessionCreatedByThisCutover": false,
+    "retry": false,
+    "cardEntry": false,
+    "charge": false,
+    "payment": false,
+    "entitlement": false,
+    "dns": false,
+    "publication": false,
+    "operationalMail": "one_backup_coincident_incident_and_one_recovery"
+  },
+  "secretDisclosed": false,
+  "nextGate": "protected evidence review while rollback, backup, and monitoring remain retained"
+}

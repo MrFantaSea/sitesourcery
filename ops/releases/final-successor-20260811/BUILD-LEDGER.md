@@ -407,3 +407,43 @@ database/customer mutation, deployment, public-byte change, DNS, publication,
 or service effect occurred. Protected review without deployment is next; live
 read-only reinspection and fresh action-time confirmation remain separate later
 gates.
+
+That browser-correction state and its later failed Checkout state are now
+superseded for the `$20` Download repair lane. Protected candidate
+`64a4f5b57c4e61a8449e7e79ed6f38f9fd8d7394`, tree
+`7019779cd8c524c4a70444b0ae01a9cf9b1d7e25`, and protected control
+`900fdbe43013635ea1f0bf861b6ad56022522681`, tree
+`19993ba687bd19f41fff494612e049371a890b17`, are live at epoch
+`fin012-checkout-fragment-64a4f5b-20260824`. Held run `32793741361` issued
+exact verified-held digest `1a26d200...` and downloaded receipt SHA-256
+`1cb179f2...`.
+
+Fresh encrypted pre-cutover backup and streamed restore rehearsal proved
+migration 145. Two final-evidence probe defects each exercised automatic exact
+database/runtime rollback before guarded attempt three succeeded. Final
+PostgreSQL 16 readback is 98 migrations, 294 tables, schema `2b1034e6...`, row
+digest `851c302b...`, and ownership `d4d55db3...`, with no row loss. Exact
+predecessor `984fa358...` and its paired restore remain retained.
+
+The same one owner-approved Session was then explicitly read back as expired,
+unpaid, without PaymentIntent or URL and reconciled once as an expired/redacted
+tombstone. Independent proof found zero Stripe payment events, zero payment
+receipts, and zero entitlements. There was no retry, second Session, card entry,
+charge, payment, or provider mutation.
+
+Post-cutover encrypted Zen backup manifest `e8964a76...` is verified on both
+machines with exactly two ciphertexts, zero writers, and no plaintext staging.
+All production services/timers are active; the final monitor follow-up is six
+of six green with no active alert. Public proof passed 24 canonical routes,
+eight legal versions, five critical assets, 14 redirects, branded 404, and
+`www` at exact bytes. Home, Abracadabra, and the anonymous workroom are browser-
+green with no console warning/error and Checkout untouched.
+
+Exact closeout evidence is
+`ops/releases/fin012-checkout-fragment-production-20260825/`.
+`production-receipt.json` has SHA-256
+`77fe7952e92808e0e9fae04245f871fe8e313701b7b107d5ebefce6cc334d693`.
+This closes the activated `$20` Download failed-attempt repair lane only.
+Every separately gated payment purpose, live Domain action, Twilio transport,
+native distribution, publication, and rollback retirement remains governed by
+its current verified provider/owner evidence rather than by this ledger entry.
