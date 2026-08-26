@@ -447,3 +447,38 @@ This closes the activated `$20` Download failed-attempt repair lane only.
 Every separately gated payment purpose, live Domain action, Twilio transport,
 native distribution, publication, and rollback retirement remains governed by
 its current verified provider/owner evidence rather than by this ledger entry.
+
+The subsequent installed-truth correction is now protected and live. Exact
+candidate `420bd8a424da3331514723d40b5be9fb5131dfe3`, tree
+`b118539b060254c663cb55325a8ec4a12d8ed24c`, and protected one-file control
+`36485462e2db4e9c81a47b0e085aa42ba2755193`, tree
+`2ebd1a93532ee67b0615d43e7215442d79914e97`, passed all protected candidate,
+control, exact-main, and held gates. Held run `32902397997` issued exact digest
+`f5adb6ba...` while every effect authority remained false.
+
+Fresh encrypted pre-cutover backup manifest `72275d9b...` is verified on Dell
+and Zen. The immutable code-only cutover selected epoch
+`fin012-installed-truth-420bd8a-20260825` without migration, database mutation,
+provider effect, payment, entitlement, DNS, publication, customer mutation, or
+static-byte change. Local API, origin, and public edge all report capability
+matrix v2 with 20 installed engineering-ready rows, six installed engineering-
+ready processes, and `externalEffects=false`. PostgreSQL remains exact at 98
+migrations, 294 tables, schema `2b1034e6...`, rows `851c302b...`, and ownership
+`d4d55db3...`.
+
+Post-cutover encrypted backup manifest `1314773...` is also Dell/Zen exact with
+two ciphertexts, zero writers, and no plaintext staging. All seven production
+services/timers are active. The explicit `2026-08-26T14:43:35.000Z` monitor
+passed all six checks with no alert or delivery. Public receipt `b5c2b29a...`
+passed 24 canonical routes, eight legal versions, five critical assets, 14
+redirects, branded 404, and `www` at exact bytes.
+
+Exact closeout evidence is
+`ops/releases/fin012-installed-capability-truth-production-20260826/`.
+`production-receipt.json` has SHA-256
+`04e549df337cfc4a89f10939d5582c6a0265dcc10db3f96a3c7cf9305be7454d`.
+This closes the installed-capability-truth correction through live production
+readback only. Publication and worker engineering are installed and held;
+external Twilio, D-U-N-S/native distribution, Spaceship/Domain, unreleased
+payment-purpose, elapsed stabilization, and rollback-retirement gates remain
+separate and unchanged.

@@ -1,0 +1,223 @@
+{
+  "schema": "sitesourcery.fin012-installed-capability-truth-production/v1",
+  "recordedAt": "2026-08-26T14:46:10.000Z",
+  "state": "production_live_installed_truth_v2_all_effects_held",
+  "git": {
+    "candidateCommit": "420bd8a424da3331514723d40b5be9fb5131dfe3",
+    "candidateTree": "b118539b060254c663cb55325a8ec4a12d8ed24c",
+    "candidatePullRequest": 43,
+    "candidatePullRequestSiteQualityRun": 32900086321,
+    "candidateMainSiteQualityRun": 32900750333,
+    "candidateMainControlledPagesRun": 32900750298,
+    "reviewControlCommit": "be876c2389ab51c001489f7bcc88ba79ef05cfe0",
+    "protectedControlCommit": "36485462e2db4e9c81a47b0e085aa42ba2755193",
+    "protectedControlTree": "2ebd1a93532ee67b0615d43e7215442d79914e97",
+    "controlPullRequest": 44,
+    "controlPullRequestSiteQualityRun": 32901620664,
+    "controlMainSiteQualityRun": 32902005918,
+    "controlMainControlledPagesRun": 32902005927,
+    "successorInputSha256": "b2e321a3b38f8c529988173589c85cc224fb8f8683e26895f4ccb5e210e30505",
+    "successorInputDigest": "fd573d9b422897875a750ef2379b55a64e0797d198c8be03fee7ed616189cf8c"
+  },
+  "heldProof": {
+    "runId": 32902397997,
+    "runAttempt": 1,
+    "state": "verified_held",
+    "receiptDigest": "f5adb6ba6b059f42b1ca40e0b5bc6c0d96ac5c02bbcd1fcbda2d23001ba74e3a",
+    "receiptFileSha256": "86a252f819bf15f560cec01c33635931d59eb04c0f16362ad74adf3500fc46f7",
+    "allowsCapabilities": false,
+    "allowsCustomerEffects": false,
+    "allowsProviderEffects": false,
+    "allowsDnsMutation": false,
+    "allowsDeployment": false
+  },
+  "preCutoverBackup": {
+    "failedClosedAttempts": [
+      {
+        "failure": "prior_public_sweep_evidence_not_group_readable",
+        "effect": false
+      },
+      {
+        "failure": "prior_public_sweep_evidence_not_group_readable_after_repeat",
+        "effect": false
+      }
+    ],
+    "repair": "group changed to root:simtech with mode retained at 0440",
+    "repairedFileContentChanged": false,
+    "attemptId": "2026-08-25T221119291Z-33eca5ba-611d-46ca-a8dd-6a2a1fead360",
+    "snapshotId": "a1785437-28cc-4617-ba99-955f9f2b6785",
+    "manifestSha256": "72275d9ba619cf1eea6ce46d2af92d28a2b84079f639ece1b2070969a7538add",
+    "databaseCiphertextSha256": "de2f3d0d0f8b4bd4ee08b84923e7b6495d2e83a26f193c76d8f04e6e1a2ed7ae",
+    "appStateCiphertextSha256": "ec3ef53a6fdb4f374359ef697d41d0cfe91e349d23c0c6840c48d740d993e81a",
+    "artifactCount": 2,
+    "databaseWriterCount": 0,
+    "verifiedBeforeAndAfter": true,
+    "dellZenHashesMatch": true,
+    "providerEgressHeld": true,
+    "plaintextStagingEmpty": true
+  },
+  "installation": {
+    "epochId": "fin012-installed-truth-420bd8a-20260825",
+    "bindingSha256": "fd573d9b422897875a750ef2379b55a64e0797d198c8be03fee7ed616189cf8c",
+    "releaseBundleSha256": "4d7102d0aa8e48aa95f981ac311b72ca1007a60f8556334c1b59d20aac05ace9",
+    "releasePath": "/home/simtech/sitesourcery-production/releases/420bd8a424da3331514723d40b5be9fb5131dfe3",
+    "originReleaseInputSha256": "5ef1eb9e9549749006d8d424874679f2b63a8c8c53dee7e1ce8d1aac7ee4429e",
+    "originSealSha256": "85966c2ee14edb6aae3da6d3036c3776537b30fcc42373d96c6aca6779a9ebc3",
+    "installedReadbackSha256": "0363abf0411a7f89ccf7dc1b13d3150f9a85af8aad75b59b41580c04cb385066",
+    "finalEpochSha256": "02d390a9e2ebb0d0db6dd21a58114ecd71eb216937d88d58e12b8835ecab7fd5",
+    "runtimeStageReceiptSha256": "d334e365c866065b7fa4742f3a05627563c6170311b7d71d06f2c20088729b37",
+    "runtimeStagePayloadDigest": "babd2b1156a917cd2647ce2ea69f1e6a1be4689065aab6ab0c754f93bd7b80f8",
+    "environmentAssignmentCount": 123,
+    "environmentSha256": "e1fa5e6742b7da8a09ca9b6f9b7b797d76c119232bd85af79446d1547848950e",
+    "runtimeWrapperSha256": "656ed04dcc6f0da6d830530889b6de56dba47073eef38f4adf9608e56cec8902",
+    "runtimeUnitSha256": "104cbe65ec854281674b3781b81b11c8c24e457f35578937faf03b2b58b7d39d",
+    "staticUnitSha256": "0b39d001962b54047ab78947279c2881d58d3229f75e0a0b0ac5400de21ff042",
+    "hostedFileCount": 118,
+    "hostedBytesChangedFromPredecessor": false,
+    "failedRootSealAttemptRetained": true,
+    "failedRootSealAttemptEffect": false
+  },
+  "guardedCutover": {
+    "preflightPassed": true,
+    "databaseMigrationStaged": false,
+    "state": "candidate_selected_code_only_live",
+    "cutoverReceiptSha256": "10b6fb13946dfef88366c0ab6740a5db78ccba11eefdb5721abac2c7bab2b7c3",
+    "localApiExact": true,
+    "localOriginExact": true,
+    "publicEdgeExact": true,
+    "databaseMigration": false,
+    "databaseMutation": false,
+    "providerMutation": false,
+    "paymentEffect": false,
+    "entitlementEffect": false,
+    "dnsEffect": false,
+    "publicationEffect": false,
+    "staticBytesChanged": false
+  },
+  "capabilityTruth": {
+    "matrixSchema": "sitesourcery.capability-process-matrix/v2",
+    "matrixSha256": "3419477ad61ae4248f42b46eae79d382622f828fa7d574b1f1915e0efc213cab",
+    "releaseState": "installed",
+    "installationState": "installed",
+    "effectState": "all_held",
+    "installedEngineeringReadyCapabilityCount": 20,
+    "installedEngineeringReadyProcessCount": 6,
+    "hostedApiRuntime": "active",
+    "postgresqlRuntime": "ready",
+    "workerRuntime": "held_not_asserted",
+    "externalProcessLivenessAsserted": false,
+    "externalEffects": false
+  },
+  "database": {
+    "databaseName": "sitesourcery_production",
+    "postgresMajor": 16,
+    "preCutoverSnapshotSha256": "832267cae459456db1f8a1511f4de0fb952a2ad986d5ae48a34f294f24bb557f",
+    "postCutoverSnapshotSha256": "e4d247c8a3f4562a7d1b826b39ed32e0059683fcdcae92eeffada4ac63aa7b9c",
+    "migrationCount": 98,
+    "latestMigration": "202608240145_stripe_checkout_fragment_authority.sql",
+    "tableCounts": {
+      "auth": 1,
+      "ss": 293,
+      "total": 294
+    },
+    "schemaSha256": "2b1034e6e9ef99e27d6941b07b1fb29f8dd4ecead3637ef498850ad877ce2189",
+    "rowCountsSha256": "851c302b7dac8e0adb7420eb9fa16ee24b62e0352aa6b9c294f2f5fe45c29d23",
+    "ownershipSha256": "d4d55db3e00debc22be17abba30c3a85a1ab9941d6a98f8baadeeaec90c74d28",
+    "allRelationsOwnedByDatabaseOwner": true,
+    "allRoutinesOwnedByDatabaseOwner": true,
+    "schemaChanged": false,
+    "rowCountsChanged": false,
+    "ownershipChanged": false,
+    "rowLoss": false
+  },
+  "postCutoverBackup": {
+    "attemptId": "2026-08-26T001435566Z-f41f848f-b17c-4cdf-a509-e98f76d65c0e",
+    "snapshotId": "153c7978-2e6b-42e8-8259-88a9ed5c7e5c",
+    "manifestSha256": "1314773bbe6c41d590063232343793dd0db7a96f1bbb326eabbd8af6c19c95c3",
+    "databaseCiphertextSha256": "e4acfddd2f6e7208778337dfb8f486c6acfa055baedf7950f62b9fbecd35e3c9",
+    "appStateCiphertextSha256": "a4cf6622f1c0074702f44d8e435add5e48a380802f109bf2bef00fb36535cf95",
+    "artifactCount": 2,
+    "databaseWriterCount": 0,
+    "verifiedBeforeAndAfter": true,
+    "dellZenHashesMatch": true,
+    "providerEgressHeld": true,
+    "plaintextStagingEmpty": true
+  },
+  "operations": {
+    "activeServices": [
+      "sitesourcery-production.service",
+      "sitesourcery-production-static.service",
+      "sitesourcery-origin.service",
+      "sitesourcery-cloudflared.service",
+      "sitesourcery-production-db-tunnel.service"
+    ],
+    "activeTimers": [
+      "sitesourcery-production-backup.timer",
+      "sitesourcery-production-monitor.timer"
+    ],
+    "latestExplicitMonitor": {
+      "observedAt": "2026-08-26T14:43:35.000Z",
+      "checksPassed": [
+        "backlog",
+        "backup",
+        "certificate",
+        "database",
+        "disk",
+        "runtime"
+      ],
+      "alerts": [],
+      "providerEgressHeld": true,
+      "deliveryRequired": false
+    }
+  },
+  "publicVerification": {
+    "localReady": true,
+    "originReady": true,
+    "publicReady": true,
+    "candidateExact": true,
+    "matrixV2Exact": true,
+    "externalEffects": false,
+    "publicSweepReceiptSha256": "b5c2b29acd9dd664c0776b9be2183a1a13e667face4b0b40824bb8d9a35496af",
+    "canonicalRoutes": 24,
+    "legalVersionRoutes": 8,
+    "exactAssets": 5,
+    "legacyRedirects": 14,
+    "notFoundExact": true,
+    "wwwRedirectExact": true,
+    "exactBytes": true
+  },
+  "rollback": {
+    "predecessorCommit": "64a4f5b57c4e61a8449e7e79ed6f38f9fd8d7394",
+    "predecessorTree": "7019779cd8c524c4a70444b0ae01a9cf9b1d7e25",
+    "databaseRestoreRequired": false,
+    "codeEnvironmentUnitsEvidenceRetained": true,
+    "encryptedRestoreRetained": true,
+    "retirementAuthorized": false
+  },
+  "effects": {
+    "databaseMigration": false,
+    "databaseMutation": false,
+    "providerRead": false,
+    "providerMutation": false,
+    "checkoutSessionCreated": false,
+    "retry": false,
+    "cardEntry": false,
+    "charge": false,
+    "payment": false,
+    "entitlement": false,
+    "dns": false,
+    "publication": false,
+    "customerMutation": false,
+    "operationalMail": false
+  },
+  "remainingExternalAndTimeGates": {
+    "twilio": "no configured CLI profile or credential evidence",
+    "duns": "D&B request submitted 2026-08-21 remains under review; no issuance evidence",
+    "spaceship": "consent complete; live credentials, exact price/final charge, disclosure, scoped approval, and reconciliation evidence absent",
+    "nativeDistribution": "unsigned clients built; organization enrollment, signing, and store distribution absent",
+    "otherStripePurposes": "held; no authority to activate",
+    "stabilization": "24-hour, 7-day, and retained 30-day checkpoints advance only with elapsed time and evidence"
+  },
+  "secretDisclosed": false,
+  "nextGate": "protected evidence review while backups, monitoring, predecessor, and all unreleased external effects remain retained"
+}
