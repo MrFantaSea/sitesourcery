@@ -1704,6 +1704,47 @@ test("held monitor covers every required signal and performs no outbound alert e
   });
 });
 
+test("an unavailable backup probe remains visible while alert delivery stays held", async () => {
+  const probes = healthyProbes();
+  probes.backup = async () => {
+    throw new Error("injected unavailable backup");
+  };
+  const result = await runOperationsMonitor({
+    ...HELD_MONITOR_CONTRACT,
+    probes,
+    alertAdapter: createHeldAlertAdapter(),
+    now: () => new Date(NOW)
+  });
+  assert.equal(result.report.ok, false);
+  assert.deepEqual(
+    result.report.checks.find(
+      ({ name }) => name === "backup"
+    ),
+    {
+      name: "backup",
+      ok: false,
+      code: "BACKUP_PROBE_UNAVAILABLE"
+    }
+  );
+  assert.deepEqual(
+    result.report.alerts,
+    [
+      {
+        code: "BACKUP_PROBE_UNAVAILABLE",
+        severity: "critical",
+        summary:
+          "The latest immutable backup could not be verified."
+      }
+    ]
+  );
+  assert.deepEqual(result.delivery, {
+    attempted: false,
+    delivered: false,
+    mode: "held",
+    code: "OUTBOUND_ALERTS_HELD"
+  });
+});
+
 test("certificate monitoring stays explicitly held until the reviewed public edge requires a real certificate", async () => {
   const heldProduction =
     createProductionMonitoringProbes({
