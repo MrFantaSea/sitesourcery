@@ -265,8 +265,8 @@ export function createHeldTwilioResponderInbound() {
 }
 
 export function createTwilioResponderInbound({
-  accountSid,
-  webhookAuthToken,
+  providerRegistry,
+  providerTopologyRepository,
   inboundMessageUrl,
   voiceUrl,
   dialResultUrl,
@@ -275,8 +275,6 @@ export function createTwilioResponderInbound({
   lookupDigests,
   clock = { now: () => new Date().toISOString() }
 } = {}) {
-  const selectedAccountSid = exactAccountSid(accountSid);
-  const selectedAuthToken = authToken(webhookAuthToken);
   const selectedMessageUrl = exactUrl(
     inboundMessageUrl,
     "https://sitesourcery.com/api/v1/provider-events/twilio/inbound-messages",
@@ -296,14 +294,23 @@ export function createTwilioResponderInbound({
   const materialVault = vaultBoundary(vault);
   const keyedLookups = lookupDigestsBoundary(lookupDigests);
   invariant(
-    typeof twilio?.validateRequest === "function" &&
+    providerRegistry?.kind === "twilio-isv-provider-registry" &&
+      providerRegistry.providerEffects === false &&
+      typeof providerRegistry.resolveAccountSid === "function" &&
+      typeof providerRegistry.readiness === "function" &&
+      providerTopologyRepository?.kind ===
+        "responder-twilio-provider-topology-postgres" &&
+      providerTopologyRepository.providerEffects === false &&
+      typeof providerTopologyRepository.requireActiveTopology === "function" &&
+      typeof providerTopologyRepository.readiness === "function" &&
+      typeof twilio?.validateRequest === "function" &&
       typeof clock?.now === "function",
     "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED",
     "The official Twilio validator and inbound clock are required.",
     { status: 500 }
   );
 
-  function verifiedParams(url, { rawBody, headers } = {}) {
+  async function verifiedParams(url, { rawBody, headers } = {}) {
     if (!/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu
       .test(header(headers, "content-type").trim())) {
       throw invalid();
@@ -311,8 +318,17 @@ export function createTwilioResponderInbound({
     const signature = header(headers, "x-twilio-signature");
     if (!/^[A-Za-z0-9+/]{27}=$/u.test(signature)) throw invalid();
     const params = parsedForm(rawBody);
+    const callbackAccountSid = one(params, "AccountSid");
+    let provider;
+    try {
+      provider = providerRegistry.resolveAccountSid(
+        exactAccountSid(callbackAccountSid)
+      );
+    } catch {
+      throw invalid();
+    }
     if (!twilio.validateRequest(
-      selectedAuthToken,
+      authToken(provider.webhookAuthToken),
       signature,
       url,
       params
@@ -323,13 +339,12 @@ export function createTwilioResponderInbound({
         { status: 400, details: { providerEffects: false } }
       );
     }
-    const callbackAccountSid = one(params, "AccountSid");
-    if (callbackAccountSid !== selectedAccountSid) throw invalid();
+    await providerTopologyRepository.requireActiveTopology(provider.topology);
     const payloadDigest = digest(rawBody);
     return {
       params,
       payloadDigest,
-      accountSidDigest: digest(callbackAccountSid),
+      accountSidDigest: provider.topology.accountSidDigest,
       signatureVerificationDigest: digest({
         schema: "sitesourcery.twilio-signature-verification/v1",
         provider: PROVIDER,
@@ -388,14 +403,18 @@ export function createTwilioResponderInbound({
     mode: "verified-inbound",
     providerEffects: false,
     async readiness() {
-      const [storage, sealing, lookups] = await Promise.all([
+      const [storage, sealing, lookups, registry, topology] = await Promise.all([
         durable.readiness(),
         materialVault.readiness(),
-        keyedLookups.readiness()
+        keyedLookups.readiness(),
+        providerRegistry.readiness(),
+        providerTopologyRepository.readiness()
       ]);
       const ready = storage?.ready === true && storage?.verified === true &&
         sealing?.ready === true && sealing?.verified === true &&
-        lookups?.ready === true && lookups?.verified === true;
+        lookups?.ready === true && lookups?.verified === true &&
+        registry?.ready === true && registry?.verified === true &&
+        topology?.ready === true && topology?.verified === true;
       return deepFreeze({
         ready,
         verified: ready,
@@ -418,7 +437,7 @@ export function createTwilioResponderInbound({
     },
 
     async ingestInboundMessage(input = {}) {
-      const verified = verifiedParams(selectedMessageUrl, input);
+      const verified = await verifiedParams(selectedMessageUrl, input);
       const { params } = verified;
       const receivedAt = currentTime(clock);
       const messageSid = one(params, "MessageSid");
@@ -479,7 +498,7 @@ export function createTwilioResponderInbound({
     },
 
     async ingestVoiceCall(input = {}) {
-      const verified = verifiedParams(selectedVoiceUrl, input);
+      const verified = await verifiedParams(selectedVoiceUrl, input);
       const { params } = verified;
       const receivedAt = currentTime(clock);
       const callSid = one(params, "CallSid");
@@ -539,7 +558,7 @@ export function createTwilioResponderInbound({
     },
 
     async ingestDialResult(input = {}) {
-      const verified = verifiedParams(selectedDialResultUrl, input);
+      const verified = await verifiedParams(selectedDialResultUrl, input);
       const { params } = verified;
       const receivedAt = currentTime(clock);
       const callSid = one(params, "CallSid");

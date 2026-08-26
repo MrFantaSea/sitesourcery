@@ -50,7 +50,8 @@ const RETAINED_CHECKPOINT_POST_PRIVACY_NAMES = Object.freeze([
   "202608200142_hosted_joint_legal_v5_authority.sql",
   "202608220143_download_protection_v1.sql",
   "202608240144_download_tax_authority.sql",
-  "202608240145_stripe_checkout_fragment_authority.sql"
+  "202608240145_stripe_checkout_fragment_authority.sql",
+  "202608260146_responder_twilio_isv_provider_topology.sql"
 ]);
 
 export function resolveMigrationVerificationInventory(

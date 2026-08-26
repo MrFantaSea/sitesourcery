@@ -479,13 +479,15 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     // (6) The whole loop performs real worker-to-readback-to-repository
     // composition against a fake read-only provider. Every result is digest
     // only and no provider create/retry path exists.
+    const readbackOrganizations = [];
     const fakeReadback = {
       kind: "twilio-responder-readback",
       mode: "verified-read-only",
       providerEffects: false,
       readOnly: true,
       async readiness() { return { ready: true, verified: true }; },
-      async findMessages({ targets }) {
+      async findMessages({ organizationId, targets }) {
+        readbackOrganizations.push(organizationId);
         const target = targets[0];
         const targetDigest = digest({
           schema: "sitesourcery.twilio-readback-target/v1",
@@ -528,7 +530,18 @@ test("provider reconciliation detects, self-heals, escalates, and projects on re
     assert.equal(swept.status, "swept");
     assert.equal(swept.openedCases, 0, "steady state opens nothing new");
     assert.equal(swept.readbackReady, true);
-    assert.ok(swept.readbacksRecorded >= 4);
+    assert.equal(swept.readbacksRecorded, 3);
+    assert.deepEqual(readbackOrganizations, [
+      ids.organization,
+      ids.organization,
+      ids.organization
+    ]);
+    const unscopedReadbacks = await pool.query(
+      `select count(*)::integer as count
+         from ss.provider_reconciliation_cases
+        where organization_id is null and readback_state <> 'none'`
+    );
+    assert.deepEqual(unscopedReadbacks.rows[0], { count: 0 });
     const ambiguousReadback = await pool.query(
       `select readback_state, readback_match_count,
               readback_matched_provider_message_id_digest

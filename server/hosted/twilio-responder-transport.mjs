@@ -294,6 +294,8 @@ async function apiRequest({
 
 export function createTwilioResponderTransport({
   environment = process.env,
+  providerRegistry,
+  providerTopologyRepository,
   materialResolver,
   fetchImpl = globalThis.fetch,
   clock = { now: () => new Date().toISOString() },
@@ -301,40 +303,19 @@ export function createTwilioResponderTransport({
   readinessCacheMs = 5_000,
   cacheClock = () => Date.now()
 } = {}) {
-  const accountSid = providerSid(
-    environment,
-    "SITESOURCERY_TWILIO_ACCOUNT_SID",
-    SID.account
-  );
-  const apiKeySid = providerSid(
-    environment,
-    "SITESOURCERY_TWILIO_API_KEY_SID",
-    SID.apiKey
-  );
-  const apiKeySecret = value(
-    environment,
-    "SITESOURCERY_TWILIO_API_KEY_SECRET"
-  );
   invariant(
-    apiKeySecret.length >= 24 && !/\s/u.test(apiKeySecret),
+    [
+      "SITESOURCERY_TWILIO_ACCOUNT_SID",
+      "SITESOURCERY_TWILIO_API_KEY_SID",
+      "SITESOURCERY_TWILIO_API_KEY_SECRET",
+      "SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID",
+      "SITESOURCERY_TWILIO_BRAND_REGISTRATION_SID",
+      "SITESOURCERY_TWILIO_A2P_CAMPAIGN_SID"
+    ].every((name) => environment?.[name] === undefined ||
+      environment[name] === ""),
     "TWILIO_RESPONDER_CONFIGURATION_REQUIRED",
-    "SITESOURCERY_TWILIO_API_KEY_SECRET is invalid.",
+    "Global Twilio customer credentials are forbidden.",
     { status: 500 }
-  );
-  const messagingServiceSid = providerSid(
-    environment,
-    "SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID",
-    SID.messagingService
-  );
-  const brandSid = providerSid(
-    environment,
-    "SITESOURCERY_TWILIO_BRAND_REGISTRATION_SID",
-    SID.brand
-  );
-  const campaignSid = providerSid(
-    environment,
-    "SITESOURCERY_TWILIO_A2P_CAMPAIGN_SID",
-    SID.campaign
   );
   const statusCallback = callbackUrl(value(
     environment,
@@ -343,7 +324,18 @@ export function createTwilioResponderTransport({
   const selectedTimeout = timeout(timeoutMs);
   const selectedReadinessCacheMs = Number(readinessCacheMs);
   invariant(
-    materialResolver?.kind ===
+    providerRegistry?.kind === "twilio-isv-provider-registry" &&
+      providerRegistry.providerEffects === false &&
+      Array.isArray(providerRegistry.organizationIds) &&
+      providerRegistry.organizationIds.length >= 1 &&
+      typeof providerRegistry.resolveOrganization === "function" &&
+      typeof providerRegistry.readiness === "function" &&
+      providerTopologyRepository?.kind ===
+        "responder-twilio-provider-topology-postgres" &&
+      providerTopologyRepository.providerEffects === false &&
+      typeof providerTopologyRepository.readiness === "function" &&
+      typeof providerTopologyRepository.requireActiveTopology === "function" &&
+      materialResolver?.kind ===
         "responder-private-delivery-material-resolver" &&
       materialResolver.providerEffects === false &&
       typeof materialResolver.resolveSmsMaterial === "function" &&
@@ -359,65 +351,88 @@ export function createTwilioResponderTransport({
     { status: 500 }
   );
 
-  const authorization = basicAuthorization(apiKeySid, apiKeySecret);
   let readyCache = null;
   let readinessInFlight = null;
 
+  async function inspectCustomerReadiness(provider) {
+    const accountSid = provider.accountSid;
+    const messagingServiceSid = provider.messagingServiceSid;
+    const brandSid = provider.brandRegistrationSid;
+    const campaignSid = provider.campaignSid;
+    const authorization = basicAuthorization(
+      provider.messagingApiKeySid,
+      provider.messagingApiKeySecret
+    );
+    await providerTopologyRepository.requireActiveTopology(provider.topology);
+    const [account, service, brand, campaign] = await Promise.all([
+      apiRequest({
+        fetchImpl,
+        url: `${API_ORIGIN}/2010-04-01/Accounts/${accountSid}.json`,
+        method: "GET",
+        authorization,
+        timeoutMs: selectedTimeout
+      }),
+      apiRequest({
+        fetchImpl,
+        url: `${MESSAGING_ORIGIN}/v1/Services/${messagingServiceSid}`,
+        method: "GET",
+        authorization,
+        timeoutMs: selectedTimeout
+      }),
+      apiRequest({
+        fetchImpl,
+        url: `${MESSAGING_ORIGIN}/v1/a2p/BrandRegistrations/${brandSid}`,
+        method: "GET",
+        authorization,
+        timeoutMs: selectedTimeout
+      }),
+      apiRequest({
+        fetchImpl,
+        url: `${MESSAGING_ORIGIN}/v1/Services/${messagingServiceSid}/Compliance/Usa2p/${campaignSid}`,
+        method: "GET",
+        authorization,
+        timeoutMs: selectedTimeout
+      })
+    ]);
+    return account?.sid === accountSid &&
+      account?.status === "active" &&
+      account?.type === "Full" &&
+      service?.sid === messagingServiceSid &&
+      service?.account_sid === accountSid &&
+      brand?.sid === brandSid &&
+      brand?.account_sid === accountSid &&
+      brand?.status === "APPROVED" &&
+      brand?.identity_status === "VERIFIED" &&
+      brand?.brand_type === provider.providerBrandType &&
+      brand?.mock === false &&
+      campaign?.sid === campaignSid &&
+      campaign?.account_sid === accountSid &&
+      campaign?.messaging_service_sid === messagingServiceSid &&
+      campaign?.brand_registration_sid === brandSid &&
+      campaign?.campaign_status === "VERIFIED" &&
+      campaign?.usecase === provider.campaignUseCase;
+  }
+
   async function inspectReadiness() {
     try {
-      const [privateMaterial, account, service, brand, campaign] =
+      const [privateMaterial, registry, topologyStorage, ...customers] =
         await Promise.all([
           materialResolver.readiness(),
-          apiRequest({
-            fetchImpl,
-            url: `${API_ORIGIN}/2010-04-01/Accounts/${accountSid}.json`,
-            method: "GET",
-            authorization,
-            timeoutMs: selectedTimeout
-          }),
-          apiRequest({
-            fetchImpl,
-            url: `${MESSAGING_ORIGIN}/v1/Services/${messagingServiceSid}`,
-            method: "GET",
-            authorization,
-            timeoutMs: selectedTimeout
-          }),
-          apiRequest({
-            fetchImpl,
-            url: `${MESSAGING_ORIGIN}/v1/a2p/BrandRegistrations/${brandSid}`,
-            method: "GET",
-            authorization,
-            timeoutMs: selectedTimeout
-          }),
-          apiRequest({
-            fetchImpl,
-            url: `${MESSAGING_ORIGIN}/v1/Services/${messagingServiceSid}/Compliance/Usa2p/${campaignSid}`,
-            method: "GET",
-            authorization,
-            timeoutMs: selectedTimeout
-          })
+          providerRegistry.readiness(),
+          providerTopologyRepository.readiness(),
+          ...providerRegistry.organizationIds.map((organizationId) =>
+            inspectCustomerReadiness(
+              providerRegistry.resolveOrganization(organizationId)
+            )
+          )
         ]);
       const ready =
         privateMaterial?.ready === true &&
         privateMaterial?.verified === true &&
-        account?.sid === accountSid &&
-        account?.status === "active" &&
-        account?.type === "Full" &&
-        service?.sid === messagingServiceSid &&
-        service?.account_sid === accountSid &&
-        service?.friendly_name === "Responder" &&
-        brand?.sid === brandSid &&
-        brand?.account_sid === accountSid &&
-        brand?.status === "APPROVED" &&
-        brand?.identity_status === "VERIFIED" &&
-        brand?.brand_type === "STANDARD" &&
-        brand?.mock === false &&
-        campaign?.sid === campaignSid &&
-        campaign?.account_sid === accountSid &&
-        campaign?.messaging_service_sid === messagingServiceSid &&
-        campaign?.brand_registration_sid === brandSid &&
-        campaign?.campaign_status === "VERIFIED" &&
-        campaign?.usecase === "CUSTOMER_CARE";
+        registry?.ready === true && registry?.verified === true &&
+        topologyStorage?.ready === true && topologyStorage?.verified === true &&
+        customers.length === providerRegistry.organizationIds.length &&
+        customers.every((customer) => customer === true);
       return Object.freeze({
         ready,
         verified: ready,
@@ -431,6 +446,25 @@ export function createTwilioResponderTransport({
         provider: PROVIDER,
         code: "TWILIO_RESPONDER_READINESS_UNAVAILABLE"
       });
+    }
+  }
+
+  async function inspectSelectedReadiness(provider) {
+    try {
+      const [privateMaterial, registry, topologyStorage, customer] =
+        await Promise.all([
+          materialResolver.readiness(),
+          providerRegistry.readiness(),
+          providerTopologyRepository.readiness(),
+          inspectCustomerReadiness(provider)
+        ]);
+      return privateMaterial?.ready === true &&
+        privateMaterial?.verified === true &&
+        registry?.ready === true && registry?.verified === true &&
+        topologyStorage?.ready === true && topologyStorage?.verified === true &&
+        customer === true;
+    } catch {
+      return false;
     }
   }
 
@@ -460,12 +494,27 @@ export function createTwilioResponderTransport({
 
   async function sendMessage(input) {
     const selectedRequest = request(input);
-    const readinessStatus = await readiness();
+    // Select customer authority before any provider read. A missing customer
+    // must fail without touching Twilio, and drift in one customer's
+    // subaccount must not hold delivery for a different customer.
+    const provider = providerRegistry.resolveOrganization(
+      selectedRequest.organizationId
+    );
+    const selectedReady = await inspectSelectedReadiness(provider);
     invariant(
-      readinessStatus.ready === true && readinessStatus.verified === true,
+      selectedReady,
       "TWILIO_RESPONDER_NOT_READY",
       "Twilio Responder delivery is not verified.",
       { status: 503 }
+    );
+    // Reassert the digest-only topology immediately before resolving private
+    // material and creating the provider effect.
+    await providerTopologyRepository.requireActiveTopology(provider.topology);
+    const accountSid = provider.accountSid;
+    const messagingServiceSid = provider.messagingServiceSid;
+    const authorization = basicAuthorization(
+      provider.messagingApiKeySid,
+      provider.messagingApiKeySecret
     );
     const selectedMaterial = material(
       await materialResolver.resolveSmsMaterial({

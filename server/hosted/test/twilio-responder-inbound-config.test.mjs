@@ -6,12 +6,28 @@ import {
 } from "../twilio-responder-inbound-config.mjs";
 
 const AUTHORITY = { kind: "canonical-postgres", service: async () => ({}) };
+const PROVIDER_REGISTRY = Object.freeze({
+  kind: "twilio-isv-provider-registry",
+  providerEffects: false,
+  async readiness() { return { ready: true, verified: true }; },
+  resolveAccountSid() { throw new Error("not called"); }
+});
+const TOPOLOGY = Object.freeze({
+  kind: "responder-twilio-provider-topology-postgres",
+  providerEffects: false,
+  async readiness() { return { ready: true, verified: true }; },
+  async requireActiveTopology() { throw new Error("not called"); }
+});
+const PROVIDER_FACTORIES = Object.freeze({
+  providerRegistryFactory: () => PROVIDER_REGISTRY,
+  providerTopologyRepositoryFactory: () => TOPOLOGY
+});
 
 function verifiedEnvironment(overrides = {}) {
   return {
     SITESOURCERY_TWILIO_INBOUND_EVENT_MODE: "verified",
-    SITESOURCERY_TWILIO_ACCOUNT_SID: `AC${"a".repeat(32)}`,
-    SITESOURCERY_TWILIO_WEBHOOK_AUTH_TOKEN: "b".repeat(32),
+    SITESOURCERY_TWILIO_ISV_PROVIDER_REGISTRY_PATH:
+      "/run/sitesourcery/twilio-isv-registry.json",
     SITESOURCERY_TWILIO_INBOUND_MESSAGE_URL:
       "https://sitesourcery.com/api/v1/provider-events/twilio/inbound-messages",
     SITESOURCERY_TWILIO_INBOUND_VOICE_URL:
@@ -73,7 +89,8 @@ test("inbound ingress defaults to held and forbids staged material keys", () => 
 test("verified inbound ingress composes keys, vault, and repository exactly", () => {
   const verified = createConfiguredTwilioResponderInboundHttp({
     environment: verifiedEnvironment(),
-    authority: AUTHORITY
+    authority: AUTHORITY,
+    ...PROVIDER_FACTORIES
   });
   assert.equal(verified.kind, "twilio-responder-inbound-http-adapter");
   assert.equal(verified.mode, "raw-form");
@@ -82,7 +99,8 @@ test("verified inbound ingress composes keys, vault, and repository exactly", ()
     environment: verifiedEnvironment({
       SITESOURCERY_TWILIO_VOICE_DIAL_MODE: "verified"
     }),
-    authority: AUTHORITY
+    authority: AUTHORITY,
+    ...PROVIDER_FACTORIES
   });
   assert.equal(voiceVerified.mode, "raw-form");
   assert.equal(voiceVerified.providerEffects, true);
@@ -92,7 +110,8 @@ test("verified mode fails closed on any missing composition input", () => {
   assert.throws(
     () => createConfiguredTwilioResponderInboundHttp({
       environment: verifiedEnvironment(),
-      authority: null
+      authority: null,
+      ...PROVIDER_FACTORIES
     }),
     (error) =>
       error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED"
@@ -105,8 +124,6 @@ test("verified mode fails closed on any missing composition input", () => {
       error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED"
   );
   for (const missing of [
-    "SITESOURCERY_TWILIO_ACCOUNT_SID",
-    "SITESOURCERY_TWILIO_WEBHOOK_AUTH_TOKEN",
     "SITESOURCERY_TWILIO_INBOUND_MESSAGE_URL",
     "SITESOURCERY_TWILIO_INBOUND_VOICE_URL",
     "SITESOURCERY_TWILIO_INBOUND_DIAL_RESULT_URL",
@@ -118,7 +135,8 @@ test("verified mode fails closed on any missing composition input", () => {
     assert.throws(
       () => createConfiguredTwilioResponderInboundHttp({
         environment,
-        authority: AUTHORITY
+        authority: AUTHORITY,
+        ...PROVIDER_FACTORIES
       }),
       (error) =>
         error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED" ||
@@ -126,4 +144,16 @@ test("verified mode fails closed on any missing composition input", () => {
       `verified mode must fail without ${missing}`
     );
   }
+  assert.throws(
+    () => createConfiguredTwilioResponderInboundHttp({
+      environment: {
+        ...verifiedEnvironment(),
+        SITESOURCERY_TWILIO_ACCOUNT_SID: `AC${"a".repeat(32)}`
+      },
+      authority: AUTHORITY,
+      ...PROVIDER_FACTORIES
+    }),
+    (error) =>
+      error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED"
+  );
 });

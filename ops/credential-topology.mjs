@@ -325,6 +325,18 @@ const DEFINITIONS = Object.freeze([
     completeStates: ["proven"]
   }),
   definition({
+    name: "control.twilio.customer-isolation",
+    kind: "separation_control",
+    purpose: "twilio_customer_subaccount_isolation",
+    scopes: [
+      "twilio.responder.production.api.restricted",
+      "twilio.responder.production.webhook.signature"
+    ],
+    storageBoundary: "immutable-nonsecret-ops-evidence-ledger",
+    allowedStates: ["proven", "unproven"],
+    completeStates: ["proven"]
+  }),
+  definition({
     name: "identity.pepper.production.current",
     kind: "identity_pepper",
     purpose: "identity_current_derivation",
@@ -474,14 +486,16 @@ const DEFINITIONS = Object.freeze([
   }),
   definition({
     name: "twilio.responder.production.api.restricted",
-    kind: "provider_api_restricted",
-    purpose: "twilio_responder_delivery",
+    kind: "provider_customer_registry",
+    purpose: "twilio_customer_runtime_authority",
     scopes: [
-      "twilio-account:read",
-      "twilio-messaging-compliance:read",
-      "twilio-messages:send"
+      "twilio-customer-subaccount:read",
+      "twilio-customer-compliance:read",
+      "twilio-customer-messages:send",
+      "twilio-customer-voice-token:sign",
+      "twilio-customer-push-credential:reference"
     ],
-    storageBoundary: "dell-hosted-production-secret-store",
+    storageBoundary: "dell-root-readable-customer-provider-registry",
     allowedStates: ["active", "unproven"],
     completeStates: ["active"]
   }),
@@ -490,7 +504,7 @@ const DEFINITIONS = Object.freeze([
     kind: "provider_webhook_signing",
     purpose: "twilio_responder_webhook_verification",
     scopes: ["twilio-webhooks:verify"],
-    storageBoundary: "dell-hosted-production-secret-store",
+    storageBoundary: "dell-root-readable-customer-provider-registry",
     allowedStates: ["active", "unproven"],
     completeStates: ["active"]
   })
@@ -1087,6 +1101,13 @@ function rotationBlockers(topology) {
       "resend_shared_full_access_revocation_not_proven"
     );
   }
+  const twilioIsolation = itemByName(
+    topology,
+    "control.twilio.customer-isolation"
+  );
+  if (twilioIsolation.rotationState !== "proven") {
+    blockers.push("twilio_customer_subaccount_isolation_not_proven");
+  }
   return blockers;
 }
 
@@ -1162,6 +1183,14 @@ function independentEvidenceBlockers(topology) {
         "stripe.webhook.production.prior"
       ],
       blocker: "stripe_webhook_independent_evidence_not_proven"
+    },
+    {
+      names: [
+        "control.twilio.customer-isolation",
+        "twilio.responder.production.api.restricted",
+        "twilio.responder.production.webhook.signature"
+      ],
+      blocker: "twilio_customer_isolation_independent_evidence_not_proven"
     }
   ];
   return requirements.flatMap(({ names, blocker }) => {

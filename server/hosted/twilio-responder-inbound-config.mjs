@@ -29,6 +29,12 @@ import {
   createHeldTwilioResponderInboundHttpAdapter,
   createTwilioResponderInboundHttpAdapter
 } from "./twilio-responder-inbound-http.mjs";
+import {
+  twilioIsvProviderRegistryFromEnvironment
+} from "./responder-twilio-provider-registry.mjs";
+import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "./responder-twilio-provider-topology-postgres.mjs";
 
 export const TWILIO_RESPONDER_INBOUND_MODE_ENVIRONMENT =
   "SITESOURCERY_TWILIO_INBOUND_EVENT_MODE";
@@ -65,6 +71,9 @@ export function composedResponderLookupDigests(environment = process.env) {
 export function createConfiguredTwilioResponderInboundHttp({
   environment = process.env,
   authority = null,
+  providerRegistryFactory = twilioIsvProviderRegistryFromEnvironment,
+  providerTopologyRepositoryFactory =
+    createPostgresResponderTwilioProviderTopologyRepository,
   clock = { now: () => new Date().toISOString() }
 } = {}) {
   const mode = value(
@@ -91,7 +100,9 @@ export function createConfiguredTwilioResponderInboundHttp({
         value(
           environment,
           "SITESOURCERY_RESPONDER_MATERIAL_PRIOR_KEY_BASE64URL"
-        ) === null,
+        ) === null &&
+        value(environment, "SITESOURCERY_TWILIO_ACCOUNT_SID") === null &&
+        value(environment, "SITESOURCERY_TWILIO_WEBHOOK_AUTH_TOKEN") === null,
       "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED",
       "Responder material keys cannot be staged while inbound is held.",
       { status: 500 }
@@ -99,12 +110,19 @@ export function createConfiguredTwilioResponderInboundHttp({
     return createHeldTwilioResponderInboundHttpAdapter();
   }
   invariant(
-    authority?.kind === "canonical-postgres",
+    authority?.kind === "canonical-postgres" &&
+      typeof providerRegistryFactory === "function" &&
+      typeof providerTopologyRepositoryFactory === "function" &&
+      value(environment, "SITESOURCERY_TWILIO_ACCOUNT_SID") === null &&
+      value(environment, "SITESOURCERY_TWILIO_WEBHOOK_AUTH_TOKEN") === null,
     "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED",
-    "Verified Twilio inbound ingress requires the PostgreSQL authority.",
+    "Verified Twilio inbound ingress requires customer registry and PostgreSQL authority; global credentials are forbidden.",
     { status: 500 }
   );
   const lookupDigests = composedResponderLookupDigests(environment);
+  const providerRegistry = providerRegistryFactory(environment);
+  const providerTopologyRepository =
+    providerTopologyRepositoryFactory({ authority });
   const vault = responderInboundMaterialVaultFromEnvironment(environment, {
     fromRouteDigestCandidates: (address) =>
       lookupDigests.callerRouteCandidates(address)
@@ -129,11 +147,8 @@ export function createConfiguredTwilioResponderInboundHttp({
       });
   return createTwilioResponderInboundHttpAdapter({
     inbound: createTwilioResponderInbound({
-      accountSid: value(environment, "SITESOURCERY_TWILIO_ACCOUNT_SID"),
-      webhookAuthToken: value(
-        environment,
-        "SITESOURCERY_TWILIO_WEBHOOK_AUTH_TOKEN"
-      ),
+      providerRegistry,
+      providerTopologyRepository,
       inboundMessageUrl: value(
         environment,
         TWILIO_RESPONDER_INBOUND_MESSAGE_URL_ENVIRONMENT

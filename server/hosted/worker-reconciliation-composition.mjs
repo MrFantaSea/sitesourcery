@@ -128,7 +128,7 @@ export function createReconciliationWorkerFactories({
         // Readback is independently held: the reconciliation loop runs its
         // read-only detection, idempotent self-heal, and operator projection
         // whether or not the provider readback credential is verified.
-        const readback = readbackFactory({ environment, clock });
+        const readback = readbackFactory({ environment, authority, clock });
         invariant(
           readback?.providerEffects === false && readback.readOnly === true,
           "WORKER_CONFIGURATION_INVALID",

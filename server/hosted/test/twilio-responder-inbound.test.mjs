@@ -10,6 +10,8 @@ import {
 
 const ACCOUNT_SID = `AC${"a".repeat(32)}`;
 const AUTH_TOKEN = "b".repeat(32);
+const OTHER_ACCOUNT_SID = `AC${"d".repeat(32)}`;
+const OTHER_AUTH_TOKEN = "e".repeat(32);
 const MESSAGE_URL =
   "https://sitesourcery.com/api/v1/provider-events/twilio/inbound-messages";
 const VOICE_URL =
@@ -21,6 +23,48 @@ const CALL_SID = `CA${"2".repeat(32)}`;
 const FROM = "+18565550100";
 const TO = "+18562441220";
 const NOW = "2026-08-12T18:00:00.000Z";
+
+function providerDependencies() {
+  const topology = {
+    organizationId: "00000000-0000-4000-8000-000000000001",
+    accountSidDigest: "a".repeat(64)
+  };
+  const otherTopology = {
+    organizationId: "00000000-0000-4000-8000-000000000002",
+    accountSidDigest: "d".repeat(64)
+  };
+  return {
+    providerRegistry: {
+      kind: "twilio-isv-provider-registry",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      resolveAccountSid(accountSid) {
+        if (accountSid === ACCOUNT_SID) {
+          return { webhookAuthToken: AUTH_TOKEN, topology };
+        }
+        if (accountSid === OTHER_ACCOUNT_SID) {
+          return {
+            webhookAuthToken: OTHER_AUTH_TOKEN,
+            topology: otherTopology
+          };
+        }
+        throw new Error("unknown account");
+      }
+    },
+    providerTopologyRepository: {
+      kind: "responder-twilio-provider-topology-postgres",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      async requireActiveTopology(selected) {
+        assert.equal(
+          selected === topology || selected === otherTopology,
+          true
+        );
+        return selected;
+      }
+    }
+  };
+}
 
 function keyed(kind, address) {
   return createHmac("sha256", `test-${kind}`)
@@ -102,8 +146,7 @@ function fixture({
     }
   };
   const inbound = createTwilioResponderInbound({
-    accountSid: ACCOUNT_SID,
-    webhookAuthToken: AUTH_TOKEN,
+    ...providerDependencies(),
     inboundMessageUrl: MESSAGE_URL,
     voiceUrl: VOICE_URL,
     dialResultUrl: DIAL_RESULT_URL,
@@ -115,14 +158,14 @@ function fixture({
   return { inbound, facts, sealed };
 }
 
-function signedRequest(url, params) {
+function signedRequest(url, params, authToken = AUTH_TOKEN) {
   const form = new URLSearchParams(params);
   return {
     rawBody: Buffer.from(form.toString(), "utf8"),
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       "x-twilio-signature": twilio.getExpectedTwilioSignature(
-        AUTH_TOKEN,
+        authToken,
         url,
         params
       )
@@ -258,6 +301,18 @@ test("signature, account, and parameter verification fail closed", async () => {
     (error) => error?.code === "TWILIO_RESPONDER_INBOUND_INVALID"
   );
   assert.equal(facts.length, 0, "nothing reaches storage without proof");
+});
+
+test("one customer's Auth Token cannot authenticate another customer's callback", async () => {
+  const { inbound, facts, sealed } = fixture();
+  await assert.rejects(
+    inbound.ingestInboundMessage(
+      signedRequest(MESSAGE_URL, smsParams(), OTHER_AUTH_TOKEN)
+    ),
+    (error) => error?.code === "TWILIO_RESPONDER_INBOUND_SIGNATURE_INVALID"
+  );
+  assert.equal(facts.length, 0);
+  assert.equal(sealed.length, 0);
 });
 
 test("voice arrival records evidence only and never fabricates a missed call", async () => {
@@ -421,8 +476,7 @@ test("only the exact production webhook URLs are configurable", () => {
 
 function fixtureWithUrl(field, value) {
   return createTwilioResponderInbound({
-    accountSid: ACCOUNT_SID,
-    webhookAuthToken: AUTH_TOKEN,
+    ...providerDependencies(),
     inboundMessageUrl: MESSAGE_URL,
     voiceUrl: VOICE_URL,
     dialResultUrl: DIAL_RESULT_URL,

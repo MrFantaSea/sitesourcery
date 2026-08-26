@@ -9,6 +9,7 @@ import {
 const NOW = "2026-08-12T18:00:00.000Z";
 const WORKER_ID = "provider-reconciliation-test000001";
 const CASE = "10000000-0000-4000-8000-0000000000a5";
+const ORGANIZATION_ID = "10000000-0000-4000-8000-0000000000a6";
 
 function fixture({
   enabled = true,
@@ -123,6 +124,7 @@ test("verified readback is executed and its exact evidence is recorded", async (
     readback,
     readbackCandidates: [{
       caseId: CASE,
+      organizationId: ORGANIZATION_ID,
       caseKind: "ambiguous_message_create",
       target: {
         kind: "responder_message_shape",
@@ -139,6 +141,7 @@ test("verified readback is executed and its exact evidence is recorded", async (
   assert.equal(result.readbacksRecorded, 1);
   assert.equal(result.readbackMatches, 1);
   assert.equal(readbackCalls.length, 1);
+  assert.equal(readbackCalls[0].organizationId, ORGANIZATION_ID);
   assert.deepEqual(calls.readbackRecords, [{
     caseId: CASE,
     readbackState: "single_candidate",

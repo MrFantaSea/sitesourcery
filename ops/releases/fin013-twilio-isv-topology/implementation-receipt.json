@@ -1,0 +1,103 @@
+{
+  "schema": "sitesourcery.fin013-twilio-isv-topology-implementation-receipt/v1",
+  "recordedAt": "2026-08-26T14:57:06-04:00",
+  "cohort": "FIN-013",
+  "state": "locally_proved_held_awaiting_protected_review",
+  "base": {
+    "protectedMain": "76ff456e9c2f002358dbed42e5ee115e855cdba2",
+    "tree": "b60368129028a7d8d1468dbcc1fe71f93e9dcf94"
+  },
+  "implementation": {
+    "branch": "fin013/twilio-isv-topology-20260826",
+    "commit": "73e6c3b6914bd2cad054c55a9e6396ca2aadfeaf",
+    "tree": "012390a34585f4583b5fc291141a25f48699fc88",
+    "parent": "76ff456e9c2f002358dbed42e5ee115e855cdba2",
+    "changedPathCount": 45,
+    "migrationCount": 99,
+    "latestMigration": "202608260146_responder_twilio_isv_provider_topology.sql",
+    "latestMigrationSha256": "044afa6a2964941ac6169c4802ce3a1493ffffd2f399b199c362b4c2975033a6"
+  },
+  "authority": {
+    "provider": "twilio",
+    "architecture": "one-primary-account-one-customer-subaccount-per-organization",
+    "providerRegistry": "root-owned-single-link-no-follow-external-file",
+    "databaseAuthority": "digest-only-forced-rls-lifecycle-evidence",
+    "outboundSelection": "organization-before-provider-read-or-private-material",
+    "callbackSelection": "account-before-customer-auth-token-validation",
+    "readbackSelection": "organization-bound-customer-subaccount",
+    "voiceSelection": "organization-bound-purpose-separated-key-and-push-credential",
+    "resourceReuse": "forbidden-across-customers-and-purposes",
+    "numberBinding": "matching-active-customer-topology-required",
+    "topologyRetirement": "active-dependent-number-bindings-forbidden"
+  },
+  "proof": {
+    "runtime": {
+      "node": "24.18.0",
+      "postgres": "16.14"
+    },
+    "focusedFinal": {
+      "tests": 13,
+      "passed": 13,
+      "failed": 0
+    },
+    "productClient": {
+      "tests": 892,
+      "passed": 892,
+      "failed": 0
+    },
+    "hostedService": {
+      "tests": 1126,
+      "passed": 1110,
+      "failed": 0,
+      "intentionalNoDatabaseSkips": 16
+    },
+    "operationsCleanGit": {
+      "tests": 252,
+      "passed": 252,
+      "failed": 0
+    },
+    "selfhost": {
+      "tests": 24,
+      "passed": 24,
+      "failed": 0
+    },
+    "siteAndArtifacts": {
+      "siteChecks": "passed",
+      "hostedArtifact": "deterministic-and-verified",
+      "selfhostArtifact": "verified"
+    },
+    "freshPostgres": {
+      "migrationCount": 99,
+      "historicalJourneyProof": "passed",
+      "standaloneVerifierDatabaseAbsent": true,
+      "topologyIntegrationTests": 1,
+      "topologyIntegrationPassed": 1,
+      "retainedTopologyVerifierDatabaseAbsent": true
+    },
+    "secretScan": {
+      "productionPathsScanned": 26,
+      "rawProviderSidHits": 0,
+      "twilioEnvironmentValueHits": 0
+    }
+  },
+  "effects": {
+    "providerReads": false,
+    "providerMutations": false,
+    "twilioAccountCreated": false,
+    "twilioSubaccountCreated": false,
+    "phoneNumberPurchased": false,
+    "registrationSubmitted": false,
+    "messageSent": false,
+    "callPlaced": false,
+    "customerMutation": false,
+    "productionDatabaseMutation": false,
+    "productionDeployment": false,
+    "publicMutation": false,
+    "dnsMutation": false,
+    "spend": false
+  },
+  "ownerAction": {
+    "twilio": "not_due_until_protected_held_proof",
+    "appleDeveloperFee": "not_due_pending_duns_and_valid_organization_enrollment_access"
+  }
+}

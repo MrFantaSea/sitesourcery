@@ -13,6 +13,47 @@ const CALLBACK =
 const ACCOUNT = `AC${"1".repeat(32)}`;
 const MESSAGE = `SM${"2".repeat(32)}`;
 const TOKEN = "3".repeat(32);
+const OTHER_ACCOUNT = `AC${"4".repeat(32)}`;
+const OTHER_TOKEN = "5".repeat(32);
+
+function providerDependencies() {
+  const topology = {
+    organizationId: "00000000-0000-4000-8000-000000000001",
+    accountSidDigest: "a".repeat(64)
+  };
+  const otherTopology = {
+    organizationId: "00000000-0000-4000-8000-000000000002",
+    accountSidDigest: "b".repeat(64)
+  };
+  return {
+    providerRegistry: {
+      kind: "twilio-isv-provider-registry",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      resolveAccountSid(accountSid) {
+        if (accountSid === ACCOUNT) {
+          return { webhookAuthToken: TOKEN, topology };
+        }
+        if (accountSid === OTHER_ACCOUNT) {
+          return { webhookAuthToken: OTHER_TOKEN, topology: otherTopology };
+        }
+        throw new Error("unknown account");
+      }
+    },
+    providerTopologyRepository: {
+      kind: "responder-twilio-provider-topology-postgres",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      async requireActiveTopology(selected) {
+        assert.equal(
+          selected === topology || selected === otherTopology,
+          true
+        );
+        return selected;
+      }
+    }
+  };
+}
 
 function repository() {
   const calls = [];
@@ -43,6 +84,7 @@ function signed({
   status = "delivered",
   extra = {},
   signature = null,
+  signatureToken = TOKEN,
   accountSid = ACCOUNT,
   messageSid = MESSAGE
 } = {}) {
@@ -62,7 +104,7 @@ function signed({
     headers: {
       "content-type": "application/x-www-form-urlencoded",
       "x-twilio-signature": signature ??
-        twilio.getExpectedTwilioSignature(TOKEN, CALLBACK, params)
+        twilio.getExpectedTwilioSignature(signatureToken, CALLBACK, params)
     }
   };
 }
@@ -70,9 +112,8 @@ function signed({
 test("official Twilio validation accepts every received form field and stores digests only", async () => {
   const durable = repository();
   const events = createTwilioResponderEvents({
-    accountSid: ACCOUNT,
+    ...providerDependencies(),
     callbackUrl: CALLBACK,
-    webhookAuthToken: TOKEN,
     repository: durable.selected,
     clock: { now: () => NOW }
   });
@@ -112,9 +153,8 @@ test("signature, account, SID, and status drift fail before durable mutation", a
   ]) {
     const durable = repository();
     const events = createTwilioResponderEvents({
-      accountSid: ACCOUNT,
+      ...providerDependencies(),
       callbackUrl: CALLBACK,
-      webhookAuthToken: TOKEN,
       repository: durable.selected,
       clock: { now: () => NOW }
     });
@@ -129,6 +169,21 @@ test("signature, account, SID, and status drift fail before durable mutation", a
   }
 });
 
+test("one customer's Auth Token cannot authenticate another customer's delivery callback", async () => {
+  const durable = repository();
+  const events = createTwilioResponderEvents({
+    ...providerDependencies(),
+    callbackUrl: CALLBACK,
+    repository: durable.selected,
+    clock: { now: () => NOW }
+  });
+  await assert.rejects(
+    events.ingest(signed({ signatureToken: OTHER_TOKEN })),
+    (error) => error?.code === "TWILIO_RESPONDER_EVENT_SIGNATURE_INVALID"
+  );
+  assert.equal(durable.calls.length, 0);
+});
+
 test("Twilio callback stays held by default and configuration is exact", async () => {
   const held = createHeldTwilioResponderEvents();
   assert.equal((await held.readiness()).ready, false);
@@ -138,9 +193,8 @@ test("Twilio callback stays held by default and configuration is exact", async (
   );
   assert.throws(
     () => createTwilioResponderEvents({
-      accountSid: ACCOUNT,
+      ...providerDependencies(),
       callbackUrl: "https://example.test/api/v1/provider-events/twilio",
-      webhookAuthToken: TOKEN,
       repository: repository().selected
     }),
     (error) => error?.code ===

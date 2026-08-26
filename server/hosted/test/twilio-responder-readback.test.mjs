@@ -4,7 +4,7 @@ import test from "node:test";
 import { digest } from "../security.mjs";
 import {
   createHeldTwilioResponderReadback,
-  createTwilioResponderReadback,
+  createTwilioResponderReadback as createRawTwilioResponderReadback,
   configuredTwilioResponderReadback
 } from "../twilio-responder-readback.mjs";
 
@@ -15,15 +15,66 @@ const API_KEY_SECRET = "c".repeat(32);
 const NOW = "2026-08-12T18:00:00.000Z";
 const KNOWN_SID = `SM${"1".repeat(32)}`;
 const OTHER_SID = `SM${"2".repeat(32)}`;
+const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
+const AUTHORITY = Object.freeze({
+  kind: "canonical-postgres",
+  service: async () => ({})
+});
+
+function providerDependencies() {
+  const topology = {
+    organizationId: ORGANIZATION_ID,
+    accountSidDigest: "a".repeat(64)
+  };
+  const provider = {
+    accountSid: ACCOUNT_SID,
+    messagingServiceSid: MESSAGING_SERVICE_SID,
+    messagingApiKeySid: API_KEY_SID,
+    messagingApiKeySecret: API_KEY_SECRET,
+    topology
+  };
+  return {
+    providerRegistry: {
+      kind: "twilio-isv-provider-registry",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      resolveOrganization(organizationId) {
+        if (organizationId !== ORGANIZATION_ID) {
+          throw new Error("unknown customer");
+        }
+        return provider;
+      }
+    },
+    providerTopologyRepository: {
+      kind: "responder-twilio-provider-topology-postgres",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      async requireActiveTopology(selected) {
+        assert.equal(selected, topology);
+        return selected;
+      }
+    }
+  };
+}
+
+function createTwilioResponderReadback(options = {}) {
+  const selected = createRawTwilioResponderReadback({
+    ...providerDependencies(),
+    ...options
+  });
+  return Object.freeze({
+    ...selected,
+    findMessages(input) {
+      return selected.findMessages({
+        organizationId: ORGANIZATION_ID,
+        ...input
+      });
+    }
+  });
+}
 
 function environment(overrides = {}) {
-  return {
-    SITESOURCERY_TWILIO_ACCOUNT_SID: ACCOUNT_SID,
-    SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID: MESSAGING_SERVICE_SID,
-    SITESOURCERY_TWILIO_API_KEY_SID: API_KEY_SID,
-    SITESOURCERY_TWILIO_API_KEY_SECRET: API_KEY_SECRET,
-    ...overrides
-  };
+  return { ...overrides };
 }
 
 function pageResponse(messages, nextPageUri = null) {
@@ -107,6 +158,36 @@ test("readback matches a stored SID digest without persisting or returning the r
     /^Basic /u
   );
   assert.match(calls[0].url, /Messages\.json\?/u);
+});
+
+test("missing or unknown customer authority fails before provider readback", async () => {
+  let providerCalls = 0;
+  const readback = createRawTwilioResponderReadback({
+    ...providerDependencies(),
+    environment: environment(),
+    clock: { now: () => NOW },
+    async fetchImpl() {
+      providerCalls += 1;
+      throw new Error("provider must not be touched");
+    }
+  });
+  const selected = {
+    targets: [sidTarget()],
+    windowFromIso: "2026-08-12T17:00:00.000Z",
+    windowToIso: NOW
+  };
+  await assert.rejects(
+    readback.findMessages(selected),
+    (error) => error?.code === "TWILIO_RESPONDER_READBACK_INVALID"
+  );
+  await assert.rejects(
+    readback.findMessages({
+      organizationId: "00000000-0000-4000-8000-000000000002",
+      ...selected
+    }),
+    /unknown customer/u
+  );
+  assert.equal(providerCalls, 0);
 });
 
 test("an unmatched target is reported, not invented", async () => {
@@ -328,6 +409,11 @@ test("held readback performs no request and configuration selects mode", async (
       environment: environment({
         SITESOURCERY_TWILIO_READBACK_MODE: "verified"
       }),
+      authority: AUTHORITY,
+      providerRegistryFactory: () =>
+        providerDependencies().providerRegistry,
+      providerTopologyRepositoryFactory: () =>
+        providerDependencies().providerTopologyRepository,
       fetchImpl: async () => pageResponse([])
     }).mode,
     "verified-read-only"

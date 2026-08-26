@@ -482,3 +482,29 @@ readback only. Publication and worker engineering are installed and held;
 external Twilio, D-U-N-S/native distribution, Spaceship/Domain, unreleased
 payment-purpose, elapsed stabilization, and rollback-retirement gates remain
 separate and unchanged.
+
+FIN-013 reopened one held Twilio engineering claim after current ISV guidance
+was compared with the installed provider boundary. Local implementation
+`73e6c3b6914bd2cad054c55a9e6396ca2aadfeaf`, tree
+`012390a34585f4583b5fc291141a25f48699fc88`, replaces global tenant-shared
+Twilio authority with one primary account and one customer subaccount per Site
+Sourcery organization. Migration 146 and the external root-owned registry bind
+outbound, callbacks, readback, number ownership, and Voice to the same active
+customer topology while PostgreSQL retains only digest and lifecycle evidence.
+
+The exact 45-path implementation passed 13/13 final focused checks, 892/892
+product/client tests, 1,110 hosted-service passes with zero failures and 16
+intentional no-database skips, 24/24 self-host checks, deterministic site and
+hosted artifacts, and clean-Git operations 252/252. Fresh PostgreSQL 16.14
+applied all 99 migrations and every historical journey; the targeted topology
+lifecycle/collision/retirement-fence integration passed 1/1; both disposable
+database paths were removed and absence-proved.
+
+Exact local evidence is
+`ops/releases/fin013-twilio-isv-topology/`. Its implementation receipt has
+SHA-256 `0b5e4517...`. This entry proves local held engineering only; protected
+review and held release proof remain next. No Twilio account, provider read or
+mutation, customer, production database, deployment, public, DNS, or spend
+effect occurred. The free Twilio-account owner handoff is not due until that
+protected held gate passes; Apple payment remains blocked before D-U-N-S and
+valid organization-enrollment access.

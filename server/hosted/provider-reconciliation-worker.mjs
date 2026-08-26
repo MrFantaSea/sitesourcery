@@ -222,6 +222,7 @@ export function createProviderReconciliationWorker({
             continue;
           }
           const result = await ports.readback.findMessages({
+            organizationId: candidate.organizationId,
             targets: [candidate.target],
             ...window,
             signal

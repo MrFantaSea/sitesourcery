@@ -244,6 +244,12 @@ import {
   createPostgresResponderNumberBindingsRepository
 } from "../responder-number-bindings-postgres.mjs";
 import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "../responder-twilio-provider-topology-postgres.mjs";
+import {
+  twilioIsvProviderRegistryFromEnvironment
+} from "../responder-twilio-provider-registry.mjs";
+import {
   createPostgresResponderForwardingRepository
 } from "../responder-forwarding-postgres.mjs";
 import {
@@ -1082,9 +1088,12 @@ async function start() {
     ids: commerceV2.ids,
     clock: commerceV2.clock
   });
+  const responderTwilioProviderTopologyRepository =
+    createPostgresResponderTwilioProviderTopologyRepository({ authority });
   const twilioResponderEvents =
     createConfiguredTwilioResponderEventsHttp({
       environment: process.env,
+      authority,
       repository: createPostgresTwilioResponderEventsRepository({
         authority
       }),
@@ -1168,9 +1177,21 @@ async function start() {
   }
   const responderNativeTokenAuthority =
     identityPepperConfiguration.compose(createResponderNativeTokenAuthority);
+  const responderNativeVoiceMode =
+    process.env.SITESOURCERY_TWILIO_VOICE_ACCESS_MODE ?? "held";
   const responderNativeVoiceAccess = identityPepperConfiguration.compose(
     createTwilioResponderVoiceAccess,
-    { environment: process.env }
+    {
+      environment: process.env,
+      ...(responderNativeVoiceMode === "verified"
+        ? {
+            providerRegistry:
+              twilioIsvProviderRegistryFromEnvironment(process.env),
+            providerTopologyRepository:
+              responderTwilioProviderTopologyRepository
+          }
+        : {})
+    }
   );
   const responderNativeClient = {
     repository: createPostgresResponderNativeClientRepository({
@@ -1254,6 +1275,21 @@ async function start() {
     lookupDigests: responderLookupDigests,
     clock: commerceV2.clock
   };
+  const responderTwilioProviderTopologies = {
+    repository: responderTwilioProviderTopologyRepository,
+    clock: commerceV2.clock
+  };
+  const responderTwilioProviderTopologyReadiness =
+    await responderTwilioProviderTopologyRepository.readiness();
+  if (
+    responderTwilioProviderTopologyReadiness.ready !== true ||
+    responderTwilioProviderTopologyReadiness.verified !== true ||
+    responderTwilioProviderTopologyReadiness.providerEffects !== false
+  ) {
+    throw new Error(
+      "Canonical held Responder Twilio provider topology is not ready."
+    );
+  }
   const responderNumberBindingReadiness =
     await responderNumberBindings.repository.readiness();
   if (
@@ -1558,6 +1594,7 @@ async function start() {
         twilioResponderEvents,
         twilioResponderInbound,
         responderNumberBindings,
+        responderTwilioProviderTopologies,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
           canonicalService: service,

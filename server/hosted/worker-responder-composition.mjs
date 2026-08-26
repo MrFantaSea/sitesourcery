@@ -25,6 +25,12 @@ import {
 import {
   createTwilioResponderTransport
 } from "./twilio-responder-transport.mjs";
+import {
+  twilioIsvProviderRegistryFromEnvironment
+} from "./responder-twilio-provider-registry.mjs";
+import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "./responder-twilio-provider-topology-postgres.mjs";
 import { WORKER_PURPOSES } from "./worker-config.mjs";
 
 const PURPOSE = "responder-fulfillment";
@@ -105,6 +111,9 @@ function configuredProviderFactory({ authority, environment, clock }) {
     });
   return createTwilioResponderTransport({
     environment,
+    providerRegistry: twilioIsvProviderRegistryFromEnvironment(environment),
+    providerTopologyRepository:
+      createPostgresResponderTwilioProviderTopologyRepository({ authority }),
     materialResolver,
     clock
   });
