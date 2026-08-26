@@ -535,3 +535,30 @@ database, application-restart, deployment, public, DNS, or spend effect
 occurred. Protected review and exact-main gates are next. Even after those
 pass, installation and the possible one incident plus later recovery email
 require a separate exact owner approval.
+
+FIN-014 then protected the exact seven-path tree through PR #50. Native PR Site
+Quality `33020608061` passed in 3m45s; supplemental exact-head run
+`33020464142` passed in 4m10s after the native event was delayed. The tree
+squash-merged as protected main `fa4a155...`/tree `2a02737...`, sole parent
+`39035f7...`. Exact-main Site Quality `33020848625` passed in 4m12s and
+Controlled Pages `33020848630` passed validation with Configure, package,
+upload, and deploy all skipped.
+
+After the owner approved the disclosed one-unit and possible-alert boundary,
+the prior base unit and unchanged active drop-in were byte-preserved under the
+FIN-014 rollback directory. Candidate unit SHA-256 `c2f75c12...` installed
+exactly, the user manager reloaded, and no application process restarted. Zen
+remained offline. The one authorized manual run executed instead of condition-
+skipping: five checks passed, backup returned exact critical
+`BACKUP_PROBE_UNAVAILABLE`, and one reviewed incident email was confirmed with
+no pending alert transition. The next unattended timer run also executed,
+attempted no delivery, and returned `DUPLICATE_ALERT_SUPPRESSED`; zero new runs
+condition-skipped.
+
+Public live/ready stayed exact installed `420bd8a...`/98, matrix v2, 20
+capabilities, six processes, and `externalEffects=false`. Exact production
+receipt SHA-256 is `055f0027...`. No backup write, mount repair, duplicate or
+recovery email, other provider effect, customer or database mutation,
+application restart, deployment, public/DNS mutation, payment, or spend
+occurred. The monitor correction is live and accepted; Zen recovery, Twilio,
+Apple, and elapsed-time gates remain separate.
