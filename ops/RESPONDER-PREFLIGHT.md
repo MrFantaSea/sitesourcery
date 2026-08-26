@@ -9,9 +9,11 @@ carrier rules can change; read them from the live provider at action time.
 
 ## Current owner-action boundary
 
-Do not create the Twilio account yet. Creating the free primary account starts
-the provider's current trial clock. The owner is asked to create it only after
-FIN-013 is protected and the exact release passes held proof.
+FIN-013 protected engineering and exact held proof are complete. The owner has
+been asked to create only the free primary account under the intended Desiderata
+Labs / Site Sourcery business identity, enable strong multifactor
+authentication, and keep recovery material under owner control. The operator
+must stop until the owner reports that exact action complete.
 
 Creating the free account does not authorize an upgrade, balance load,
 auto-recharge, phone number, Secondary Customer Profile, Brand, Campaign,
@@ -59,27 +61,29 @@ case is exactly `CUSTOMER_CARE`.
 
 ## Gate 0 — engineering proof before account creation
 
-- [ ] Migration 146 passes from empty PostgreSQL 16.
-- [ ] Migration 146 passes against an exact predecessor copy.
-- [ ] Outbound SMS resolves the request organization before any HTTP request.
-- [ ] Inbound SMS/Voice and delivery callbacks select the untrusted
+- [x] Migration 146 passes from empty PostgreSQL 16.
+- [x] Migration 146 passes against an exact predecessor copy.
+- [x] Outbound SMS resolves the request organization before any HTTP request.
+- [x] Inbound SMS/Voice and delivery callbacks select the untrusted
       `AccountSid`, verify with only that subaccount Auth Token, then require
       the matching active topology.
-- [ ] Read-only provider reconciliation carries organization identity and uses
+- [x] Read-only provider reconciliation carries organization identity and uses
       only that customer's subaccount/API key/Messaging Service.
-- [ ] Voice access tokens use only the requesting organization's Voice key and
+- [x] Voice access tokens use only the requesting organization's Voice key and
       platform/environment Push Credential.
-- [ ] Unknown organization, unknown account, cross-customer signature,
+- [x] Unknown organization, unknown account, cross-customer signature,
       duplicate authority, stale topology, and digest mismatch all fail closed.
-- [ ] Registry and database serialization contain no raw provider identifier or
+- [x] Registry and database serialization contain no raw provider identifier or
       secret.
-- [ ] Complete product, hosted, operations, native, credential-topology, and
+- [x] Complete product, hosted, operations, native, credential-topology, and
       held-effect gates pass on the exact clean candidate.
-- [ ] Protected review and held release proof pass with every provider effect
+- [x] Protected review and held release proof pass with every provider effect
       false.
 
-Only after every box above is evidenced should the owner be asked to create the
-free primary account.
+Every box above is evidenced by protected candidate `a6be927d...`, protected
+control `ad09e2d...`, and verified-held run `33005754314`. The owner has now
+been asked to create the free primary account. Gate 1 remains open until the
+owner reports completion and the operator performs the non-secret readback.
 
 ## Gate 1 — primary account, no spend
 
