@@ -1,6 +1,12 @@
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 import { digest } from "./security.mjs";
+import {
+  twilioIsvProviderRegistryFromEnvironment
+} from "./responder-twilio-provider-registry.mjs";
+import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "./responder-twilio-provider-topology-postgres.mjs";
 
 const PROVIDER = "twilio";
 const API_ORIGIN = "https://api.twilio.com";
@@ -10,6 +16,8 @@ const MESSAGE_SID = /^(?:SM|MM)[0-9a-fA-F]{32}$/u;
 const API_KEY_SID = /^SK[0-9a-fA-F]{32}$/u;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const E164_US = /^\+1[2-9][0-9]{9}$/u;
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MESSAGE_STATUSES = new Set([
   "accepted", "scheduled", "canceled", "queued", "sending", "sent",
   "receiving", "received", "delivered", "undelivered", "failed", "read"
@@ -209,44 +217,38 @@ export function createHeldTwilioResponderReadback() {
 
 export function createTwilioResponderReadback({
   environment = process.env,
+  providerRegistry,
+  providerTopologyRepository,
   fetchImpl = globalThis.fetch,
   clock = { now: () => new Date().toISOString() },
   timeoutMs = 5_000
 } = {}) {
-  const accountSid = environment?.SITESOURCERY_TWILIO_ACCOUNT_SID;
-  const messagingServiceSid =
-    environment?.SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID;
-  const apiKeySid = environment?.SITESOURCERY_TWILIO_API_KEY_SID;
-  const apiKeySecret = environment?.SITESOURCERY_TWILIO_API_KEY_SECRET;
-  if (typeof accountSid !== "string" || !ACCOUNT_SID.test(accountSid)) {
-    throw configuration("The Twilio readback account binding is invalid.");
-  }
-  if (typeof messagingServiceSid !== "string" ||
-      !MESSAGING_SERVICE_SID.test(messagingServiceSid)) {
-    throw configuration(
-      "The Twilio readback Messaging Service binding is invalid."
-    );
-  }
-  if (
-    typeof apiKeySid !== "string" || !API_KEY_SID.test(apiKeySid) ||
-    typeof apiKeySecret !== "string" || apiKeySecret.length < 16 ||
-    apiKeySecret.length > 256
-  ) {
-    throw configuration("The Twilio readback API key binding is invalid.");
-  }
   invariant(
-    typeof fetchImpl === "function" && typeof clock?.now === "function",
+    [
+      "SITESOURCERY_TWILIO_ACCOUNT_SID",
+      "SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID",
+      "SITESOURCERY_TWILIO_API_KEY_SID",
+      "SITESOURCERY_TWILIO_API_KEY_SECRET"
+    ].every((name) => environment?.[name] === undefined ||
+      environment[name] === "") &&
+      providerRegistry?.kind === "twilio-isv-provider-registry" &&
+      providerRegistry.providerEffects === false &&
+      typeof providerRegistry.resolveOrganization === "function" &&
+      typeof providerRegistry.readiness === "function" &&
+      providerTopologyRepository?.kind ===
+        "responder-twilio-provider-topology-postgres" &&
+      providerTopologyRepository.providerEffects === false &&
+      typeof providerTopologyRepository.requireActiveTopology === "function" &&
+      typeof providerTopologyRepository.readiness === "function" &&
+      typeof fetchImpl === "function" && typeof clock?.now === "function",
     "TWILIO_RESPONDER_READBACK_CONFIGURATION_REQUIRED",
     "The Twilio readback fetch implementation and clock are required.",
     { status: 500 }
   );
   const selectedTimeout = timeout(timeoutMs);
-  const authorization = `Basic ${Buffer.from(
-    `${apiKeySid}:${apiKeySecret}`,
-    "utf8"
-  ).toString("base64")}`;
 
-  async function listPage(url, signal) {
+  async function listPage(url, signal, provider) {
+    const { accountSid, authorization } = provider;
     let selectedUrl;
     try {
       selectedUrl = new URL(url);
@@ -290,14 +292,12 @@ export function createTwilioResponderReadback({
     readOnly: true,
     async readiness() {
       try {
-      const query = new URLSearchParams({ PageSize: "1" });
-        const page = await listPage(
-          `${API_ORIGIN}/2010-04-01/Accounts/${accountSid}` +
-            `/Messages.json?${query.toString()}`,
-          null
-        );
-        const ready = Array.isArray(page?.messages) &&
-          page.messages.length <= 1;
+        const [registry, topology] = await Promise.all([
+          providerRegistry.readiness(),
+          providerTopologyRepository.readiness()
+        ]);
+        const ready = registry?.ready === true && registry?.verified === true &&
+          topology?.ready === true && topology?.verified === true;
         return deepFreeze({
           ready,
           verified: ready,
@@ -324,6 +324,7 @@ export function createTwilioResponderReadback({
     // authorized route/content digests. Raw recipients, bodies, and SIDs
     // never leave this module.
     async findMessages({
+      organizationId,
       targets,
       windowFromIso,
       windowToIso,
@@ -332,12 +333,27 @@ export function createTwilioResponderReadback({
       signal = null
     } = {}) {
       invariant(
-        Array.isArray(targets) && targets.length >= 1 &&
+        typeof organizationId === "string" && UUID.test(organizationId) &&
+          Array.isArray(targets) && targets.length >= 1 &&
           targets.length <= MAXIMUM_TARGETS,
         "TWILIO_RESPONDER_READBACK_INVALID",
         "Twilio readback targets must be bounded.",
         { status: 400 }
       );
+      const providerAuthority = providerRegistry.resolveOrganization(
+        organizationId
+      );
+      await providerTopologyRepository.requireActiveTopology(
+        providerAuthority.topology
+      );
+      const accountSid = providerAuthority.accountSid;
+      const messagingServiceSid = providerAuthority.messagingServiceSid;
+      const authorization = `Basic ${Buffer.from(
+        `${providerAuthority.messagingApiKeySid}:` +
+          providerAuthority.messagingApiKeySecret,
+        "utf8"
+      ).toString("base64")}`;
+      const provider = { accountSid, authorization };
       const selectedTargets = targets.map(target);
       const selectedTargetDigests = selectedTargets.map(targetDigest);
       invariant(
@@ -378,7 +394,7 @@ export function createTwilioResponderReadback({
         `/Messages.json?${query.toString()}`;
 
       while (nextUrl !== null && pagesFetched < maximumPages) {
-        const page = await listPage(nextUrl, signal);
+        const page = await listPage(nextUrl, signal, provider);
         pagesFetched += 1;
         const rows = Array.isArray(page?.messages) ? page.messages : null;
         if (rows === null || rows.length > pageSize) {
@@ -493,6 +509,10 @@ export function createTwilioResponderReadback({
 
 export function configuredTwilioResponderReadback({
   environment = process.env,
+  authority = null,
+  providerRegistryFactory = twilioIsvProviderRegistryFromEnvironment,
+  providerTopologyRepositoryFactory =
+    createPostgresResponderTwilioProviderTopologyRepository,
   fetchImpl = globalThis.fetch,
   clock = { now: () => new Date().toISOString() },
   timeoutMs = 5_000
@@ -504,9 +524,34 @@ export function configuredTwilioResponderReadback({
     "SITESOURCERY_TWILIO_READBACK_MODE must be held or verified.",
     { status: 500 }
   );
-  if (mode === "held") return createHeldTwilioResponderReadback();
+  if (mode === "held") {
+    invariant(
+      [
+        "SITESOURCERY_TWILIO_ACCOUNT_SID",
+        "SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID",
+        "SITESOURCERY_TWILIO_API_KEY_SID",
+        "SITESOURCERY_TWILIO_API_KEY_SECRET"
+      ].every((name) => environment?.[name] === undefined ||
+        environment[name] === ""),
+      "TWILIO_RESPONDER_READBACK_CONFIGURATION_REQUIRED",
+      "Global Twilio readback credentials cannot be staged while held.",
+      { status: 500 }
+    );
+    return createHeldTwilioResponderReadback();
+  }
+  invariant(
+    authority?.kind === "canonical-postgres" &&
+      typeof providerRegistryFactory === "function" &&
+      typeof providerTopologyRepositoryFactory === "function",
+    "TWILIO_RESPONDER_READBACK_CONFIGURATION_REQUIRED",
+    "Verified Twilio readback requires customer registry and PostgreSQL authority.",
+    { status: 500 }
+  );
   return createTwilioResponderReadback({
     environment,
+    providerRegistry: providerRegistryFactory(environment),
+    providerTopologyRepository:
+      providerTopologyRepositoryFactory({ authority }),
     fetchImpl,
     clock,
     timeoutMs

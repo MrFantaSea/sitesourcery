@@ -226,6 +226,8 @@ export function createTwilioResponderVoiceAccess({
   pepperVersion,
   previousPeppers = {},
   environment = {},
+  providerRegistry = null,
+  providerTopologyRepository = null,
   randomBytes = systemRandomBytes,
   tokenFactory = defaultTokenFactory
 } = {}) {
@@ -270,6 +272,7 @@ export function createTwilioResponderVoiceAccess({
   const verifierVersions = Object.freeze([...keyring.keys()]);
 
   const dedicatedNames = [
+    ACCOUNT_SID_ENVIRONMENT,
     TWILIO_RESPONDER_VOICE_API_KEY_SID_ENVIRONMENT,
     TWILIO_RESPONDER_VOICE_API_KEY_SECRET_ENVIRONMENT,
     TWILIO_RESPONDER_VOICE_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
@@ -277,59 +280,32 @@ export function createTwilioResponderVoiceAccess({
     TWILIO_RESPONDER_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
     TWILIO_RESPONDER_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT
   ];
-  let provider = null;
+  invariant(
+    dedicatedNames.every((name) => selectedValue(environment, name) === null),
+    "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
+    "Global Twilio Voice customer credentials are forbidden.",
+    { status: 500 }
+  );
   if (mode === "held") {
     invariant(
-      dedicatedNames.every((name) => selectedValue(environment, name) === null),
+      providerRegistry === null && providerTopologyRepository === null,
       "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
-      "Twilio Voice credentials cannot be staged while Voice access is held.",
+      "Twilio customer provider authority cannot be staged while Voice access is held.",
       { status: 500 }
     );
   } else {
-    provider = Object.freeze({
-      accountSid: providerSid(environment, ACCOUNT_SID_ENVIRONMENT, ACCOUNT_SID),
-      apiKeySid: providerSid(
-        environment,
-        TWILIO_RESPONDER_VOICE_API_KEY_SID_ENVIRONMENT,
-        API_KEY_SID
-      ),
-      apiKeySecret: providerSecret(
-        environment,
-        TWILIO_RESPONDER_VOICE_API_KEY_SECRET_ENVIRONMENT
-      ),
-      pushCredentials: Object.freeze({
-        ios: Object.freeze({
-          sandbox: providerSid(
-            environment,
-            TWILIO_RESPONDER_VOICE_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
-            PUSH_CREDENTIAL_SID
-          ),
-          production: providerSid(
-            environment,
-            TWILIO_RESPONDER_VOICE_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT,
-            PUSH_CREDENTIAL_SID
-          )
-        }),
-        android: Object.freeze({
-          sandbox: providerSid(
-            environment,
-            TWILIO_RESPONDER_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_ENVIRONMENT,
-            PUSH_CREDENTIAL_SID
-          ),
-          production: providerSid(
-            environment,
-            TWILIO_RESPONDER_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_ENVIRONMENT,
-            PUSH_CREDENTIAL_SID
-          )
-        })
-      })
-    });
     invariant(
-      new Set(Object.values(provider.pushCredentials).flatMap(
-        (platform) => Object.values(platform)
-      )).size === 4,
+      providerRegistry?.kind === "twilio-isv-provider-registry" &&
+        providerRegistry.providerEffects === false &&
+        typeof providerRegistry.resolveOrganization === "function" &&
+        typeof providerRegistry.readiness === "function" &&
+        providerTopologyRepository?.kind ===
+          "responder-twilio-provider-topology-postgres" &&
+        providerTopologyRepository.providerEffects === false &&
+        typeof providerTopologyRepository.requireActiveTopology === "function" &&
+        typeof providerTopologyRepository.readiness === "function",
       "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
-      "Twilio Voice platform Push Credentials must be distinct.",
+      "Verified Voice access requires customer-isolated Twilio authority.",
       { status: 500 }
     );
   }
@@ -360,7 +336,13 @@ export function createTwilioResponderVoiceAccess({
     };
   }
 
-  function metadataFor(selected, decoded, opaque, pushCredentialSid) {
+  function metadataFor(
+    selected,
+    decoded,
+    opaque,
+    pushCredentialSid,
+    provider
+  ) {
     invariant(
       decoded.header?.alg === "HS256" &&
         decoded.header?.cty === "twilio-fpa;v=1" &&
@@ -498,17 +480,26 @@ export function createTwilioResponderVoiceAccess({
     voiceCallEffects: false,
     providerAuthorizationEffects: mode === "verified",
     async readiness() {
+      const [registry, topology] = mode === "verified"
+        ? await Promise.all([
+            providerRegistry.readiness(),
+            providerTopologyRepository.readiness()
+          ])
+        : [null, null];
+      const signerReady = mode === "verified" &&
+        registry?.ready === true && registry?.verified === true &&
+        topology?.ready === true && topology?.verified === true;
       return deepFreeze({
-        ready: true,
-        verified: true,
+        ready: mode === "held" || signerReady,
+        verified: mode === "held" || signerReady,
         kind: "twilio-responder-voice-access",
         mode,
         provider: "twilio",
         transports: Object.freeze([
           "twilio_voice_ios", "twilio_voice_android"
         ]),
-        signerReady: provider !== null,
-        issuanceEnabled: mode === "verified",
+        signerReady,
+        issuanceEnabled: mode === "verified" && signerReady,
         ttlSeconds: SESSION_TTL_SECONDS,
         writerVersion: currentVersion,
         verifierVersions,
@@ -521,7 +512,7 @@ export function createTwilioResponderVoiceAccess({
         secretMaterial: "redacted"
       });
     },
-    issueSession(authorityValue) {
+    async issueSession(authorityValue) {
       const selected = sessionAuthority(authorityValue);
       if (mode !== "verified") {
         throw new HostedError(
@@ -530,6 +521,59 @@ export function createTwilioResponderVoiceAccess({
           { status: 409 }
         );
       }
+      const providerAuthority = providerRegistry.resolveOrganization(
+        selected.organizationId
+      );
+      await providerTopologyRepository.requireActiveTopology(
+        providerAuthority.topology
+      );
+      const provider = Object.freeze({
+        accountSid: providerSid(
+          { value: providerAuthority.accountSid }, "value", ACCOUNT_SID
+        ),
+        apiKeySid: providerSid(
+          { value: providerAuthority.voiceApiKeySid }, "value", API_KEY_SID
+        ),
+        apiKeySecret: providerSecret(
+          { value: providerAuthority.voiceApiKeySecret }, "value"
+        ),
+        pushCredentials: Object.freeze({
+          ios: Object.freeze({
+            sandbox: providerSid(
+              { value: providerAuthority.voiceSandboxPushCredentialSid },
+              "value", PUSH_CREDENTIAL_SID
+            ),
+            production: providerSid(
+              { value: providerAuthority.voiceProductionPushCredentialSid },
+              "value", PUSH_CREDENTIAL_SID
+            )
+          }),
+          android: Object.freeze({
+            sandbox: providerSid(
+              {
+                value:
+                  providerAuthority.voiceAndroidSandboxPushCredentialSid
+              },
+              "value", PUSH_CREDENTIAL_SID
+            ),
+            production: providerSid(
+              {
+                value:
+                  providerAuthority.voiceAndroidProductionPushCredentialSid
+              },
+              "value", PUSH_CREDENTIAL_SID
+            )
+          })
+        })
+      });
+      invariant(
+        new Set(Object.values(provider.pushCredentials).flatMap(
+          (platform) => Object.values(platform)
+        )).size === 4,
+        "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
+        "Twilio Voice platform Push Credentials must be distinct.",
+        { status: 500 }
+      );
       const keys = keyring.get(currentVersion);
       const opaque = opaqueAuthority(selected, keys);
       const pushCredentialSid =
@@ -553,7 +597,7 @@ export function createTwilioResponderVoiceAccess({
         );
       }
       const metadata = metadataFor(
-        selected, decodeJwt(accessToken), opaque, pushCredentialSid
+        selected, decodeJwt(accessToken), opaque, pushCredentialSid, provider
       );
       return deepFreeze({
         schema: "sitesourcery.responder-native-voice-session-internal/v1",

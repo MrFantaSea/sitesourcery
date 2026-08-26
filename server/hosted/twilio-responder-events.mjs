@@ -183,18 +183,25 @@ export function createHeldTwilioResponderEvents() {
 }
 
 export function createTwilioResponderEvents({
-  accountSid,
+  providerRegistry,
+  providerTopologyRepository,
   callbackUrl,
-  webhookAuthToken,
   repository,
   clock = { now: () => new Date().toISOString() }
 } = {}) {
-  const selectedAccountSid = exactAccountSid(accountSid);
   const selectedCallbackUrl = exactCallbackUrl(callbackUrl);
-  const selectedAuthToken = authToken(webhookAuthToken);
   const durable = repositoryBoundary(repository);
   invariant(
-    typeof twilio?.validateRequest === "function" &&
+    providerRegistry?.kind === "twilio-isv-provider-registry" &&
+      providerRegistry.providerEffects === false &&
+      typeof providerRegistry.resolveAccountSid === "function" &&
+      typeof providerRegistry.readiness === "function" &&
+      providerTopologyRepository?.kind ===
+        "responder-twilio-provider-topology-postgres" &&
+      providerTopologyRepository.providerEffects === false &&
+      typeof providerTopologyRepository.requireActiveTopology === "function" &&
+      typeof providerTopologyRepository.readiness === "function" &&
+      typeof twilio?.validateRequest === "function" &&
       typeof clock?.now === "function",
     "TWILIO_RESPONDER_EVENT_CONFIGURATION_REQUIRED",
     "The official Twilio validator and callback clock are required.",
@@ -206,8 +213,14 @@ export function createTwilioResponderEvents({
     mode: "verified-status-callback",
     providerEffects: false,
     async readiness() {
-      const storage = await durable.readiness();
-      const ready = storage?.ready === true && storage?.verified === true;
+      const [storage, registry, topology] = await Promise.all([
+        durable.readiness(),
+        providerRegistry.readiness(),
+        providerTopologyRepository.readiness()
+      ]);
+      const ready = storage?.ready === true && storage?.verified === true &&
+        registry?.ready === true && registry?.verified === true &&
+        topology?.ready === true && topology?.verified === true;
       return deepFreeze({
         ready,
         verified: ready,
@@ -226,8 +239,17 @@ export function createTwilioResponderEvents({
       const signature = header(headers, "x-twilio-signature");
       if (!/^[A-Za-z0-9+/]{27}=$/u.test(signature)) throw invalid();
       const { params } = parsedForm(rawBody);
+      const callbackAccountSid = one(params, "AccountSid");
+      let provider;
+      try {
+        provider = providerRegistry.resolveAccountSid(
+          exactAccountSid(callbackAccountSid)
+        );
+      } catch {
+        throw invalid();
+      }
       if (!twilio.validateRequest(
-        selectedAuthToken,
+        authToken(provider.webhookAuthToken),
         signature,
         selectedCallbackUrl,
         params
@@ -238,16 +260,15 @@ export function createTwilioResponderEvents({
           { status: 400, details: { providerEffects: false } }
         );
       }
+      await providerTopologyRepository.requireActiveTopology(provider.topology);
 
       const receivedAt = currentTime(clock);
-      const callbackAccountSid = one(params, "AccountSid");
       const messageSid = one(params, "MessageSid");
       const messageStatus = one(params, "MessageStatus");
       const smsSid = one(params, "SmsSid", { optional: true });
       const smsStatus = one(params, "SmsStatus", { optional: true });
       const errorCode = one(params, "ErrorCode", { optional: true });
       if (
-        callbackAccountSid !== selectedAccountSid ||
         !MESSAGE_SID.test(messageSid) || !STATUSES.has(messageStatus) ||
         (smsSid !== null && smsSid !== messageSid) ||
         (smsStatus !== null && smsStatus !== messageStatus) ||
@@ -257,7 +278,7 @@ export function createTwilioResponderEvents({
       }
 
       const providerMessageIdDigest = digest(messageSid);
-      const accountSidDigest = digest(callbackAccountSid);
+      const accountSidDigest = provider.topology.accountSidDigest;
       const errorCodeDigest = errorCode === null ? null : digest({
         provider: PROVIDER,
         errorCode

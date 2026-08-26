@@ -35,6 +35,9 @@ import { createTwilioResponderInbound } from
 import { createPostgresResponderNumberBindingsRepository } from
   "../responder-number-bindings-postgres.mjs";
 import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "../responder-twilio-provider-topology-postgres.mjs";
+import {
   createPostgresResponderVoiceDialTargets
 } from "../responder-voice-dial-target-postgres.mjs";
 import {
@@ -61,6 +64,32 @@ const CALLER = "+18565550100";
 const FOLLOWUP_CALLER = "+18565550101";
 const DELIVERY_BODY =
   "Sorry we missed you - this is Site Sourcery. Reply STOP to opt out.";
+
+function providerTopology(organizationId) {
+  const selected = {
+    organizationId,
+    registrationClass: "LOW_VOLUME_STANDARD",
+    providerBrandType: "STANDARD",
+    campaignUseCase: "CUSTOMER_CARE",
+    accountSidDigest: digest(ACCOUNT_SID),
+    messagingServiceSidDigest: digest(`MG${"1".repeat(32)}`)
+  };
+  for (const field of [
+    "customerProfileSidDigest",
+    "brandRegistrationSidDigest",
+    "campaignSidDigest",
+    "messagingApiKeySidDigest",
+    "messagingApiKeySecretDigest",
+    "webhookAuthTokenDigest",
+    "voiceApiKeySidDigest",
+    "voiceApiKeySecretDigest",
+    "voiceSandboxPushCredentialSidDigest",
+    "voiceProductionPushCredentialSidDigest",
+    "voiceAndroidSandboxPushCredentialSidDigest",
+    "voiceAndroidProductionPushCredentialSidDigest"
+  ]) selected[field] = digest(`inbound-integration:${field}`);
+  return Object.freeze(selected);
+}
 
 async function seed(pool) {
   const ids = {
@@ -188,9 +217,24 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
         authority,
         verifierKeyVersions: [...lookupDigests.verifierVersions]
       });
+    const selectedProviderTopology = providerTopology(ids.organization);
+    const providerRegistry = Object.freeze({
+      kind: "twilio-isv-provider-registry",
+      providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      resolveAccountSid(accountSid) {
+        assert.equal(accountSid, ACCOUNT_SID);
+        return Object.freeze({
+          webhookAuthToken: AUTH_TOKEN,
+          topology: selectedProviderTopology
+        });
+      }
+    });
+    const providerTopologyRepository =
+      createPostgresResponderTwilioProviderTopologyRepository({ authority });
     const inbound = createTwilioResponderInbound({
-      accountSid: ACCOUNT_SID,
-      webhookAuthToken: AUTH_TOKEN,
+      providerRegistry,
+      providerTopologyRepository,
       inboundMessageUrl: MESSAGE_URL,
       voiceUrl: VOICE_URL,
       dialResultUrl: DIAL_RESULT_URL,
@@ -213,6 +257,18 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
       userId: ids.customer,
       organizationId: ids.organization
     };
+    await providerTopologyRepository.attestTopology(operator, {
+      commandId: "pg-inbound-provider-topology-001",
+      requestDigest: digest("pg-inbound-provider-topology-request-001"),
+      ...selectedProviderTopology,
+      providerReadbackDigest: digest(
+        "pg-inbound-provider-topology-readback-001"
+      ),
+      topologyEvidenceDigest: digest(
+        "pg-inbound-provider-topology-evidence-001"
+      ),
+      recordedAt: tick()
+    });
     const core = createResponderCore({
       repository: createPostgresResponderCoreRepository({ authority }),
       provider: createFakeResponderProvider(),
@@ -353,7 +409,12 @@ test("Twilio inbound tenancy, STOP-versus-claim in both orders, replay, and priv
       `select organization_id, project_id, state, state_reason
          from ss.responder_twilio_inbound_events
         where state = 'unbound'
-        order by received_at`
+          and provider_event_id_digest = any($1::text[])
+        order by received_at`,
+      [[
+        digest(`SM${"a".repeat(32)}`),
+        digest(`SM${"b".repeat(32)}`)
+      ]]
     );
     assert.equal(unboundRows.rowCount, 2);
     for (const row of unboundRows.rows) {

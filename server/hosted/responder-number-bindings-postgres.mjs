@@ -154,6 +154,11 @@ export function createPostgresResponderNumberBindingsRepository({
               ) is not null
               and ss.hosted_responder_twilio_inbound_contract_v1() =
                 'canonical-responder-twilio-inbound-v1-keyed-lookup-tenant-bound'
+              and to_regprocedure(
+                'ss.hosted_responder_twilio_isv_topology_contract_v1()'
+              ) is not null
+              and ss.hosted_responder_twilio_isv_topology_contract_v1() =
+                'canonical-responder-twilio-isv-topology-v1-customer-subaccount'
                 as contract_ready,
               (select count(*) = 1
                  and bool_and(relation.relrowsecurity)
@@ -168,13 +173,32 @@ export function createPostgresResponderNumberBindingsRepository({
                 select 1 from ss.responder_provider_number_bindings binding
                  where binding.state = 'active'
                    and binding.lookup_key_version <> all($1::text[])
-              ) as lookup_keys_cover_bindings
+              ) as lookup_keys_cover_bindings,
+              not exists (
+                select 1 from ss.responder_provider_number_bindings binding
+                 where binding.state = 'active'
+                   and not exists (
+                     select 1
+                       from ss.responder_twilio_provider_topologies topology
+                      where topology.organization_id = binding.organization_id
+                        and topology.provider = binding.provider
+                        and topology.state = 'active'
+                        and topology.account_sid_digest =
+                          binding.account_sid_digest
+                        and (
+                          binding.messaging_service_sid_digest is null
+                          or topology.messaging_service_sid_digest =
+                            binding.messaging_service_sid_digest
+                        )
+                   )
+              ) as provider_topologies_cover_bindings
           `, [verifierKeyVersions])
         );
         const row = result.rows[0] ?? {};
         const storageReady = row.contract_ready === true &&
           row.tables_ready === true;
-        const ready = storageReady && row.lookup_keys_cover_bindings === true;
+        const ready = storageReady && row.lookup_keys_cover_bindings === true &&
+          row.provider_topologies_cover_bindings === true;
         return deepFreeze({
           ready,
           verified: ready,

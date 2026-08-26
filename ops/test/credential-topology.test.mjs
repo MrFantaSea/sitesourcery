@@ -139,7 +139,7 @@ test("credential topology contract is exact, held, and sorted", () => {
   assert.equal(template.schema, CREDENTIAL_TOPOLOGY_SCHEMA);
   assert.equal(template.mode, "held");
   assert.equal(CREDENTIAL_TOPOLOGY_CONTRACT.effectsAllowed, false);
-  assert.equal(template.items.length, 26);
+  assert.equal(template.items.length, 27);
   assert.deepEqual(
     template.items.map((entry) => entry.name),
     [...CREDENTIAL_TOPOLOGY_CONTRACT.names].sort()
@@ -181,7 +181,7 @@ test("held template makes no presence or readiness claim", () => {
   assert.equal(result.mode, "held");
   assert.equal(result.effectsAllowed, false);
   assert.equal(result.topologyEvidenceComplete, false);
-  assert.equal(result.itemCount, 26);
+  assert.equal(result.itemCount, 27);
   assert.match(result.topologyDigest, /^[a-f0-9]{64}$/u);
   assert.ok(
     result.blockers.includes(
@@ -398,8 +398,8 @@ test("JSON schema exposes only the reviewed metadata vocabulary", async () => {
   );
   assert.equal(schema.$id, CREDENTIAL_TOPOLOGY_JSON_SCHEMA_ID);
   assert.equal(schema.properties.mode.const, "held");
-  assert.equal(schema.properties.items.minItems, 26);
-  assert.equal(schema.properties.items.maxItems, 26);
+  assert.equal(schema.properties.items.minItems, 27);
+  assert.equal(schema.properties.items.maxItems, 27);
   assert.deepEqual(
     schema.$defs.item.properties.name.enum,
     CREDENTIAL_TOPOLOGY_CONTRACT.names

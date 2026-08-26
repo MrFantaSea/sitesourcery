@@ -119,6 +119,9 @@ import {
   createResponderNumberBindingsHttpBoundary
 } from "./responder-number-bindings-http.mjs";
 import {
+  createResponderTwilioProviderTopologyHttpBoundary
+} from "./responder-twilio-provider-topology-http.mjs";
+import {
   createResponderForwardingHttpBoundary
 } from "./responder-forwarding-http.mjs";
 import {
@@ -914,6 +917,7 @@ export function createHostedApi(
     twilioResponderEvents = null,
     twilioResponderInbound = null,
     responderNumberBindings = null,
+    responderTwilioProviderTopologies = null,
     responderForwarding = null,
     responderNativeClient = null,
     stripeWebhook = null,
@@ -1178,6 +1182,40 @@ export function createHostedApi(
           lookupDigests: responderNumberBindings.lookupDigests,
           ...(responderNumberBindings.clock
             ? { clock: responderNumberBindings.clock }
+            : {}),
+          authenticate: (request, route) => authenticatedOrganizationActor({
+            service,
+            request,
+            route,
+            product: "Responder",
+            selectionCode: "RESPONDER_ORGANIZATION_SELECTION_REQUIRED"
+          }),
+          async requireWriteGuard(request) {
+            requireCsrf(
+              request,
+              parseCookies(request.headers.get("cookie"))
+            );
+            return true;
+          }
+        });
+  invariant(
+    responderTwilioProviderTopologies === null ||
+      (
+        responderTwilioProviderTopologies?.repository?.kind ===
+          "responder-twilio-provider-topology-postgres" &&
+        responderTwilioProviderTopologies.repository.providerEffects === false
+      ),
+    "RUNTIME_CONFIGURATION_ERROR",
+    "Hosted Responder Twilio topologies require digest-only PostgreSQL authority.",
+    { status: 500 }
+  );
+  const responderTwilioProviderTopologyHttpBoundary =
+    responderTwilioProviderTopologies === null
+      ? null
+      : createResponderTwilioProviderTopologyHttpBoundary({
+          repository: responderTwilioProviderTopologies.repository,
+          ...(responderTwilioProviderTopologies.clock
+            ? { clock: responderTwilioProviderTopologies.clock }
             : {}),
           authenticate: (request, route) => authenticatedOrganizationActor({
             service,
@@ -2389,6 +2427,14 @@ export function createHostedApi(
             await responderNumberBindingsHttpBoundary.dispatch(request);
           if (bindingResponse !== null) {
             return rootedResponse(bindingResponse, requestId);
+          }
+        }
+
+        if (responderTwilioProviderTopologyHttpBoundary !== null) {
+          const topologyResponse =
+            await responderTwilioProviderTopologyHttpBoundary.dispatch(request);
+          if (topologyResponse !== null) {
+            return rootedResponse(topologyResponse, requestId);
           }
         }
 

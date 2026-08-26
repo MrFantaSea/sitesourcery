@@ -359,6 +359,7 @@ test("readback candidates expose only digest targets and bounded attempt windows
         rowCount: 1,
         rows: [{
           id: CASE,
+          organization_id: ORG,
           case_kind: "ambiguous_message_create",
           subject_provider_message_id_digest: null,
           route_digest: routeDigest,
@@ -378,6 +379,11 @@ test("readback candidates expose only digest targets and bounded attempt windows
     contentDigest
   });
   assert.match(result.candidates[0].targetDigest, /^[0-9a-f]{64}$/u);
+  assert.equal(result.candidates[0].organizationId, ORG);
+  assert.match(
+    fake.calls[0].queries[0].text,
+    /reconciliation\.organization_id is not null/u
+  );
   assert.equal(fake.calls[0].context.readOnly, true);
 });
 

@@ -1732,7 +1732,7 @@ export function createPostgresResponderNativeClientRepository({
             appEnvironment: installed.appEnvironment
           });
           if (voiceAccess.mode === "held") {
-            voiceAccess.issueSession(authorityValue);
+            await voiceAccess.issueSession(authorityValue);
             throw new HostedError(
               "RESPONDER_NATIVE_VOIP_HELD",
               "Native VoIP access remains held pending explicit provider activation.",
@@ -1791,7 +1791,7 @@ export function createPostgresResponderNativeClientRepository({
               semanticReplay: true
             });
           }
-          const issued = voiceAccess.issueSession(authorityValue);
+          const issued = await voiceAccess.issueSession(authorityValue);
           const envelopeDigest = await client.query(
             `select ss.responder_native_voice_session_envelope_digest_v2(
                $1,$2,$3,$4,$5,$6,$7

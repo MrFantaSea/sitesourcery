@@ -368,21 +368,25 @@ function troubleshooting() {
 
   out(bold('  No text arrives at all'));
   bullet(
-    'Brand or campaign not approved yet. Check the Twilio console. ' +
-      'Nothing is deliverable until every carrier shows approved. ' +
-      'See RESPONDER-PREFLIGHT.md, Stage 4.'
+    'The customer-specific Brand or Campaign may not be approved. ' +
+      'Check only this customer subaccount. Do not inspect or change ' +
+      'another customer to work around it. See RESPONDER-PREFLIGHT.md.'
   );
   bullet(
-    'Or: the number is not in the Messaging Service that is attached ' +
-      'to the campaign. Add it, wait a minute, retest.'
+    'Or: the number, Messaging Service, Campaign, registry entry, ' +
+      'topology attestation, and number binding are not the same active ' +
+      'customer authority. Hold the purpose and reconcile them.'
   );
-  bullet('Or: the Twilio balance is zero. Check it.');
+  bullet(
+    'Or: the provider account cannot fund the action. Stop before any ' +
+      'upgrade or recharge and obtain exact owner spend approval.'
+  );
   out();
 
   out(bold('  The text arrives on some phones and not others'));
   bullet(
-    'Almost always AT&T still pending. Verizon and T-Mobile approve ' +
-      'in days, AT&T takes 2-4 weeks. Do not hand over.'
+    'Treat this as incomplete customer approval or delivery filtering. ' +
+      'Read the exact current provider/carrier state. Do not hand over.'
   );
   out();
 
@@ -394,11 +398,9 @@ function troubleshooting() {
   out();
 
   out(bold('  A caller who WAS answered got the "we missed you" text'));
-  bullet('The flow branched wrong. In Studio, the Split Based On');
-  out('    widget must test  widgets.connect_call.DialCallStatus');
-  out('    and the missed-call branch must match only');
-  out('      busy, no-answer, failed, cancelled');
-  out('    and NOT completed. Fix before anyone else calls.');
+  bullet('Hold this customer. The durable call-result routing or binding');
+  out('    is wrong. Reconcile the exact call evidence and customer');
+  out('    topology in Site Sourcery; do not add a parallel Studio flow.');
   out();
 
   out(bold('  The forwarding code is refused by the handset'));
@@ -567,14 +569,14 @@ async function main() {
 
     if (flavour === 'relay') {
       warn([
-        'REPLY-RELAY NEEDS A TWILIO FUNCTION.',
-        'It cannot be built from Studio widgets alone - the owner',
-        'reply arrives as a new execution with no memory of the call.',
-        'If you have not deployed and tested that Function already,',
-        'do not install 2b today. Install 2a and come back.',
+        'REPLY-RELAY NEEDS THE VERIFIED SITE SOURCERY PATH.',
+        'Do not create a Twilio Function or Studio flow. The hosted',
+        'runtime owns tenant, consent, STOP, retention, and reply',
+        'correlation. If this customer path is not verified and active,',
+        'do not install 2b today.',
       ]);
       const ready = await yesNo(
-        'Is the reply-relay Function already deployed AND tested on your own number?'
+        'Is this customer reply-relay path active and reconciled in Site Sourcery?'
       );
       if (!ready) {
         out();
@@ -588,36 +590,42 @@ async function main() {
         const fallback = await yesNo('Switch to Tier 2a and carry on?');
         if (!fallback) return finish('2b not ready, install not started');
         record.tierFlavour = '2a generic auto (2b deferred)';
-        record.notes.push('2b reply-relay deferred - Function not ready.');
+        record.notes.push(
+          '2b reply-relay deferred - Site Sourcery path not ready.'
+        );
       }
     }
   }
 
   // ---- 2. preflight gate --------------------------------------
   step(2, 'Preflight gate');
-  out('  If the A2P campaign is not fully approved, nothing you');
-  out('  build today will deliver, and you will not find out');
-  out('  until a customer complains.');
+  out('  This customer needs its own active subaccount, Secondary');
+  out('  Customer Profile, Brand, Campaign, Messaging Service,');
+  out('  registry entry, topology attestation, and number binding.');
   out();
   const approved = await yesNo(
-    'In the Twilio console, does the campaign show approved for ALL carriers, including AT&T?'
+    'Does this exact customer topology read active and approved end to end?'
   );
   if (!approved) {
     warn([
       'DO NOT INSTALL TODAY. DO NOT TAKE THE MONEY.',
-      'AT&T approval takes 2-4 weeks on its own.',
-      'Book the install for a date after approval, and say so',
-      'plainly. A promise you keep is worth more than a deposit',
-      'you have to refund.',
+      'Do not estimate approval from an old timeline.',
+      'Book the install only after exact provider and Site Sourcery',
+      'readback are both active, and say so plainly.',
     ]);
     return finish('campaign not approved');
   }
-  good('Campaign approved.');
+  good('Customer provider topology approved and active.');
 
-  const funded = await yesNo('Does the Twilio account have money on it?');
+  const funded = await yesNo(
+    'Is this customer action already funded under exact owner-approved spend?'
+  );
   if (!funded) {
-    warn(['Top the balance up before you go any further.']);
-    await pause('Press Enter once the balance is topped up.');
+    warn([
+      'STOP. Do not top up or enable auto-recharge from this script.',
+      'Read the exact live charge and obtain owner approval first.',
+    ]);
+    return finish('provider spend not approved');
   }
 
   // ---- 3. landline check - HARD STOP ---------------------------
@@ -871,23 +879,22 @@ async function main() {
     await pause('Tell them now. Press Enter when done.');
   }
 
-  // ---- 9. build in Twilio --------------------------------------
-  step(9, 'Build it in Twilio (about 10 minutes)');
-  bullet(`Buy a number in area code ${record.publicNumber.slice(0, 3)}`);
-  bullet('Local numbers are trusted more than out-of-area ones');
-  bullet('Add the new number to the Responder Messaging Service');
-  bullet('Copy the ' + (tier === 'tier1' ? 'TIER 1' : 'TIER 2') + ' Studio flow template');
-  bullet('Point the new number at the copied flow for INCOMING CALLS');
+  // ---- 9. verify Site Sourcery customer topology ---------------
+  step(9, 'Verify the customer provider topology');
+  bullet('Use the authenticated Site Sourcery operator surface');
+  bullet('Confirm one customer organization maps to one subaccount');
+  bullet('Confirm its Profile, Brand, Campaign, Messaging Service and number');
+  bullet('Confirm the external registry and digest-only topology match');
+  bullet('Do not create or copy a Twilio Studio flow or Function');
   bullet(
-    'Point the same number at the SMS-forward flow for INCOMING ' +
-      `MESSAGES, so caller replies land on ${prettyNumber(record.ownerMobile)}. ` +
-      'Without this the caller replies into a void.'
+    'Confirm inbound message, Voice, and delivery callbacks use the exact ' +
+      'Site Sourcery production endpoints for this subaccount.'
   );
   out();
   if (publishedInstall) {
     out('  ' + bold('This one is a published-number install:'));
     bullet(
-      'Connect Call To goes to the line they actually answer - their ' +
+      'The customer Voice route goes to the line they actually answer - their ' +
         'landline is fine, it will just ring'
     );
     bullet(
@@ -896,19 +903,15 @@ async function main() {
     out();
   }
   if (tier === 'tier1') {
-    out('  In the copied flow, set:');
-    bullet(`Connect Call To -> ${prettyNumber(record.ownerMobile)}`);
-    bullet('Split on widgets.connect_call.DialCallStatus');
-    bullet('Missed branch matches: busy, no-answer, failed, cancelled');
-    bullet('Send Message -> the missed-call text');
+    out('  In Site Sourcery, verify:');
+    bullet(`Customer reply route -> ${prettyNumber(record.ownerMobile)}`);
+    bullet('Missed-call evidence is consent-gated and tenant-scoped');
+    bullet('Answered calls do not create a Tier 1 missed-call send');
   } else {
-    out('  In the copied flow, set:');
-    bullet(`Connect Call To -> ${prettyNumber(record.ownerMobile)}`);
-    bullet('Split on widgets.connect_call.DialCallStatus');
-    bullet('Branch A, matches busy/no-answer/failed/cancelled');
-    out('      -> Send Message: the missed-call text');
-    bullet('Branch B, matches completed');
-    out('      -> Send Message: the follow-up text');
+    out('  In Site Sourcery, verify:');
+    bullet(`Customer Voice/reply route -> ${prettyNumber(record.ownerMobile)}`);
+    bullet('Missed and completed call evidence remain distinct');
+    bullet('The configured follow-up is bound to the same customer project');
     out();
     warn([
       'The two branches must not overlap.',
@@ -918,9 +921,11 @@ async function main() {
     ]);
   }
   out();
-  record.twilioNumber = await askNumber('What number did you buy?');
-  await pause('Press Enter once the flow is published and live on that number.');
-  good('Built.');
+  record.twilioNumber = await askNumber(
+    'What customer number is already approved and bound?'
+  );
+  await pause('Press Enter once the exact held/active readback is verified.');
+  good('Customer topology verified.');
 
   // ---- 10. forwarding ------------------------------------------
   step(10, 'Point their line at the Twilio number');
@@ -1174,7 +1179,7 @@ async function main() {
         'missed you" makes the business look broken.',
         '',
         'Cancel the forwarding now: ' + record.cancelCode,
-        'Fix the Studio split, then rerun both tests.',
+        'Hold and reconcile the Site Sourcery call-result path, then rerun both tests.',
       ]);
       troubleshooting();
       const fixed = await yesNo('Fixed, and a retest sent nothing?');
@@ -1207,10 +1212,8 @@ async function main() {
       }
       warn([
         'THE BRANCHES ARE CROSSED. DO NOT HAND OVER.',
-        'In Studio: the completed branch sends the follow-up,',
-        'and the missed branch matches ONLY',
-        '  busy, no-answer, failed, cancelled.',
-        'completed must not appear in the missed branch.',
+        'In Site Sourcery: completed and missed-call evidence must',
+        'remain distinct and bound to this exact customer topology.',
       ]);
       troubleshooting();
       const fixed = await yesNo('Fixed, and a clean retest of BOTH call types?');

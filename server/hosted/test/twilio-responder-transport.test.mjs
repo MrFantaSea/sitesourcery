@@ -6,6 +6,9 @@ import {
   responderSmsContentDigest,
   responderSmsRouteDigest
 } from "../twilio-responder-transport.mjs";
+import {
+  createTwilioIsvProviderRegistry
+} from "../responder-twilio-provider-registry.mjs";
 
 const ACCOUNT_SID = `AC${"a".repeat(32)}`;
 const API_KEY_SID = `SK${"b".repeat(32)}`;
@@ -13,6 +16,9 @@ const MESSAGING_SERVICE_SID = `MG${"c".repeat(32)}`;
 const BRAND_SID = `BN${"d".repeat(32)}`;
 const CAMPAIGN_SID = `QE${"e".repeat(32)}`;
 const MESSAGE_SID = `SM${"f".repeat(32)}`;
+const ORGANIZATION_ID = "10000000-0000-4000-8000-000000000002";
+const OTHER_ORGANIZATION_ID = "20000000-0000-4000-8000-000000000002";
+const API_KEY_SECRET = "fixture-api-key-secret-not-real-0001";
 const TO = "+18562441220";
 const BODY = [
   "Sorry we missed you - this is Site Sourcery.",
@@ -23,17 +29,50 @@ const ROUTE_DIGEST = responderSmsRouteDigest(TO);
 const CONTENT_DIGEST = responderSmsContentDigest(BODY);
 const NOW = "2026-08-12T21:00:00.000Z";
 const ENVIRONMENT = Object.freeze({
-  SITESOURCERY_TWILIO_ACCOUNT_SID: ACCOUNT_SID,
-  SITESOURCERY_TWILIO_API_KEY_SID: API_KEY_SID,
-  SITESOURCERY_TWILIO_API_KEY_SECRET:
-    "fixture-api-key-secret-not-real-0001",
-  SITESOURCERY_TWILIO_MESSAGING_SERVICE_SID:
-    MESSAGING_SERVICE_SID,
-  SITESOURCERY_TWILIO_BRAND_REGISTRATION_SID: BRAND_SID,
-  SITESOURCERY_TWILIO_A2P_CAMPAIGN_SID: CAMPAIGN_SID,
   SITESOURCERY_TWILIO_STATUS_CALLBACK_URL:
     "https://sitesourcery.com/api/v1/provider-events/twilio"
 });
+
+const PROVIDER_REGISTRY = createTwilioIsvProviderRegistry({
+  schema: "sitesourcery.twilio-isv-provider-registry/v1",
+  entries: [{
+    organizationId: ORGANIZATION_ID,
+    accountSid: ACCOUNT_SID,
+    messagingApiKeySid: API_KEY_SID,
+    messagingApiKeySecret: API_KEY_SECRET,
+    webhookAuthToken: "fixture-webhook-auth-token-000001",
+    messagingServiceSid: MESSAGING_SERVICE_SID,
+    customerProfileSid: `BU${"1".repeat(32)}`,
+    brandRegistrationSid: BRAND_SID,
+    campaignSid: CAMPAIGN_SID,
+    registrationClass: "LOW_VOLUME_STANDARD",
+    campaignUseCase: "CUSTOMER_CARE",
+    voiceApiKeySid: `SK${"2".repeat(32)}`,
+    voiceApiKeySecret: "fixture-voice-api-key-secret-0001",
+    voiceSandboxPushCredentialSid: `CR${"3".repeat(32)}`,
+    voiceProductionPushCredentialSid: `CR${"4".repeat(32)}`,
+    voiceAndroidSandboxPushCredentialSid: `CR${"5".repeat(32)}`,
+    voiceAndroidProductionPushCredentialSid: `CR${"6".repeat(32)}`
+  }]
+});
+
+function providerTopologyRepository(overrides = {}) {
+  return Object.freeze({
+    kind: "responder-twilio-provider-topology-postgres",
+    providerEffects: false,
+    async readiness() { return { ready: true, verified: true }; },
+    async requireActiveTopology(topology) { return topology; },
+    ...overrides
+  });
+}
+
+function twilioDependencies(overrides = {}) {
+  return {
+    providerRegistry: PROVIDER_REGISTRY,
+    providerTopologyRepository: providerTopologyRepository(),
+    ...overrides
+  };
+}
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -101,7 +140,7 @@ function delivery(overrides = {}) {
     schema: "sitesourcery.responder-fulfillment-request/v1",
     operationId: "10000000-0000-4000-8000-000000000001",
     commandId: "responder-message-command-0001",
-    organizationId: "10000000-0000-4000-8000-000000000002",
+    organizationId: ORGANIZATION_ID,
     projectId: "10000000-0000-4000-8000-000000000003",
     interactionId: "10000000-0000-4000-8000-000000000004",
     contactAuthorityId: "10000000-0000-4000-8000-000000000005",
@@ -115,20 +154,29 @@ function delivery(overrides = {}) {
   };
 }
 
-test("Twilio Responder requires every exact provider identity and callback", () => {
-  for (const environment of [
-    {},
-    { ...ENVIRONMENT, SITESOURCERY_TWILIO_ACCOUNT_SID: "ACwrong" },
-    { ...ENVIRONMENT, SITESOURCERY_TWILIO_API_KEY_SECRET: "short" },
+test("Twilio Responder requires customer registry, topology, and exact callback", () => {
+  for (const options of [
+    { environment: {}, ...twilioDependencies() },
     {
-      ...ENVIRONMENT,
-      SITESOURCERY_TWILIO_STATUS_CALLBACK_URL:
-        "https://example.test/api/v1/provider-events/twilio"
-    }
+      environment: {
+        ...ENVIRONMENT,
+        SITESOURCERY_TWILIO_ACCOUNT_SID: ACCOUNT_SID
+      },
+      ...twilioDependencies()
+    },
+    {
+      environment: {
+        ...ENVIRONMENT,
+        SITESOURCERY_TWILIO_STATUS_CALLBACK_URL:
+          "https://example.test/api/v1/provider-events/twilio"
+      },
+      ...twilioDependencies()
+    },
+    { environment: ENVIRONMENT, providerRegistry: PROVIDER_REGISTRY }
   ]) {
     assert.throws(
       () => createTwilioResponderTransport({
-        environment,
+        ...options,
         materialResolver: materialResolver()
       }),
       (error) => error?.code ===
@@ -140,6 +188,7 @@ test("Twilio Responder requires every exact provider identity and callback", () 
 test("readiness proves full account, Responder service, brand, campaign, and private material", async () => {
   const calls = [];
   const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
     environment: ENVIRONMENT,
     materialResolver: materialResolver(),
     async fetchImpl(url, init) {
@@ -163,7 +212,7 @@ test("readiness proves full account, Responder service, brand, campaign, and pri
   assert.equal(calls.every(({ init }) => init.method === "GET"), true);
   assert.equal(calls.every(({ init }) => init.body === undefined), true);
   const expectedAuthorization = `Basic ${Buffer.from(
-    `${API_KEY_SID}:${ENVIRONMENT.SITESOURCERY_TWILIO_API_KEY_SECRET}`
+    `${API_KEY_SID}:${API_KEY_SECRET}`
   ).toString("base64")}`;
   assert.equal(calls.every(({ init }) =>
     new Headers(init.headers).get("authorization") ===
@@ -177,8 +226,8 @@ test("any provider or private-material readback drift keeps Twilio held", async 
       ? json({ sid: ACCOUNT_SID, status: "suspended", type: "Full" })
       : providerReadback(url)],
     ["service", (url) => url.endsWith(`/Services/${MESSAGING_SERVICE_SID}`)
-      ? json({ sid: MESSAGING_SERVICE_SID, account_sid: ACCOUNT_SID,
-          friendly_name: "Other" })
+      ? json({ sid: MESSAGING_SERVICE_SID,
+          account_sid: `AC${"0".repeat(32)}` })
       : providerReadback(url)],
     ["campaign", (url) => url.includes("Compliance/Usa2p")
       ? json({ sid: CAMPAIGN_SID, account_sid: ACCOUNT_SID,
@@ -189,6 +238,7 @@ test("any provider or private-material readback drift keeps Twilio held", async 
   ];
   for (const [name, fetchImpl] of cases) {
     const transport = createTwilioResponderTransport({
+      ...twilioDependencies(),
       environment: ENVIRONMENT,
       materialResolver: materialResolver(),
       fetchImpl,
@@ -201,6 +251,7 @@ test("any provider or private-material readback drift keeps Twilio held", async 
 
   const heldMaterial = materialResolver();
   const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
     environment: ENVIRONMENT,
     materialResolver: {
       ...heldMaterial,
@@ -215,6 +266,7 @@ test("any provider or private-material readback drift keeps Twilio held", async 
 test("one exact private SMS material record creates one Twilio Message without fake idempotency", async () => {
   const calls = [];
   const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
     environment: ENVIRONMENT,
     materialResolver: materialResolver(),
     clock: { now: () => NOW },
@@ -266,9 +318,83 @@ test("one exact private SMS material record creates one Twilio Message without f
   assert.equal(JSON.stringify(receipt).includes(BODY), false);
 });
 
+test("unknown customer fails before any provider or private-material read", async () => {
+  let providerCalls = 0;
+  let materialCalls = 0;
+  const selectedMaterial = materialResolver();
+  const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
+    environment: ENVIRONMENT,
+    materialResolver: {
+      ...selectedMaterial,
+      async resolveSmsMaterial() {
+        materialCalls += 1;
+        return selectedMaterial.resolveSmsMaterial();
+      }
+    },
+    async fetchImpl() {
+      providerCalls += 1;
+      throw new Error("provider must not be touched");
+    }
+  });
+  await assert.rejects(
+    transport.sendMessage(delivery({
+      organizationId: OTHER_ORGANIZATION_ID
+    })),
+    (error) => error?.code === "TWILIO_ISV_CUSTOMER_PROVIDER_NOT_CONFIGURED"
+  );
+  assert.equal(providerCalls, 0);
+  assert.equal(materialCalls, 0);
+});
+
+test("another customer's provider drift cannot hold this customer send", async () => {
+  let unrelatedCustomerResolutions = 0;
+  const isolatedRegistry = Object.freeze({
+    kind: PROVIDER_REGISTRY.kind,
+    providerEffects: false,
+    organizationIds: Object.freeze([
+      ORGANIZATION_ID,
+      OTHER_ORGANIZATION_ID
+    ]),
+    readiness: PROVIDER_REGISTRY.readiness,
+    resolveOrganization(organizationId) {
+      if (organizationId === OTHER_ORGANIZATION_ID) {
+        unrelatedCustomerResolutions += 1;
+        throw new Error("unrelated customer is held");
+      }
+      return PROVIDER_REGISTRY.resolveOrganization(organizationId);
+    }
+  });
+  const calls = [];
+  const transport = createTwilioResponderTransport({
+    providerRegistry: isolatedRegistry,
+    providerTopologyRepository: providerTopologyRepository(),
+    environment: ENVIRONMENT,
+    materialResolver: materialResolver(),
+    async fetchImpl(url, init) {
+      calls.push({ url, init });
+      if (init.method === "GET") return providerReadback(url);
+      return json({
+        sid: MESSAGE_SID,
+        account_sid: ACCOUNT_SID,
+        messaging_service_sid: MESSAGING_SERVICE_SID,
+        to: TO,
+        body: BODY,
+        status: "accepted"
+      }, 201);
+    }
+  });
+  const receipt = await transport.sendMessage(delivery());
+  assert.equal(receipt.status, "accepted");
+  assert.equal(unrelatedCustomerResolutions, 0);
+  assert.equal(calls.filter(({ init }) => init.method === "GET").length, 4);
+  assert.equal(calls.filter(({ init }) => init.method === "POST").length, 1);
+});
+
 test("route, content, STOP copy, and expanded request drift fail before provider send", async () => {
   let postCalls = 0;
   const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
     environment: ENVIRONMENT,
     materialResolver: materialResolver({
       body: "Sorry we missed you.",
@@ -294,6 +420,7 @@ test("route, content, STOP copy, and expanded request drift fail before provider
 
 test("an uncertain Twilio create result is manual-review-only", async () => {
   const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
     environment: ENVIRONMENT,
     materialResolver: materialResolver(),
     async fetchImpl(url, init) {
@@ -313,6 +440,7 @@ test("an uncertain Twilio create result is manual-review-only", async () => {
 
 test("a malformed Twilio acceptance never becomes a durable receipt", async () => {
   const transport = createTwilioResponderTransport({
+    ...twilioDependencies(),
     environment: ENVIRONMENT,
     materialResolver: materialResolver(),
     async fetchImpl(url, init) {

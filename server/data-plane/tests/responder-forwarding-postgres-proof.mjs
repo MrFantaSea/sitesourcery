@@ -20,6 +20,9 @@ import { createResponderLookupDigests } from
   "../../hosted/responder-lookup-digests.mjs";
 import { createPostgresResponderNumberBindingsRepository } from
   "../../hosted/responder-number-bindings-postgres.mjs";
+import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "../../hosted/responder-twilio-provider-topology-postgres.mjs";
 import { createCanonicalPostgresAuthority } from
   "../../hosted/repository-postgres.mjs";
 import { digest } from "../../hosted/security.mjs";
@@ -34,6 +37,7 @@ import {
 } from "../../hosted/twilio-responder-inbound-http.mjs";
 
 const ACCOUNT_SID = `AC${"d".repeat(32)}`;
+const OTHER_ACCOUNT_SID = `AC${"f".repeat(32)}`;
 const AUTH_TOKEN = "e".repeat(32);
 const MESSAGE_URL =
   "https://sitesourcery.com/api/v1/provider-events/twilio/inbound-messages";
@@ -68,6 +72,32 @@ const EXPECTED_GATES = Object.freeze([
   "digest-only-durability-and-zero-provider-send-effects",
   "followup-stops-at-held-manual-review-boundary"
 ]);
+
+function providerTopology(organizationId, accountSid, scope) {
+  const selected = {
+    organizationId,
+    registrationClass: "LOW_VOLUME_STANDARD",
+    providerBrandType: "STANDARD",
+    campaignUseCase: "CUSTOMER_CARE",
+    accountSidDigest: digest(accountSid)
+  };
+  for (const field of [
+    "messagingServiceSidDigest",
+    "customerProfileSidDigest",
+    "brandRegistrationSidDigest",
+    "campaignSidDigest",
+    "messagingApiKeySidDigest",
+    "messagingApiKeySecretDigest",
+    "webhookAuthTokenDigest",
+    "voiceApiKeySidDigest",
+    "voiceApiKeySecretDigest",
+    "voiceSandboxPushCredentialSidDigest",
+    "voiceProductionPushCredentialSidDigest",
+    "voiceAndroidSandboxPushCredentialSidDigest",
+    "voiceAndroidProductionPushCredentialSidDigest"
+  ]) selected[field] = digest(`${scope}:${field}`);
+  return Object.freeze(selected);
+}
 
 async function expectCode(work, code) {
   await assert.rejects(async () => work(), (error) => error?.code === code);
@@ -209,9 +239,35 @@ export async function verifyResponderForwardingPostgres(pool) {
       authority,
       verifierKeyVersions: [...lookupDigests.verifierVersions]
     });
+  const selectedProviderTopology = providerTopology(
+    ids.organization,
+    ACCOUNT_SID,
+    "forward-primary"
+  );
+  const otherProviderTopology = providerTopology(
+    ids.otherOrganization,
+    OTHER_ACCOUNT_SID,
+    "forward-other"
+  );
+  const providerRegistry = Object.freeze({
+    kind: "twilio-isv-provider-registry",
+    providerEffects: false,
+    async readiness() { return { ready: true, verified: true }; },
+    resolveAccountSid(accountSid) {
+      assert.equal(accountSid, ACCOUNT_SID);
+      return Object.freeze({
+        webhookAuthToken: AUTH_TOKEN,
+        topology: selectedProviderTopology
+      });
+    }
+  });
+  const providerTopologyRepository =
+    createPostgresResponderTwilioProviderTopologyRepository({
+      authority
+    });
   const inbound = createTwilioResponderInbound({
-    accountSid: ACCOUNT_SID,
-    webhookAuthToken: AUTH_TOKEN,
+    providerRegistry,
+    providerTopologyRepository,
     inboundMessageUrl: MESSAGE_URL,
     voiceUrl: VOICE_URL,
     dialResultUrl: DIAL_RESULT_URL,
@@ -269,6 +325,23 @@ export async function verifyResponderForwardingPostgres(pool) {
     userId: ids.operator,
     organizationId: ids.otherOrganization
   };
+  for (const [actor, topology, scope] of [
+    [operator, selectedProviderTopology, "primary"],
+    [otherOperator, otherProviderTopology, "other"]
+  ]) {
+    await providerTopologyRepository.attestTopology(actor, {
+      commandId: `forward.pg.topology.${scope}.0001`,
+      requestDigest: digest(`forward.pg.topology.${scope}.request`),
+      ...topology,
+      providerReadbackDigest: digest(
+        `forward.pg.topology.${scope}.readback`
+      ),
+      topologyEvidenceDigest: digest(
+        `forward.pg.topology.${scope}.evidence`
+      ),
+      recordedAt: tick()
+    });
+  }
 
   async function directCreate(actor, input) {
     return authority.service({
@@ -390,7 +463,9 @@ export async function verifyResponderForwardingPostgres(pool) {
         .numberLookupCandidates(number).map((entry) => entry.digest),
       lookupKeyVersion: lookupDigests.writerVersion,
       phoneNumberSidDigest: digest(`PN${suffix.repeat(32)}`),
-      accountSidDigest: digest(ACCOUNT_SID),
+      accountSidDigest: organizationId === ids.organization
+        ? selectedProviderTopology.accountSidDigest
+        : otherProviderTopology.accountSidDigest,
       messagingServiceSidDigest: null,
       providerReadbackDigest: digest(`${commandId}-readback`),
       provisionEvidenceDigest: digest(`${commandId}-evidence`),

@@ -6,6 +6,12 @@ import {
 import {
   createTwilioResponderEvents
 } from "./twilio-responder-events.mjs";
+import {
+  twilioIsvProviderRegistryFromEnvironment
+} from "./responder-twilio-provider-registry.mjs";
+import {
+  createPostgresResponderTwilioProviderTopologyRepository
+} from "./responder-twilio-provider-topology-postgres.mjs";
 
 export const TWILIO_RESPONDER_EVENT_MODE_ENVIRONMENT =
   "SITESOURCERY_TWILIO_RESPONDER_EVENT_MODE";
@@ -21,7 +27,11 @@ function value(environment, name) {
 
 export function createConfiguredTwilioResponderEventsHttp({
   environment = process.env,
+  authority,
   repository,
+  providerRegistryFactory = twilioIsvProviderRegistryFromEnvironment,
+  providerTopologyRepositoryFactory =
+    createPostgresResponderTwilioProviderTopologyRepository,
   clock = { now: () => new Date().toISOString() }
 } = {}) {
   const mode = value(
@@ -40,7 +50,8 @@ export function createConfiguredTwilioResponderEventsHttp({
   );
   if (mode === "held") {
     invariant(
-      authToken === null,
+      authToken === null &&
+        value(environment, "SITESOURCERY_TWILIO_ACCOUNT_SID") === null,
       "TWILIO_RESPONDER_EVENT_CONFIGURATION_REQUIRED",
       "The Twilio webhook Auth Token cannot be staged while ingress is held.",
       { status: 500 }
@@ -48,19 +59,24 @@ export function createConfiguredTwilioResponderEventsHttp({
     return createHeldTwilioResponderEventsHttpAdapter();
   }
   invariant(
-    authToken !== null,
+    authToken === null && authority?.kind === "canonical-postgres" &&
+      typeof providerRegistryFactory === "function" &&
+      typeof providerTopologyRepositoryFactory === "function",
     "TWILIO_RESPONDER_EVENT_CONFIGURATION_REQUIRED",
-    `${TWILIO_RESPONDER_WEBHOOK_AUTH_TOKEN_ENVIRONMENT} is required.`,
+    "Verified Twilio callbacks require the customer registry and PostgreSQL authority; a global Auth Token is forbidden.",
     { status: 500 }
   );
+  const providerRegistry = providerRegistryFactory(environment);
+  const providerTopologyRepository =
+    providerTopologyRepositoryFactory({ authority });
   return createTwilioResponderEventsHttpAdapter({
     events: createTwilioResponderEvents({
-      accountSid: value(environment, "SITESOURCERY_TWILIO_ACCOUNT_SID"),
+      providerRegistry,
+      providerTopologyRepository,
       callbackUrl: value(
         environment,
         "SITESOURCERY_TWILIO_STATUS_CALLBACK_URL"
       ),
-      webhookAuthToken: authToken,
       repository,
       clock
     })

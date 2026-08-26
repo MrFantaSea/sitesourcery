@@ -496,24 +496,46 @@ export async function verifyResponderNativeClientPostgres(pool) {
   });
   let voiceNonce = 0;
   let voiceToken = 0;
+  const voiceTopology = Object.freeze({
+    organizationId: ids.organization,
+    accountSidDigest: digest(`AC${"1".repeat(32)}`)
+  });
+  const voiceProvider = Object.freeze({
+    accountSid: `AC${"1".repeat(32)}`,
+    voiceApiKeySid: `SK${"2".repeat(32)}`,
+    voiceApiKeySecret: "voice-pg-proof-secret-".padEnd(40, "3"),
+    voiceSandboxPushCredentialSid: `CR${"4".repeat(32)}`,
+    voiceProductionPushCredentialSid: `CR${"5".repeat(32)}`,
+    voiceAndroidSandboxPushCredentialSid: `CR${"6".repeat(32)}`,
+    voiceAndroidProductionPushCredentialSid: `CR${"7".repeat(32)}`,
+    topology: voiceTopology
+  });
+  const providerRegistry = Object.freeze({
+    kind: "twilio-isv-provider-registry",
+    providerEffects: false,
+    async readiness() { return { ready: true, verified: true }; },
+    resolveOrganization(organizationId) {
+      assert.equal(organizationId, ids.organization);
+      return voiceProvider;
+    }
+  });
+  const providerTopologyRepository = Object.freeze({
+    kind: "responder-twilio-provider-topology-postgres",
+    providerEffects: false,
+    async readiness() { return { ready: true, verified: true }; },
+    async requireActiveTopology(topology) {
+      assert.equal(topology, voiceTopology);
+      return topology;
+    }
+  });
   const verifiedVoiceAccess = createTwilioResponderVoiceAccess({
     pepper: Buffer.alloc(32, 19),
     pepperVersion: "native-pg-v1",
     environment: {
-      SITESOURCERY_TWILIO_VOICE_ACCESS_MODE: "verified",
-      SITESOURCERY_TWILIO_ACCOUNT_SID: `AC${"1".repeat(32)}`,
-      SITESOURCERY_TWILIO_VOICE_API_KEY_SID: `SK${"2".repeat(32)}`,
-      SITESOURCERY_TWILIO_VOICE_API_KEY_SECRET:
-        "voice-pg-proof-secret-".padEnd(40, "3"),
-      SITESOURCERY_TWILIO_VOICE_SANDBOX_PUSH_CREDENTIAL_SID:
-        `CR${"4".repeat(32)}`,
-      SITESOURCERY_TWILIO_VOICE_PRODUCTION_PUSH_CREDENTIAL_SID:
-        `CR${"5".repeat(32)}`,
-      SITESOURCERY_TWILIO_VOICE_ANDROID_SANDBOX_PUSH_CREDENTIAL_SID:
-        `CR${"6".repeat(32)}`,
-      SITESOURCERY_TWILIO_VOICE_ANDROID_PRODUCTION_PUSH_CREDENTIAL_SID:
-        `CR${"7".repeat(32)}`
+      SITESOURCERY_TWILIO_VOICE_ACCESS_MODE: "verified"
     },
+    providerRegistry,
+    providerTopologyRepository,
     randomBytes() {
       const selected = Buffer.alloc(12);
       selected.writeUInt32BE(++voiceNonce, 8);

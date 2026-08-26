@@ -154,6 +154,7 @@ function readbackCandidate(row) {
       });
   return deepFreeze({
     caseId: uuid(row.id, "Readback case ID"),
+    organizationId: uuid(row.organization_id, "Readback organization ID"),
     caseKind: row.case_kind,
     target,
     targetDigest: digest({
@@ -729,6 +730,7 @@ export function createPostgresProviderReconciliationRepository({
         async (client) => {
           const rows = await client.query(
             `select reconciliation.id, reconciliation.case_kind,
+                    reconciliation.organization_id,
                     reconciliation.subject_provider_message_id_digest,
                     reconciliation.opened_at,
                     operation.route_digest, operation.content_digest,
@@ -748,9 +750,10 @@ export function createPostgresProviderReconciliationRepository({
                           reconciliation.subject_operation_attempt
                   order by event.occurred_at desc, event.id desc
                   limit 1
-               ) attempt on true
+              ) attempt on true
               where reconciliation.state = 'open'
                 and reconciliation.readback_state = 'none'
+                and reconciliation.organization_id is not null
                 and (
                   reconciliation.subject_provider_message_id_digest
                     is not null
