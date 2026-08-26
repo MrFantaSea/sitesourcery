@@ -828,7 +828,11 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
 
   assert.match(
     monitorService,
-    /^Requires=sitesourcery-production\.service sitesourcery-production-backup-mount\.service$/mu
+    /^After=network-online\.target sitesourcery-production\.service$/mu
+  );
+  assert.doesNotMatch(
+    monitorService,
+    /^Requires=|sitesourcery-production-backup-mount\.service|ConditionPathIsMountPoint=|off-machine\/\.sitesourcery-off-machine\.json/mu
   );
   assert.match(
     monitorService,
@@ -837,10 +841,6 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   assert.match(
     monitorService,
     /^TimeoutStartSec=2m$/mu
-  );
-  assert.match(
-    monitorService,
-    /^ConditionPathIsMountPoint=\/home\/simtech\/sitesourcery-production\/off-machine$/mu
   );
   assert.match(
     monitorService,
@@ -877,6 +877,14 @@ test("held production rehearsal is separate, persistent, and loopback-only", asy
   assert.match(
     monitorEnvironment,
     /^SITESOURCERY_ALERT_REPEAT_INTERVAL_MS=21600000$/mu
+  );
+  assert.match(
+    monitorEnvironment,
+    /^SITESOURCERY_MONITOR_BACKUP_HASH_MODE=remote_ssh$/mu
+  );
+  assert.match(
+    monitorEnvironment,
+    /^SITESOURCERY_MONITOR_BACKUP_HASH_TIMEOUT_MS=30000$/mu
   );
   assert.doesNotMatch(
     monitorEnvironment,

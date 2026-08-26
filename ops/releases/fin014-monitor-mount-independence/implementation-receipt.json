@@ -1,0 +1,119 @@
+{
+  "schema": "sitesourcery.fin014-monitor-mount-independence-implementation-receipt/v1",
+  "recordedAt": "2026-08-26T18:33:38-04:00",
+  "cohort": "FIN-014",
+  "state": "locally_proved_held_awaiting_protected_review",
+  "base": {
+    "protectedMain": "39035f71d24ba36894783de90384a08dc302f006",
+    "tree": "a78922f214f87fc52a1db55993ea7f174b4128ab"
+  },
+  "implementation": {
+    "branch": "fin014/monitor-mount-independence-20260826",
+    "commit": "6bee262b8c90503b92513b6b46f97c6fd53e5260",
+    "tree": "4e8b233c55270615cb938b84ee8ac27460831dc5",
+    "parent": "39035f71d24ba36894783de90384a08dc302f006",
+    "changedPathCount": 4,
+    "candidateUnit": "ops/production-rehearsal/sitesourcery-production-monitor.service",
+    "candidateUnitSha256": "c2f75c12658c897b526c061694a54708b102c8f59d30ad6523bb1e5c1f9fd5ea"
+  },
+  "correction": {
+    "runtimeDependency": "ordering-only-after-production-service",
+    "runtimeLifecycleCoupling": false,
+    "backupMountDependency": false,
+    "backupMountConditions": false,
+    "backupWriterMountBoundaryChanged": false,
+    "backupHashMode": "remote_ssh",
+    "remoteHashTimeoutSeconds": 30,
+    "unavailableBackupCode": "BACKUP_PROBE_UNAVAILABLE",
+    "alertTransition": "existing-idempotent-state-machine"
+  },
+  "proof": {
+    "runtime": {
+      "node": "24.18.0",
+      "systemdVerifier": "Dell Linux systemd-analyze"
+    },
+    "focused": {
+      "tests": 38,
+      "passed": 38,
+      "failed": 0
+    },
+    "operationsCleanGit": {
+      "tests": 253,
+      "passed": 253,
+      "failed": 0
+    },
+    "fullQuality": {
+      "command": "npm test",
+      "status": "passed",
+      "productClientTests": 892,
+      "productClientPassed": 892,
+      "siteChecks": "passed",
+      "pagesArtifact": "deterministic-and-verified",
+      "hostedArtifact": "deterministic-and-verified",
+      "browserAudit": "24-routes-by-6-required-width-modes-passed"
+    },
+    "linuxUnit": {
+      "candidateAndDependenciesVerified": true,
+      "exitCode": 0,
+      "diagnostics": 0
+    },
+    "injectedUnavailableBackup": {
+      "reportOk": false,
+      "criticalCode": "BACKUP_PROBE_UNAVAILABLE",
+      "deliveryAttempted": false,
+      "deliveryDelivered": false,
+      "deliveryMode": "held",
+      "holdCode": "OUTBOUND_ALERTS_HELD"
+    }
+  },
+  "productionObservation": {
+    "observedAt": "2026-08-26T22:32:38Z",
+    "installedReleaseCommit": "420bd8a424da3331514723d40b5be9fb5131dfe3",
+    "installedReleaseTree": "b118539b060254c663cb55325a8ec4a12d8ed24c",
+    "installedEpoch": "fin012-installed-truth-420bd8a-20260825",
+    "migrationCount": 98,
+    "capabilityMatrixVersion": 2,
+    "capabilityRows": 20,
+    "processRows": 6,
+    "externalEffects": false,
+    "publicLive": true,
+    "publicReady": true,
+    "zenReachable": false,
+    "backupMountServiceReportedActive": true,
+    "backupMountReadState": "stale-io-error",
+    "lastExecutedMonitorAt": "2026-08-26T20:39:55.658Z",
+    "lastExecutedMonitorChecksPassed": 6,
+    "timerOffersConditionSkippedAfterLastRun": 21,
+    "monitorTimerState": "active-waiting",
+    "monitorConditionResult": false,
+    "backupQuiesceFencePresent": false,
+    "installedUnitSha256": "5e59485c46f2be0650d128f8c3582ba53c460c17aac0c8a3d7db2c224cb2e30f",
+    "activeDropInSha256": "7f872f919b75743e3b6a0c578dcd16944a080d729a04e6a7866a26356e542821",
+    "applicationServicesActive": 4,
+    "applicationServiceRestarts": 0,
+    "workerState": "intentionally-held-inactive"
+  },
+  "effects": {
+    "productionUnitInstalled": false,
+    "daemonReload": false,
+    "monitorStarted": false,
+    "alertAttempted": false,
+    "emailSent": false,
+    "backupWritten": false,
+    "providerRead": false,
+    "providerMutation": false,
+    "customerMutation": false,
+    "productionDatabaseMutation": false,
+    "applicationRestart": false,
+    "deployment": false,
+    "publicMutation": false,
+    "dnsMutation": false,
+    "spend": false
+  },
+  "nextGate": {
+    "protectedReviewRequired": true,
+    "exactMainHeldProofRequired": true,
+    "productionInstallApprovalRequired": true,
+    "possibleIncidentAndRecoveryEmailDisclosedAtApproval": true
+  }
+}

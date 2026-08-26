@@ -1,10 +1,9 @@
 [Unit]
 Description=Check Site Sourcery production rehearsal and recovery signals
-After=network-online.target sitesourcery-production.service sitesourcery-production-backup-mount.service
+After=network-online.target sitesourcery-production.service
 Wants=network-online.target
-Requires=sitesourcery-production.service sitesourcery-production-backup-mount.service
-ConditionPathIsMountPoint=/home/simtech/sitesourcery-production/off-machine
-ConditionPathExists=/home/simtech/sitesourcery-production/off-machine/.sitesourcery-off-machine.json
+# Ordering is not lifecycle coupling: this observer must still run when the
+# runtime or the separately supervised backup mount is unavailable.
 ConditionPathExists=/home/simtech/sitesourcery-production/run/operations-state-approved.json
 ConditionPathExists=!%t/sitesourcery-production/BACKUP_QUIESCE
 
