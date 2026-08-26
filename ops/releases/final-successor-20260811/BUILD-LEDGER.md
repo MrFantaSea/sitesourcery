@@ -508,3 +508,30 @@ mutation, customer, production database, deployment, public, DNS, or spend
 effect occurred. The free Twilio-account owner handoff is not due until that
 protected held gate passes; Apple payment remains blocked before D-U-N-S and
 valid organization-enrollment access.
+
+FIN-014 reopened one production-observability claim after the Zen storage host
+became unreachable while the Dell SSHFS mount process stayed active. The last
+actual monitor run at 16:40 EDT passed six of six checks; 21 later five-minute
+timer offers through the 18:30 readback were condition-skipped because the old
+base unit required the unreachable mount marker. The monitor was therefore
+silent instead of emitting its existing fixed `BACKUP_PROBE_UNAVAILABLE`
+critical state.
+
+Local implementation `6bee262b8c90503b92513b6b46f97c6fd53e5260`, tree
+`4e8b233c55270615cb938b84ee8ac27460831dc5`, removes monitor lifecycle and
+mount coupling while preserving runtime ordering, the operations approval,
+quiesce fence, lock, timeouts, direct strict-host-key backup probe, state path,
+and hardening. The backup writer's supervised mount boundary is unchanged.
+Focused proof passed 38/38, clean operations passed 253/253, the complete
+pinned-Node quality ladder passed, and Dell Linux verified the candidate unit
+with no diagnostics. The injected unavailable-backup proof emits the fixed
+critical result while alert delivery remains held.
+
+Exact local evidence is
+`ops/releases/fin014-monitor-mount-independence/`. Its implementation receipt
+has SHA-256 `02a4da96...`. Production still uses byte-exact prior unit and
+drop-in files; no reload, one-shot, alert, email, backup, provider, customer,
+database, application-restart, deployment, public, DNS, or spend effect
+occurred. Protected review and exact-main gates are next. Even after those
+pass, installation and the possible one incident plus later recovery email
+require a separate exact owner approval.
