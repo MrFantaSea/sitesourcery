@@ -5,18 +5,25 @@ held Responder iPhone client from unsigned source to Apple distribution. It is
 not permission to enroll, pay, create signing or push assets, upload a build,
 invite testers, submit for review, or release the app.
 
-Verified 2026-08-26 against Apple's current official membership, D-U-N-S,
-certificate, TestFlight, and privacy guidance. Apple screens, terms, prices,
-roles, and review requirements can change; read them again from the live Apple
-account at each action gate.
+Provider guidance verified 2026-08-26 against Apple's current official
+membership, D-U-N-S, certificate, TestFlight, and privacy guidance. External
+account state was reconciled 2026-08-27. Apple screens, terms, prices, roles,
+and review requirements can change; read them again from the live Apple account
+at each action gate.
 
 ## Current owner-action boundary
 
-The Apple Developer Program fee is **not due**. Desiderata Labs LLC's free
-D-U-N-S request remains under D&B review, and the latest available Apple
-account request was denied with no later approval. Wait for D-U-N-S issuance,
-Apple's documented propagation interval, successful organization-enrollment
-access, organization verification, and license review.
+The Apple Developer Program fee is **not due**. The owner confirms that
+Desiderata Labs LLC already has a D-U-N-S Number; never copy that identifier
+into source, Git, chat, logs, screenshots, receipts, or provenance. An August
+27 notice that one D&B creation case could not be completed does not erase the
+existing identifier and must not trigger a duplicate request or paid expedite.
+
+The latest business-email Apple Account request was denied, and the Apple
+Developer portal currently stops at sign-in. Next obtain valid owner-controlled
+Apple Account access, verify that Apple's organization lookup sees the existing
+D&B legal name and address after the documented propagation interval, and
+complete organization verification and license review without paying.
 
 Apple currently lists organization membership at USD 99 per membership year.
 That public price is planning information, not payment authority. When Apple
@@ -72,19 +79,21 @@ Current source truth is also checked by
 
 ## Gate 1 — legal identity and organization access, no spend
 
-- [ ] D&B issues the free D-U-N-S Number for **Desiderata Labs LLC**.
+- [x] Owner confirms **Desiderata Labs LLC** already has a D-U-N-S Number; the
+      identifier is retained privately and is not recorded in this runbook.
 - [ ] Owner verifies the D&B record's exact legal name, headquarters address,
       legal-entity status, and work contact information privately.
 - [ ] Wait at least Apple's then-current propagation interval after issuance or
       a D&B correction before attempting enrollment.
-- [ ] Use an owner-controlled Apple Account with strong two-factor
-      authentication and private recovery controls.
+- [ ] Restore or establish usable owner-controlled Apple Account access with
+      strong two-factor authentication and private recovery controls; do not
+      treat the denied business-email account request as a valid identity.
 - [ ] Enter organization enrollment using the LLC's exact legal identity and
       the owner's genuine authority to bind the company.
 - [ ] Stop if Apple still denies account access, cannot find the organization,
       shows the wrong entity/status, or asks for inconsistent evidence.
 - [ ] Do not accept a paid expedite, individual enrollment, alternate entity,
-      or duplicate enrollment as a workaround.
+      duplicate D-U-N-S request, or duplicate enrollment as a workaround.
 
 Do not record the D-U-N-S Number, private Apple Account address, recovery data,
 personal phone, private business documents, or enrollment identifiers in Git,
