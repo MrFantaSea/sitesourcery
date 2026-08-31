@@ -17,6 +17,8 @@ const CHECKOUT_COMMAND_ID =
   "50000000-0000-4000-8000-000000000001";
 const DOWNGRADE_COMMAND_ID =
   "60000000-0000-4000-8000-000000000001";
+const CANCELLATION_COMMAND_ID =
+  "70000000-0000-4000-8000-000000000001";
 const DISCLOSURE_DIGEST = "d".repeat(64);
 const SITE_SETUP_DIGEST = "c".repeat(64);
 const QUOTE_DIGEST = "e".repeat(64);
@@ -336,6 +338,89 @@ test("Alakazam downgrade scheduling retains the global CSRF and idempotency fenc
   assert.equal(calls, 0);
 });
 
+test("Alakazam cancellation accepts only the reviewed disclosure behind authentication, CSRF, and idempotency", async () => {
+  const calls = [];
+  const api = createHostedApi(service(), {
+    alakazamBillingSurfaces: {
+      async getInvoice() {
+        throw new Error("unused");
+      },
+      async getCancellationPreview() {
+        throw new Error("unused");
+      },
+      async getBillingStates() {
+        throw new Error("unused");
+      },
+      async requestCancellation(actor, projectId, input) {
+        calls.push({ actor, projectId, input });
+        return {
+          schema:
+            "sitesourcery.alakazam-cancellation-request/v1",
+          status: "provider_confirmation_pending",
+          projectId
+        };
+      }
+    }
+  });
+  const path =
+    `/api/v1/projects/${PROJECT_ID}` +
+    "/alakazam/cancellation-command";
+  const accepted = await api.fetch(
+    writeRequest(path, {
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST
+      },
+      idempotencyKey: CANCELLATION_COMMAND_ID
+    })
+  );
+  assert.equal(accepted.status, 202);
+  assert.equal(
+    (await accepted.json()).status,
+    "provider_confirmation_pending"
+  );
+  assert.deepEqual(calls, [
+    {
+      actor: { userId: CUSTOMER_ID },
+      projectId: PROJECT_ID,
+      input: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST
+      }
+    }
+  ]);
+
+  for (const extra of [
+    { amountMinor: 0 },
+    { cancelAtPeriodEnd: true },
+    { commandId: CANCELLATION_COMMAND_ID }
+  ]) {
+    const rejected = await api.fetch(
+      writeRequest(path, {
+        body: {
+          acceptedDisclosureDigest: DISCLOSURE_DIGEST,
+          ...extra
+        },
+        idempotencyKey: CANCELLATION_COMMAND_ID
+      })
+    );
+    assert.equal(rejected.status, 400);
+    assert.equal(
+      (await rejected.json()).error.code,
+      "ALAKAZAM_CANCELLATION_ROUTE_BINDING_REJECTED"
+    );
+  }
+  const signedOut = await api.fetch(
+    writeRequest(path, {
+      body: {
+        acceptedDisclosureDigest: DISCLOSURE_DIGEST
+      },
+      idempotencyKey: CANCELLATION_COMMAND_ID,
+      signedIn: false
+    })
+  );
+  assert.equal(signedOut.status, 401);
+  assert.equal(calls.length, 1);
+});
+
 test("Alakazam capabilities reflect only the billing boundary readiness", async () => {
   const api = createHostedApi(service(), {
     alakazamBilling: {
@@ -468,5 +553,9 @@ test("the production executable composes held Alakazam billing and downgrade sch
   assert.match(
     source,
     /const alakazamRepository\s*=\s*createPostgresAlakazamRepository\(\{ authority \}\)/u
+  );
+  assert.match(
+    source,
+    /createHostedAlakazamBillingSurfaces\(\{[\s\S]*cancellation:\s*alakazamLifecycle\.cancellation,[\s\S]*resolveSession:\s*commerceV2\.resolveSession/u
   );
 });

@@ -374,10 +374,21 @@ test("the default hosted runtime keeps the cancellation preview held", async () 
         "ALAKAZAM_CANCELLATION_PREVIEW_HELD" &&
       error.status === 503
   );
+  await assert.rejects(
+    () =>
+      held.requestCancellation(
+        { userId: CUSTOMER_ID },
+        PROJECT_ID,
+        { acceptedDisclosureDigest: "d".repeat(64) }
+      ),
+    (error) =>
+      error.code === "ALAKAZAM_CANCELLATION_HELD" &&
+      error.status === 503
+  );
 });
 
-test("the composed preview reads the customer's own account and never writes", async () => {
-  const reads = [];
+test("the composed cancellation boundary binds preview and request to the customer's exact scope", async () => {
+  const calls = { previews: [], requests: [] };
   const surfaces = createHostedAlakazamBillingSurfaces({
     repository: {
       async readCustomerInvoice() {
@@ -387,13 +398,25 @@ test("the composed preview reads the customer's own account and never writes", a
         throw new Error("unused");
       }
     },
-    account: {
-      async read(readScope) {
-        reads.push(readScope);
-        return accountSnapshot({
-          site: liveSite(),
-          subscription: subscription()
-        });
+    cancellation: {
+      async preview(readScope) {
+        calls.previews.push(readScope);
+        return {
+          schema:
+            "sitesourcery.alakazam-cancellation-preview/v1",
+          projectId: PROJECT_ID,
+          eligible: true,
+          disclosureDigest: "d".repeat(64)
+        };
+      },
+      async request(readScope, input) {
+        calls.requests.push({ readScope, input });
+        return {
+          schema:
+            "sitesourcery.alakazam-cancellation-request/v1",
+          projectId: PROJECT_ID,
+          status: "provider_confirmation_pending"
+        };
       }
     },
     async resolveSession({ actor, projectId }) {
@@ -409,13 +432,33 @@ test("the composed preview reads the customer's own account and never writes", a
     { userId: CUSTOMER_ID },
     PROJECT_ID
   );
-  assert.equal(preview.state, "available");
-  assert.deepEqual(reads, [
+  assert.equal(preview.eligible, true);
+  const requested = await surfaces.requestCancellation(
+    { userId: CUSTOMER_ID },
+    PROJECT_ID,
+    { acceptedDisclosureDigest: "d".repeat(64) }
+  );
+  assert.equal(
+    requested.status,
+    "provider_confirmation_pending"
+  );
+  assert.deepEqual(calls.previews, [
     {
       tenantId: TENANT_ID,
       customerId: CUSTOMER_ID,
-      actorId: CUSTOMER_ID,
       projectId: PROJECT_ID
+    }
+  ]);
+  assert.deepEqual(calls.requests, [
+    {
+      readScope: {
+        tenantId: TENANT_ID,
+        customerId: CUSTOMER_ID,
+        projectId: PROJECT_ID
+      },
+      input: {
+        acceptedDisclosureDigest: "d".repeat(64)
+      }
     }
   ]);
 });

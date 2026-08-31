@@ -706,7 +706,8 @@ test("approved Alakazam environment constructs the pinned adapter without making
     "retrieveAlakazamReversal",
     "retrieveAlakazamSubscription",
     "applyAlakazamUpgrade",
-    "scheduleAlakazamDowngrade"
+    "scheduleAlakazamDowngrade",
+    "scheduleCancellation"
   ]) {
     assert.equal(
       typeof composition.adapter[method],
@@ -737,6 +738,7 @@ test("held and approved production construction satisfy every Alakazam lifecycle
     async findRecoverySubscriptionByInvoice() {},
     async recordPaymentRecovery() {},
     async readCancellationSubscription() {},
+    async claimCancellationRequest() {},
     async findCancellationBySubscription() {},
     async confirmCancellationSchedule() {},
     async findReversalPaymentByCharge() {},
