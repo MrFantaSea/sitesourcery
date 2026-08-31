@@ -6619,6 +6619,53 @@ async function verifyAlakazamPolicyAuthority(pool) {
     contract_ready: true
   }]);
 
+  const publicationExecutionV2 = await pool.query(`
+    select
+      to_regclass('ss.publication_control_releases') is not null
+        as releases_ready,
+      to_regclass('ss.publication_control_worker_jobs') is not null
+        as jobs_ready,
+      to_regclass('ss.publication_control_execution_receipts') is not null
+        as receipts_ready,
+      has_table_privilege(
+        'service_role', 'ss.publication_control_releases', 'SELECT,INSERT'
+      )
+        and not has_table_privilege(
+          'service_role', 'ss.publication_control_releases', 'UPDATE,DELETE'
+        )
+        and has_table_privilege(
+          'service_role', 'ss.publication_control_worker_jobs',
+          'SELECT,INSERT,UPDATE'
+        )
+        and not has_table_privilege(
+          'service_role', 'ss.publication_control_worker_jobs', 'DELETE'
+        )
+        and has_table_privilege(
+          'service_role', 'ss.publication_control_execution_receipts',
+          'SELECT,INSERT'
+        )
+        and not has_table_privilege(
+          'service_role', 'ss.publication_control_execution_receipts',
+          'UPDATE,DELETE'
+        )
+        and not has_table_privilege(
+          'anon', 'ss.publication_control_worker_jobs', 'SELECT'
+        )
+        and not has_table_privilege(
+          'authenticated', 'ss.publication_control_releases', 'SELECT'
+        ) as grants_ready,
+      ss.hosted_publication_control_contract_v2() =
+        'canonical-publication-control-v2-released-leased'
+        as contract_ready
+  `);
+  assert.deepEqual(publicationExecutionV2.rows, [{
+    releases_ready: true,
+    jobs_ready: true,
+    receipts_ready: true,
+    grants_ready: true,
+    contract_ready: true
+  }]);
+
   const selectProjection = () => pool.query(
     `select
        organization_id, project_id, customer_user_id, subscription_id,

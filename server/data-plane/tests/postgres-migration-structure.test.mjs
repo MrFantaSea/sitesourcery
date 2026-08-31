@@ -4332,3 +4332,48 @@ test("migration 147 adds one immutable released Alakazam policy without rewritin
     /update\s+ss\.alakazam_policy_authorities|delete\s+from\s+ss\.alakazam_policy_authorities|stripe\.|publishProject|createCheckout|grant all privileges/iu
   );
 });
+
+test("migration 148 adds separate released publication authority and leased execution evidence", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608310148_alakazam_publication_execution_v2.sql"
+  );
+  assert.ok(migration, "missing Alakazam publication execution migration 148");
+  assert.match(migration.sql, /\bbegin;[\s\S]*commit;\s*$/iu);
+  assert.match(
+    migration.sql,
+    /canonical-publication-control-held-v1[\s\S]*canonical-alakazam-policy-authority-v2-released/iu
+  );
+  assert.match(
+    migration.sql,
+    /create table ss\.publication_control_releases[\s\S]*command_id uuid primary key[\s\S]*state text not null default 'released'/iu
+  );
+  assert.match(
+    migration.sql,
+    /publication_control_releases_validate[\s\S]*new\.released_at >= policy\.approved_at[\s\S]*command\.requested_at = new\.released_at[\s\S]*deferrable initially deferred[\s\S]*publication_control_releases_immutable[\s\S]*before update or delete/iu
+  );
+  assert.match(
+    migration.sql,
+    /create table ss\.publication_control_worker_jobs[\s\S]*'queued', 'running', 'failed', 'succeeded',[\s\S]*'reconciliation_required'[\s\S]*lease_fence bigint/iu
+  );
+  assert.match(
+    migration.sql,
+    /create unique index publication_control_one_open_job_per_project[\s\S]*where state in \('queued', 'running', 'failed'\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /create table ss\.publication_control_execution_receipts[\s\S]*'publication_applied', 'reconciliation_required'[\s\S]*unique \(command_id\)/iu
+  );
+  assert.match(
+    migration.sql,
+    /enable row level security[\s\S]*force row level security[\s\S]*grant select, insert, update on table[\s\S]*publication_control_worker_jobs/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_publication_control_contract_v2\(\)[\s\S]*canonical-publication-control-v2-released-leased/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /update\s+ss\.publication_control_commands|delete\s+from\s+ss\.publication_control_commands|publishProject|stripe\.|grant all privileges/iu
+  );
+});

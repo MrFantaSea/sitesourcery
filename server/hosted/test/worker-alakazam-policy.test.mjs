@@ -67,7 +67,7 @@ test("Alakazam workers accept only the API release gate's exact policy tuple", (
   });
 });
 
-test("both external Alakazam workers consume only read-only policy readiness before enablement", async () => {
+test("all external Alakazam workers consume only read-only policy readiness before enablement", async () => {
   const source = await readFile(
     new URL("../worker-alakazam-composition.mjs", import.meta.url),
     "utf8"
@@ -82,7 +82,12 @@ test("both external Alakazam workers consume only read-only policy readiness bef
   );
   assert.equal(
     [...source.matchAll(/shared\.workerPolicy\.ready === true/gu)].length,
-    2
+    3
+  );
+  assert.match(source, /"alakazam-publication": publicationControl/u);
+  assert.match(
+    source,
+    /SITESOURCERY_ALAKAZAM_PUBLICATION_WORKER/u
   );
   assert.doesNotMatch(
     source,
