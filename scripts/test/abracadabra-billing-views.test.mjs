@@ -69,60 +69,65 @@ function preview(overrides = {}) {
     schema:
       "sitesourcery.alakazam-cancellation-preview/v1",
     projectId: PROJECT_ID,
-    state: "available",
-    accountState: "active",
-    subscription: {
+    eligible: true,
+    ineligibleReason: null,
+    tierId: "alakazam_50",
+    amountMinor: 5000,
+    currency: "USD",
+    effectiveAt: "2026-09-08T11:10:00.000Z",
+    servesUntil: "2026-09-08T11:10:00.000Z",
+    cancellationFeeMinor: 0,
+    furtherChargesAfterEffective: false,
+    refundTreatment:
+      "no_partial_period_refund_or_proration",
+    refundExceptions: [
+      "required_by_law",
+      "duplicate_or_unauthorized_charge",
+      "proven_service_failure"
+    ],
+    undoAvailable: false,
+    undoTreatment: "resubscribe_separately",
+    export: {
+      schema: "sitesourcery.alakazam-export-grant/v1",
+      state: "available",
+      availableFrom: "2026-08-10T11:10:00.000Z",
+      paidThroughAt: "2026-09-08T11:10:00.000Z",
+      retentionState: "granted",
+      policyVersion: "alakazam-lifecycle.2026-08-10.v1",
+      retentionEndsAt: "2026-10-08T11:10:00.000Z",
+      exportWindowEndsAt: "2026-10-08T11:10:00.000Z"
+    },
+    disclosure: {
+      schema:
+        "sitesourcery.alakazam-cancellation-disclosure/v1",
+      cancellationPolicy:
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
+      projectId: PROJECT_ID,
       tierId: "alakazam_50",
-      name: "Alakazam 50",
-      status: "active",
       amountMinor: 5000,
       currency: "USD",
-      currentPeriodEndsAt: "2026-09-08T11:10:00.000Z"
+      effectiveAt: "2026-09-08T11:10:00.000Z",
+      servesUntil: "2026-09-08T11:10:00.000Z",
+      cancellationFeeMinor: 0,
+      furtherChargesAfterEffective: false,
+      refundTreatment:
+        "no_partial_period_refund_or_proration",
+      refundExceptions: [
+        "required_by_law",
+        "duplicate_or_unauthorized_charge",
+        "proven_service_failure"
+      ],
+      undoAvailable: false,
+      undoTreatment: "resubscribe_separately",
+      retainedExitHours: 720,
+      exportWindowHours: 720
     },
-    effect: {
-      endsAt: "2026-09-08T11:10:00.000Z",
-      keepsAccessUntil: "2026-09-08T11:10:00.000Z",
-      alreadyScheduled: false,
-      website: {
-        state: "live",
-        hostname: "example.sitesourcery.me",
-        url: "https://example.sitesourcery.me/",
-        publishedUntil: "2026-09-08T11:10:00.000Z",
-        afterEnd: "not_published"
-      },
-      renewalStopped: {
-        tierId: "alakazam_50",
-        amountMinor: 5000,
-        currency: "USD",
-        dueAt: "2026-09-08T11:10:00.000Z",
-        chargedIfCancelled: false,
-        currentTierId: "alakazam_50"
-      },
-      savedSetupKept: true,
-      receiptsKept: true,
-      refund: {
-        state: "owner_review_required",
-        cashRefundMinor: null,
-        providerProration: null
-      }
-    },
-    policy: {
-      cancellationPolicy:
-        "owner_review_required_before_release",
-      released: false,
-      releaseBlocker: "cancellation_policy"
-    },
+    disclosureDigest: "d".repeat(64),
     actions: {
-      confirmCancellation: {
-        available: false,
-        reason: "cancellation_policy_owner_review_required"
-      },
-      billingPortal: {
-        available: false,
-        state: "held",
-        reason: "alakazam_billing_held"
-      },
-      reason: "cancellation_preview_only"
+      requestCancellation: true,
+      reason: null
     },
     ...overrides
   };
@@ -281,10 +286,9 @@ test("E-08 the cancellation preview view accepts only the exact preview", () => 
   assert.equal(
     views.verifiedAlakazamCancellationPreview(
       preview({
-        policy: {
-          cancellationPolicy: "no_refund",
-          released: true,
-          releaseBlocker: "cancellation_policy"
+        disclosure: {
+          ...preview().disclosure,
+          cancellationPolicy: "no_refund"
         }
       }),
       PROJECT_ID
@@ -293,16 +297,13 @@ test("E-08 the cancellation preview view accepts only the exact preview", () => 
   );
 });
 
-test("a preview that offers a confirmation or an open billing portal is refused", () => {
+test("a cancellation preview rejects action and disclosure drift", () => {
   assert.equal(
     views.verifiedAlakazamCancellationPreview(
       preview({
         actions: {
-          ...preview().actions,
-          confirmCancellation: {
-            available: true,
-            reason: "cancellation_policy_owner_review_required"
-          }
+          requestCancellation: true,
+          reason: "alakazam_cancellation_effect_held"
         }
       }),
       PROJECT_ID
@@ -312,29 +313,9 @@ test("a preview that offers a confirmation or an open billing portal is refused"
   assert.equal(
     views.verifiedAlakazamCancellationPreview(
       preview({
-        actions: {
-          ...preview().actions,
-          billingPortal: {
-            available: true,
-            state: "held",
-            reason: "alakazam_billing_held"
-          }
-        }
-      }),
-      PROJECT_ID
-    ),
-    null
-  );
-  assert.equal(
-    views.verifiedAlakazamCancellationPreview(
-      preview({
-        actions: {
-          ...preview().actions,
-          billingPortal: {
-            available: false,
-            state: "approved_live",
-            reason: "alakazam_billing_held"
-          }
+        disclosure: {
+          ...preview().disclosure,
+          cancellationFeeMinor: 500
         }
       }),
       PROJECT_ID
@@ -343,18 +324,11 @@ test("a preview that offers a confirmation or an open billing portal is refused"
   );
 });
 
-test("a preview that states a refund amount is refused", () => {
+test("a preview that changes the refund treatment is refused", () => {
   assert.equal(
     views.verifiedAlakazamCancellationPreview(
       preview({
-        effect: {
-          ...preview().effect,
-          refund: {
-            state: "owner_review_required",
-            cashRefundMinor: 0,
-            providerProration: false
-          }
-        }
+        refundTreatment: "refund_promised"
       }),
       PROJECT_ID
     ),
@@ -362,58 +336,53 @@ test("a preview that states a refund amount is refused", () => {
   );
 });
 
-test("the cancellation preview reads as plain consequences and never offers to cancel", () => {
+test("the cancellation preview reads as plain consequences and offers exact confirmation", () => {
   const shown =
     views.alakazamCancellationPreviewPresentation(
       preview(),
       PROJECT_ID
     );
-  assert.equal(shown.heading, "What cancelling would do");
-  assert.equal(shown.confirmAvailable, false);
+  assert.equal(shown.heading, "Review cancellation");
+  assert.equal(shown.confirmAvailable, true);
+  assert.equal(
+    shown.acceptedDisclosureDigest,
+    "d".repeat(64)
+  );
   assert.deepEqual(shown.facts, [
     {
       label: "Your plan keeps working until",
       value: "September 8, 2026"
     },
     {
-      label: "The $50.00 renewal on September 8, 2026",
-      value: "Would not be charged."
+      label: "Your next renewal",
+      value: "Will not be charged after you confirm."
     },
     {
-      label: "Your website",
-      value:
-        "Stays published until September 8, 2026, then comes down."
+      label: "Cancellation fee",
+      value: "$0.00"
     },
     {
-      label: "Your saved website setup",
-      value: "Stays in your account."
+      label: "Current paid period",
+      value: "No partial refund or proration. We still review refunds required by law, duplicate or unauthorized charges, and proven service failures."
     },
     {
-      label: "Your past receipts",
-      value: "Stays in your account."
+      label: "Saved work and export",
+      value: "Available until October 8, 2026."
     }
-  ].map((fact, index) =>
-    index === 4
-      ? { ...fact, value: "Stay in your account." }
-      : fact
-  ));
-  assert.match(shown.policyNote, /refund terms/u);
-  assert.match(shown.portalNote, /not open yet/u);
+  ]);
+  assert.match(shown.policyNote, /Cancel anytime/u);
+  assert.match(shown.policyNote, /30 days/u);
 });
 
 test("an already scheduled cancellation says so and stops offering a renewal", () => {
   const shown =
     views.alakazamCancellationPreviewPresentation(
       preview({
-        state: "already_scheduled",
-        effect: {
-          ...preview().effect,
-          alreadyScheduled: true,
-          renewalStopped: null
-        },
+        eligible: false,
+        ineligibleReason: "already_scheduled_to_end",
         actions: {
-          ...preview().actions,
-          reason: "cancellation_already_scheduled"
+          requestCancellation: false,
+          reason: "already_scheduled_to_end"
         }
       }),
       PROJECT_ID
@@ -423,9 +392,7 @@ test("an already scheduled cancellation says so and stops offering a renewal", (
     "Your Alakazam plan is already set to end."
   );
   assert.equal(
-    shown.facts.some((fact) =>
-      fact.label.includes("renewal")
-    ),
+    shown.confirmAvailable,
     false
   );
 });
@@ -434,12 +401,18 @@ test("an account with nothing to cancel says so plainly", () => {
   const shown =
     views.alakazamCancellationPreviewPresentation(
       preview({
-        state: "not_applicable",
-        subscription: null,
-        effect: null,
+        eligible: false,
+        ineligibleReason: "no_current_subscription",
+        tierId: null,
+        amountMinor: 0,
+        effectiveAt: null,
+        servesUntil: null,
+        export: null,
+        disclosure: null,
+        disclosureDigest: null,
         actions: {
-          ...preview().actions,
-          reason: "no_cancellable_subscription"
+          requestCancellation: false,
+          reason: "no_current_subscription"
         }
       }),
       PROJECT_ID

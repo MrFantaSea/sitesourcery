@@ -25,15 +25,34 @@
     "renewal_payment"
   ];
   var TAX_STATES = ["automatic", "disabled_by_owner"];
-  var PREVIEW_STATES = [
-    "available",
-    "already_scheduled",
-    "not_applicable"
-  ];
   var PREVIEW_REASONS = [
-    "cancellation_preview_only",
-    "cancellation_already_scheduled",
-    "no_cancellable_subscription"
+    null,
+    "already_scheduled_to_end",
+    "open_tier_change",
+    "period_boundary_passed",
+    "subscription_not_current",
+    "no_current_subscription"
+  ];
+  var CANCELLATION_ACTION_REASONS = [
+    null,
+    "alakazam_lifecycle_policy_held",
+    "alakazam_cancellation_effect_held",
+    "already_scheduled_to_end",
+    "open_tier_change",
+    "period_boundary_passed",
+    "subscription_not_current",
+    "no_current_subscription"
+  ];
+  var CANCELLATION_POLICY =
+    "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export";
+  var CANCELLATION_POLICY_VERSION =
+    "alakazam-cancellation.2026-08-31.v1";
+  var REFUND_TREATMENT =
+    "no_partial_period_refund_or_proration";
+  var REFUND_EXCEPTIONS = [
+    "required_by_law",
+    "duplicate_or_unauthorized_charge",
+    "proven_service_failure"
   ];
   var PAYMENT_STATES = [
     "none",
@@ -282,62 +301,73 @@
     });
   }
 
-  function verifiedCancellationWebsite(value) {
+  function verifiedCancellationExport(value, effectiveAt) {
+    if (value === null) return true;
     return exactKeys(value, [
-      "afterEnd",
-      "hostname",
-      "publishedUntil",
-      "state",
-      "url"
+      "availableFrom",
+      "exportWindowEndsAt",
+      "paidThroughAt",
+      "policyVersion",
+      "retentionEndsAt",
+      "retentionState",
+      "schema",
+      "state"
     ])
-      && value.afterEnd === "not_published"
-      && nullableIso(value.publishedUntil)
-      && text(value.state).length > 0;
+      && value.schema ===
+        "sitesourcery.alakazam-export-grant/v1"
+      && value.state === "available"
+      && safeIso(value.availableFrom)
+      && value.paidThroughAt === effectiveAt
+      && value.retentionState === "granted"
+      && text(value.policyVersion).length > 0
+      && safeIso(value.retentionEndsAt)
+      && safeIso(value.exportWindowEndsAt)
+      && Date.parse(value.exportWindowEndsAt)
+        <= Date.parse(value.retentionEndsAt)
+      && Date.parse(value.retentionEndsAt)
+        >= Date.parse(value.paidThroughAt);
   }
 
-  function verifiedCancellationRenewal(value) {
-    if (value === null) return true;
+  function verifiedCancellationDisclosure(value, preview) {
     return exactKeys(value, [
       "amountMinor",
-      "chargedIfCancelled",
+      "cancellationFeeMinor",
+      "cancellationPolicy",
+      "cancellationPolicyVersion",
       "currency",
-      "currentTierId",
-      "dueAt",
-      "tierId"
+      "effectiveAt",
+      "exportWindowHours",
+      "furtherChargesAfterEffective",
+      "projectId",
+      "refundExceptions",
+      "refundTreatment",
+      "retainedExitHours",
+      "schema",
+      "servesUntil",
+      "tierId",
+      "undoAvailable",
+      "undoTreatment"
     ])
-      && safeMinor(value.amountMinor)
+      && value.schema ===
+        "sitesourcery.alakazam-cancellation-disclosure/v1"
+      && value.cancellationPolicy === CANCELLATION_POLICY
+      && value.cancellationPolicyVersion ===
+        CANCELLATION_POLICY_VERSION
+      && value.projectId === preview.projectId
+      && value.tierId === preview.tierId
+      && value.amountMinor === preview.amountMinor
       && value.currency === "USD"
-      && value.chargedIfCancelled === false
-      && safeIso(value.dueAt);
-  }
-
-  function verifiedCancellationEffect(value) {
-    if (value === null) return true;
-    return exactKeys(value, [
-      "alreadyScheduled",
-      "endsAt",
-      "keepsAccessUntil",
-      "receiptsKept",
-      "refund",
-      "renewalStopped",
-      "savedSetupKept",
-      "website"
-    ])
-      && typeof value.alreadyScheduled === "boolean"
-      && safeIso(value.endsAt)
-      && value.keepsAccessUntil === value.endsAt
-      && value.savedSetupKept === true
-      && value.receiptsKept === true
-      && verifiedCancellationWebsite(value.website)
-      && verifiedCancellationRenewal(value.renewalStopped)
-      && exactKeys(value.refund, [
-        "cashRefundMinor",
-        "providerProration",
-        "state"
-      ])
-      && value.refund.state === "owner_review_required"
-      && value.refund.cashRefundMinor === null
-      && value.refund.providerProration === null;
+      && value.effectiveAt === preview.effectiveAt
+      && value.servesUntil === preview.servesUntil
+      && value.cancellationFeeMinor === 0
+      && value.furtherChargesAfterEffective === false
+      && value.refundTreatment === REFUND_TREATMENT
+      && JSON.stringify(value.refundExceptions) ===
+        JSON.stringify(REFUND_EXCEPTIONS)
+      && value.undoAvailable === false
+      && value.undoTreatment === "resubscribe_separately"
+      && value.retainedExitHours === 720
+      && value.exportWindowHours === 720;
   }
 
   function verifiedAlakazamCancellationPreview(
@@ -346,76 +376,103 @@
   ) {
     if (
       !exactKeys(value, [
-        "accountState",
         "actions",
-        "effect",
-        "policy",
+        "amountMinor",
+        "cancellationFeeMinor",
+        "currency",
+        "disclosure",
+        "disclosureDigest",
+        "effectiveAt",
+        "eligible",
+        "export",
+        "furtherChargesAfterEffective",
+        "ineligibleReason",
         "projectId",
+        "refundExceptions",
+        "refundTreatment",
         "schema",
-        "state",
-        "subscription"
+        "servesUntil",
+        "tierId",
+        "undoAvailable",
+        "undoTreatment"
       ])
       || value.schema !== CANCELLATION_PREVIEW_SCHEMA
       || text(value.projectId) !== text(projectId)
-      || PREVIEW_STATES.indexOf(value.state) < 0
-      || !verifiedCancellationEffect(value.effect)
-      || (value.state === "not_applicable") !==
-        (value.effect === null)
-      || (value.state === "not_applicable") !==
-        (value.subscription === null)
-      || (
-        value.effect !== null
-        && value.effect.alreadyScheduled !==
-          (value.state === "already_scheduled")
-      )
-      || !exactKeys(value.policy, [
-        "cancellationPolicy",
-        "releaseBlocker",
-        "released"
-      ])
-      || value.policy.cancellationPolicy !==
-        "owner_review_required_before_release"
-      || value.policy.released !== false
-      || value.policy.releaseBlocker !==
-        "cancellation_policy"
+      || typeof value.eligible !== "boolean"
+      || PREVIEW_REASONS.indexOf(value.ineligibleReason) < 0
+      || value.eligible !== (value.ineligibleReason === null)
+      || !safeMinor(value.amountMinor)
+      || value.currency !== "USD"
+      || value.cancellationFeeMinor !== 0
+      || value.furtherChargesAfterEffective !== false
+      || value.refundTreatment !== REFUND_TREATMENT
+      || JSON.stringify(value.refundExceptions) !==
+        JSON.stringify(REFUND_EXCEPTIONS)
+      || value.undoAvailable !== false
+      || value.undoTreatment !== "resubscribe_separately"
       || !exactKeys(value.actions, [
-        "billingPortal",
-        "confirmCancellation",
-        "reason"
-      ])
-      || !exactKeys(value.actions.confirmCancellation, [
-        "available",
-        "reason"
-      ])
-      || value.actions.confirmCancellation.available
-        !== false
-      || !exactKeys(value.actions.billingPortal, [
-        "available",
         "reason",
-        "state"
+        "requestCancellation"
       ])
-      || value.actions.billingPortal.available !== false
-      || value.actions.billingPortal.state !== "held"
-      || PREVIEW_REASONS.indexOf(value.actions.reason) < 0
+      || typeof value.actions.requestCancellation !== "boolean"
+      || CANCELLATION_ACTION_REASONS.indexOf(
+        value.actions.reason
+      ) < 0
+      || (
+        value.actions.requestCancellation === true
+        && value.actions.reason !== null
+      )
+      || (
+        value.actions.requestCancellation === true
+        && value.eligible !== true
+      )
+      || (
+        value.actions.requestCancellation === false
+        && value.eligible === false
+        && value.actions.reason !== value.ineligibleReason
+      )
+      || (
+        value.actions.requestCancellation === false
+        && value.eligible === true
+        && [
+          "alakazam_lifecycle_policy_held",
+          "alakazam_cancellation_effect_held"
+        ].indexOf(value.actions.reason) < 0
+      )
     ) return null;
-    if (value.subscription !== null && !exactKeys(
-      value.subscription,
-      [
-        "amountMinor",
-        "currency",
-        "currentPeriodEndsAt",
-        "name",
-        "status",
-        "tierId"
-      ]
-    )) return null;
+    if (value.tierId === null) {
+      if (
+        value.ineligibleReason !== "no_current_subscription"
+        || value.amountMinor !== 0
+        || value.effectiveAt !== null
+        || value.servesUntil !== null
+        || value.export !== null
+        || value.disclosure !== null
+        || value.disclosureDigest !== null
+        || value.actions.requestCancellation !== false
+      ) return null;
+      return clone(value);
+    }
+    if (
+      text(value.tierId).length === 0
+      || value.amountMinor <= 0
+      || !safeIso(value.effectiveAt)
+      || value.servesUntil !== value.effectiveAt
+      || !verifiedCancellationExport(
+        value.export,
+        value.effectiveAt
+      )
+      || !verifiedCancellationDisclosure(
+        value.disclosure,
+        value
+      )
+      || !SHA256.test(text(value.disclosureDigest))
+    ) return null;
     return clone(value);
   }
 
   /**
-   * E-08. What cancelling would do, before anything is done. The money terms
-   * are deliberately absent: the Alakazam cancellation policy is still an
-   * owner decision, so the preview says so instead of guessing.
+   * E-08. Exact plain-English consequences before the customer confirms.
    */
   function alakazamCancellationPreviewPresentation(
     value,
@@ -426,59 +483,58 @@
       projectId
     );
     if (!preview) return null;
-    if (preview.state === "not_applicable") {
+    if (preview.tierId === null) {
       return Object.freeze({
         preview: preview,
         heading: "There is no Alakazam plan to cancel.",
-        summary: "When you have an active plan, this is where you will see exactly what cancelling would do before you do it.",
+        summary: "When you have an active plan, this is where you can review exactly what cancelling would do.",
         facts: [],
         policyNote: "",
-        portalNote: "",
-        confirmAvailable: false
+        confirmAvailable: false,
+        acceptedDisclosureDigest: null
       });
     }
-    var endsOn = day(preview.effect.endsAt);
     var facts = [
       {
         label: "Your plan keeps working until",
-        value: endsOn
+        value: day(preview.effectiveAt)
       },
       {
-        label: "Your website",
-        value: preview.effect.website.state === "live"
-          ? "Stays published until " + endsOn + ", then comes down."
-          : "Is not published now, and would stay unpublished."
+        label: "Your next renewal",
+        value: "Will not be charged after you confirm."
       },
       {
-        label: "Your saved website setup",
-        value: "Stays in your account."
+        label: "Cancellation fee",
+        value: "$0.00"
       },
       {
-        label: "Your past receipts",
-        value: "Stay in your account."
+        label: "Current paid period",
+        value: "No partial refund or proration. We still review refunds required by law, duplicate or unauthorized charges, and proven service failures."
+      },
+      {
+        label: "Saved work and export",
+        value: preview.export
+          ? "Available until "
+            + day(preview.export.exportWindowEndsAt)
+            + "."
+          : "Available through the paid period."
       }
     ];
-    if (preview.effect.renewalStopped) {
-      facts.splice(1, 0, {
-        label: "The "
-          + usd(preview.effect.renewalStopped.amountMinor)
-          + " renewal on "
-          + day(preview.effect.renewalStopped.dueAt),
-        value: "Would not be charged."
-      });
-    }
     return Object.freeze({
       preview: preview,
-      heading: preview.state === "already_scheduled"
+      heading: preview.ineligibleReason ===
+        "already_scheduled_to_end"
         ? "Your Alakazam plan is already set to end."
-        : "What cancelling would do",
-      summary: preview.state === "already_scheduled"
-        ? "Nothing more happens until " + endsOn + "."
-        : "Read this before you decide. Nothing changes until you confirm.",
+        : "Review cancellation",
+      summary: preview.actions.requestCancellation
+        ? "Nothing changes until you check the box and confirm."
+        : "You can review the exact dates here, but cancellation is not available right now.",
       facts: facts,
-      policyNote: "We have not published the refund terms for cancelling yet, so we cannot take a cancellation here. Contact us and we will handle it with you directly.",
-      portalNote: "The billing portal is not open yet.",
-      confirmAvailable: false
+      policyNote: "Cancel anytime with no cancellation fee. Your plan keeps working through the period you already paid for, then your saved work and export stay available for 30 days.",
+      confirmAvailable:
+        preview.actions.requestCancellation === true,
+      acceptedDisclosureDigest:
+        preview.disclosureDigest
     });
   }
 

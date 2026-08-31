@@ -40,6 +40,12 @@
     "sitesourcery.alakazam-checkout-ready/v1";
   var ALAKAZAM_DOWNGRADE_SCHEMA =
     "sitesourcery.alakazam-downgrade-scheduled/v1";
+  var ALAKAZAM_CANCELLATION_REQUEST_SCHEMA =
+    "sitesourcery.alakazam-cancellation-request/v1";
+  var ALAKAZAM_CANCELLATION_POLICY =
+    "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export";
+  var ALAKAZAM_CANCELLATION_POLICY_VERSION =
+    "alakazam-cancellation.2026-08-31.v1";
   var ALAKAZAM_PUBLICATION_SCHEMA =
     "sitesourcery.alakazam-publication/v1";
   var ALAKAZAM_PUBLICATION_HOLD_REASON =
@@ -1543,6 +1549,7 @@
         [
           "appliedValue",
           "cancellationPolicy",
+          "cancellationPolicyVersion",
           "changeKind",
           "currentTierId",
           "downgrade",
@@ -1586,7 +1593,52 @@
       || value.disclosure.premiumConfiguration !==
         value.premiumConfiguration
       || value.disclosure.cancellationPolicy !==
-        "owner_review_required_before_release"
+        ALAKAZAM_CANCELLATION_POLICY
+      || value.disclosure.cancellationPolicyVersion !==
+        ALAKAZAM_CANCELLATION_POLICY_VERSION
+    ) return null;
+    return clone(value);
+  }
+
+  function verifiedAlakazamCancellationRequest(
+    value,
+    projectId,
+    acceptedDisclosureDigest
+  ) {
+    if (
+      !exactKeys(value, [
+        "acceptedDisclosureDigest",
+        "cancellationFeeMinor",
+        "cancellationId",
+        "effectiveAt",
+        "furtherChargesAfterEffective",
+        "next",
+        "projectId",
+        "provider",
+        "providerStatus",
+        "schema",
+        "servesUntil",
+        "status",
+        "subscriptionId"
+      ])
+      || value.schema !==
+        ALAKAZAM_CANCELLATION_REQUEST_SCHEMA
+      || value.status !== "provider_confirmation_pending"
+      || value.provider !== "stripe"
+      || !UUID.test(text(value.cancellationId))
+      || !UUID.test(text(value.subscriptionId))
+      || text(value.projectId) !== text(projectId)
+      || !safeIso(value.effectiveAt)
+      || value.servesUntil !== value.effectiveAt
+      || value.cancellationFeeMinor !== 0
+      || value.furtherChargesAfterEffective !== false
+      || value.acceptedDisclosureDigest !==
+        text(acceptedDisclosureDigest)
+      || !SHA256.test(
+        text(value.acceptedDisclosureDigest)
+      )
+      || text(value.providerStatus).length === 0
+      || value.next !== "verified_provider_confirmation"
     ) return null;
     return clone(value);
   }
@@ -2685,11 +2737,216 @@
     body.appendChild(review);
   }
 
+  function renderAlakazamCancellationReview(
+    documentRef,
+    body,
+    state,
+    actions
+  ) {
+    var section = accountElement(
+      documentRef,
+      "section",
+      "customer-alakazam-cancellation"
+    );
+    section.setAttribute("data-alakazam-cancellation", "");
+    section.appendChild(
+      accountElement(
+        documentRef,
+        "h4",
+        "",
+        "Cancel Alakazam"
+      )
+    );
+    var phase = text(state && state.phase) || "idle";
+    var presentation = state && state.presentation;
+    if (phase === "idle") {
+      section.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "",
+          "See the exact end date, refund terms, and export window before deciding."
+        )
+      );
+      var reviewButton = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        "Review cancellation"
+      );
+      reviewButton.type = "button";
+      reviewButton.setAttribute(
+        "data-alakazam-cancellation-review",
+        ""
+      );
+      reviewButton.addEventListener("click", function () {
+        if (typeof actions.reviewCancellation === "function") {
+          actions.reviewCancellation();
+        }
+      });
+      section.appendChild(reviewButton);
+      body.appendChild(section);
+      return;
+    }
+    if (phase === "loading") {
+      section.appendChild(
+        accountElement(
+          documentRef,
+          "p",
+          "customer-alakazam-command-state",
+          "Loading the exact cancellation details…"
+        )
+      );
+      body.appendChild(section);
+      return;
+    }
+    if (phase === "submitted") {
+      section.append(
+        accountElement(
+          documentRef,
+          "p",
+          "customer-alakazam-command-state",
+          "Cancellation requested. Your plan stays active through "
+            + accountDate(state.result.effectiveAt)
+            + " while the provider confirmation is verified."
+        ),
+        accountElement(
+          documentRef,
+          "p",
+          "",
+          "The cancellation fee is $0.00 and no renewal will be charged after the confirmed end date."
+        )
+      );
+      body.appendChild(section);
+      return;
+    }
+    if (!presentation) {
+      var error = accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-error",
+        state.error
+          || "The cancellation details could not be verified. Nothing changed."
+      );
+      error.setAttribute("role", "alert");
+      var retry = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        "Try loading cancellation details again"
+      );
+      retry.type = "button";
+      retry.addEventListener("click", function () {
+        if (typeof actions.reviewCancellation === "function") {
+          actions.reviewCancellation();
+        }
+      });
+      section.append(error, retry);
+      body.appendChild(section);
+      return;
+    }
+    section.append(
+      accountElement(
+        documentRef,
+        "h5",
+        "",
+        presentation.heading
+      ),
+      accountElement(
+        documentRef,
+        "p",
+        "",
+        presentation.summary
+      )
+    );
+    var facts = accountElement(
+      documentRef,
+      "dl",
+      "customer-alakazam-cancellation-facts"
+    );
+    presentation.facts.forEach(function (fact) {
+      appendAccountFact(
+        documentRef,
+        facts,
+        fact.label,
+        fact.value
+      );
+    });
+    section.append(
+      facts,
+      accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-cancellation-policy",
+        presentation.policyNote
+      )
+    );
+    if (state.error) {
+      var commandError = accountElement(
+        documentRef,
+        "p",
+        "customer-alakazam-error",
+        state.error
+      );
+      commandError.setAttribute("role", "alert");
+      section.appendChild(commandError);
+    }
+    if (presentation.confirmAvailable) {
+      var acceptance = accountElement(
+        documentRef,
+        "label",
+        "customer-alakazam-cancellation-acceptance"
+      );
+      var checkbox = documentRef.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.setAttribute(
+        "data-alakazam-cancellation-acceptance",
+        ""
+      );
+      acceptance.append(
+        checkbox,
+        documentRef.createTextNode(
+          " I understand the end date, refund terms, and 30-day saved-work and export window shown above."
+        )
+      );
+      var confirm = accountElement(
+        documentRef,
+        "button",
+        "spark-button",
+        phase === "submitting"
+          ? "Confirming cancellation…"
+          : state.error
+            ? "Try confirming cancellation again"
+            : "Confirm cancellation"
+      );
+      confirm.type = "button";
+      confirm.setAttribute(
+        "data-alakazam-cancellation-confirm",
+        ""
+      );
+      function syncConfirmation() {
+        confirm.disabled = phase === "submitting"
+          || checkbox.checked !== true;
+      }
+      checkbox.addEventListener("change", syncConfirmation);
+      confirm.addEventListener("click", function () {
+        if (
+          checkbox.checked === true
+          && typeof actions.cancel === "function"
+        ) actions.cancel();
+      });
+      syncConfirmation();
+      section.append(acceptance, confirm);
+    }
+    body.appendChild(section);
+  }
+
   function renderAlakazamAccountBody(
     documentRef,
     body,
     presentation,
     command,
+    cancellation,
     capabilities,
     actions
   ) {
@@ -3020,6 +3277,20 @@
         account,
         command,
         capabilities,
+        actions
+      );
+    }
+
+    if (
+      account.subscription
+      && !["cancelled", "ended"].includes(
+        account.subscription.status
+      )
+    ) {
+      renderAlakazamCancellationReview(
+        documentRef,
+        body,
+        cancellation || {},
         actions
       );
     }
@@ -14379,6 +14650,10 @@
           String(
             readState.phase === "loading"
             || command.phase === "configuring"
+            || readState.cancellation
+              && ["loading", "submitting"].includes(
+                readState.cancellation.phase
+              )
           )
         );
         retryButton.disabled =
@@ -14412,8 +14687,16 @@
           );
           return;
         }
-        status.textContent =
-          command.phase === "configuring"
+        status.textContent = readState.cancellation
+          && readState.cancellation.phase === "loading"
+            ? "Loading the exact cancellation details…"
+          : readState.cancellation
+            && readState.cancellation.phase === "submitting"
+            ? "Confirming the cancellation request…"
+          : readState.cancellation
+            && readState.cancellation.phase === "submitted"
+            ? "Cancellation requested. Provider confirmation is pending."
+          : command.phase === "configuring"
             ? "Saving the hosted address and refreshing website setup…"
             : command.phase === "scheduling"
             ? "Scheduling the accepted downgrade…"
@@ -14429,6 +14712,7 @@
           body,
           readState.presentation,
           readState.command || {},
+          readState.cancellation || {},
           readState.capabilities || {},
           actions
         );
@@ -15688,6 +15972,15 @@
       setupLabel: "",
       error: ""
     };
+    var alakazamCancellationSequence = 0;
+    var alakazamCancellation = {
+      projectId: "",
+      phase: "idle",
+      presentation: null,
+      commandId: "",
+      result: null,
+      error: ""
+    };
     var downloadCheckoutReturn =
       downloadCheckoutReturnFromLocation(
         windowRef.location
@@ -16196,6 +16489,12 @@
           },
           downgrade: function () {
             requestAlakazamDowngrade();
+          },
+          reviewCancellation: function () {
+            requestAlakazamCancellationPreview();
+          },
+          cancel: function () {
+            requestAlakazamCancellation();
           },
           configure: function (addressLabel) {
             requestAlakazamSiteSetup(addressLabel);
@@ -21110,6 +21409,7 @@
         phase: alakazamRead.phase,
         presentation: alakazamRead.presentation,
         command: alakazamCommand,
+        cancellation: alakazamCancellation,
         capabilities: capabilities
       });
       syncAlakazam35Panel(lastState);
@@ -21347,6 +21647,15 @@
         setupLabel: "",
         error: ""
       };
+      alakazamCancellationSequence += 1;
+      alakazamCancellation = {
+        projectId: text(projectId),
+        phase: "idle",
+        presentation: null,
+        commandId: "",
+        result: null,
+        error: ""
+      };
     }
 
     function currentAlakazamAccount(projectId) {
@@ -21474,6 +21783,205 @@
           renderAlakazamPanel();
           return null;
         });
+    }
+
+    function alakazamCancellationIsCurrent(
+      sequence,
+      projectId
+    ) {
+      return sequence === alakazamCancellationSequence
+        && Boolean(lastState.account)
+        && idOf(lastState.project) === projectId
+        && alakazamRead.phase === "ready"
+        && Boolean(currentAlakazamAccount(projectId));
+    }
+
+    function requestAlakazamCancellationPreview() {
+      var projectId = idOf(lastState && lastState.project);
+      var account = currentAlakazamAccount(projectId);
+      var viewModule =
+        windowRef.SiteSourceryAlakazamBillingViews;
+      if (
+        ALAKAZAM_PUBLIC_OFFER_STATE !== "released"
+        || !projectId
+        || !account
+        || !account.subscription
+        || !client
+        || typeof client.getAlakazamCancellationPreview !==
+          "function"
+        || !viewModule
+        || typeof viewModule
+          .alakazamCancellationPreviewPresentation !==
+          "function"
+      ) return Promise.resolve(null);
+      var sequence = ++alakazamCancellationSequence;
+      alakazamCancellation = {
+        projectId: projectId,
+        phase: "loading",
+        presentation: null,
+        commandId: "",
+        result: null,
+        error: ""
+      };
+      renderAlakazamPanel();
+      return client
+        .getAlakazamCancellationPreview(projectId)
+        .then(function (result) {
+          if (!alakazamCancellationIsCurrent(
+            sequence,
+            projectId
+          )) return null;
+          var presentation = viewModule
+            .alakazamCancellationPreviewPresentation(
+              result,
+              projectId
+            );
+          if (!presentation) {
+            throw new Error(
+              "The cancellation details could not be verified."
+            );
+          }
+          alakazamCancellation = {
+            projectId: projectId,
+            phase: "ready",
+            presentation: presentation,
+            commandId: "",
+            result: null,
+            error: ""
+          };
+          renderAlakazamPanel();
+          alakazamPanel.focusStatus();
+          return presentation.preview;
+        })
+        .catch(function (error) {
+          if (!alakazamCancellationIsCurrent(
+            sequence,
+            projectId
+          )) return null;
+          alakazamCancellation = {
+            projectId: projectId,
+            phase: "error",
+            presentation: null,
+            commandId: "",
+            result: null,
+            error: explain(
+              error,
+              "The cancellation details could not be loaded. Nothing changed."
+            )
+          };
+          renderAlakazamPanel();
+          alakazamPanel.focusStatus();
+          return null;
+        });
+    }
+
+    function requestAlakazamCancellation() {
+      var projectId = idOf(lastState && lastState.project);
+      var presentation =
+        alakazamCancellation.presentation;
+      var acceptedDisclosureDigest = text(
+        presentation
+        && presentation.acceptedDisclosureDigest
+      );
+      if (
+        ALAKAZAM_PUBLIC_OFFER_STATE !== "released"
+        || !projectId
+        || alakazamCancellation.projectId !== projectId
+        || !presentation
+        || presentation.confirmAvailable !== true
+        || !SHA256.test(acceptedDisclosureDigest)
+        || !client
+        || typeof client.requestAlakazamCancellation !==
+          "function"
+      ) return Promise.resolve(null);
+      var commandId;
+      try {
+        commandId = UUID.test(
+          text(alakazamCancellation.commandId)
+        )
+          ? alakazamCancellation.commandId
+          : freshAlakazamCommandId();
+      } catch (error) {
+        alakazamCancellation = {
+          projectId: projectId,
+          phase: "command_error",
+          presentation: presentation,
+          commandId: "",
+          result: null,
+          error: explain(
+            error,
+            "The cancellation request could not be identified. Nothing changed."
+          )
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return Promise.resolve(null);
+      }
+      var sequence = ++alakazamCancellationSequence;
+      alakazamCancellation = {
+        projectId: projectId,
+        phase: "submitting",
+        presentation: presentation,
+        commandId: commandId,
+        result: null,
+        error: ""
+      };
+      renderAlakazamPanel();
+      alakazamPanel.focusStatus();
+      return client.requestAlakazamCancellation(
+        projectId,
+        {
+          acceptedDisclosureDigest:
+            acceptedDisclosureDigest
+        },
+        { idempotencyKey: commandId }
+      ).then(function (result) {
+        if (!alakazamCancellationIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        var confirmed =
+          verifiedAlakazamCancellationRequest(
+            result,
+            projectId,
+            acceptedDisclosureDigest
+          );
+        if (!confirmed) {
+          throw new Error(
+            "The cancellation request was not verified."
+          );
+        }
+        alakazamCancellation = {
+          projectId: projectId,
+          phase: "submitted",
+          presentation: presentation,
+          commandId: commandId,
+          result: confirmed,
+          error: ""
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return confirmed;
+      }).catch(function (error) {
+        if (!alakazamCancellationIsCurrent(
+          sequence,
+          projectId
+        )) return null;
+        alakazamCancellation = {
+          projectId: projectId,
+          phase: "command_error",
+          presentation: presentation,
+          commandId: commandId,
+          result: null,
+          error: explain(
+            error,
+            "Cancellation was not confirmed. The same request can be tried safely."
+          )
+        };
+        renderAlakazamPanel();
+        alakazamPanel.focusStatus();
+        return null;
+      });
     }
 
     function renderAlakazamPublicationPanel() {
@@ -24218,6 +24726,8 @@
       safeAlakazamSiteUrl,
     safeCheckoutDestination:
       safeCheckoutDestination,
+    verifiedAlakazamCancellationRequest:
+      verifiedAlakazamCancellationRequest,
     verifiedAlakazamAccount:
       verifiedAlakazamAccount,
     verifiedAlakazamPublication:

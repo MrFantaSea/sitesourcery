@@ -29,6 +29,109 @@ const PRIOR_RELEASE_ID =
 const PRIOR_VERSION_ID =
   "31000000-0000-4000-8000-000000000002";
 
+test("the customer verifies the exact Alakazam cancellation request result", () => {
+  const disclosureDigest = "9".repeat(64);
+  const result = {
+    schema: "sitesourcery.alakazam-cancellation-request/v1",
+    status: "provider_confirmation_pending",
+    provider: "stripe",
+    cancellationId:
+      "34000000-0000-4000-8000-000000000001",
+    projectId: PROJECT_ID,
+    subscriptionId:
+      "33000000-0000-4000-8000-000000000001",
+    effectiveAt: "2026-09-02T12:00:00.000Z",
+    servesUntil: "2026-09-02T12:00:00.000Z",
+    cancellationFeeMinor: 0,
+    furtherChargesAfterEffective: false,
+    acceptedDisclosureDigest: disclosureDigest,
+    providerStatus: "active",
+    next: "verified_provider_confirmation",
+  };
+  assert.deepEqual(
+    customerControl.verifiedAlakazamCancellationRequest(
+      result,
+      PROJECT_ID,
+      disclosureDigest
+    ),
+    result
+  );
+  assert.equal(
+    customerControl.verifiedAlakazamCancellationRequest(
+      { ...result, cancellationFeeMinor: 1 },
+      PROJECT_ID,
+      disclosureDigest
+    ),
+    null
+  );
+  assert.equal(
+    customerControl.verifiedAlakazamCancellationRequest(
+      { ...result, projectId: OTHER_PROJECT_ID },
+      PROJECT_ID,
+      disclosureDigest
+    ),
+    null
+  );
+});
+
+test("the signed-in Alakazam cancellation control is disclosure-bound and retry-safe", async () => {
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  const renderStart = source.indexOf(
+    "function renderAlakazamCancellationReview"
+  );
+  const renderEnd = source.indexOf(
+    "function renderAlakazamAccountBody",
+    renderStart
+  );
+  const requestStart = source.indexOf(
+    "function requestAlakazamCancellationPreview"
+  );
+  const requestEnd = source.indexOf(
+    "function renderAlakazamPublicationPanel",
+    requestStart
+  );
+  const renderSource = source.slice(renderStart, renderEnd);
+  const requestSource = source.slice(requestStart, requestEnd);
+  assert.match(renderSource, /Review cancellation/u);
+  assert.match(renderSource, /Confirm cancellation/u);
+  assert.match(renderSource, /cancellation fee is \$0\.00/u);
+  assert.match(
+    renderSource,
+    /30-day saved-work and export window/u
+  );
+  assert.match(
+    renderSource,
+    /checkbox\.checked === true/u
+  );
+  assert.match(
+    requestSource,
+    /alakazamCancellationPreviewPresentation/u
+  );
+  assert.match(
+    requestSource,
+    /acceptedDisclosureDigest:\s*acceptedDisclosureDigest/u
+  );
+  assert.match(requestSource, /idempotencyKey: commandId/u);
+  assert.match(
+    requestSource,
+    /verifiedAlakazamCancellationRequest/u
+  );
+  assert.match(
+    requestSource,
+    /alakazamCancellation\.commandId/u
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /amountMinor:|effectiveAt:|refundTreatment:/u
+  );
+});
+
 function response(status, payload) {
   return {
     ok: status >= 200 && status < 300,
@@ -432,7 +535,9 @@ function startQuote(
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
     },
     disclosureDigest: "a".repeat(64),
     quoteDigest: "b".repeat(64),
@@ -510,7 +615,9 @@ function upgradeQuote(
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
     },
     disclosureDigest: "d".repeat(64),
     quoteDigest: "e".repeat(64),
@@ -581,7 +688,9 @@ function downgradeQuote(
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
     },
     disclosureDigest: "f".repeat(64),
     quoteDigest: "1".repeat(64),

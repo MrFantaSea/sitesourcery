@@ -88,11 +88,11 @@ const FIN007_HOSTED_TRUTH_REQUIREMENTS = hostedTruthRequirements;
 const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   ...hostedStagingAssetSha256,
   "abracadabra/app/abracadabra-api.js":
-    "d9946f089312119a04d504fe87ed166f0f35efd9cfe81eb926d4dd017a17b1a9",
+    "9e53ff3d9ff1d6112ae129b5f63dbb7666ccc8090725b197f72996bed6217408",
   "abracadabra/app/abracadabra-hosted-control.js":
     "cc3336358e99f252a4694d08d307dc37550525c7cf8ebf4e9c00e96fba5a6274",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "fec69c6174482ac42749317312c8f01437688f3ba8ad833d955521971c697257",
+    "5082cd1d2b7453b1bc6547293847fc7f23677785c22f417b1f84414125e734af",
 });
 
 function lexical(left, right) {

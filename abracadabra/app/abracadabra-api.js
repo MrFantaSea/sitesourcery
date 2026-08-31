@@ -3809,6 +3809,27 @@
       );
     }
 
+    function requestAlakazamCancellation(projectId, input, requestOptions) {
+      var source = isObject(input) ? input : {};
+      rejectClaimedAuthority(source);
+      return request(
+        "POST",
+        "/projects/" + segment(projectId, "Project ID")
+          + "/alakazam/cancellation-command",
+        {
+          body: {
+            acceptedDisclosureDigest: requiredText(
+              source.acceptedDisclosureDigest,
+              "Accepted Alakazam cancellation disclosure digest",
+              100
+            )
+          },
+          idempotencyKey:
+            requestOptions && requestOptions.idempotencyKey
+        }
+      );
+    }
+
     function getAlakazamBillingStates(projectId, requestOptions) {
       return request(
         "GET",
@@ -6813,6 +6834,8 @@
       getAlakazamInvoice: getAlakazamInvoice,
       getAlakazamCancellationPreview:
         getAlakazamCancellationPreview,
+      requestAlakazamCancellation:
+        requestAlakazamCancellation,
       getAlakazamBillingStates:
         getAlakazamBillingStates,
       getAlakazamPublication: getAlakazamPublication,

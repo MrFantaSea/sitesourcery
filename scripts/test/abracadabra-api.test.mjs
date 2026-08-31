@@ -868,6 +868,65 @@ test("cancellation requires a server preview and submits only its accepted discl
   });
 });
 
+test("Alakazam cancellation uses its exact preview and command routes without browser authority", async () => {
+  const calls = [];
+  const disclosureDigest = "d".repeat(64);
+  const client = createClient({
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      if (url === "/api/v1/csrf") {
+        return response(200, {
+          csrfToken: "csrf_alakazam_cancellation"
+        });
+      }
+      return response(
+        options.method === "GET" ? 200 : 202,
+        options.method === "GET"
+          ? { disclosureDigest }
+          : { status: "provider_confirmation_pending" }
+      );
+    },
+    idempotencyFactory: () =>
+      "alakazam-cancellation-command"
+  });
+
+  await client.getAlakazamCancellationPreview("project_1");
+  assert.equal(
+    calls[0].url,
+    "/api/v1/projects/project_1/alakazam/cancellation-preview"
+  );
+  assert.equal(calls[0].options.method, "GET");
+
+  await client.requestAlakazamCancellation(
+    "project_1",
+    { acceptedDisclosureDigest: disclosureDigest }
+  );
+  const command = calls.find(({ url }) =>
+    url.endsWith("/alakazam/cancellation-command")
+  );
+  assert.equal(command.options.method, "POST");
+  assert.equal(
+    command.options.headers["Idempotency-Key"],
+    "alakazam-cancellation-command"
+  );
+  assert.deepEqual(JSON.parse(command.options.body), {
+    acceptedDisclosureDigest: disclosureDigest
+  });
+
+  assert.throws(
+    () => client.requestAlakazamCancellation(
+      "project_1",
+      {
+        acceptedDisclosureDigest: disclosureDigest,
+        amountMinor: 0
+      }
+    ),
+    (error) =>
+      error instanceof APIError &&
+      error.code === "OWNER_AUTHORITY_REJECTED"
+  );
+});
+
 test("project exports expose status, retry, and one-time same-origin archive download routes", async () => {
   const calls = [];
   const archive = new Blob(["PK\u0003\u0004export"], { type: "application/zip" });
