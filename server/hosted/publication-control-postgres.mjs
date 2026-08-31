@@ -11,7 +11,6 @@ import {
 } from "../commerce-v2/alakazam-publication.mjs";
 import {
   PUBLICATION_CONTROL_CAPABILITY,
-  PUBLICATION_CONTROL_HOLD_REASON,
   createHeldPublicationControlCommand
 } from "../commerce-v2/publication-control-authority.mjs";
 import {
@@ -20,6 +19,12 @@ import {
 
 const RUNTIME_CONTRACT =
   "canonical-publication-control-held-v1";
+const RUNTIME_CONTRACT_V2 =
+  "canonical-publication-control-v2-released-leased";
+const RELEASED_POLICY_ID =
+  "SS-ALAKAZAM-POLICY-2026-08-31-V2";
+const RELEASED_POLICY_DIGEST =
+  "145892e43ab6f4a03ebbed84fd148633f9a4de9727ce4294a0eb9b08f329c320";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const DATABASE_CONSTRAINT_CODES = new Set([
@@ -183,11 +188,20 @@ function nonnegativeInteger(value, field) {
 
 function storedCommand(row) {
   if (!row) return null;
+  const executionState = {
+    queued: "queued",
+    failed: "queued",
+    running: "processing",
+    succeeded: "applied",
+    reconciliation_required: "reconciliation_required"
+  }[row.execution_state] ?? "held";
   return Object.freeze({
     commandId: row.id,
     action: row.action,
-    state: "held",
-    holdReason: ALAKAZAM_PUBLICATION_HOLD_REASON,
+    state: executionState,
+    holdReason: executionState === "held"
+      ? ALAKAZAM_PUBLICATION_HOLD_REASON
+      : null,
     snapshotDigest: row.snapshot_digest,
     commandDigest: row.command_digest,
     targetReleaseId: row.target_release_id,
@@ -556,12 +570,20 @@ async function selectPublication(client, input, { lock = false } = {}) {
     ]
   );
   const genericCommand = await client.query(
-    `select *
-       from ss.publication_control_commands
-      where organization_id = $1
-        and project_id = $2
-        and customer_user_id = $3
-      order by requested_at desc, id desc
+    `select command.*,
+            release.state as release_state,
+            job.state as execution_state
+       from ss.publication_control_commands command
+       left join ss.publication_control_releases release
+         on release.organization_id = command.organization_id
+        and release.command_id = command.id
+       left join ss.publication_control_worker_jobs job
+         on job.organization_id = command.organization_id
+        and job.command_id = command.id
+      where command.organization_id = $1
+        and command.project_id = $2
+        and command.customer_user_id = $3
+      order by command.requested_at desc, command.id desc
       limit 1`,
     [input.tenantId, input.projectId, input.customerId]
   );
@@ -612,12 +634,23 @@ async function selectPublication(client, input, { lock = false } = {}) {
 }
 
 export function createPostgresPublicationControlRepository({
-  authority
+  authority,
+  legacyRepositoryFactory = createPostgresAlakazamPublicationRepository
 } = {}) {
   const database = validateAuthority(authority);
-  const legacy = createPostgresAlakazamPublicationRepository({
-    authority: database
-  });
+  invariant(
+    typeof legacyRepositoryFactory === "function",
+    "invalid_configuration",
+    "legacy publication evidence verifier is required",
+    { status: 500 }
+  );
+  const legacy = legacyRepositoryFactory({ authority: database });
+  invariant(
+    legacy && typeof legacy.readiness === "function",
+    "invalid_configuration",
+    "legacy publication evidence readiness is required",
+    { status: 500 }
+  );
   return Object.freeze({
     async readiness() {
       await legacy.readiness();
@@ -628,6 +661,49 @@ export function createPostgresPublicationControlRepository({
             `select
                ss.hosted_publication_control_contract() = $1
                  as exact_runtime_marker,
+               ss.hosted_publication_control_contract_v2() = $2
+                 as exact_runtime_marker_v2,
+               exists (
+                 select 1
+                   from ss.alakazam_policy_releases policy
+                  where policy.policy_id = $3
+                    and policy.policy_digest = $4
+                    and policy.state = 'released'
+                    and policy.commercial_effects
+                    and policy.provider_effects
+                    and policy.publication_effects
+                    and not policy.automatic_recovery_from_reversal_evidence
+               ) as exact_released_policy,
+               has_table_privilege(
+                 'service_role',
+                 'ss.publication_control_releases',
+                 'SELECT,INSERT'
+               )
+               and not has_table_privilege(
+                 'service_role',
+                 'ss.publication_control_releases',
+                 'UPDATE,DELETE'
+               )
+               and has_table_privilege(
+                 'service_role',
+                 'ss.publication_control_worker_jobs',
+                 'SELECT,INSERT,UPDATE'
+               )
+               and not has_table_privilege(
+                 'service_role',
+                 'ss.publication_control_worker_jobs',
+                 'DELETE'
+               )
+               and has_table_privilege(
+                 'service_role',
+                 'ss.publication_control_execution_receipts',
+                 'SELECT,INSERT'
+               )
+               and not has_table_privilege(
+                 'service_role',
+                 'ss.publication_control_execution_receipts',
+                 'UPDATE,DELETE'
+               ) as exact_v2_security,
                (
                  select relation.relkind = 'r'
                    and relation.relpersistence = 'p'
@@ -702,7 +778,12 @@ export function createPostgresPublicationControlRepository({
                  'ss.hosted_publication_control_contract()',
                  'EXECUTE'
                ) as exact_function_security`,
-            [RUNTIME_CONTRACT]
+            [
+              RUNTIME_CONTRACT,
+              RUNTIME_CONTRACT_V2,
+              RELEASED_POLICY_ID,
+              RELEASED_POLICY_DIGEST
+            ]
           );
           invariant(
             proof.rowCount === 1 &&
@@ -716,10 +797,10 @@ export function createPostgresPublicationControlRepository({
           return Object.freeze({
             ready: true,
             authorization: true,
-            providerEffects: false,
-            state: "held",
-            holdReason: PUBLICATION_CONTROL_HOLD_REASON,
-            runtimeContract: RUNTIME_CONTRACT
+            providerEffects: true,
+            state: "released",
+            holdReason: null,
+            runtimeContract: RUNTIME_CONTRACT_V2
           });
         }
       ));
@@ -756,11 +837,19 @@ export function createPostgresPublicationControlRepository({
             ]
           );
           const replay = await client.query(
-            `select *
-               from ss.publication_control_commands
-              where organization_id = $1
-                and id = $2
-              for update`,
+            `select command.*,
+                    release.state as release_state,
+                    job.state as execution_state
+               from ss.publication_control_commands command
+               left join ss.publication_control_releases release
+                 on release.organization_id = command.organization_id
+                and release.command_id = command.id
+               left join ss.publication_control_worker_jobs job
+                 on job.organization_id = command.organization_id
+                and job.command_id = command.id
+              where command.organization_id = $1
+                and command.id = $2
+               for update of command`,
             [input.tenantId, input.commandId]
           );
           if (replay.rowCount === 1) {
@@ -795,6 +884,23 @@ export function createPostgresPublicationControlRepository({
             client,
             input,
             { lock: true }
+          );
+          const openExecution = await client.query(
+            `select exists (
+               select 1
+                 from ss.publication_control_worker_jobs job
+                where job.organization_id = $1
+                  and job.project_id = $2
+                  and job.state in ('queued', 'running', 'failed')
+             ) as present`,
+            [input.tenantId, input.projectId]
+          );
+          invariant(
+            openExecution.rowCount === 1 &&
+              openExecution.rows[0].present === false,
+            "publication_command_pending",
+            "a publication change is already being processed; refresh before trying again",
+            { status: 409 }
           );
           const validatedCommand =
             createAlakazamPublicationCommand({
@@ -968,7 +1074,47 @@ export function createPostgresPublicationControlRepository({
             "the publication-control command was not recorded",
             { status: 500 }
           );
-          const stored = storedCommand(inserted.rows[0]);
+          await client.query(
+            `insert into ss.publication_control_releases (
+               command_id, organization_id, project_id,
+               customer_user_id, command_digest,
+               policy_id, policy_digest, state,
+               released_at, release_basis
+             ) values (
+               $1, $2, $3, $4, $5,
+               $6, $7, 'released', $8,
+               'owner_approved_2026_08_31'
+             )`,
+            [
+              command.commandId,
+              command.tenantId,
+              command.projectId,
+              command.customerId,
+              command.commandDigest,
+              RELEASED_POLICY_ID,
+              RELEASED_POLICY_DIGEST,
+              command.requestedAt
+            ]
+          );
+          await client.query(
+            `insert into ss.publication_control_worker_jobs (
+               command_id, organization_id, project_id,
+               state, run_at, queued_at, updated_at
+             ) values (
+               $1, $2, $3, 'queued', $4, $4, $4
+             )`,
+            [
+              command.commandId,
+              command.tenantId,
+              command.projectId,
+              command.requestedAt
+            ]
+          );
+          const stored = storedCommand({
+            ...inserted.rows[0],
+            release_state: "released",
+            execution_state: "queued"
+          });
           return Object.freeze({
             publication: Object.freeze({
               ...selected.publication,

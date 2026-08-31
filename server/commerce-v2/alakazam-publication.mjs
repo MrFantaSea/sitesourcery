@@ -14,6 +14,14 @@ export const ALAKAZAM_PUBLICATION_COMMAND_SCHEMA =
   "sitesourcery.alakazam-publication-command/v1";
 export const ALAKAZAM_PUBLICATION_HOLD_REASON =
   "commercial_cutover_not_authorized";
+export const ALAKAZAM_PUBLICATION_RELEASE_STATE = "released";
+export const ALAKAZAM_PUBLICATION_COMMAND_STATES = Object.freeze([
+  "held",
+  "queued",
+  "processing",
+  "applied",
+  "reconciliation_required"
+]);
 
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -31,6 +39,7 @@ const SUBSCRIPTION_STATES = new Set([
   "active",
   "grace"
 ]);
+const COMMAND_STATES = new Set(ALAKAZAM_PUBLICATION_COMMAND_STATES);
 
 function exactKeys(value, expected, field, options = {}) {
   invariant(
@@ -301,11 +310,18 @@ function exactStoredCommand(value) {
     "publication.command.action",
     20
   );
+  const state = requiredText(
+    value.state,
+    "publication.command.state",
+    40
+  );
   invariant(
-    ACTIONS.has(action) &&
-      value.state === "held" &&
-      value.holdReason ===
-        ALAKAZAM_PUBLICATION_HOLD_REASON,
+    ACTIONS.has(action) && COMMAND_STATES.has(state) &&
+      (
+        state === "held"
+          ? value.holdReason === ALAKAZAM_PUBLICATION_HOLD_REASON
+          : value.holdReason === null
+      ),
     options.code,
     "publication.command authority is invalid",
     { status: options.status }
@@ -336,8 +352,10 @@ function exactStoredCommand(value) {
       options
     ),
     action,
-    state: "held",
-    holdReason: ALAKAZAM_PUBLICATION_HOLD_REASON,
+    state,
+    holdReason: state === "held"
+      ? ALAKAZAM_PUBLICATION_HOLD_REASON
+      : null,
     snapshotDigest: requiredDigest(
       value.snapshotDigest,
       "publication.command.snapshotDigest"
@@ -400,8 +418,8 @@ export function projectAlakazamPublication(value) {
   const snapshotFacts = {
     schema: ALAKAZAM_PUBLICATION_SCHEMA,
     projectId,
-    state: "held",
-    holdReason: ALAKAZAM_PUBLICATION_HOLD_REASON,
+    state: ALAKAZAM_PUBLICATION_RELEASE_STATE,
+    holdReason: null,
     subscription,
     site,
     history,
@@ -484,6 +502,13 @@ export function createAlakazamPublicationCommand({
         request.snapshotDigest,
     "publication_authority_changed",
     "the Alakazam publication authority changed; refresh before trying again",
+    { status: 409 }
+  );
+  invariant(
+    publication.command === null ||
+      publication.command.state === "held",
+    "publication_command_pending",
+    "a publication change is already being processed; refresh before trying again",
     { status: 409 }
   );
   invariant(

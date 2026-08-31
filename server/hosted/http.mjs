@@ -1907,7 +1907,8 @@ export function createHostedApi(
             alakazamRetainedPremiumReadiness.state === "held",
           alakazamPublication:
             alakazamPublicationReadiness.authorization === true &&
-            alakazamPublicationReadiness.providerEffects === false,
+            alakazamPublicationReadiness.providerEffects === true &&
+            alakazamPublicationReadiness.state === "released",
           mailProviderEvents:
             resendMailEventReadiness?.ready === true &&
             resendMailEventReadiness?.verified === true,

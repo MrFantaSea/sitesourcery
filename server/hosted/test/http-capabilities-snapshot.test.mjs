@@ -326,7 +326,8 @@ function apiFixture({
       ["getSnapshot", "requestCommand"],
       counted("publication", {
         authorization: true,
-        providerEffects: false
+        providerEffects: true,
+        state: "released"
       })
     ),
     resendMailEvents: {

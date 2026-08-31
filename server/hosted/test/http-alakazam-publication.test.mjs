@@ -99,7 +99,7 @@ test("publication routes preserve authenticated project, exact body, and command
   const snapshot = {
     schema: "sitesourcery.alakazam-publication/v1",
     projectId: PROJECT_ID,
-    state: "held",
+    state: "released",
     snapshotDigest: SNAPSHOT_DIGEST
   };
   const api = createHostedApi(service(), {
@@ -108,8 +108,8 @@ test("publication routes preserve authenticated project, exact body, and command
         return {
           ready: true,
           authorization: true,
-          providerEffects: false,
-          state: "held"
+          providerEffects: true,
+          state: "released"
         };
       },
       async getSnapshot(actor, projectId) {
@@ -126,7 +126,7 @@ test("publication routes preserve authenticated project, exact body, and command
         return {
           command: {
             commandId: command.commandId,
-            state: "held"
+            state: "queued"
           },
           publication: structuredClone(snapshot)
         };
@@ -256,8 +256,8 @@ test("publication HTTP rejects malformed, stale, and rogue authority before reco
         return {
           ready: true,
           authorization: true,
-          providerEffects: false,
-          state: "held"
+          providerEffects: true,
+          state: "released"
         };
       },
       async readCustomerPublication() {
@@ -356,15 +356,15 @@ test("publication HTTP rejects malformed, stale, and rogue authority before reco
   assert.equal(records, 0);
 });
 
-test("publication capability reports authorization without provider effects", async () => {
+test("publication capability requires released execution and provider authority", async () => {
   let at = 1_000;
   const boundary = {
     async readiness() {
       return {
         ready: true,
         authorization: true,
-        providerEffects: false,
-        state: "held"
+        providerEffects: true,
+        state: "released"
       };
     },
     async getSnapshot() {
@@ -392,7 +392,8 @@ test("publication capability reports authorization without provider effects", as
   );
   boundary.readiness = async () => ({
     authorization: true,
-    providerEffects: true
+    providerEffects: false,
+    state: "held"
   });
   at += 2;
   const providerEnabled = await api.fetch(
@@ -404,7 +405,7 @@ test("publication capability reports authorization without provider effects", as
   );
 });
 
-test("the production executable composes publication authorization without a provider port", async () => {
+test("the API process composes durable publication enqueue without owning provider execution", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"
