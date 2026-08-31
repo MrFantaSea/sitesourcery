@@ -392,7 +392,7 @@ test("application page has zero forms and fails closed before its local compiler
   assert.doesNotMatch(pageHtml, /<iframe\b[^>]*sandbox="[^"]+"/u);
 });
 
-test("maker stays guest-first while account and payment authority remain hosted-only", () => {
+test("maker stays guest-first while source account and payment controls stay disabled", () => {
   assert.match(
     pageHtml,
     /<section class="spark-workroom" id="workroom"[^>]*\stabindex="-1"[^>]*>/u,
@@ -434,7 +434,7 @@ test("maker stays guest-first while account and payment authority remain hosted-
   );
   assert.match(
     pageHtml,
-    /Saving and payment are unavailable here\.[\s\S]*?<button[^>]*disabled[^>]*aria-disabled="true">Account path unavailable<\/button>/u,
+    /The free preview stays in this tab\.[\s\S]*?download the HTML for \$20\.[\s\S]*?Alakazam hosting is coming soon\.[\s\S]*?<button[^>]*disabled[^>]*aria-disabled="true">Account setup is coming next<\/button>/u,
   );
   assert.doesNotMatch(pageHtml, /data-save-direction/u);
   assert.doesNotMatch(hostedScriptsMarkup, /abracadabra-account\.js|abracadabra-paid-download\.js/u);
@@ -450,11 +450,11 @@ test("the Abracadabra lane has a plain HTML door into the maker", () => {
     /<a class="vessel-link" href="\/abracadabra\/app\/#workroom"[^>]*><\/a>/u,
   );
   assert.match(landingHtml, /Click[\s\S]*to[\s\S]*Conjure/u);
-  assert.match(landingHtml, /Free to See-\$20 Download Coming-Alakazam Plans Held/u);
-  assert.match(landingHtml, /the account and download path are not open yet/u);
+  assert.match(landingHtml, /Make a one-page website for your business free · \$20 to download · hosting coming soon/u);
+  assert.match(landingHtml, /Build and test the page free\. Pay \$20 once to download the HTML file and use it anywhere you choose\./u);
   assert.match(
     landingHtml,
-    /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,
+    /Alakazam will put the page online at a Site Sourcery address and add more design controls\. Monthly sign-up is not open yet\./u,
   );
   assert.doesNotMatch(
     landingHtml,
@@ -473,7 +473,7 @@ test("guest data-loss truth stays visible in both artifacts and hosted controls 
   assert.match(hostedHeroMarkup, /Sign in for the \$20 Download\./u);
   assert.match(
     hostedHeroMarkup,
-    /Alakazam subscriptions and hosting activation remain held\./u,
+    /Alakazam hosting is coming soon\./u,
   );
   assert.doesNotMatch(
     hostedHeroMarkup,
@@ -682,7 +682,7 @@ test("hosted Download requires the exact server quote and exposes no direct chec
   );
 });
 
-test("held maker keeps canonical identity while pricing stays on account-aware surfaces", () => {
+test("source maker keeps canonical identity and shows only the approved download price", () => {
   assert.match(pageHtml, /tel:\+18562441220/u);
   assert.match(pageHtml, /\(856\) 244-1220/u);
   assert.match(pageHtml, /mailto:sitesourcery@proton\.me/u);
@@ -691,7 +691,6 @@ test("held maker keeps canonical identity while pricing stays on account-aware s
     /Desiderata Labs LLC · DBA Site Sourcery/u,
   );
   for (const pattern of [
-    /\bcoming soon\b/iu,
     /\bpre-?launch\b/iu,
     /\bwaitlist\b/iu,
     /\bsubscribe\b/iu,
@@ -705,11 +704,11 @@ test("held maker keeps canonical identity while pricing stays on account-aware s
       (pageHtml.match(/\$\s*\d+(?:[.,]\d+)?/gu) ?? [])
         .map((amount) => Number(amount.replace(/[^\d.]/gu, ""))),
     )].sort((left, right) => left - right),
-    [],
+    [20],
   );
   assert.match(
     landingHtml,
-    /A one-time \$20 download of the file is planned; the account and download path are not open yet/u,
+    /Build and test the page free\. Pay \$20 once to download the HTML file and use it anywhere you choose\./u,
   );
   assert.match(hostedControlMarkup, /<strong>\$20 once<\/strong>/u);
   assert.equal(

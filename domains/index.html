@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#08070c">
-  <title>Domain preflight and address options | Site Sourcery</title>
-  <meta name="description" content="Run a public-DNS preflight for a .com, .net, or .org, then ask Site Sourcery to confirm registrar availability, exact price, and terms before any purchase.">
+  <title>Domain names and setup | Site Sourcery</title>
+  <meta name="description" content="Site Sourcery can check, register, connect, and help manage a domain for your business. You approve the name and price before anything is bought.">
   <link rel="canonical" href="https://sitesourcery.com/domains/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Domain preflight and address options | Site Sourcery">
-  <meta property="og:description" content="Run a public-DNS preflight for a .com, .net, or .org, then ask Site Sourcery to confirm registrar availability, exact price, and terms before any purchase.">
+  <meta property="og:title" content="Domain names and setup | Site Sourcery">
+  <meta property="og:description" content="Site Sourcery can check, register, connect, and help manage a domain for your business. You approve the name and price before anything is bought.">
   <meta property="og:url" content="https://sitesourcery.com/domains/">
   <meta property="og:image" content="https://sitesourcery.com/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Site Sourcery social card reading ‘Your source for websites’ over a purple-lit website workshop.">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Domain preflight and address options | Site Sourcery">
-  <meta name="twitter:description" content="Run a public-DNS preflight for a .com, .net, or .org, then ask Site Sourcery to confirm registrar availability, exact price, and terms before any purchase.">
+  <meta name="twitter:title" content="Domain names and setup | Site Sourcery">
+  <meta name="twitter:description" content="Site Sourcery can check, register, connect, and help manage a domain for your business. You approve the name and price before anything is bought.">
   <meta name="twitter:image" content="https://sitesourcery.com/og.png">
   <meta name="twitter:image:alt" content="Site Sourcery social card reading ‘Your source for websites’ over a purple-lit website workshop.">
   <link rel="preload" as="image" href="/assets/site-sourcery-main-street-v2-portrait-529.avif" type="image/avif" media="(max-width: 600px)" imagesrcset="/assets/site-sourcery-main-street-v2-portrait-360.avif 360w, /assets/site-sourcery-main-street-v2-portrait-529.avif 529w" imagesizes="100vw" fetchpriority="high">
@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="/vnext.css">
   <script src="/vnext.js" defer></script>
   <script src="/domains/domain-search.js" defer></script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Domain preflight and address options | Site Sourcery","description":"Run a public-DNS preflight for a .com, .net, or .org, then ask Site Sourcery to confirm registrar availability, exact price, and terms before any purchase.","url":"https://sitesourcery.com/domains/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Domain names and setup | Site Sourcery","description":"Site Sourcery can check, register, connect, and help manage a domain for your business. You approve the name and price before anything is bought.","url":"https://sitesourcery.com/domains/","isPartOf":{"@type":"WebSite","name":"Site Sourcery","url":"https://sitesourcery.com/"}}</script>
 </head>
 <body class="vnext-page domains-page">
   <a class="skip-link" href="#main">Skip to the address options</a>
@@ -64,13 +64,16 @@
         <div class="hero-copy reveal">
           <div class="domain-hero-intro">
             <p class="eyebrow">Domains</p>
-            <h1 id="domains-title" data-customer-job="understand-address-options">Four possible ways to have an address.</h1>
-            <p class="lede">Your website needs a name people can type. You can discuss registering one to run yourself, registering one with ongoing help, connecting a name you already own, or using a Site Sourcery address where that option is available.</p>
-            <p class="domain-price-line"><strong>Domain registration is inquiry-only.</strong> The search below is a public-DNS preflight, not a reservation or registrar quote. Availability, exact price, provider terms, and operating responsibility are confirmed in writing before any purchase or payment.</p>
+            <h1 id="domains-title" data-customer-job="understand-address-options">Get the right domain and keep it in your name.</h1>
+            <p class="lede">Site Sourcery can check a name, register it for your business, connect it to your website, and help manage it.</p>
+            <p class="domain-price-line"><strong>You approve the name and price before anything is bought.</strong> Domain prices can change, so I check the live price when you are ready.</p>
           </div>
           <div class="domain-search" data-domain-search>
             <label class="domain-search-label" for="domain-name">Your business name</label>
-            <p class="domain-price-line" id="domain-preflight-disclosure">When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com. Cloudflare processes the query and connection data under its Public DNS Resolver privacy notice. A recursive resolver may contact authoritative DNS servers to answer. Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API, and it does not prove availability, create a quote, reserve a name, authorize a purchase, or place an order. <a href="/legal/privacy/#domains">Read the Domains section of the privacy notice.</a></p>
+            <details class="legal-topic" id="domain-preflight-disclosure">
+              <summary>What this quick check does</summary>
+              <p class="domain-price-line">It asks Cloudflare's public DNS service whether .com, .net, and .org versions already have internet records. It does not reserve the name or prove that it can be bought. <a href="/legal/privacy/#domains">Read the privacy details.</a></p>
+            </details>
             <div class="domain-search-row">
               <input class="domain-search-input" id="domain-name" type="text" inputmode="url"
                      autocomplete="off" spellcheck="false" placeholder="joes-crab-shack"
@@ -79,11 +82,11 @@
                       aria-describedby="domain-preflight-disclosure domain-status"
                       data-domain-submit>Check it</button>
             </div>
-            <p class="domain-search-status" id="domain-status" role="status" aria-live="polite" data-domain-status>Type a name to run a public-DNS preflight. It costs nothing, reserves nothing, and does not prove registrar availability.</p>
+            <p class="domain-search-status" id="domain-status" role="status" aria-live="polite" data-domain-status>Type a name for a free quick check. Nothing is bought or reserved.</p>
             <ul class="domain-results" data-domain-results></ul>
           </div>
           <div class="hero-actions">
-            <a class="button" href="#domains-compare" data-primary-action="compare-domain-options">Compare the four ways</a>
+            <a class="button button-primary" href="/contact/" data-primary-action="ask-about-domains">Ask about a domain</a>
           </div>
         </div>
       </div>
@@ -93,48 +96,48 @@
       <div class="site-shell">
         <div class="section-head reveal">
           <div>
-            <p class="overline">Four routes to discuss</p>
-            <h2 id="domains-compare-title" data-customer-job="compare-address-options">Register it, get ongoing help, bring your own, or use a Site Sourcery address.</h2>
+            <p class="overline">Your options</p>
+            <h2 id="domains-compare-title" data-customer-job="compare-address-options">Start new, bring your own, or let me keep it working.</h2>
           </div>
-          <p>These are planning options, not released checkout products. The exact provider, price, ownership, renewal, and support terms have to be confirmed for your situation.</p>
+          <p>Pick the kind of help you need. Your written quote will show the cost, renewals, and who handles what.</p>
         </div>
 
         <div class="choice-grid">
           <article class="card reveal">
             <p class="card-kicker">Registration help</p>
-            <h3>Ask about a name you would run.</h3>
-            <p>If registration help is available for your name, Site Sourcery first gets a fresh registrar result and exact price, shows you the provider terms and required registrant data, and waits for your written authorization.</p>
+            <h3>Register a new domain.</h3>
+            <p>I check whether the name is available, show you the current price and renewal details, and register it only after you say yes.</p>
             <ul class="pill-list">
-              <li>Inquiry first</li>
-              <li>Fresh registrar check</li>
-              <li>Exact written price</li>
-              <li>No public checkout</li>
+              <li>Current availability check</li>
+              <li>Price shown before purchase</li>
+              <li>Your business is the owner</li>
+              <li>Renewal details explained</li>
             </ul>
-            <p><strong>Possible fit</strong> when you want your own name and expect to handle the provider account and renewals yourself.</p>
+            <p><strong>Best if</strong> you want your own name and plan to handle renewals yourself.</p>
           </article>
 
           <article class="card reveal">
             <p class="card-kicker">Registration plus ongoing help</p>
-            <h3>Ask about a name with written upkeep.</h3>
-            <p>Registration and ongoing domain work are separate responsibilities. If both are available, the accepted scope states who controls the provider account, handles renewals and settings, receives notices, and approves changes.</p>
+            <h3>Register it and get ongoing help.</h3>
+            <p>I can help with renewals, settings, and website connections. Your quote says what I manage and what still needs your approval.</p>
             <ul class="pill-list">
-              <li>Separate written scope</li>
-              <li>Renewal duties named</li>
-              <li>Provider access named</li>
-              <li>Exit terms named</li>
+              <li>Renewal reminders</li>
+              <li>DNS and website help</li>
+              <li>Clear account access</li>
+              <li>Simple handoff if you leave</li>
             </ul>
-            <p><strong>Possible fit</strong> when you want ongoing help and the exact operating boundary can be agreed before work starts.</p>
+            <p><strong>Best if</strong> you want one person to help keep the domain connected and current.</p>
           </article>
 
           <article class="card reveal">
             <p class="card-kicker">Bring your own</p>
             <h3>Keep the name you have.</h3>
-            <p>Already own a domain? A written website or connection scope can keep it at your current provider and state the DNS changes, access required, verification evidence, and handoff boundary.</p>
+            <p>Already own a domain? Keep it where it is. I can connect it to your website and make the needed DNS changes with your approval.</p>
             <ul class="pill-list">
               <li>Nothing to transfer</li>
               <li>Keep your registrar</li>
-              <li>Changes stated first</li>
-              <li>Verification evidence</li>
+              <li>Changes explained first</li>
+              <li>Connection tested afterward</li>
             </ul>
             <p><strong>Best when</strong> you already have a name, or someone already manages it for you.</p>
           </article>
@@ -142,14 +145,14 @@
           <article class="card reveal">
             <p class="card-kicker">Site Sourcery address</p>
             <h3>your-name.sitesourcery.me</h3>
-            <p>Some Site Sourcery services may use an address on the Site Sourcery domain. That address is not a domain you own, and availability, service tier, lifecycle, and exit behavior must come from the accepted service terms.</p>
+            <p>Some Site Sourcery plans may include an address like this. You can use it while the plan is active, but Site Sourcery owns the main sitesourcery.me domain.</p>
             <ul class="pill-list">
-              <li>No registration claim</li>
-              <li>Service terms control</li>
-              <li>Site Sourcery-owned name</li>
-              <li>Customer content stays yours</li>
+              <li>No separate domain purchase</li>
+              <li>Included only when your plan says so</li>
+              <li>Your content stays yours</li>
+              <li>Easy to tell apart from a domain you own</li>
             </ul>
-            <p><strong>Possible fit</strong> when a platform address is included in a separately available Site Sourcery service.</p>
+            <p><strong>Best if</strong> you need a simple address included with a Site Sourcery service.</p>
           </article>
         </div>
       </div>
@@ -164,30 +167,30 @@
             <p class="overline">Who owns it</p>
             <h2 id="domains-ownership-title" data-customer-job="understand-domain-ownership">For a customer-owned domain, you remain the owner on record.</h2>
           </div>
-          <p>The plainest answer available, including the parts most people never tell you.</p>
+          <p>You should never have to wonder who owns your web address.</p>
         </div>
 
         <div class="split">
           <div class="reveal">
             <ul class="solution-list">
               <li><strong>The registrant is the customer.</strong> If Site Sourcery is authorized to register a customer-owned domain, your name or business goes on the registration as the registrant — not Site Sourcery's.</li>
-              <li><strong>Transfer is governed by the provider.</strong> Eligibility, locks, authorization codes, timing, and any provider charges are checked and stated; a transfer outcome or deadline is never guaranteed.</li>
-              <li><strong>Renewal terms must be explicit.</strong> The renewal cadence, exact renewal price, notices, and who is responsible are confirmed for the exact name and provider.</li>
-              <li><strong>Site Sourcery is not the registrar.</strong> Any accepted registration scope names the actual provider and the authority Site Sourcery has to act. Site Sourcery claims no special access to a registry.</li>
-              <li><strong>Registrant data goes only with authorization.</strong> Registration can require a name, address, email, and phone. You see what the provider requires and authorize its submission before it is sent.</li>
-              <li><strong>A platform address works differently.</strong> <code>your-name.sitesourcery.me</code> remains a name on the Site Sourcery domain. Its availability and lifecycle come from the separately accepted service terms, not a domain purchase.</li>
+              <li><strong>The domain company handles transfers.</strong> Locks, transfer codes, timing, and fees depend on that company. I check those details before work starts.</li>
+              <li><strong>You will know the renewal plan.</strong> I show the renewal price I can see, when it renews, and who is responsible for it.</li>
+              <li><strong>Site Sourcery is not the registrar.</strong> I use a domain company to register the name and tell you which company it is.</li>
+              <li><strong>You approve the information we send.</strong> Registration may need a name, address, email, and phone. I show you what is needed first.</li>
+              <li><strong>A Site Sourcery address is different.</strong> <code>your-name.sitesourcery.me</code> is part of a Site Sourcery plan, not a domain you own.</li>
             </ul>
           </div>
 
           <div class="card reveal">
             <p class="card-kicker">Before anything is bought</p>
             <ul class="pill-list">
-              <li>Exact price, in writing</li>
-              <li>What data goes to the registrar</li>
-              <li>The registrar's terms to read</li>
-              <li>Your say-so, recorded</li>
+              <li>The current price</li>
+              <li>The renewal price we can see</li>
+              <li>The information the domain company needs</li>
+              <li>Your clear approval</li>
             </ul>
-            <p>Domain availability and prices can change between checks. A fresh registrar result, exact provider and price, required data, renewal terms, and recorded authorization are required before any purchase. This page cannot accept payment.</p>
+            <p>Names and prices can change quickly. I check again right before purchase and buy only after you approve the details.</p>
           </div>
         </div>
       </div>
@@ -197,8 +200,8 @@
       <div class="site-shell quote-panel reveal">
         <p class="overline">Still deciding?</p>
         <h2 id="domains-help-title" data-customer-job="ask-about-domains">Not sure which address fits?</h2>
-        <p>Say the name of your business and whether you already own anything. Site Sourcery can confirm which help is currently available and, if registration work is offered, provide the exact provider result, scope, price, and terms before you decide.</p>
-        <p>Getting a website made too? A <a href="/custom/">custom build</a> can include connecting or setting up your address as part of the written scope, so the domain and the site are handled together.</p>
+        <p>Tell me your business name and whether you already own a domain. I will help you choose the simplest route and show the cost before you decide.</p>
+        <p>Getting a website made too? A <a href="/custom/">custom build</a> can include choosing and connecting the domain, so you do not have to coordinate two jobs.</p>
         <div class="hero-actions">
           <a class="button button-primary" href="/contact/" data-primary-action="ask-about-domains">Ask about a domain</a>
           <a class="button" href="/custom/">See custom builds</a>

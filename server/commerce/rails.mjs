@@ -15,9 +15,10 @@
  *
  * Provider objects exist for some offers, but provider configuration is not
  * release authority. `availability` is the explicit customer-entry gate:
- * account-only offers require the authenticated server flow, inquiry-only
- * offers require a written quote, held offers cannot be sold, and only a
- * public-checkout offer may place a Checkout link on the public artifact.
+ * account-only offers require the authenticated server flow, contact-to-start
+ * offers may be advertised and discussed but have no direct checkout,
+ * inquiry-only offers require a written quote, held offers cannot be sold, and
+ * only a public-checkout offer may place a Checkout link on the public artifact.
  *
  * THE STATIC-HOSTING CONSTRAINT
  *
@@ -63,6 +64,7 @@ export const RAIL_NEEDS_SERVER = Object.freeze({
 export const OFFER_AVAILABILITY = Object.freeze({
   PUBLIC_CHECKOUT: "public-checkout",
   ACCOUNT_ONLY: "account-only",
+  CONTACT_TO_START: "contact-to-start",
   INQUIRY_ONLY: "inquiry-only",
   HELD: "held"
 });
@@ -74,6 +76,7 @@ function rail({
   label,
   rail: railId,
   amountCents,
+  displayAmountsCents = [],
   interval = null,
   creditsForward = null,
   productRef = null,
@@ -91,13 +94,20 @@ function rail({
     { status: 500 }
   );
   invariant(
+    Array.isArray(displayAmountsCents)
+      && displayAmountsCents.every((amount) => Number.isSafeInteger(amount) && amount >= 0),
+    "invalid_rail",
+    `${id} display amounts must be exact non-negative minor units`,
+    { status: 500 }
+  );
+  invariant(
     OFFER_AVAILABILITY_VALUES.has(availability),
     "invalid_rail",
     `${id} must declare an explicit availability`,
     { status: 500 }
   );
   return Object.freeze({
-    id, label, rail: railId, amountCents, interval, creditsForward, productRef, priceRef, checkoutUrl,
+    id, label, rail: railId, amountCents, displayAmountsCents, interval, creditsForward, productRef, priceRef, checkoutUrl,
     availability, taxTreatment, note
   });
 }
@@ -177,13 +187,15 @@ export const SELLABLE = Object.freeze([
     label: "The Responder",
     rail: "billing",
     amountCents: null,
-    availability: OFFER_AVAILABILITY.HELD,
+    displayAmountsCents: [30_000, 25_000],
+    availability: OFFER_AVAILABILITY.CONTACT_TO_START,
     taxTreatment: "review_required",
     note:
-      "HELD. No setup or recurring price is public authority. Release requires "
-      + "proven telephony and A2P provisioning, delivery and opt-out handling, "
-      + "monitoring and operator recovery, exact lifecycle terms, billing and "
-      + "cancellation controls, and customer-visible end-to-end evidence."
+      "CONTACT TO START. The owner-approved public price is $300 setup plus "
+      + "$250 monthly. A customer may ask to begin a hands-on setup, but this "
+      + "record grants no direct Checkout, payment, phone-number, messaging, "
+      + "A2P, or other provider effect. Customer-specific terms, provisioning, "
+      + "testing, and approval are required before activation."
   }),
   rail({
     id: "custom.build",

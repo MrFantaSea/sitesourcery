@@ -10,16 +10,8 @@ import {
 
 const root = process.cwd();
 const errors = [];
-const HELD_ALAKAZAM_PRICE_DISCLOSURE =
-  "The planned $25, $35, and $50 Alakazam plans are not available.";
-const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
-  "faq/index.html",
-  "legal/website-terms/index.html",
-]);
 const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
-  "legal/privacy/index.html",
   "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
-  "legal/website-terms/index.html",
   "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
 ]);
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
@@ -190,7 +182,7 @@ const expectedOfferAvailability = {
   "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
   "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
   assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
-  responder: OFFER_AVAILABILITY.HELD,
+  responder: OFFER_AVAILABILITY.CONTACT_TO_START,
   "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
 };
 const actualOfferAvailability = Object.fromEntries(
@@ -315,28 +307,10 @@ const availabilityClaimRules = [
       /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
       /Alakazam is the service that keeps it and puts it online/iu,
       /Live at your own address/iu,
-      /\$25[^<\n]{0,40}(?:month|mo)\b/iu,
       /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
       /leaving costs nothing/iu,
       /Alakazam is (?:active|on)\b/iu,
     ],
-  },
-  {
-    id: "responder",
-    state: OFFER_AVAILABILITY.HELD,
-    label: "held Responder sale",
-    patterns: [
-      /\$300\s+setup/iu,
-      /\$250\s+(?:a|per)\s+month/iu,
-      /The Responder[^<\n]{0,80}texts them back/iu,
-      /Answers in seconds|Sent 4 seconds|Switch it off any time/iu,
-    ],
-  },
-  {
-    id: "domain.purchase",
-    state: OFFER_AVAILABILITY.INQUIRY_ONLY,
-    label: "inquiry-only domain sale",
-    patterns: [/Buy a domain/iu, /rent an address instead/iu],
   },
   {
     id: "assessment",
@@ -360,16 +334,28 @@ for (const [file, source] of Object.entries(files)) {
     }
   }
 }
+for (const file of [
+  "abracadabra/index.html",
+  "abracadabra/how/index.html",
+  "alakazam/index.html",
+  "faq/index.html",
+  "legal/website-terms/index.html",
+]) {
+  if (!files[file].match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
+    errors.push(`${file}: must plainly say that Alakazam sign-up or hosting is coming soon`);
+  }
+  forbidRegex(file, /Alakazam[^<\n]{0,100}\$25(?!\d)|\$25(?!\d)[^<\n]{0,100}Alakazam/iu, "unreleased Alakazam price");
+}
 
 const domainPage = files["domains/index.html"] ?? "";
 const domainSearch = await readFile(path.join(root, "domains/domain-search.js"), "utf8");
 for (const marker of [
-  "Domain registration is inquiry-only.",
-  "public-DNS preflight",
-  "This page cannot accept payment.",
+  "You approve the name and price before anything is bought.",
+  "It does not reserve the name or prove that it can be bought.",
+  "I check again right before purchase and buy only after you approve the details.",
 ]) {
   if (!domainPage.includes(marker)) {
-    errors.push(`domains/index.html: missing inquiry-only boundary ${JSON.stringify(marker)}`);
+    errors.push(`domains/index.html: missing customer purchase boundary ${JSON.stringify(marker)}`);
   }
 }
 for (const [sourceName, source, forbidden] of [
@@ -394,10 +380,6 @@ for (const marker of [
   if (!domainSearch.includes(marker)) {
     errors.push(`domains/domain-search.js: missing inquiry-only preflight boundary ${JSON.stringify(marker)}`);
   }
-}
-
-for (const file of publicHtmlFiles) {
-  forbidRegex(file, /\b(?:Host|Care Lite|Care Plus|Partner)\b[^<\n]{0,60}(?:\/mo|per month|\$\d)/i, "Care plan offer");
 }
 
 const assessment = publicCatalog.professionalServices?.find((service) =>
@@ -451,22 +433,15 @@ if (
       offer.amountCents !== null
       && offer.availability !== OFFER_AVAILABILITY.HELD
     ) allowedDollarDisplays.add(offer.amountCents / 100);
+    for (const amount of offer.displayAmountsCents ?? []) {
+      if (offer.availability !== OFFER_AVAILABILITY.HELD) {
+        allowedDollarDisplays.add(amount / 100);
+      }
+    }
   }
   const observedDisplays = [];
   for (const file of publicHtmlFiles) {
-    let source = files[file];
-    if (HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES.has(file)) {
-      const disclosureCount = source.split(
-        HELD_ALAKAZAM_PRICE_DISCLOSURE
-      ).length - 1;
-      if (disclosureCount !== 1) {
-        errors.push(
-          `${file}: held Alakazam price disclosure must appear exactly once; received ${disclosureCount}`
-        );
-      } else {
-        source = source.replace(HELD_ALAKAZAM_PRICE_DISCLOSURE, "");
-      }
-    }
+    const source = files[file];
     for (const match of source.matchAll(/\$\s?\d[\d,.]*/gu)) {
       observedDisplays.push(`${file}:${match[0].replace(/\s/gu, "")}`);
     }
@@ -497,5 +472,5 @@ if (errors.length) {
   for (const error of errors) console.error(`- ${error}`);
   process.exitCode = 1;
 } else {
-  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope records and public dollar copy match the private projection; all commerce offers have explicit availability; Domains is inquiry/preflight-only; checkout endpoints, Offer data, price-bearing attributes, and Care plan offers are absent.`);
+  console.log(`Pitch-safe catalog checks passed: ${publicCatalog.version}/${publicCatalog.tierCatalogId}/${publicCatalog.addonCatalogId}/${publicCatalog.careCatalogId} lineage verified; Custom scope and public dollar copy match approved records; every commerce offer has explicit availability; direct checkout, Offer data, and price-bearing attributes remain absent.`);
 }

@@ -11,16 +11,30 @@ const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(SCRIPT_DIRECTORY, "..");
 
 export const CUSTOMER_COPY_ROUTES = Object.freeze([
-  Object.freeze({ route: "/", file: "index.html", maxVisibleWords: 520, maxVisibleHeadings: 15 }),
-  Object.freeze({ route: "/custom/", file: "custom/index.html", maxVisibleWords: 450, maxVisibleHeadings: 10 }),
-  Object.freeze({ route: "/custom/scope/", file: "custom/scope/index.html", maxVisibleWords: 430, maxVisibleHeadings: 9 }),
-  Object.freeze({ route: "/custom/process/", file: "custom/process/index.html", maxVisibleWords: 490, maxVisibleHeadings: 13 }),
-  Object.freeze({ route: "/solutions/", file: "solutions/index.html", maxVisibleWords: 520, maxVisibleHeadings: 15 }),
-  Object.freeze({ route: "/work/", file: "work/index.html", maxVisibleWords: 390, maxVisibleHeadings: 10 }),
-  Object.freeze({ route: "/about/", file: "about/index.html", maxVisibleWords: 410, maxVisibleHeadings: 8 }),
-  Object.freeze({ route: "/faq/", file: "faq/index.html", maxVisibleWords: 270, maxVisibleHeadings: 6 }),
-  Object.freeze({ route: "/start/", file: "start/index.html", maxVisibleWords: 330, maxVisibleHeadings: 7 }),
-  Object.freeze({ route: "/contact/", file: "contact/index.html", maxVisibleWords: 330, maxVisibleHeadings: 7 }),
+  Object.freeze({ route: "/", file: "index.html", maxVisibleWords: 520, maxVisibleHeadings: 15, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/websites/", file: "websites/index.html", maxVisibleWords: 500, maxVisibleHeadings: 12, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/websites/made-for-you/", file: "websites/made-for-you/index.html", maxVisibleWords: 500, maxVisibleHeadings: 12, heroLinks: [1, 2] }),
+  Object.freeze({ route: "/custom/", file: "custom/index.html", maxVisibleWords: 500, maxVisibleHeadings: 10, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/custom/scope/", file: "custom/scope/index.html", maxVisibleWords: 450, maxVisibleHeadings: 9, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/custom/process/", file: "custom/process/index.html", maxVisibleWords: 500, maxVisibleHeadings: 13, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/abracadabra/", file: "abracadabra/index.html", maxVisibleWords: 330, maxVisibleHeadings: 8, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/abracadabra/how/", file: "abracadabra/how/index.html", maxVisibleWords: 520, maxVisibleHeadings: 18, heroLinks: [1, 2] }),
+  Object.freeze({ route: "/abracadabra/app/", file: "abracadabra/app/index.html", minVisibleWords: 40, maxVisibleWords: 950, maxVisibleHeadings: 18, heroLinks: [0, 1], requiresAudience: false, requiresOfferStatus: false }),
+  Object.freeze({ route: "/hive/", file: "hive/index.html", maxVisibleWords: 650, maxVisibleHeadings: 18, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/solutions/", file: "solutions/index.html", maxVisibleWords: 520, maxVisibleHeadings: 15, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/domains/", file: "domains/index.html", maxVisibleWords: 650, maxVisibleHeadings: 16, heroLinks: [1, 2] }),
+  Object.freeze({ route: "/work/", file: "work/index.html", maxVisibleWords: 390, maxVisibleHeadings: 10, heroLinks: [4, 4], requiresAudience: false, requiresOfferStatus: false }),
+  Object.freeze({ route: "/about/", file: "about/index.html", maxVisibleWords: 410, maxVisibleHeadings: 8, heroLinks: [1, 1], requiresOfferStatus: false }),
+  Object.freeze({ route: "/faq/", file: "faq/index.html", maxVisibleWords: 300, maxVisibleHeadings: 6, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/contact/", file: "contact/index.html", maxVisibleWords: 350, maxVisibleHeadings: 7, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/start/", file: "start/index.html", maxVisibleWords: 350, maxVisibleHeadings: 7, heroLinks: [1, 12] }),
+  Object.freeze({ route: "/legal/", file: "legal/index.html", maxVisibleWords: 280, maxVisibleHeadings: 8, heroLinks: [0, 0], requiresAudience: false, requiresOfferStatus: false }),
+  Object.freeze({ route: "/legal/privacy/", file: "legal/privacy/index.html", maxVisibleWords: 650, maxVisibleHeadings: 22, maxParagraphWords: 150, heroLinks: [0, 0], requiresAudience: false, requiresOfferStatus: false, legal: true }),
+  Object.freeze({ route: "/legal/website-terms/", file: "legal/website-terms/index.html", maxVisibleWords: 750, maxVisibleHeadings: 24, maxParagraphWords: 150, heroLinks: [0, 0], requiresAudience: false, requiresOfferStatus: false, legal: true }),
+  Object.freeze({ route: "/alakazam/", file: "alakazam/index.html", maxVisibleWords: 350, maxVisibleHeadings: 10, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/care/", file: "care/index.html", maxVisibleWords: 450, maxVisibleHeadings: 14, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/responder/", file: "responder/index.html", maxVisibleWords: 650, maxVisibleHeadings: 18, heroLinks: [1, 1] }),
+  Object.freeze({ route: "/services/", file: "services/index.html", maxVisibleWords: 450, maxVisibleHeadings: 12, heroLinks: [1, 1] }),
 ]);
 
 export const BANNED_CUSTOMER_COPY = Object.freeze([
@@ -35,6 +49,16 @@ export const BANNED_CUSTOMER_COPY = Object.freeze([
   Object.freeze({ label: "scope-receipt jargon", expression: /\bscope receipt\b/iu }),
   Object.freeze({ label: "commercial-terms jargon", expression: /\bcommercial terms\b/iu }),
   Object.freeze({ label: "route-inventory jargon", expression: /\broute inventory\b/iu }),
+  Object.freeze({ label: "internal held-state label", expression: /\bheld\b/iu }),
+  Object.freeze({ label: "inquiry-only label", expression: /\binquiry[ -]only\b/iu }),
+  Object.freeze({ label: "release-state jargon", expression: /\brelease state\b/iu }),
+  Object.freeze({ label: "effect-state jargon", expression: /\beffect state\b/iu }),
+  Object.freeze({ label: "provider-effects jargon", expression: /\bprovider effects?\b/iu }),
+  Object.freeze({ label: "customer-proof jargon", expression: /\bcustomer proof(?: journey)?\b/iu }),
+  Object.freeze({ label: "commercial-authority jargon", expression: /\bcommercial authority\b/iu }),
+  Object.freeze({ label: "bounded jargon", expression: /\bbounded\b/iu }),
+  Object.freeze({ label: "non-cash jargon", expression: /\bnon-cash\b/iu }),
+  Object.freeze({ label: "exact-scope jargon", expression: /\bexact scope\b/iu }),
 ]);
 
 const BLOCK_END = /<\/(?:address|article|aside|blockquote|dd|div|dl|dt|figcaption|figure|footer|h[1-6]|header|li|main|nav|ol|p|section|summary|ul)>/giu;
@@ -74,6 +98,17 @@ export function stripClosedDetails(source) {
   while (result !== previous) {
     previous = result;
     result = result.replace(closedDetails, "<summary>$1</summary>");
+  }
+  return result;
+}
+
+export function stripHiddenContent(source) {
+  let result = source;
+  let previous = "";
+  const hiddenElement = /<([a-z][a-z0-9-]*)\b(?=[^>]*\b(?:hidden|inert)(?:\s|=|>))[^>]*>[\s\S]*?<\/\1>/giu;
+  while (result !== previous) {
+    previous = result;
+    result = result.replace(hiddenElement, " ");
   }
   return result;
 }
@@ -127,7 +162,7 @@ function elements(source, name) {
 
 export function analyzeCustomerCopySource(file, source, routeConfig) {
   const main = mainHtml(source);
-  const visible = stripClosedDetails(main);
+  const visible = stripHiddenContent(stripClosedDetails(main));
   const fullText = htmlToText(main);
   const visibleText = htmlToText(visible);
   const visibleHeadings = ["h1", "h2", "h3"].flatMap((name) => elements(visible, name));
@@ -136,7 +171,7 @@ export function analyzeCustomerCopySource(file, source, routeConfig) {
   const heroCopy = firstSection.match(/<div\b[^>]*class="[^"]*hero-copy[^"]*"[^>]*>[\s\S]*?<\/div>/iu)?.[0]
     ?? firstSection;
   const heroText = htmlToText(firstSection);
-  const heroLinks = heroCopy.match(/<a\b/giu)?.length ?? 0;
+  const heroLinks = firstSection.match(/<a\b/giu)?.length ?? 0;
   const paragraphs = elements(main, "p");
   const h1s = elements(main, "h1");
   return {
@@ -161,8 +196,9 @@ export function validateCustomerCopyAnalysis(analysis, routeConfig) {
   if (analysis.h1s.length !== 1) {
     errors.push(`${prefix} expected exactly one h1; received ${analysis.h1s.length}`);
   }
-  if (analysis.visibleWords < MIN_VISIBLE_WORDS) {
-    errors.push(`${prefix} default-visible copy is too thin: ${analysis.visibleWords} words; minimum ${MIN_VISIBLE_WORDS}`);
+  const minimumVisibleWords = routeConfig.minVisibleWords ?? MIN_VISIBLE_WORDS;
+  if (analysis.visibleWords < minimumVisibleWords) {
+    errors.push(`${prefix} default-visible copy is too thin: ${analysis.visibleWords} words; minimum ${minimumVisibleWords}`);
   }
   if (analysis.visibleWords > routeConfig.maxVisibleWords) {
     errors.push(`${prefix} default-visible copy is too long: ${analysis.visibleWords} words; maximum ${routeConfig.maxVisibleWords}`);
@@ -173,13 +209,14 @@ export function validateCustomerCopyAnalysis(analysis, routeConfig) {
   if (analysis.visibleGrade > MAX_VISIBLE_GRADE) {
     errors.push(`${prefix} default-visible reading grade is ${analysis.visibleGrade}; maximum ${MAX_VISIBLE_GRADE}`);
   }
-  if (analysis.heroLinks !== 1) {
-    errors.push(`${prefix} first section must offer exactly one next-action link; received ${analysis.heroLinks}`);
+  const [minimumHeroLinks, maximumHeroLinks] = routeConfig.heroLinks ?? [1, 1];
+  if (analysis.heroLinks < minimumHeroLinks || analysis.heroLinks > maximumHeroLinks) {
+    errors.push(`${prefix} first section must offer ${minimumHeroLinks === maximumHeroLinks ? minimumHeroLinks : `${minimumHeroLinks}-${maximumHeroLinks}`} useful link${maximumHeroLinks === 1 ? "" : "s"}; received ${analysis.heroLinks}`);
   }
-  if (!/\b(?:business|businesses|owner|owners)\b/iu.test(analysis.heroText)) {
+  if (routeConfig.requiresAudience !== false && !/\b(?:business|businesses|owner|owners)\b/iu.test(analysis.heroText)) {
     errors.push(`${prefix} first section must say who the page is for`);
   }
-  if (!/\b(?:inquir|price|priced|quote|currently|works|paid)\w*/iu.test(analysis.heroText)) {
+  if (routeConfig.requiresOfferStatus !== false && !/(?:[$]\d+|\bfree\b|\bstart(?:s|ing)?\b|\bprice\w*|\bquote\w*|\bcurrent\w*|\bworks?\b|\bpaid\b|\bmonthly\b|\bplan\w*)/iu.test(analysis.heroText)) {
     errors.push(`${prefix} first section must state current price, quote, or availability status`);
   }
   for (const heading of analysis.allHeadings) {
@@ -188,10 +225,11 @@ export function validateCustomerCopyAnalysis(analysis, routeConfig) {
       errors.push(`${prefix} heading is ${count} words; maximum ${HEADING_WORD_LIMIT}: ${JSON.stringify(heading)}`);
     }
   }
+  const paragraphWordLimit = routeConfig.maxParagraphWords ?? PARAGRAPH_WORD_LIMIT;
   for (const paragraph of analysis.paragraphs) {
     const count = words(paragraph).length;
-    if (count > PARAGRAPH_WORD_LIMIT) {
-      errors.push(`${prefix} paragraph is ${count} words; maximum ${PARAGRAPH_WORD_LIMIT}: ${JSON.stringify(paragraph)}`);
+    if (count > paragraphWordLimit) {
+      errors.push(`${prefix} paragraph is ${count} words; maximum ${paragraphWordLimit}: ${JSON.stringify(paragraph)}`);
     }
   }
   for (const banned of BANNED_CUSTOMER_COPY) {
@@ -241,10 +279,14 @@ function printReport(analyses) {
 async function main() {
   const args = process.argv.slice(2);
   const reportOnly = args.includes("--report");
+  const rootIndex = args.indexOf("--root");
+  const requestedRoot = rootIndex >= 0 ? args[rootIndex + 1] : undefined;
+  if (rootIndex >= 0 && !requestedRoot) throw new Error("--root requires a directory");
+  const root = requestedRoot ? path.resolve(requestedRoot) : DEFAULT_ROOT;
   const refIndex = args.indexOf("--git-ref");
   const gitRef = refIndex >= 0 ? args[refIndex + 1] : undefined;
   if (refIndex >= 0 && !gitRef) throw new Error("--git-ref requires a value");
-  const result = await inspectCustomerCopy(DEFAULT_ROOT, { reportOnly, gitRef });
+  const result = await inspectCustomerCopy(root, { reportOnly, gitRef });
   printReport(result.analyses);
   if (!result.ok) {
     process.stderr.write(`Customer-copy checks failed (${result.errors.length}):\n`);

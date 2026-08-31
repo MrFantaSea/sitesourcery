@@ -52,11 +52,11 @@ export const HOSTED_PRIVACY_V3_CONTENT = Object.freeze({
   published: false,
   deployable: false,
   reviewArtifactSha256:
-    "d051b6fbf3191b59a86863ff673cd1571cf2b117c2f8ee51bcaa693cfb4f69dc",
-  reviewArtifactByteCount: 26_058,
+    "14ff3c20328cb3152622370e3e525fbcd2bf00dada3c533c60ce80f484bcc328",
+  reviewArtifactByteCount: 24_656,
   contentTemplateSha256:
-    "1f80e120f6edc8be6c989aa34de7f6f2a8bde3db5027b31c045d7d89b935a129",
-  contentTemplateByteCount: 25_827,
+    "6c50fa994db0e50113f22396b92e060301d8ed87168b9f2a83ad0f31a7988ab1",
+  contentTemplateByteCount: 24_418,
   approvalReceiptSha256: null,
   contentSealSha256: null,
 });
@@ -245,13 +245,13 @@ export function assertPrivacyV3CandidateSources({ root = process.cwd() } = {}) {
   if (
     occurrences(source, candidate.sourceStateMeta) !== 1
     || occurrences(source, candidate.sourceStateAttribute) !== 1
-    || !source.includes("Not effective — release identity pending")
-    || !source.includes("Privacy V3 clause-review source")
+    || !source.includes('<p class="card-kicker">Draft for review</p>')
+    || !source.includes("This draft is not effective or published yet.")
     || FINAL_PRIVACY_V3_FILE.test(candidate.currentFile)
     || /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u.test(source)
     || /<p class="card-kicker">Effective [A-Z][a-z]+ \d{1,2}, \d{4}<\/p>/u.test(source)
   ) {
-    throw new Error("privacy V3 candidate source contains sealed or ambiguous release identity");
+    throw new Error("privacy draft source contains sealed or ambiguous release identity");
   }
   return true;
 }

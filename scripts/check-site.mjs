@@ -46,16 +46,8 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CANONICAL_PHONE_DISPLAY = "(856) 244-1220";
 const CANONICAL_PHONE_TEL = "tel:+18562441220";
 const CANONICAL_MAILBOX = "sitesourcery@proton.me";
-const HELD_ALAKAZAM_PRICE_DISCLOSURE =
-  "The planned $25, $35, and $50 Alakazam plans are not available.";
-const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
-  "faq/index.html",
-  "legal/website-terms/index.html",
-]);
 const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
-  "legal/privacy/index.html",
   "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
-  "legal/website-terms/index.html",
   "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
 ]);
 
@@ -126,6 +118,7 @@ function catalogPrices(catalog, commerce) {
     buildAddons: catalog.buildAddons,
     architectureBands: catalog.architectureBands,
     migration: catalog.migration,
+    carePlans: catalog.carePlans,
     professionalServices: catalog.professionalServices,
   }, null);
   for (const offer of commerce.SELLABLE) {
@@ -133,6 +126,11 @@ function catalogPrices(catalog, commerce) {
       offer.amountCents !== null
       && offer.availability !== commerce.OFFER_AVAILABILITY.HELD
     ) amounts.add(offer.amountCents / 100);
+    for (const amount of offer.displayAmountsCents ?? []) {
+      if (offer.availability !== commerce.OFFER_AVAILABILITY.HELD) {
+        amounts.add(amount / 100);
+      }
+    }
   }
   return amounts;
 }
@@ -202,21 +200,7 @@ function checkContact(page, source) {
 }
 
 function checkPrices(page, source, allowed) {
-  let priceSource = source;
-  if (HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES.has(page)) {
-    const disclosureCount = source.split(
-      HELD_ALAKAZAM_PRICE_DISCLOSURE
-    ).length - 1;
-    if (disclosureCount !== 1) {
-      fail(
-        page,
-        `held Alakazam price disclosure must appear exactly once, found ${disclosureCount}`
-      );
-    } else {
-      priceSource = source.replace(HELD_ALAKAZAM_PRICE_DISCLOSURE, "");
-    }
-  }
-  for (const raw of priceSource.match(PRICE) ?? []) {
+  for (const raw of source.match(PRICE) ?? []) {
     const amount = Number(raw.replace(/[^\d.]/gu, ""));
     if (amount === 5 && SEALED_FIVE_DOLLAR_LEGAL_V5_FILES.has(page)) {
       continue;
@@ -242,28 +226,10 @@ function checkOfferClaims(page, source, commerce) {
         /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
         /Alakazam is the service that keeps it and puts it online/iu,
         /Live at your own address/iu,
-        /\$25[^<\n]{0,40}(?:month|mo)\b/iu,
         /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
         /leaving costs nothing/iu,
         /Alakazam is (?:active|on)\b/iu,
       ],
-    },
-    {
-      id: "responder",
-      state: commerce.OFFER_AVAILABILITY.HELD,
-      label: "held Responder sale",
-      patterns: [
-        /\$300\s+setup/iu,
-        /\$250\s+(?:a|per)\s+month/iu,
-        /The Responder[^<\n]{0,80}texts them back/iu,
-        /Answers in seconds|Sent 4 seconds|Switch it off any time/iu,
-      ],
-    },
-    {
-      id: "domain.purchase",
-      state: commerce.OFFER_AVAILABILITY.INQUIRY_ONLY,
-      label: "inquiry-only domain sale",
-      patterns: [/Buy a domain/iu, /rent an address instead/iu],
     },
     {
       id: "assessment",
@@ -282,6 +248,19 @@ function checkOfferClaims(page, source, commerce) {
       const match = source.match(pattern);
       if (match) fail(page, `contains ${rule.label} claim ${JSON.stringify(match[0])}`);
     }
+  }
+  if ([
+    "abracadabra/index.html",
+    "abracadabra/how/index.html",
+    "alakazam/index.html",
+    "faq/index.html",
+    "legal/website-terms/index.html",
+  ].includes(page)) {
+    if (!source.match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
+      fail(page, "must plainly say that Alakazam sign-up or hosting is coming soon");
+    }
+    const priceClaim = source.match(/Alakazam[^<\n]{0,100}\$25(?!\d)|\$25(?!\d)[^<\n]{0,100}Alakazam/iu);
+    if (priceClaim) fail(page, `contains unreleased Alakazam price ${JSON.stringify(priceClaim[0])}`);
   }
 }
 
@@ -448,7 +427,7 @@ async function checkRails(pagesSources, commerce, publicCatalog) {
     "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
     "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
     assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
-    responder: OFFER_AVAILABILITY.HELD,
+    responder: OFFER_AVAILABILITY.CONTACT_TO_START,
     "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
   };
   const actualOfferAvailability = Object.fromEntries(

@@ -83,35 +83,8 @@ const JOINT_LEGAL_CURRENT_FILES = Object.freeze([
   "legal/website-terms/index.html",
 ]);
 const FIN007_HOSTED_TRUTH_SLOTS = hostedTruthSlots;
-const FIN007_HELD_TRUTH_REQUIREMENTS = Object.freeze({
-  ...heldTruthRequirements,
-  "index.html": Object.freeze(
-    heldTruthRequirements["index.html"].map((phrase) => phrase ===
-      "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400."
-      ? "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350."
-      : phrase),
-  ),
-  "abracadabra/how/index.html": Object.freeze([
-    "Make your preview in six short steps.",
-    "Looking is free. The private Download and Alakazam payment paths remain held",
-    "Start building",
-  ]),
-});
-const FIN007_HOSTED_TRUTH_REQUIREMENTS = Object.freeze({
-  ...hostedTruthRequirements,
-  "index.html": Object.freeze(
-    hostedTruthRequirements["index.html"].map((phrase) => phrase ===
-      "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400."
-      ? "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350."
-      : phrase),
-  ),
-  "abracadabra/how/index.html": Object.freeze([
-    "Make your preview in six short steps.",
-    "Looking is free. Download is $20 once per saved editor project",
-    "Sign in only when you want to save the project, review its exact one-time $20 quote and delivery terms, and download the accepted HTML after payment.",
-    "Start building",
-  ]),
-});
+const FIN007_HELD_TRUTH_REQUIREMENTS = heldTruthRequirements;
+const FIN007_HOSTED_TRUTH_REQUIREMENTS = hostedTruthRequirements;
 const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   ...hostedStagingAssetSha256,
   "abracadabra/app/abracadabra-api.js":

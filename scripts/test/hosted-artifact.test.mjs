@@ -336,7 +336,8 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     path.join(ROOT, HOSTED_PRIVACY_V3_CANDIDATE.currentFile),
     "utf8",
   );
-  assert.match(privacySource, /Not effective — release identity pending/u);
+  assert.match(privacySource, /Draft for review/u);
+  assert.match(privacySource, /This draft is not effective or published yet\./u);
   assert.doesNotMatch(
     privacySource,
     /SS-HOSTED-PRIVACY-\d{4}-\d{2}-\d{2}-V3/u,
@@ -439,7 +440,7 @@ test("held Alakazam copy fragments and customer UI fail closed before release", 
   assert.equal(assertHostedAlakazamUiHeld(customerControl), true);
 });
 
-test("one hosted build emits sealed Legal V5, the exact $20 Download product copy, customer controls, and no retired product", async (t) => {
+test("one hosted build preserves sealed Legal V5 while non-legal pages use current customer offers", async (t) => {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-hosted-artifact-"));
   t.after(async () => rm(temporary, { recursive: true, force: true }));
   const output = path.join(temporary, "artifact");
@@ -643,7 +644,7 @@ test("one hosted build emits sealed Legal V5, the exact $20 Download product cop
   assert.match(app, /Sign in for the \$20 Download\./u);
   assert.match(
     app,
-    /Alakazam subscriptions and hosting activation remain held\./u,
+    /Alakazam hosting is coming soon\./u,
   );
   assert.doesNotMatch(
     app,
@@ -652,25 +653,17 @@ test("one hosted build emits sealed Legal V5, the exact $20 Download product cop
 
   const landing = sources.get("abracadabra/index.html");
   assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Free preview\. \$20 Download\. Alakazam plans held\./u);
+  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting coming soon/u);
   assert.match(
     landing,
-    /A signed-in account can save the project and buy its HTML Download once for \$20\./u,
+    /Sign in to save the project, then pay \$20 once to download the HTML file and use it anywhere you choose\./u,
   );
   assert.match(
     landing,
-    /Repeat downloads from that retained project do not require another Site Sourcery payment/u,
+    /Alakazam will put the page online at a Site Sourcery address and add more design controls\. Monthly sign-up is not open yet\./u,
   );
-  assert.match(
-    landing,
-    /the full \$20 is a one-time non-cash credit toward that account and project's first separately released Alakazam invoice\./u,
-  );
-  assert.match(
-    landing,
-    /Alakazam plans are in development\. Public subscriptions and hosting activation are held/u,
-  );
-  assert.match(landing, /<small>plans<\/small>held/u);
-  assert.match(landing, /class="kd-live"><i><\/i>Held<\/span>/u);
+  assert.match(landing, /<small>coming<\/small>soon/u);
+  assert.match(landing, /class="kd-live"><i><\/i>Coming soon<\/span>/u);
   assert.doesNotMatch(
     landing,
     /\$25|Keeps It Live|Live at your own address|comes off your first month|leaving costs nothing|class="kd-live"><i><\/i>Live<\/span>/iu,
@@ -680,7 +673,7 @@ test("one hosted build emits sealed Legal V5, the exact $20 Download product cop
   assert.doesNotMatch(guide, /http-equiv="refresh"/u);
   assert.match(guide, /rel="canonical" href="https:\/\/sitesourcery\.com\/abracadabra\/how\/"/u);
   assert.match(guide, /Make your preview in six short steps\./u);
-  assert.match(guide, /Looking is free\. Download is \$20 once per saved editor project/u);
+  assert.match(guide, /Making and testing the page is free\. Download the HTML for \$20\. Alakazam hosting is coming soon\./u);
 
   const faq = sources.get("faq/index.html");
   for (const anchor of [
@@ -694,26 +687,27 @@ test("one hosted build emits sealed Legal V5, the exact $20 Download product cop
   }
   assert.match(
     faq,
-    /Alakazam subscription sales and hosting activation remain held\./u,
+    /Alakazam self-service hosting is coming soon\./u,
   );
   assert.doesNotMatch(faq, /complete three-plan ladder is approved/iu);
-  assert.match(faq, /The Responder is also held: it sends no messages and this page cannot quote or start setup\./u);
+  assert.match(faq, /The Responder is \$300 to set up and \$250 a month\./u);
   assert.match(faq, /the final 50% becomes due after completion and before final handoff\./u);
   assert.match(faq, /It is not charged merely because completion was recorded\./u);
-  assert.doesNotMatch(faq, /The Responder answers missed calls with a text in seconds/u);
+  assert.doesNotMatch(faq, /\bheld\b|inquiry[- ]only/iu);
 
   const responder = await readFile(path.join(output, "responder/index.html"), "utf8");
   for (const phrase of [
-    "The Responder is not currently connected to a phone number, sending messages, or operating for customers.",
-    "No setup or monthly plan is for sale.",
-    "This is an inquiry page only.",
-    "The Responder remains held.",
+    "The Responder sends a quick text",
+    "$300 setup + $250 a month.",
+    "The $300 setup covers your call flow",
+    "The $250 monthly plan keeps the missed-call text-back running",
+    "schedule a hands-on installation",
   ]) {
     assert.ok(responder.includes(phrase), phrase);
   }
   assert.doesNotMatch(
     responder,
-    /\$300|\$250|within seconds|Texts in seconds|switch it off whenever you like/iu,
+    /\bheld\b|inquiry[- ]only|buy now|checkout/iu,
   );
 
   const privacy = sources.get("legal/privacy/index.html");
@@ -830,11 +824,11 @@ test("privacy V3 clause/layout review stays unsealed and outside production arti
     published: false,
     deployable: false,
     reviewArtifactSha256:
-      "d051b6fbf3191b59a86863ff673cd1571cf2b117c2f8ee51bcaa693cfb4f69dc",
-    reviewArtifactByteCount: 26_058,
+      "14ff3c20328cb3152622370e3e525fbcd2bf00dada3c533c60ce80f484bcc328",
+    reviewArtifactByteCount: 24_656,
     contentTemplateSha256:
-      "1f80e120f6edc8be6c989aa34de7f6f2a8bde3db5027b31c045d7d89b935a129",
-    contentTemplateByteCount: 25_827,
+      "6c50fa994db0e50113f22396b92e060301d8ed87168b9f2a83ad0f31a7988ab1",
+    contentTemplateByteCount: 24_418,
     approvalReceiptSha256: null,
     contentSealSha256: null,
   });
@@ -1410,7 +1404,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      "Saving and payment are unavailable here.",
+      "Account setup is coming next",
       "Use a changed account instruction",
     ),
     "utf8",
