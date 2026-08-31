@@ -31,9 +31,9 @@ function snapshot(overrides = {}) {
     lifecycleState: "payment_grace",
     retentionWindowId: null,
     retentionEndsAt: null,
-    commercialEffects: false,
-    providerEffects: false,
-    publicationEffects: false,
+    commercialEffects: true,
+    providerEffects: true,
+    publicationEffects: true,
     automaticRecoveryFromReversalEvidence: false,
     holdReason: ALAKAZAM_POLICY_HOLD_REASON,
     observedAt: "2026-08-10T12:00:00.000Z",
@@ -41,16 +41,17 @@ function snapshot(overrides = {}) {
   };
 }
 
-test("one canonical Alakazam authority preserves exact customer rights while held", () => {
+test("one canonical released Alakazam authority preserves exact customer rights", () => {
   assert.equal(
     ALAKAZAM_POLICY_AUTHORITY.policyId,
-    "SS-ALAKAZAM-POLICY-2026-08-10-V1"
+    "SS-ALAKAZAM-POLICY-2026-08-31-V2"
   );
-  assert.equal(ALAKAZAM_POLICY_AUTHORITY.state, "held");
+  assert.equal(ALAKAZAM_POLICY_AUTHORITY.state, "released");
+  assert.equal(ALAKAZAM_POLICY_AUTHORITY.holdReason, null);
   assert.deepEqual(ALAKAZAM_POLICY_AUTHORITY.effects, {
-    commercial: false,
-    provider: false,
-    publication: false,
+    commercial: true,
+    provider: true,
+    publication: true,
     automaticRecoveryFromReversalEvidence: false
   });
   assert.deepEqual(ALAKAZAM_POLICY_AUTHORITY.customerRights, {
@@ -71,11 +72,28 @@ test("one canonical Alakazam authority preserves exact customer rights while hel
     authority: "purpose_bound_separate_activation",
     stripeTaxCode: "txcd_10701100",
     taxBehavior: "exclusive",
-    collectionState: "held"
+    collectionState: "automatic"
+  });
+  assert.deepEqual(ALAKAZAM_POLICY_AUTHORITY.subscription, {
+    tiers: ["alakazam_25", "alakazam_35", "alakazam_50"],
+    billingModel: "stripe_subscription",
+    renewalEvidence: "exact_invoice_readback",
+    cancellationPolicyVersion:
+      "alakazam-cancellation.2026-08-31.v1",
+    cancellationEffectiveAt: "paid_through_boundary",
+    cancellationFeeMinor: 0,
+    cancellationRefundTreatment:
+      "no_partial_period_refund_or_proration",
+    cancellationRefundExceptions: [
+      "required_by_law",
+      "duplicate_or_unauthorized_charge",
+      "proven_service_failure"
+    ],
+    cancellationUndoTreatment: "resubscribe_separately"
   });
   assert.equal(
     ALAKAZAM_POLICY_AUTHORITY_DIGEST,
-    "8b7562daef4b3d91fff1bea04da5cdd982755b901e58f0e60a780fde17ce9bb1"
+    "145892e43ab6f4a03ebbed84fd148633f9a4de9727ce4294a0eb9b08f329c320"
   );
   assert.deepEqual(
     exactAlakazamPolicyAuthority(ALAKAZAM_POLICY_AUTHORITY),
@@ -87,7 +105,7 @@ test("canonical snapshots retain legacy evidence without creating authority", ()
   const grace = createAlakazamPolicySnapshot(snapshot());
   assert.equal(grace.lifecycleState, "payment_grace");
   assert.equal(grace.sourceSubscriptionRevision, 8);
-  assert.equal(grace.providerEffects, false);
+  assert.equal(grace.providerEffects, true);
   assert.equal(grace.automaticRecoveryFromReversalEvidence, false);
 
   const retained = createAlakazamPolicySnapshot(snapshot({
@@ -101,11 +119,12 @@ test("canonical snapshots retain legacy evidence without creating authority", ()
   assert.equal(retained.retentionWindowId, IDS.retentionWindowId);
 });
 
-test("expanded effects, reversal recovery, and incomplete retention fail closed", () => {
+test("reduced effects, reversal recovery, and incomplete retention fail closed", () => {
   for (const candidate of [
-    snapshot({ providerEffects: true }),
-    snapshot({ commercialEffects: true }),
-    snapshot({ publicationEffects: true }),
+    snapshot({ providerEffects: false }),
+    snapshot({ commercialEffects: false }),
+    snapshot({ publicationEffects: false }),
+    snapshot({ holdReason: "commercial_cutover_not_authorized" }),
     snapshot({ automaticRecoveryFromReversalEvidence: true }),
     snapshot({
       lifecycleState: "retained_exit",

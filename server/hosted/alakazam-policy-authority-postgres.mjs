@@ -8,7 +8,7 @@ import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 
 const RUNTIME_CONTRACT =
-  "canonical-alakazam-policy-authority-v1-held";
+  "canonical-alakazam-policy-authority-v2-released";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const DATABASE_CONFLICTS = new Set([
@@ -146,39 +146,39 @@ export function createPostgresAlakazamPolicyAuthorityRepository({
           { actorKind: "system", readOnly: true },
           (client) => client.query(`
             select
-              ss.hosted_alakazam_policy_authority_contract_v1() = $1
+              ss.hosted_alakazam_policy_authority_contract_v2() = $1
                 as contract_ready,
               policy.policy_id = $2
                 and policy.policy_digest = $3
-                and policy.state = 'held'
-                and not policy.commercial_effects
-                and not policy.provider_effects
-                and not policy.publication_effects
+                and policy.state = 'released'
+                and policy.commercial_effects
+                and policy.provider_effects
+                and policy.publication_effects
                 and not policy.automatic_recovery_from_reversal_evidence
                 as policy_ready,
               relation.relrowsecurity and relation.relforcerowsecurity
                 as rls_ready,
               has_table_privilege(
-                'service_role', 'ss.alakazam_policy_authorities', 'SELECT'
+                'service_role', 'ss.alakazam_policy_releases', 'SELECT'
               )
                 and not has_table_privilege(
-                  'service_role', 'ss.alakazam_policy_authorities',
+                  'service_role', 'ss.alakazam_policy_releases',
                   'INSERT,UPDATE,DELETE'
                 )
                 and has_table_privilege(
                   'service_role',
-                  'ss.alakazam_policy_subscription_authority_v1',
+                  'ss.alakazam_policy_subscription_authority_v2',
                   'SELECT'
                 )
                 and not has_table_privilege(
-                  'anon', 'ss.alakazam_policy_authorities', 'SELECT'
+                  'anon', 'ss.alakazam_policy_releases', 'SELECT'
                 )
                 and not has_table_privilege(
-                  'authenticated', 'ss.alakazam_policy_authorities', 'SELECT'
+                  'authenticated', 'ss.alakazam_policy_releases', 'SELECT'
                 ) as grants_ready
-            from ss.alakazam_policy_authorities policy
+            from ss.alakazam_policy_releases policy
             join pg_catalog.pg_class relation
-              on relation.oid = 'ss.alakazam_policy_authorities'::regclass
+              on relation.oid = 'ss.alakazam_policy_releases'::regclass
             where policy.policy_id = $2
           `, [
             RUNTIME_CONTRACT,
@@ -196,12 +196,12 @@ export function createPostgresAlakazamPolicyAuthorityRepository({
           schema: "sitesourcery.alakazam-policy-readiness/v1",
           ready,
           verified: ready,
-          state: "held",
+          state: "released",
           policyId: ALAKAZAM_POLICY_AUTHORITY_ID,
           authorityDigest: ALAKAZAM_POLICY_AUTHORITY_DIGEST,
-          commercialEffects: false,
-          providerEffects: false,
-          publicationEffects: false,
+          commercialEffects: true,
+          providerEffects: true,
+          publicationEffects: true,
           automaticRecoveryFromReversalEvidence: false,
           code: ready ? null : "ALAKAZAM_POLICY_NOT_READY"
         });
@@ -210,12 +210,12 @@ export function createPostgresAlakazamPolicyAuthorityRepository({
           schema: "sitesourcery.alakazam-policy-readiness/v1",
           ready: false,
           verified: false,
-          state: "held",
+          state: "released",
           policyId: ALAKAZAM_POLICY_AUTHORITY_ID,
           authorityDigest: ALAKAZAM_POLICY_AUTHORITY_DIGEST,
-          commercialEffects: false,
-          providerEffects: false,
-          publicationEffects: false,
+          commercialEffects: true,
+          providerEffects: true,
+          publicationEffects: true,
           automaticRecoveryFromReversalEvidence: false,
           code: "ALAKAZAM_POLICY_DATABASE_UNAVAILABLE"
         });
@@ -228,7 +228,7 @@ export function createPostgresAlakazamPolicyAuthorityRepository({
         async (client) => {
           const selected = await client.query(
             `select policy_document, policy_digest
-               from ss.alakazam_policy_authorities
+               from ss.alakazam_policy_releases
               where policy_id = $1`,
             [ALAKAZAM_POLICY_AUTHORITY_ID]
           );
@@ -258,7 +258,7 @@ export function createPostgresAlakazamPolicyAuthorityRepository({
         async (client) => {
           const selected = await client.query(
             `select *
-               from ss.alakazam_policy_subscription_authority_v1
+               from ss.alakazam_policy_subscription_authority_v2
               where organization_id = $1
                 and project_id = $2
                 and customer_user_id = $3
