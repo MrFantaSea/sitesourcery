@@ -180,54 +180,6 @@ export const hostedTruthSlots = Object.freeze([
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-save-gate.html",
     hostedSha256: "6ceb1308e30269dd42b74962505e758b480c1c0cff7a1011e76df1553472827e",
   }),
-  slot({
-    id: "legal-center-head",
-    file: "legal/index.html",
-    kind: "html",
-    sourceSha256: "9fd7eff931a705fa03bd061e90f24732c0ffcb760579a650a105fd3665a1a5c2",
-    hostedFragment: "scripts/hosted-truth/fragments/legal-center-head.html",
-    hostedSha256: "9784eae2dce22b8feaa51e7fad7438d05db8bbd7a2b6e56d898b45bb6aae863c",
-  }),
-  slot({
-    id: "legal-center-main",
-    file: "legal/index.html",
-    kind: "html",
-    sourceSha256: "bc6f70ab180b69c0ef57ef69662c5c07c31f2d8fa76731e7407e6cea6032d808",
-    hostedFragment: "scripts/hosted-truth/fragments/legal-center-main.html",
-    hostedSha256: "0e038f55bacdc46e68b07d54acb6cb53c0d27e4e00cc6f9fe11965b6766ac875",
-  }),
-  slot({
-    id: "legal-privacy-head",
-    file: "legal/privacy/index.html",
-    kind: "html",
-    sourceSha256: "f1bd804b78210d1cca0a367d7389fc243efe8fea9027d410d359a1270261b79a",
-    hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-head.html",
-    hostedSha256: "c02671d601e8a04856f8b5e45efc72206e48d26d128aa52d2ab3b5ff070b61fc",
-  }),
-  slot({
-    id: "legal-privacy-main",
-    file: "legal/privacy/index.html",
-    kind: "html",
-    sourceSha256: "40a509b4689ee4a86849efe1e3deec1bd439e9ab012b7d9b56f15574b0ba78f7",
-    hostedFragment: "scripts/hosted-truth/fragments/legal-privacy-main.html",
-    hostedSha256: "14e0239c3a3f7eeb7d4012ba628badb63adc4989be3c1a8b36f46ad5649c402a",
-  }),
-  slot({
-    id: "legal-website-terms-head",
-    file: "legal/website-terms/index.html",
-    kind: "html",
-    sourceSha256: "680d185c111b5ae73031ece804cd5ef9b1b86bb0d307e102bbf405d9829d7900",
-    hostedFragment: "scripts/hosted-truth/fragments/legal-website-terms-head.html",
-    hostedSha256: "feb4592b77c29faa4248ead162e74f2104667321483b47669f4cad59704197f6",
-  }),
-  slot({
-    id: "legal-website-terms-main",
-    file: "legal/website-terms/index.html",
-    kind: "html",
-    sourceSha256: "413bfd52919fab08f7fd28015ff38ab865be472844d7f5fdd996b8baa0fb329e",
-    hostedFragment: "scripts/hosted-truth/fragments/legal-website-terms-main.html",
-    hostedSha256: "55b17c3584a5bd7b46c940a90ae19053747e223dd176d0ee6b31f5fea1cac7c3",
-  }),
 ]);
 
 export const hostedStagingAssetSha256 = Object.freeze({
@@ -382,41 +334,11 @@ export const heldTruthRequirements = Object.freeze({
     "Alakazam hosting is $25, $35, or $50 a month",
     "$300 to set up and $250 a month",
   ]),
-  "legal/index.html": Object.freeze([
-    "These pages cover the public website and Site Sourcery tools.",
-  ]),
-  "legal/privacy/index.html": Object.freeze([
-    "Draft for review",
-    "This draft is not effective or published yet.",
-    "Saving a project or using its $20 Download requires sign-in.",
-    "The public Responder page does not send a text or collect caller information.",
-  ]),
-  "legal/website-terms/index.html": Object.freeze([
-    "Draft for review",
-    "This draft is not effective or published yet.",
-    "A completed one-time $20 payment unlocks Download for one saved project.",
-    "The one-time $300 setup and separate $250 monthly service begin only under a customer agreement.",
-  ]),
 });
 
 export const heldTruthForbiddenPhrases = Object.freeze({
   "faq/index.html": Object.freeze([
     "Alakazam’s complete three-plan ladder is approved",
-  ]),
-  "legal/privacy/index.html": Object.freeze([
-    "SS-HOSTED-PRIVACY-2026-07-30-V2",
-  ]),
-  "legal/website-terms/index.html": Object.freeze([
-    "SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2",
-    "$5 once per editor project unlocks Download for that project.",
-    "A different editor project has its own one-time $5 Download unlock.",
-    "The customer may modify it and self-host it without another Site Sourcery payment.",
-    "Make temporary versions, preview them, and download chosen HTML.",
-    "open a working preview, and download a chosen self-contained HTML file.",
-    "The browser may process, compile, display, and download that material on the customer’s device",
-    "Alakazam has three plans",
-    "has an approved three-plan ladder",
-    "difference-only upgrade rule",
   ]),
 });
 
@@ -444,21 +366,6 @@ export const hostedTruthRequirements = Object.freeze({
   "faq/index.html": Object.freeze([
     "Alakazam hosting is $25, $35, or $50 a month",
     "$300 to set up and $250 a month",
-  ]),
-  "legal/index.html": Object.freeze([
-    "These pages cover the public website and Site Sourcery tools.",
-  ]),
-  "legal/privacy/index.html": Object.freeze([
-    "Draft for review",
-    "This draft is not effective or published yet.",
-    "Saving a project or using its $20 Download requires sign-in.",
-    "The public Responder page does not send a text or collect caller information.",
-  ]),
-  "legal/website-terms/index.html": Object.freeze([
-    "Draft for review",
-    "This draft is not effective or published yet.",
-    "A completed one-time $20 payment unlocks Download for one saved project.",
-    "The one-time $300 setup and separate $250 monthly service begin only under a customer agreement.",
   ]),
 });
 

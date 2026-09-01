@@ -91,7 +91,7 @@ export function createBrowserAuditArtifactPlan({
   const explicitRoot = argumentRoot || environmentRoot;
   if (!explicitRoot) {
     return Object.freeze({
-      mode: "held-build",
+      mode: "current-build",
       siteRoot: absoluteSiteRoot,
       outputRoot: null,
       hostedRoot: path.join(absoluteSiteRoot, "_hosted"),
@@ -408,7 +408,7 @@ export async function prepareBrowserAuditArtifact({
   buildHostedArtifactImpl = buildHostedArtifact,
   verifyHostedArtifactImpl = verifyHostedArtifact,
 } = {}) {
-  if (!plan || plan.mode === "held-build") {
+  if (!plan || plan.mode === "current-build") {
     if (!plan) throw new Error("browser audit artifact plan is required");
     const builtRoot = await buildHostedArtifactImpl({
       root: plan.siteRoot,

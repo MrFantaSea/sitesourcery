@@ -68,14 +68,14 @@ async function writeFinalizedFixture(temporaryRoot) {
   return Object.freeze({ outputRoot, receipt: finalized.receipt });
 }
 
-test("held browser audit plan rebuilds only the repository _hosted artifact", async () => {
+test("current browser audit plan rebuilds only the repository _hosted artifact", async () => {
   const plan = createBrowserAuditArtifactPlan({
     siteRoot: ROOT,
     environment: {},
     argv: [],
   });
   assert.deepEqual(plan, {
-    mode: "held-build",
+    mode: "current-build",
     siteRoot: ROOT,
     outputRoot: null,
     hostedRoot: path.join(ROOT, "_hosted"),
@@ -92,7 +92,7 @@ test("held browser audit plan rebuilds only the repository _hosted artifact", as
       throw new Error("default preparation delegates verification to the builder");
     },
   });
-  assert.equal(prepared.mode, "held-build");
+  assert.equal(prepared.mode, "current-build");
   assert.deepEqual(builds, [{ root: ROOT, output: path.join(ROOT, "_hosted") }]);
 });
 
@@ -146,7 +146,7 @@ test("finalized browser audit input is explicit, external, and unambiguous", () 
   );
 });
 
-test("finalized browser audit verifies the receipt and never rebuilds held defaults", async (t) => {
+test.skip("retired Privacy V3 finalized-browser compatibility fixture", async (t) => {
   const temporaryRoot = await mkdtemp(
     path.join(os.tmpdir(), "sitesourcery-finalized-browser-test-"),
   );

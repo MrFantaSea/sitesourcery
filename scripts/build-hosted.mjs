@@ -50,10 +50,14 @@ import {
   PAGES_JOINT_LEGAL_V3_ROOT,
 } from "./hosted-truth/pages-legal-v4.mjs";
 import {
-  assertPagesJointLegalV5Artifact,
   createPagesJointLegalV5Plan,
   pagesLegalV5Files,
 } from "./hosted-truth/pages-legal-v5.mjs";
+import {
+  assertPagesJointLegalV7Artifact,
+  createPagesJointLegalV7Plan,
+  pagesLegalV7Files,
+} from "./hosted-truth/pages-legal-v7.mjs";
 
 const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
@@ -405,19 +409,19 @@ function hostedFilesForPlans(
   privacyV3Plan,
   jointLegalV3Plan,
   jointLegalV4Plan,
-  jointLegalV5Plan,
+  jointLegalV7Plan,
 ) {
   const legalPlans = [
     jointLegalV3Plan,
     jointLegalV4Plan,
-    jointLegalV5Plan,
+    jointLegalV7Plan,
   ].filter(Boolean);
   if ((privacyV3Plan && legalPlans.length > 0) || legalPlans.length > 1) {
     throw new Error("legal rendering and finalization inputs are mutually exclusive");
   }
   if (legalPlans.length === 0) return hostedFilesForPrivacyV3Plan(privacyV3Plan);
-  if (jointLegalV5Plan) {
-    return pagesLegalV5Files(hostedFileAllowlist, jointLegalV5Plan);
+  if (jointLegalV7Plan) {
+    return pagesLegalV7Files(hostedFileAllowlist, jointLegalV7Plan);
   }
   return Object.freeze([
     ...new Set([
@@ -446,6 +450,13 @@ export function hostedFilesForJointLegalV5({
   root = process.cwd(),
 } = {}) {
   const plan = createPagesJointLegalV5Plan({ root: path.resolve(root) });
+  return pagesLegalV5Files(hostedFileAllowlist, plan);
+}
+
+export function hostedFilesForJointLegalV7({
+  root = process.cwd(),
+} = {}) {
+  const plan = createPagesJointLegalV7Plan({ root: path.resolve(root) });
   return hostedFilesForPlans(null, null, null, plan);
 }
 
@@ -993,7 +1004,7 @@ async function writeHostedArtifact({
   privacyV3Plan,
   jointLegalV3Plan,
   jointLegalV4Plan,
-  jointLegalV5Plan,
+  jointLegalV7Plan,
   artifactFiles,
 }) {
   const jointLegalPlan = jointLegalV4Plan ?? jointLegalV3Plan;
@@ -1005,9 +1016,9 @@ async function writeHostedArtifact({
   for (const file of artifactFiles) {
     const destination = path.join(staging, ...file.split("/"));
     await mkdir(path.dirname(destination), { recursive: true });
-    const finalizedV5Source = jointLegalV5Plan?.sourceByFile.get(file);
-    if (finalizedV5Source) {
-      await copyFile(finalizedV5Source, destination);
+    const finalizedV7Source = jointLegalV7Plan?.sourceByFile.get(file);
+    if (finalizedV7Source) {
+      await copyFile(finalizedV7Source, destination);
       continue;
     }
     const finalizedLegalArtifact = jointLegalPlan?.artifacts.find(
@@ -1180,24 +1191,24 @@ export async function verifyHostedArtifact({
     jointLegalV4FinalizationRoot,
     absoluteRoot,
   );
-  const jointLegalV5Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
+  const jointLegalV7Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
     ? null
-    : createPagesJointLegalV5Plan({ root: absoluteRoot });
+    : createPagesJointLegalV7Plan({ root: absoluteRoot });
   const artifactFiles = hostedFilesForPlans(
     privacyV3Plan,
     jointLegalV3Plan,
     jointLegalV4Plan,
-    jointLegalV5Plan,
+    jointLegalV7Plan,
   );
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
-  assertPrivacyV3CandidateSources({ root: absoluteRoot });
+  if (privacyV3Plan) assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputState = await lstat(absoluteOutput);
   if (!outputState.isDirectory() || outputState.isSymbolicLink()) {
     throw new Error(`hosted artifact must be a real directory: ${absoluteOutput}`);
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
-  if (jointLegalV5Plan) {
-    assertPagesJointLegalV5Artifact(absoluteOutput, jointLegalV5Plan);
+  if (jointLegalV7Plan) {
+    assertPagesJointLegalV7Artifact(absoluteOutput, jointLegalV7Plan);
   } else if (jointLegalV3Plan || jointLegalV4Plan) {
     await assertJointLegalArtifact(
       absoluteOutput,
@@ -1282,7 +1293,7 @@ export async function verifyHostedArtifact({
     ),
   );
   const applicableTruthRequirements = (
-    jointLegalV3Plan || jointLegalV4Plan || jointLegalV5Plan
+    jointLegalV3Plan || jointLegalV4Plan || jointLegalV7Plan
   )
     ? Object.fromEntries(
       Object.entries(FIN007_HOSTED_TRUTH_REQUIREMENTS).filter(
@@ -1423,9 +1434,9 @@ export async function buildHostedArtifact({
     jointLegalV4FinalizationRoot,
     absoluteRoot,
   );
-  const jointLegalV5Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
+  const jointLegalV7Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
     ? null
-    : createPagesJointLegalV5Plan({ root: absoluteRoot });
+    : createPagesJointLegalV7Plan({ root: absoluteRoot });
   if (
     (privacyV3Plan || jointLegalV3Plan)
     && absoluteOutput === path.join(absoluteRoot, "_hosted")
@@ -1436,10 +1447,10 @@ export async function buildHostedArtifact({
     privacyV3Plan,
     jointLegalV3Plan,
     jointLegalV4Plan,
-    jointLegalV5Plan,
+    jointLegalV7Plan,
   );
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
-  assertPrivacyV3CandidateSources({ root: absoluteRoot });
+  if (privacyV3Plan) assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const rootState = await lstat(absoluteRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) {
     throw new Error(`site root must be a real directory: ${absoluteRoot}`);
@@ -1468,7 +1479,7 @@ export async function buildHostedArtifact({
       privacyV3Plan,
       jointLegalV3Plan,
       jointLegalV4Plan,
-      jointLegalV5Plan,
+      jointLegalV7Plan,
       artifactFiles,
     });
     await verifyHostedArtifact({
