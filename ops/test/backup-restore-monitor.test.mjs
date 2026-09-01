@@ -2327,6 +2327,14 @@ test("operations candidates keep independent approvals and provider egress holds
       .replace(
         /^SITESOURCERY_HOSTED_WEBSITE_TERMS_V5_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/website-terms\/versions\/SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5\/$/gmu,
         ""
+      )
+      .replace(
+        /^SITESOURCERY_HOSTED_PRIVACY_V7_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/privacy\/versions\/SS-HOSTED-PRIVACY-2026-08-31-V7\/$/gmu,
+        ""
+      )
+      .replace(
+        /^SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_(?:URI|ARTIFACT_URI)=https:\/\/sitesourcery\.com\/legal\/website-terms\/versions\/SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7\/$/gmu,
+        ""
       );
     assert.match(
       environment,

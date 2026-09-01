@@ -4377,3 +4377,47 @@ test("migration 148 adds separate released publication authority and leased exec
     /update\s+ss\.publication_control_commands|delete\s+from\s+ss\.publication_control_commands|publishProject|stripe\.|grant all privileges/iu
   );
 });
+
+test("migration 149 installs exact Legal V7 while preserving every prior legal receipt", async () => {
+  const migration = (await migrations()).find(
+    ({ name }) => name ===
+      "202608310149_hosted_joint_legal_v7_authority.sql"
+  );
+  assert.ok(migration, "missing Legal V7 migration 149");
+  assert.match(migration.sql, /\bbegin;[\s\S]*commit;\s*$/iu);
+  for (const identity of [
+    "SS-HOSTED-PRIVACY-2026-08-31-V7",
+    "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7",
+    "2026-09-01T04:00:00.000Z",
+    "b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b",
+    "00000000-0000-4000-8000-000000000152",
+    "00000000-0000-4000-8000-000000000153",
+    "00000000-0000-4000-8000-000000000154"
+  ]) {
+    assert.match(migration.sql, new RegExp(identity.replaceAll(".", "\\."), "u"));
+  }
+  assert.match(
+    migration.sql,
+    /project_legal_acceptance_receipts_schema_version_v7_check[\s\S]*project-legal-acceptance\/v3[\s\S]*project-legal-acceptance\/v4[\s\S]*project-legal-acceptance\/v5[\s\S]*project-legal-acceptance\/v7/iu
+  );
+  assert.match(
+    migration.sql,
+    /customer_engagement_invitations_legal_schema_v7_check[\s\S]*project-legal-acceptance\/v4[\s\S]*project-legal-acceptance\/v5[\s\S]*project-legal-acceptance\/v7/iu
+  );
+  assert.match(
+    migration.sql,
+    /validate_project_legal_acceptance_receipt\(\)[\s\S]*project-legal-acceptance\/v3[\s\S]*project-legal-acceptance\/v4[\s\S]*project-legal-acceptance\/v5[\s\S]*project-legal-acceptance\/v7/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_joint_legal_v7_history_fingerprint[\s\S]*Legal V7 integration rewrote retained evidence/iu
+  );
+  assert.match(
+    migration.sql,
+    /hosted_joint_legal_v7_contract\(\)[\s\S]*canonical-hosted-joint-legal-v7-authority[\s\S]*grant execute on function ss\.hosted_joint_legal_v7_contract\(\)\s+to service_role/iu
+  );
+  assert.doesNotMatch(
+    migration.sql,
+    /deploymentAuthorized\s*=\s*true|provider_effects_authorized\s*=\s*true|publication_state\s*=\s*'live'|update\s+ss\.legal_documents|delete\s+from\s+ss\.legal_documents/iu
+  );
+});

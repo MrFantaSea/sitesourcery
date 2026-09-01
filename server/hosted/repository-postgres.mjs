@@ -288,7 +288,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
   select
     case when to_regprocedure('ss.hosted_runtime_contract_v48()') is null
       or to_regprocedure('ss.hosted_runtime_contract_v53()') is null
-      or to_regprocedure('ss.hosted_joint_legal_v5_contract()') is null
+      or to_regprocedure('ss.hosted_joint_legal_v7_contract()') is null
       or to_regprocedure('ss.project_legal_json_digest(jsonb)') is null
       then false else exists (
         select 1 from pg_proc procedure_row
@@ -345,14 +345,14 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
       ) and exists (
         select 1 from pg_proc procedure_row
          where procedure_row.oid =
-           to_regprocedure('ss.hosted_joint_legal_v5_contract()')
+           to_regprocedure('ss.hosted_joint_legal_v7_contract()')
            and procedure_row.prokind = 'f'
            and procedure_row.pronargs = 0
            and procedure_row.provolatile = 's'
            and not procedure_row.prosecdef
            and procedure_row.prorettype = 'text'::regtype
            and btrim(procedure_row.prosrc, E' \\t\\n\\r') =
-             'select ''canonical-hosted-joint-legal-v5-authority'''
+             'select ''canonical-hosted-joint-legal-v7-authority'''
            and not exists (
              select 1
                from aclexplode(coalesce(
@@ -691,7 +691,7 @@ const PROJECT_LEGAL_CATALOG_QUERY = `
             ('UNIQUE (project_id, request_id)'),
             ('FOREIGN KEY (user_id) REFERENCES auth.users(id)'),
             ('FOREIGN KEY (organization_id, project_id) REFERENCES ss.projects(organization_id, id)'),
-            ('CHECK ((schema_version = ANY (ARRAY[''sitesourcery.project-legal-acceptance/v3''::text, ''sitesourcery.project-legal-acceptance/v4''::text, ''sitesourcery.project-legal-acceptance/v5''::text])))'),
+            ('CHECK ((schema_version = ANY (ARRAY[''sitesourcery.project-legal-acceptance/v3''::text, ''sitesourcery.project-legal-acceptance/v4''::text, ''sitesourcery.project-legal-acceptance/v5''::text, ''sitesourcery.project-legal-acceptance/v7''::text])))'),
             ('CHECK ((acceptance_statement = ''accepted_exact_project_terms_and_acknowledged_privacy''::text))')
           ) expected(definition)
           left join pg_namespace namespace on namespace.nspname = 'ss'
@@ -967,8 +967,8 @@ const PROJECT_LEGAL_DATA_QUERY = `
       'canonical-ss-v48-hosted-joint-legal-v3'
     and ss.hosted_runtime_contract_v53() =
       'canonical-ss-v53-joint-legal-v4-authority'
-    and ss.hosted_joint_legal_v5_contract() =
-      'canonical-hosted-joint-legal-v5-authority'
+    and ss.hosted_joint_legal_v7_contract() =
+      'canonical-hosted-joint-legal-v7-authority'
       as contract_marker_ready,
     (
       select count(*) = 2
@@ -1062,8 +1062,8 @@ const PROJECT_LEGAL_CONSTANTS_QUERY = `
       'canonical-ss-v48-hosted-joint-legal-v3'
     and ss.hosted_runtime_contract_v53() =
       'canonical-ss-v53-joint-legal-v4-authority'
-    and ss.hosted_joint_legal_v5_contract() =
-      'canonical-hosted-joint-legal-v5-authority'
+    and ss.hosted_joint_legal_v7_contract() =
+      'canonical-hosted-joint-legal-v7-authority'
       as contract_marker_ready,
     (
       select count(*) = 3

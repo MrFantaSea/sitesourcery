@@ -36,6 +36,12 @@
       acceptance: "sitesourcery.project-legal-acceptance/v5",
       privacy: /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V5$/u,
       website: /^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V5$/u
+    }),
+    v7: Object.freeze({
+      authority: "sitesourcery.project-legal-authority/v7",
+      acceptance: "sitesourcery.project-legal-acceptance/v7",
+      privacy: /^SS-HOSTED-PRIVACY-[0-9]{4}-[0-9]{2}-[0-9]{2}-V7$/u,
+      website: /^SS-HOSTED-WEBSITE-TERMS-[0-9]{4}-[0-9]{2}-[0-9]{2}-V7$/u
     })
   });
   var PROJECT_LEGAL_ACCEPTANCE_STATEMENT =
