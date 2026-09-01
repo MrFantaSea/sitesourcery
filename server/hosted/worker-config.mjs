@@ -11,6 +11,7 @@ export const WORKER_PURPOSES = Object.freeze([
   "cancellation",
   "notification-mail",
   "alakazam-fulfillment",
+  "alakazam-publication",
   "alakazam-retained-lifecycle",
   "responder-fulfillment",
   "provider-reconciliation",

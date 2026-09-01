@@ -757,7 +757,7 @@ test("enhancement is idempotent", () => {
   assert.equal(controls[0].listeners.get("click").length, listenerCount);
 });
 
-test("dormant planner copy stays customer-readable while the public page stays held", () => {
+test("planner copy stays customer-readable while the public page stays conversation-only", () => {
   const planner = loadPlanner();
   const customerCopy = planner.cells
     .flatMap((cell) => Object.values(cell.customer))
@@ -780,27 +780,28 @@ test("dormant planner copy stays customer-readable while the public page stays h
     true
   );
   for (const phrase of [
-    "The Responder · held",
-    "No setup or monthly plan is for sale.",
-    "No live telephony",
-    "Human handoff required",
-    "This is a design description, not a running workflow.",
+    "Turn one stuck task into a simple plan.",
+    "Nothing starts on this page",
+    "Your choice only changes this page. It is not saved or sent.",
+    "This page cannot place an order or start work.",
+    "Nothing here orders work, saves customer data, changes another tool, or starts a service.",
   ]) {
-    assert.ok(HTML.includes(phrase), phrase);
+    assert.ok(LEGACY_HTML.includes(phrase), phrase);
   }
   assert.doesNotMatch(HTML, /hive-planner\.js|data-hive-planner/iu);
 });
 
-test("the public Responder experience is inquiry-only and cannot start work", () => {
+test("the public Responder experience is contact-to-start at the approved price", () => {
   const main = HTML.match(/<main\b[\s\S]*?<\/main>/u)?.[0];
   assert.ok(main);
 
   for (const phrase of [
-    "The Responder is not currently connected to a phone number",
-    "No setup or monthly plan is for sale.",
-    "A call or email can record your question; it cannot activate The Responder",
-    "I will not quote, invoice, accept payment for, or start a Responder installation",
-    "The Responder remains held.",
+    "The Responder sends a quick text",
+    "$300 setup + $250 a month.",
+    "Know the cost before setup starts.",
+    "The $300 setup covers your call flow",
+    "The $250 monthly plan keeps the missed-call text-back running",
+    "schedule a hands-on installation",
   ]) {
     assert.ok(main.includes(phrase), phrase);
   }
@@ -814,8 +815,7 @@ test("the public Responder experience is inquiry-only and cannot start work", ()
     /\bbuy now\b/iu,
     /\bsubscribe\b/iu,
     /\badd to cart\b/iu,
-    /\bcreate an account\b/iu,
-    /\bsign up\b/iu,
+    /\bcheckout\b/iu,
   ]) {
     assert.doesNotMatch(visibleCopy, pattern);
   }
@@ -827,6 +827,7 @@ test("the public Responder experience is inquiry-only and cannot start work", ()
   );
   assert.ok(hrefs.includes("tel:+18562441220"));
   assert.ok(hrefs.includes("mailto:sitesourcery@proton.me"));
+  assert.doesNotMatch(main, /\bheld\b|inquiry[- ]only/iu);
   assert.doesNotMatch(main, /<button\b|data-hive-(?:back|cell|download|next|pause)/iu);
 });
 
@@ -840,7 +841,7 @@ test("the canonical Hive route is a local-only conversation guide", () => {
   assert.equal((LEGACY_HTML.match(/data-hive-noscript-cell=/gu) || []).length, 6);
   assert.equal((LEGACY_HTML.match(/data-hive-stage="[1-5]"/gu) || []).length, 5);
   assert.match(LEGACY_HTML, /Your choice only changes this page\. It is not saved or sent\./u);
-  assert.match(LEGACY_HTML, /cannot place an order, reserve time, or start anything/u);
+  assert.match(LEGACY_HTML, /This page cannot place an order or start work\./u);
 });
 
 test("contains no network, persistence, markup-injection, or payment API", () => {

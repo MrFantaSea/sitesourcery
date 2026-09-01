@@ -11,8 +11,8 @@ const customerControl = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
 
-test("the hosted customer surface keeps Alakazam held", () => {
-  assert.equal(customerControl.alakazamPublicOfferState, "held");
+test("the hosted customer surface releases Alakazam", () => {
+  assert.equal(customerControl.alakazamPublicOfferState, "released");
 });
 
 const PROJECT_ID =
@@ -28,6 +28,109 @@ const PRIOR_RELEASE_ID =
   "32000000-0000-4000-8000-000000000002";
 const PRIOR_VERSION_ID =
   "31000000-0000-4000-8000-000000000002";
+
+test("the customer verifies the exact Alakazam cancellation request result", () => {
+  const disclosureDigest = "9".repeat(64);
+  const result = {
+    schema: "sitesourcery.alakazam-cancellation-request/v1",
+    status: "provider_confirmation_pending",
+    provider: "stripe",
+    cancellationId:
+      "34000000-0000-4000-8000-000000000001",
+    projectId: PROJECT_ID,
+    subscriptionId:
+      "33000000-0000-4000-8000-000000000001",
+    effectiveAt: "2026-09-02T12:00:00.000Z",
+    servesUntil: "2026-09-02T12:00:00.000Z",
+    cancellationFeeMinor: 0,
+    furtherChargesAfterEffective: false,
+    acceptedDisclosureDigest: disclosureDigest,
+    providerStatus: "active",
+    next: "verified_provider_confirmation",
+  };
+  assert.deepEqual(
+    customerControl.verifiedAlakazamCancellationRequest(
+      result,
+      PROJECT_ID,
+      disclosureDigest
+    ),
+    result
+  );
+  assert.equal(
+    customerControl.verifiedAlakazamCancellationRequest(
+      { ...result, cancellationFeeMinor: 1 },
+      PROJECT_ID,
+      disclosureDigest
+    ),
+    null
+  );
+  assert.equal(
+    customerControl.verifiedAlakazamCancellationRequest(
+      { ...result, projectId: OTHER_PROJECT_ID },
+      PROJECT_ID,
+      disclosureDigest
+    ),
+    null
+  );
+});
+
+test("the signed-in Alakazam cancellation control is disclosure-bound and retry-safe", async () => {
+  const source = await readFile(
+    new URL(
+      "../../abracadabra/app/abracadabra-customer-control-dom.js",
+      import.meta.url
+    ),
+    "utf8"
+  );
+  const renderStart = source.indexOf(
+    "function renderAlakazamCancellationReview"
+  );
+  const renderEnd = source.indexOf(
+    "function renderAlakazamAccountBody",
+    renderStart
+  );
+  const requestStart = source.indexOf(
+    "function requestAlakazamCancellationPreview"
+  );
+  const requestEnd = source.indexOf(
+    "function renderAlakazamPublicationPanel",
+    requestStart
+  );
+  const renderSource = source.slice(renderStart, renderEnd);
+  const requestSource = source.slice(requestStart, requestEnd);
+  assert.match(renderSource, /Review cancellation/u);
+  assert.match(renderSource, /Confirm cancellation/u);
+  assert.match(renderSource, /cancellation fee is \$0\.00/u);
+  assert.match(
+    renderSource,
+    /30-day saved-work and export window/u
+  );
+  assert.match(
+    renderSource,
+    /checkbox\.checked === true/u
+  );
+  assert.match(
+    requestSource,
+    /alakazamCancellationPreviewPresentation/u
+  );
+  assert.match(
+    requestSource,
+    /acceptedDisclosureDigest:\s*acceptedDisclosureDigest/u
+  );
+  assert.match(requestSource, /idempotencyKey: commandId/u);
+  assert.match(
+    requestSource,
+    /verifiedAlakazamCancellationRequest/u
+  );
+  assert.match(
+    requestSource,
+    /alakazamCancellation\.commandId/u
+  );
+  assert.doesNotMatch(
+    requestSource,
+    /amountMinor:|effectiveAt:|refundTreatment:/u
+  );
+});
 
 function response(status, payload) {
   return {
@@ -150,8 +253,8 @@ function publication(overrides = {}) {
   const source = {
     schema: "sitesourcery.alakazam-publication/v1",
     projectId: PROJECT_ID,
-    state: "held",
-    holdReason: "commercial_cutover_not_authorized",
+    state: "released",
+    holdReason: null,
     subscription: {
       subscriptionId:
         "33000000-0000-4000-8000-000000000001",
@@ -432,7 +535,9 @@ function startQuote(
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
     },
     disclosureDigest: "a".repeat(64),
     quoteDigest: "b".repeat(64),
@@ -510,7 +615,9 @@ function upgradeQuote(
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
     },
     disclosureDigest: "d".repeat(64),
     quoteDigest: "e".repeat(64),
@@ -581,7 +688,9 @@ function downgradeQuote(
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
     },
     disclosureDigest: "f".repeat(64),
     quoteDigest: "1".repeat(64),
@@ -668,11 +777,11 @@ test("the Abracadabra client reads only the selected project's Alakazam route", 
   );
 });
 
-test("the Abracadabra client reads only the selected project's held publication authority", async () => {
+test("the Abracadabra client reads only the selected project's released publication authority", async () => {
   const calls = [];
   const expected = {
     schema: "sitesourcery.alakazam-publication/v1",
-    state: "held"
+    state: "released"
   };
   const controller = new AbortController();
   const client = createClient({
@@ -698,7 +807,7 @@ test("the Abracadabra client reads only the selected project's held publication 
   assert.equal(calls[0].options.body, undefined);
 });
 
-test("publication commands send only exact held action authority with CSRF and stable identity", async () => {
+test("publication commands send only exact action authority with CSRF and stable identity", async () => {
   const calls = [];
   const commandId =
     "50000000-0000-4000-8000-000000000011";
@@ -709,7 +818,7 @@ test("publication commands send only exact held action authority with CSRF and s
       if (url === "/api/v1/csrf") {
         return response(200, { csrfToken: "csrf-publication" });
       }
-      return response(202, { state: "held" });
+      return response(202, { state: "queued" });
     },
   });
   await client.requestAlakazamPublication(
@@ -756,7 +865,7 @@ test("publication commands send only exact held action authority with CSRF and s
   );
 });
 
-test("the customer validator accepts exact held release history and rejects manufactured authority", () => {
+test("the customer validator accepts released execution states and rejects manufactured authority", () => {
   const snapshot = publication();
   assert.deepEqual(
     customerControl.verifiedAlakazamPublication(
@@ -769,8 +878,8 @@ test("the customer validator accepts exact held release history and rejects manu
     commandId:
       "34000000-0000-4000-8000-000000000001",
     action: "rollback",
-    state: "held",
-    holdReason: "commercial_cutover_not_authorized",
+    state: "queued",
+    holdReason: null,
     snapshotDigest: snapshot.snapshotDigest,
     commandDigest: "d".repeat(64),
     targetReleaseId: PRIOR_RELEASE_ID,
@@ -784,8 +893,34 @@ test("the customer validator accepts exact held release history and rejects manu
     ).command,
     command
   );
+  for (const state of [
+    "processing",
+    "applied",
+    "reconciliation_required",
+  ]) {
+    assert.equal(
+      customerControl.verifiedAlakazamPublication(
+        publication({ command: { ...command, state } }),
+        PROJECT_ID
+      ).command.state,
+      state
+    );
+  }
+  assert.equal(
+    customerControl.verifiedAlakazamPublication(
+      publication({
+        command: {
+          ...command,
+          state: "held",
+          holdReason: "commercial_cutover_not_authorized",
+        },
+      }),
+      PROJECT_ID
+    ).command.state,
+    "held"
+  );
   for (const changed of [
-    publication({ state: "live" }),
+    publication({ state: "held" }),
     publication({ holdReason: "provider_approved" }),
     publication({
       actions: { rollbackTargetReleaseId: CURRENT_RELEASE_ID },
@@ -801,7 +936,11 @@ test("the customer validator accepts exact held release history and rejects manu
       }],
     }),
     publication({
-      command: { ...command, state: "applied" },
+      command: {
+        ...command,
+        state: "applied",
+        holdReason: "provider_approved",
+      },
     }),
   ]) {
     assert.equal(
@@ -814,7 +953,7 @@ test("the customer validator accepts exact held release history and rejects manu
   }
 });
 
-test("the held publication panel source is exact-authority, retry-safe, responsive, and provider-free", async () => {
+test("the released publication panel is exact-authority, retry-safe, and status-aware", async () => {
   const [source, css] = await Promise.all([
     readFile(
       new URL(
@@ -851,14 +990,17 @@ test("the held publication panel source is exact-authority, retry-safe, responsi
   assert.match(panelSource, /Publish accepted version/u);
   assert.match(panelSource, /Roll back to prior release/u);
   assert.match(panelSource, /Unpublish website/u);
-  assert.match(panelSource, /record exact customer authorization only/u);
-  assert.match(panelSource, /no live provider effect, cancellation, or deletion occurs/u);
+  assert.match(panelSource, /Publish makes the accepted version live/u);
+  assert.match(panelSource, /Unpublish takes the website offline without deleting the project/u);
+  assert.match(panelSource, /Refresh publication status/u);
+  assert.match(panelSource, /do not submit it again/u);
   assert.match(requestSource, /snapshot\.actions\[action\] !== true/u);
   assert.match(requestSource, /capabilities\.alakazamPublication !== true/u);
   assert.match(requestSource, /snapshotDigest:\s*snapshot\.snapshotDigest/u);
   assert.match(requestSource, /targetReleaseId:\s*targetReleaseId/u);
   assert.match(requestSource, /idempotencyKey:\s*commandId/u);
-  assert.match(requestSource, /confirmed\.command\.state !== "held"/u);
+  assert.match(requestSource, /confirmed\.command\.state !== "queued"/u);
+  assert.match(requestSource, /scheduleAlakazamPublicationRefresh/u);
   assert.doesNotMatch(
     requestSource,
     /stripe|providerPort|publishProject|rollbackProject|unpublishProject/iu

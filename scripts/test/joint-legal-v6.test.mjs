@@ -53,20 +53,20 @@ test("Legal V6 is a deterministic noindex review bundle with no release authorit
       {
         role: "legal-center-review",
         file: "legal/index.html",
-        sha256: "0b420e7ea4be57ca68c630a0f7c9023031832abbef2b032c4a5c64e0f7427405",
-        byteCount: 5635,
+        sha256: "7a6a8629ed4f29ad1de4139ead3f987ce8ec0f7bf2cc68d83a57367497491cb8",
+        byteCount: 4896,
       },
       {
         role: "privacy-review",
         file: "legal/privacy/index.html",
-        sha256: "9a1cbf00be381f2c08cfd8fac3fb1e8a6b49484821d6d9a5d1512eb155a6072a",
-        byteCount: 31771,
+        sha256: "951959d3dd42a3cdaae64869903476d7563c469d4c4d94140cdc210ddf8aeb7f",
+        byteCount: 24564,
       },
       {
         role: "website-terms-review",
         file: "legal/website-terms/index.html",
-        sha256: "267c4983659356fdc5a69e93d52b0cb9d3d5b6a9b547e9825f3cbf881618ffe2",
-        byteCount: 33509,
+        sha256: "60044adbae607c19bcdd15fd37d3787dfe722f9844c00105b17e3a3291f84309",
+        byteCount: 21947,
       },
     ],
   );
@@ -128,26 +128,25 @@ test("Legal V6 review cannot replace or enter the sealed public Legal V5 plan", 
   }
 });
 
-test("Legal V6 review exposes the exact attainable protection boundary", () => {
+test("Legal V6 review matches the current plain-English service boundary", () => {
   const { artifacts } = createJointLegalV6ReviewBundle({ root: ROOT });
   const privacy = artifacts.find(({ role }) => role === "privacy-review").bytes;
   const terms = artifacts.find(({ role }) => role === "website-terms-review").bytes;
   for (const phrase of [
-    "full $20 creates one non-transferable, one-use, non-cash credit",
-    "same account and project’s first separately released Alakazam invoice",
-    "early fraud warning",
-    "private dispute dossier",
-    "authorized organization owner",
+    "Saving a project or using its $20 Download requires sign-in.",
+    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
+    "The Responder uses phone numbers and text messages after setup.",
+    "does not ask for or store the full card number or card security code",
   ]) assert.ok(`${privacy}\n${terms}`.includes(phrase), phrase);
   for (const phrase of [
-    "issuer controls whether authentication is required or succeeds",
-    "not a waiver of any lawful dispute right",
-    "issuing bank control the dispute process and outcome",
-    "does not limit a remedy for non-delivery",
-    "No term, 3D Secure result, receipt, or evidence package guarantees",
+    "Make and test a preview without an account.",
+    "Download costs $20 once per saved project.",
+    "Alakazam monthly sign-up is not open yet.",
+    "The Responder costs $300 to start and $250 each month.",
+    "A domain you own stays yours.",
   ]) assert.ok(terms.includes(phrase), phrase);
   assert.doesNotMatch(
     `${privacy}\n${terms}`,
-    /always win|chargeback-proof|cannot dispute|waive all disputes|guaranteed break-even/iu,
+    /\$5(?!\d)|remain held|private dispute dossier|disabled_by_owner|provider effects?/iu,
   );
 });

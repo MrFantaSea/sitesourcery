@@ -583,15 +583,6 @@ async function start() {
       resolveSession: commerceV2.resolveSession,
       clock: commerceV2.clock
     });
-  const alakazamBillingSurfaces =
-    createHostedAlakazamBillingSurfaces({
-      repository:
-        createPostgresAlakazamBillingRepository({
-          authority
-        }),
-      account: alakazamAccountService,
-      resolveSession: commerceV2.resolveSession
-    });
   const customServicesAccountRepository =
     createPostgresCustomServicesAccountRepository({
       authority
@@ -759,6 +750,15 @@ async function start() {
         alakazamLifecyclePorts
       )
   });
+  const alakazamBillingSurfaces =
+    createHostedAlakazamBillingSurfaces({
+      repository:
+        createPostgresAlakazamBillingRepository({
+          authority
+        }),
+      cancellation: alakazamLifecycle.cancellation,
+      resolveSession: commerceV2.resolveSession
+    });
   const alakazamBilling =
     createHostedAlakazamBilling({
       billing: createAlakazamBillingService(

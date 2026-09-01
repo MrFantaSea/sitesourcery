@@ -38,6 +38,11 @@ const HELD_SURFACES = Object.freeze({
     message:
       "Alakazam cancellation preview is held in this runtime."
   }),
+  cancellationRequest: Object.freeze({
+    code: "ALAKAZAM_CANCELLATION_HELD",
+    message:
+      "Alakazam cancellation is held in this runtime."
+  }),
   billingStates: Object.freeze({
     code: "ALAKAZAM_BILLING_STATES_HELD",
     message:
@@ -152,12 +157,14 @@ export function createHeldHostedAlakazamBillingSurfaces() {
   return Object.freeze({
     getInvoice: held("invoice"),
     getCancellationPreview: held("cancellationPreview"),
+    requestCancellation: held("cancellationRequest"),
     getBillingStates: held("billingStates")
   });
 }
 
 export function createHostedAlakazamBillingSurfaces({
   repository,
+  cancellation,
   account,
   resolveSession
 } = {}) {
@@ -172,9 +179,15 @@ export function createHostedAlakazamBillingSurfaces({
     { status: 500 }
   );
   invariant(
-    account && typeof account.read === "function",
+    (
+      cancellation &&
+        typeof cancellation.preview === "function" &&
+        typeof cancellation.request === "function"
+    ) || (
+      account && typeof account.read === "function"
+    ),
     "RUNTIME_CONFIGURATION_ERROR",
-    "The Alakazam account service is required.",
+    "The Alakazam cancellation or legacy account reader is required.",
     { status: 500 }
   );
   invariant(
@@ -192,6 +205,14 @@ export function createHostedAlakazamBillingSurfaces({
       actor,
       projectId
     );
+  }
+
+  function cancellationScope(value) {
+    return Object.freeze({
+      tenantId: value.tenantId,
+      customerId: value.customerId,
+      projectId: value.projectId
+    });
   }
 
   return Object.freeze({
@@ -226,9 +247,35 @@ export function createHostedAlakazamBillingSurfaces({
           actorInput,
           projectIdInput
         );
-        return projectAlakazamCancellationPreview(
-          await account.read(scope),
-          scope
+        return cancellation
+          ? cancellation.preview(cancellationScope(scope))
+          : projectAlakazamCancellationPreview(
+              await account.read(scope),
+              scope
+            );
+      });
+    },
+
+    async requestCancellation(
+      actorInput,
+      projectIdInput,
+      input
+    ) {
+      return translated(async () => {
+        if (!cancellation) {
+          throw new HostedError(
+            HELD_SURFACES.cancellationRequest.code,
+            HELD_SURFACES.cancellationRequest.message,
+            { status: 503 }
+          );
+        }
+        const scope = await scopeFor(
+          actorInput,
+          projectIdInput
+        );
+        return cancellation.request(
+          cancellationScope(scope),
+          input
         );
       });
     },

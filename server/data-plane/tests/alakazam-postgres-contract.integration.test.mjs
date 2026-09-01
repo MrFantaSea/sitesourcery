@@ -2438,12 +2438,12 @@ test(
       assert.equal((await worker.runOnce()).status, "idle");
 
       const publicationTimes = [
-        "2026-08-02T12:17:00.000Z",
-        "2026-08-02T12:17:01.000Z",
-        "2026-08-02T12:17:02.000Z",
-        "2026-08-02T12:17:03.000Z",
-        "2026-08-02T12:17:04.000Z",
-        "2026-08-02T12:17:05.000Z"
+        "2026-09-01T12:17:00.000Z",
+        "2026-09-01T12:17:01.000Z",
+        "2026-09-01T12:17:02.000Z",
+        "2026-09-01T12:17:03.000Z",
+        "2026-09-01T12:17:04.000Z",
+        "2026-09-01T12:17:05.000Z"
       ];
       const publicationRepository =
         createPostgresPublicationControlRepository({
@@ -2477,8 +2477,8 @@ test(
         },
         {
           authorization: true,
-          providerEffects: false,
-          state: "held"
+          providerEffects: true,
+          state: "released"
         }
       );
       await client.query(
@@ -2599,7 +2599,7 @@ test(
         [authority.organizationId, authority.projectId]
       );
       const rollbackCommandId = randomUUID();
-      const heldRollback = await publication.request(
+      const queuedRollback = await publication.request(
         publicationScope,
         {
           commandId: rollbackCommandId,
@@ -2608,9 +2608,9 @@ test(
           targetReleaseId: live.releaseId
         }
       );
-      assert.equal(heldRollback.command.state, "held");
+      assert.equal(queuedRollback.command.state, "queued");
       assert.equal(
-        heldRollback.command.targetReleaseId,
+        queuedRollback.command.targetReleaseId,
         live.releaseId
       );
       await flushConstraints(client);
@@ -2621,7 +2621,7 @@ test(
           snapshotDigest: livePublication.snapshotDigest,
           targetReleaseId: live.releaseId
         })).command.commandDigest,
-        heldRollback.command.commandDigest
+        queuedRollback.command.commandDigest
       );
       await assert.rejects(
         publication.request(publicationScope, {
@@ -2631,7 +2631,7 @@ test(
           targetReleaseId: live.releaseId
         }),
         (error) =>
-          error.code === "publication_authority_changed" &&
+          error.code === "publication_command_pending" &&
           error.status === 409
       );
       const commandsAfterStaleSnapshot = await client.query(
@@ -2646,18 +2646,17 @@ test(
         1,
         "a stale publication snapshot must not persist a command"
       );
-      const heldUnpublish = await publication.request(
-        publicationScope,
-        {
+      await assert.rejects(
+        publication.request(publicationScope, {
           commandId: randomUUID(),
           action: "unpublish",
           snapshotDigest: livePublication.snapshotDigest,
           targetReleaseId: null
-        }
+        }),
+        (error) =>
+          error.code === "publication_command_pending" &&
+          error.status === 409
       );
-      assert.equal(heldUnpublish.command.state, "held");
-      assert.equal(heldUnpublish.command.targetVersionId, null);
-      await flushConstraints(client);
 
       await client.query(
         `update ss.alakazam_fulfillment_projection
@@ -2680,21 +2679,17 @@ test(
         unpublish: false,
         rollbackTargetReleaseId: null
       });
-      const heldPublish = await publication.request(
-        publicationScope,
-        {
+      await assert.rejects(
+        publication.request(publicationScope, {
           commandId: randomUUID(),
           action: "publish",
           snapshotDigest: darkPublication.snapshotDigest,
           targetReleaseId: null
-        }
+        }),
+        (error) =>
+          error.code === "publication_command_pending" &&
+          error.status === 409
       );
-      assert.equal(heldPublish.command.state, "held");
-      assert.equal(
-        heldPublish.command.targetVersionId,
-        acceptedSite.versionId
-      );
-      await flushConstraints(client);
       await assert.rejects(
         publication.read({
           ...publicationScope,
@@ -2714,6 +2709,15 @@ test(
               from ss.alakazam_customer_publication_commands
              where organization_id = $1
                and project_id = $2) as legacy_command_count,
+           (select count(*)::integer
+              from ss.publication_control_releases
+             where organization_id = $1
+               and project_id = $2) as command_release_count,
+           (select count(*)::integer
+              from ss.publication_control_worker_jobs
+             where organization_id = $1
+               and project_id = $2
+               and state = 'queued') as queued_job_count,
            (select bool_and(
                      capability = 'publish_accepted_project_version'
                      and entitlement_revision > 0
@@ -2749,15 +2753,21 @@ test(
             heldProof.rows[0].legacy_command_count,
           exactAuthorityEvidence:
             heldProof.rows[0].exact_authority_evidence,
+          commandReleaseCount:
+            heldProof.rows[0].command_release_count,
+          queuedJobCount:
+            heldProof.rows[0].queued_job_count,
           releaseCount: heldProof.rows[0].release_count,
           servingState: heldProof.rows[0].serving_state,
           currentReleaseId:
             heldProof.rows[0].current_release_id
         },
         {
-          commandCount: 3,
+          commandCount: 1,
           legacyCommandCount: 0,
           exactAuthorityEvidence: true,
+          commandReleaseCount: 1,
+          queuedJobCount: 1,
           releaseCount:
             beforeHeldCommands.rows[0].release_count,
           servingState:
@@ -2786,13 +2796,13 @@ test(
       assert.equal(changedAfterHeldCommand.command, null);
       await assert.rejects(
         publication.request(publicationScope, {
-          commandId: heldPublish.command.commandId,
-          action: "publish",
+          commandId: queuedRollback.command.commandId,
+          action: "rollback",
           snapshotDigest: darkPublication.snapshotDigest,
-          targetReleaseId: null
+          targetReleaseId: live.releaseId
         }),
         (error) =>
-          error.code === "publication_authority_changed" &&
+          error.code === "publication_command_conflict" &&
           error.status === 409
       );
 
@@ -3581,6 +3591,23 @@ test(
         anon_insert: false
       });
       await client.query("commit");
+
+      // The earlier command already proved the one-open-job fence. Close that
+      // isolated fixture before exercising same-command concurrency below.
+      await client.query(
+        `update ss.publication_control_worker_jobs
+            set state = 'reconciliation_required',
+                failure_code = 'test_fixture_closed',
+                manual_review_at = $3,
+                updated_at = $3
+          where organization_id = $1
+            and command_id = $2`,
+        [
+          authority.organizationId,
+          queuedRollback.command.commandId,
+          "2026-09-02T12:08:00.000Z"
+        ]
+      );
 
       const concurrentRepository =
         createPostgresPublicationControlRepository({

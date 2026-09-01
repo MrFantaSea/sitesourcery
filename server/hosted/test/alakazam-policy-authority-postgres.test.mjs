@@ -37,11 +37,11 @@ function row(overrides = {}) {
     legacy_evidence_compatible: true,
     policy_id: ALAKAZAM_POLICY_AUTHORITY_ID,
     authority_digest: ALAKAZAM_POLICY_AUTHORITY_DIGEST,
-    state: "held",
+    state: "released",
     hold_reason: ALAKAZAM_POLICY_HOLD_REASON,
-    commercial_effects: false,
-    provider_effects: false,
-    publication_effects: false,
+    commercial_effects: true,
+    provider_effects: true,
+    publication_effects: true,
     automatic_recovery_from_reversal_evidence: false,
     observed_at: new Date("2026-08-10T12:00:00.000Z"),
     ...overrides
@@ -58,7 +58,7 @@ function fixture({ snapshotRow = row() } = {}) {
         async query(statement) {
           const sql = String(statement).replace(/\s+/gu, " ").trim();
           call.statements.push(sql);
-          if (sql.includes("hosted_alakazam_policy_authority_contract_v1")) {
+          if (sql.includes("hosted_alakazam_policy_authority_contract_v2")) {
             return {
               rowCount: 1,
               rows: [{
@@ -78,7 +78,7 @@ function fixture({ snapshotRow = row() } = {}) {
               }]
             };
           }
-          if (sql.includes("alakazam_policy_subscription_authority_v1")) {
+          if (sql.includes("alakazam_policy_subscription_authority_v2")) {
             return { rowCount: 1, rows: [structuredClone(snapshotRow)] };
           }
           throw new Error(`unexpected query: ${sql}`);
@@ -92,18 +92,18 @@ function fixture({ snapshotRow = row() } = {}) {
   };
 }
 
-test("readiness proves the exact held policy, RLS, grants, and no effects", async () => {
+test("readiness proves the exact released policy, RLS, grants, and gated effects", async () => {
   const { calls, repository } = fixture();
   assert.deepEqual(await repository.readiness(), {
     schema: "sitesourcery.alakazam-policy-readiness/v1",
     ready: true,
     verified: true,
-    state: "held",
+    state: "released",
     policyId: ALAKAZAM_POLICY_AUTHORITY_ID,
     authorityDigest: ALAKAZAM_POLICY_AUTHORITY_DIGEST,
-    commercialEffects: false,
-    providerEffects: false,
-    publicationEffects: false,
+    commercialEffects: true,
+    providerEffects: true,
+    publicationEffects: true,
     automaticRecoveryFromReversalEvidence: false,
     code: null
   });
@@ -126,7 +126,7 @@ test("legacy projection reads are byte-stable and idempotent", async () => {
   const second = await repository.read(input);
   assert.deepEqual(second, first);
   assert.equal(first.lifecycleState, "payment_grace");
-  assert.equal(first.providerEffects, false);
+  assert.equal(first.providerEffects, true);
   assert.equal(calls.length, 2);
   assert.ok(calls.every((call) => call.context.readOnly === true));
 });
@@ -162,7 +162,7 @@ test("incomplete legacy evidence and unavailable storage fail closed", async () 
   );
 });
 
-test("production startup requires only read-only held policy readiness", async () => {
+test("production startup requires only read-only released policy readiness", async () => {
   const source = await readFile(
     new URL("../bin/server.mjs", import.meta.url),
     "utf8"

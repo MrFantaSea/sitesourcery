@@ -15,7 +15,6 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
-  assertPrivacyV3CandidateSources,
   assertPrivacyV3NotPublished,
   HOSTED_PRIVACY_V2_ARTIFACT,
   HOSTED_PRIVACY_V3_CANDIDATE,
@@ -27,10 +26,10 @@ import {
   pagesLegalV4Files,
 } from "./hosted-truth/pages-legal-v4.mjs";
 import {
-  assertPagesJointLegalV5Artifact,
-  createPagesJointLegalV5Plan,
-  pagesLegalV5Files,
-} from "./hosted-truth/pages-legal-v5.mjs";
+  assertPagesJointLegalV7Artifact,
+  createPagesJointLegalV7Plan,
+  pagesLegalV7Files,
+} from "./hosted-truth/pages-legal-v7.mjs";
 
 /*
  * This is intentionally an allowlist, not a recursive copy with exceptions.
@@ -302,14 +301,13 @@ export function buildPagesArtifact({
         finalizationRoot: jointLegalV4FinalizationRoot,
       })
     : null;
-  const jointLegalV5Plan = jointLegalV4Plan
+  const jointLegalV7Plan = jointLegalV4Plan
     ? null
-    : createPagesJointLegalV5Plan({ root: absoluteRoot });
+    : createPagesJointLegalV7Plan({ root: absoluteRoot });
   const artifactFiles = jointLegalV4Plan
     ? pagesLegalV4Files(publicFileAllowlist, jointLegalV4Plan)
-    : pagesLegalV5Files(publicFileAllowlist, jointLegalV5Plan);
+    : pagesLegalV7Files(publicFileAllowlist, jointLegalV7Plan);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
-  assertPrivacyV3CandidateSources({ root: absoluteRoot });
 
   /*
    * Validate every source before touching the existing artifact. A missing or
@@ -332,7 +330,7 @@ export function buildPagesArtifact({
       const destination = path.join(absoluteOutput, ...file.split("/"));
       mkdirSync(path.dirname(destination), { recursive: true });
       const plannedSource = jointLegalV4Plan?.sourceByFile.get(file)
-        ?? jointLegalV5Plan?.sourceByFile.get(file);
+        ?? jointLegalV7Plan?.sourceByFile.get(file);
       const source = plannedSource
         ?? path.join(absoluteRoot, ...unsealedPublicationSource(file).split("/"));
       copyFileSync(source, destination);
@@ -341,7 +339,7 @@ export function buildPagesArtifact({
     if (jointLegalV4Plan) {
       assertPagesJointLegalV4Artifact(absoluteOutput, jointLegalV4Plan);
     } else {
-      assertPagesJointLegalV5Artifact(absoluteOutput, jointLegalV5Plan);
+      assertPagesJointLegalV7Artifact(absoluteOutput, jointLegalV7Plan);
     }
   } catch (error) {
     /*
@@ -369,14 +367,13 @@ export function verifyPagesArtifact({
         finalizationRoot: jointLegalV4FinalizationRoot,
       })
     : null;
-  const jointLegalV5Plan = jointLegalV4Plan
+  const jointLegalV7Plan = jointLegalV4Plan
     ? null
-    : createPagesJointLegalV5Plan({ root: absoluteRoot });
+    : createPagesJointLegalV7Plan({ root: absoluteRoot });
   const artifactFiles = jointLegalV4Plan
     ? pagesLegalV4Files(publicFileAllowlist, jointLegalV4Plan)
-    : pagesLegalV5Files(publicFileAllowlist, jointLegalV5Plan);
+    : pagesLegalV7Files(publicFileAllowlist, jointLegalV7Plan);
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
-  assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputStat = lstatSync(absoluteOutput);
   if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
     throw new Error(`public artifact must be a real directory: ${absoluteOutput}`);
@@ -385,7 +382,7 @@ export function verifyPagesArtifact({
   if (jointLegalV4Plan) {
     assertPagesJointLegalV4Artifact(absoluteOutput, jointLegalV4Plan);
   } else {
-    assertPagesJointLegalV5Artifact(absoluteOutput, jointLegalV5Plan);
+    assertPagesJointLegalV7Artifact(absoluteOutput, jointLegalV7Plan);
   }
 
   for (const file of publicFileAllowlist) assertRegularSource(absoluteRoot, file);
@@ -404,7 +401,7 @@ export function verifyPagesArtifact({
 
   for (const file of artifactFiles) {
     const plannedSource = jointLegalV4Plan?.sourceByFile.get(file)
-      ?? jointLegalV5Plan?.sourceByFile.get(file);
+      ?? jointLegalV7Plan?.sourceByFile.get(file);
     const sourceBytes = readFileSync(
       plannedSource ?? path.join(absoluteRoot, ...unsealedPublicationSource(file).split("/")),
     );

@@ -1614,6 +1614,8 @@ export function createHostedApi(
       typeof alakazamBillingSurfacesBoundary
         .getCancellationPreview === "function" &&
       typeof alakazamBillingSurfacesBoundary
+        .requestCancellation === "function" &&
+      typeof alakazamBillingSurfacesBoundary
         .getBillingStates === "function",
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Alakazam billing surfaces boundary is invalid.",
@@ -1905,7 +1907,8 @@ export function createHostedApi(
             alakazamRetainedPremiumReadiness.state === "held",
           alakazamPublication:
             alakazamPublicationReadiness.authorization === true &&
-            alakazamPublicationReadiness.providerEffects === false,
+            alakazamPublicationReadiness.providerEffects === true &&
+            alakazamPublicationReadiness.state === "released",
           mailProviderEvents:
             resendMailEventReadiness?.ready === true &&
             resendMailEventReadiness?.verified === true,
@@ -3773,6 +3776,38 @@ export function createHostedApi(
               actor,
               route[0]
             );
+        } else if (
+          method === "POST" &&
+          (route = match(
+            pathname,
+            /^\/api\/v1\/projects\/([^/]+)\/alakazam\/cancellation-command$/u
+          ))
+        ) {
+          invariant(
+            actor !== null,
+            "AUTHENTICATION_REQUIRED",
+            "Sign in before cancelling Alakazam.",
+            { status: 401 }
+          );
+          exactRouteQuery(
+            url,
+            [],
+            "ALAKAZAM_CANCELLATION_ROUTE_BINDING_REJECTED",
+            "Alakazam cancellation accepts no query parameters."
+          );
+          result =
+            await alakazamBillingSurfacesBoundary
+              .requestCancellation(
+                actor,
+                route[0],
+                exactRouteBody(
+                  body,
+                  ["acceptedDisclosureDigest"],
+                  "ALAKAZAM_CANCELLATION_ROUTE_BINDING_REJECTED",
+                  "Alakazam cancellation accepts only the reviewed disclosure proof."
+                )
+              );
+          status = 202;
         } else if (
           (alakazamBillingSurface =
             matchAlakazamBillingSurfaceRoute(

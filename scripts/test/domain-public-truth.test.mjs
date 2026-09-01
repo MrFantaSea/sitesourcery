@@ -15,7 +15,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("inquiry-only catalog releases no implicit public Checkout rails", async () => {
+test("customer-entry catalog releases no implicit public Checkout rails", async () => {
   const catalog = JSON.parse(
     await readFile(path.join(ROOT, "data/public-catalog.json"), "utf8")
   );
@@ -26,12 +26,13 @@ test("inquiry-only catalog releases no implicit public Checkout rails", async ()
     Object.fromEntries(SELLABLE.map((offer) => [offer.id, offer.availability])),
     {
       "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
-      "alacazam.hosting": OFFER_AVAILABILITY.HELD,
-      "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
-      "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+      "alacazam.hosting": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+      "domain.purchase": OFFER_AVAILABILITY.CONTACT_TO_START,
+      "domain.purchase.plus": OFFER_AVAILABILITY.CONTACT_TO_START,
       assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
-      responder: OFFER_AVAILABILITY.HELD,
-      "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+      care: OFFER_AVAILABILITY.CONTACT_TO_START,
+      responder: OFFER_AVAILABILITY.CONTACT_TO_START,
+      "custom.build": OFFER_AVAILABILITY.CONTACT_TO_START,
     },
   );
 
@@ -52,7 +53,11 @@ test("inquiry-only catalog releases no implicit public Checkout rails", async ()
     assert.equal(offer.productRef, null, id);
     assert.equal(offer.priceRef, null, id);
   }
-  assert.deepEqual(readiness().needsServer, ["abracadabra.preview", "assessment"]);
+  assert.deepEqual(readiness().needsServer, [
+    "abracadabra.preview",
+    "alacazam.hosting",
+    "assessment",
+  ]);
 
   const held = SELLABLE.filter((offer) =>
     offer.availability === OFFER_AVAILABILITY.HELD
@@ -65,31 +70,31 @@ test("inquiry-only catalog releases no implicit public Checkout rails", async ()
   }
 });
 
-test("domain offers have inquiry authority but no direct provider checkout authority", () => {
+test("domain offers have a real contact path but no direct provider checkout authority", () => {
   for (const id of ["domain.purchase", "domain.purchase.plus"]) {
     const offer = SELLABLE.find((candidate) => candidate.id === id);
     assert.ok(offer, id);
-    assert.equal(offer.availability, OFFER_AVAILABILITY.INQUIRY_ONLY);
+    assert.equal(offer.availability, OFFER_AVAILABILITY.CONTACT_TO_START);
     assert.equal(offer.checkoutUrl, null);
     assert.equal(offer.productRef, null);
     assert.equal(offer.priceRef, null);
   }
 });
 
-test("public Domains surface is DNS preflight plus inquiry only", async () => {
+test("public Domains surface offers hands-on help and labels the DNS quick check", async () => {
   const [page, search] = await Promise.all([
     readFile(path.join(ROOT, "domains/index.html"), "utf8"),
     readFile(path.join(ROOT, "domains/domain-search.js"), "utf8"),
   ]);
 
-  assert.match(page, /Domain registration is inquiry-only\./u);
-  assert.match(page, /public-DNS preflight/u);
-  assert.match(page, /This page cannot accept payment\./u);
+  assert.match(page, /Get the right domain and keep it in your name\./u);
+  assert.match(page, /You approve the name and price before anything is bought\./u);
+  assert.match(page, /What this quick check does/u);
   for (const phrase of [
-    "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
-    "Cloudflare processes the query and connection data under its Public DNS Resolver privacy notice.",
-    "A recursive resolver may contact authoritative DNS servers to answer.",
-    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API, and it does not prove availability, create a quote, reserve a name, authorize a purchase, or place an order.",
+    "It asks Cloudflare's public DNS service whether .com, .net, and .org versions already have internet records.",
+    "It does not reserve the name or prove that it can be bought.",
+    "Your business is the owner",
+    "I check again right before purchase and buy only after you approve the details.",
   ]) {
     assert.ok(page.includes(phrase), phrase);
   }
@@ -236,24 +241,21 @@ test("Domains preflight sends nothing before action and exactly three cleaned NS
   );
 });
 
-test("held offers cannot return through the landing, home, or flyer", async () => {
+test("customer-facing pages show the current offers without internal state labels", async () => {
   const [landing, home, flyer] = await Promise.all([
     readFile(path.join(ROOT, "abracadabra/index.html"), "utf8"),
     readFile(path.join(ROOT, "index.html"), "utf8"),
     readFile(path.join(ROOT, "flyer.html"), "utf8"),
   ]);
 
-  assert.match(landing, /Free to See-\$20 Download Coming-Alakazam Plans Held/u);
-  assert.match(home, /Three ways to start: make a free preview/u);
-  assert.match(home, /Neither of these is for sale yet\./u);
-  assert.match(flyer, /Alakazam and The Responder remain held\./u);
-  assert.match(flyer, /one qualifying Custom base build/u);
+  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting from \$25 a month/u);
+  assert.match(landing, /Choose Alakazam for \$25, \$35, or \$50 a month\./u);
+  assert.match(home, /Look good online\. Stop losing leads\./u);
+  assert.match(home, /\$300 setup · \$250 a month/u);
+  assert.match(flyer, /The Responder: \$300 setup \+ \$250 a month/u);
+  assert.match(flyer, /full \$350 goes toward it/u);
 
   for (const source of [landing, home, flyer]) {
-    assert.doesNotMatch(source, /\$(?:25|250|300)\b/u);
-    assert.doesNotMatch(
-      source,
-      /Keeps It Live|keeps it live|Live at your own address|leaving costs nothing|texts them back|Answers in seconds|Buy a domain|comes off any build/iu,
-    );
+    assert.doesNotMatch(source, /\bheld\b|inquiry[ -]only|release state|provider effects/iu);
   }
 });

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   ALAKAZAM_PUBLICATION_HOLD_REASON,
   ALAKAZAM_PUBLICATION_SCHEMA,
+  createAlakazamPublicationCommand,
   createAlakazamPublicationService,
   createHeldHostedAlakazamPublication,
   createHostedAlakazamPublication,
@@ -107,14 +108,11 @@ function heldCommand(snapshot, overrides = {}) {
   };
 }
 
-test("a live Alakazam publication snapshot exposes exact current and rollback authority while effects stay held", () => {
+test("a live Alakazam publication snapshot exposes released exact customer controls", () => {
   const snapshot = projectAlakazamPublication(stored());
   assert.equal(snapshot.schema, ALAKAZAM_PUBLICATION_SCHEMA);
-  assert.equal(snapshot.state, "held");
-  assert.equal(
-    snapshot.holdReason,
-    ALAKAZAM_PUBLICATION_HOLD_REASON
-  );
+  assert.equal(snapshot.state, "released");
+  assert.equal(snapshot.holdReason, null);
   assert.deepEqual(snapshot.actions, {
     publish: false,
     rollback: true,
@@ -127,7 +125,7 @@ test("a live Alakazam publication snapshot exposes exact current and rollback au
   assert.match(snapshot.snapshotDigest, /^[a-f0-9]{64}$/u);
 });
 
-test("an accepted version newer than the live release enables only an exact held publish target", () => {
+test("an accepted version newer than the live release enables only its exact publish target", () => {
   const snapshot = projectAlakazamPublication(
     stored({
       site: {
@@ -182,7 +180,77 @@ test("changed authority hides a historical command without discarding its durabl
   assert.equal(changed.actions.publish, true);
 });
 
-test("the service records rollback authorization once and returns held evidence without a provider port", async () => {
+for (const state of [
+  "queued",
+  "processing",
+  "applied",
+  "reconciliation_required"
+]) {
+  test(`released publication snapshots preserve exact ${state} execution state`, () => {
+    const initial = projectAlakazamPublication(stored());
+    const snapshot = projectAlakazamPublication(stored({
+      lastCommand: heldCommand(initial, {
+        state,
+        holdReason: null
+      })
+    }));
+    assert.equal(snapshot.state, "released");
+    assert.equal(snapshot.command.state, state);
+    assert.equal(snapshot.command.holdReason, null);
+  });
+}
+
+test("a second publication command is refused while exact execution is open", async () => {
+  const initial = projectAlakazamPublication(stored());
+  const queued = heldCommand(initial, {
+    state: "queued",
+    holdReason: null
+  });
+  const publication = createAlakazamPublicationService({
+    repository: {
+      async readiness() {
+        return { ready: true };
+      },
+      async readCustomerPublication() {
+        return { ...stored(), lastCommand: queued };
+      },
+      async recordCustomerPublicationCommand(input) {
+        const current = { ...stored(), lastCommand: queued };
+        createAlakazamPublicationCommand({
+          scope: {
+            tenantId: input.tenantId,
+            customerId: input.customerId,
+            actorId: input.actorId,
+            projectId: input.projectId
+          },
+          publication: current,
+          request: {
+            commandId: input.commandId,
+            action: input.action,
+            snapshotDigest: input.snapshotDigest,
+            targetReleaseId: input.targetReleaseId
+          },
+          requestedAt: input.requestedAt
+        });
+      }
+    },
+    clock: { now: () => new Date(NOW) }
+  });
+  await assert.rejects(
+    publication.request(scope(), {
+      commandId:
+        "70000000-0000-4000-8000-000000000002",
+      action: "unpublish",
+      snapshotDigest: initial.snapshotDigest,
+      targetReleaseId: null
+    }),
+    (error) =>
+      error.code === "publication_command_pending" &&
+      error.status === 409
+  );
+});
+
+test("the service records rollback authorization once and returns a queued command", async () => {
   const source = stored();
   const initial = projectAlakazamPublication(source);
   const calls = [];
@@ -191,8 +259,8 @@ test("the service records rollback authorization once and returns held evidence 
       return {
         ready: true,
         authorization: true,
-        providerEffects: false,
-        state: "held"
+        providerEffects: true,
+        state: "released"
       };
     },
     async readCustomerPublication(input) {
@@ -204,8 +272,8 @@ test("the service records rollback authorization once and returns held evidence 
       const command = {
         commandId: input.commandId,
         action: input.action,
-        state: "held",
-        holdReason: ALAKAZAM_PUBLICATION_HOLD_REASON,
+        state: "queued",
+        holdReason: null,
         snapshotDigest: input.snapshotDigest,
         commandDigest: "d".repeat(64),
         targetReleaseId: input.targetReleaseId,
@@ -227,7 +295,7 @@ test("the service records rollback authorization once and returns held evidence 
   });
   assert.equal(
     (await publication.readiness()).providerEffects,
-    false
+    true
   );
   const result = await publication.request(scope(), {
     commandId: COMMAND_ID,
@@ -236,7 +304,7 @@ test("the service records rollback authorization once and returns held evidence 
     targetReleaseId: PRIOR_RELEASE_ID
   });
   assert.equal(result.command.commandId, COMMAND_ID);
-  assert.equal(result.command.state, "held");
+  assert.equal(result.command.state, "queued");
   assert.equal(result.command.targetVersionId, PRIOR_VERSION_ID);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0][1], {
@@ -307,7 +375,7 @@ test("the hosted boundary binds canonical customer scope and translates stale au
           structuredClone(input),
           structuredClone(command)
         ]);
-        return { state: "held" };
+        return { state: "queued" };
       }
     },
     async resolveSession({ actor, projectId }) {
@@ -332,7 +400,7 @@ test("the hosted boundary binds canonical customer scope and translates stale au
       PROJECT_ID,
       { action: "unpublish" }
     ),
-    { state: "held" }
+    { state: "queued" }
   );
   assert.equal(calls.length, 2);
   assert.deepEqual(calls[0][1], scope());

@@ -144,7 +144,9 @@ function quoteResult(overrides = {}) {
       premiumConfiguration:
         "preserved_when_inactive",
       cancellationPolicy:
-        "owner_review_required_before_release",
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
       providerEvidence: "private_nested_evidence"
     },
     disclosureDigest: DISCLOSURE_DIGEST,

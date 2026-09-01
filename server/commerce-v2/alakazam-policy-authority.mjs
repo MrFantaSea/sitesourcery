@@ -9,13 +9,13 @@ import {
 } from "./canonical.mjs";
 
 export const ALAKAZAM_POLICY_AUTHORITY_ID =
-  "SS-ALAKAZAM-POLICY-2026-08-10-V1";
+  "SS-ALAKAZAM-POLICY-2026-08-31-V2";
 export const ALAKAZAM_POLICY_AUTHORITY_SCHEMA =
   "sitesourcery.alakazam-policy-authority/v1";
 export const ALAKAZAM_POLICY_SNAPSHOT_SCHEMA =
   "sitesourcery.alakazam-policy-snapshot/v1";
 export const ALAKAZAM_POLICY_HOLD_REASON =
-  "commercial_and_publication_cutover_not_authorized";
+  null;
 
 export const ALAKAZAM_CANONICAL_CARE_LIFECYCLE = deepFreeze({
   paymentGraceDays: 7,
@@ -115,19 +115,30 @@ export const ALAKAZAM_CANONICAL_CARE = deepFreeze({
 export const ALAKAZAM_POLICY_AUTHORITY = deepFreeze({
   schema: ALAKAZAM_POLICY_AUTHORITY_SCHEMA,
   policyId: ALAKAZAM_POLICY_AUTHORITY_ID,
-  state: "held",
+  state: "released",
   holdReason: ALAKAZAM_POLICY_HOLD_REASON,
   effects: {
-    commercial: false,
-    provider: false,
-    publication: false,
+    commercial: true,
+    provider: true,
+    publication: true,
     automaticRecoveryFromReversalEvidence: false
   },
   subscription: {
     tiers: ["alakazam_25", "alakazam_35", "alakazam_50"],
     billingModel: "stripe_subscription",
     renewalEvidence: "exact_invoice_readback",
-    cancellationEffectiveAt: "paid_through_boundary"
+    cancellationPolicyVersion:
+      "alakazam-cancellation.2026-08-31.v1",
+    cancellationEffectiveAt: "paid_through_boundary",
+    cancellationFeeMinor: 0,
+    cancellationRefundTreatment:
+      "no_partial_period_refund_or_proration",
+    cancellationRefundExceptions: [
+      "required_by_law",
+      "duplicate_or_unauthorized_charge",
+      "proven_service_failure"
+    ],
+    cancellationUndoTreatment: "resubscribe_separately"
   },
   customerRights: {
     paymentGraceHours: 168,
@@ -147,7 +158,7 @@ export const ALAKAZAM_POLICY_AUTHORITY = deepFreeze({
     authority: "purpose_bound_separate_activation",
     stripeTaxCode: "txcd_10701100",
     taxBehavior: "exclusive",
-    collectionState: "held"
+    collectionState: "automatic"
   },
   prerequisites: {
     fulfillment: "exact_paid_subscription_revision",
@@ -166,7 +177,7 @@ export const ALAKAZAM_POLICY_AUTHORITY = deepFreeze({
 export const ALAKAZAM_POLICY_AUTHORITY_DIGEST =
   digest(ALAKAZAM_POLICY_AUTHORITY);
 const EXPECTED_ALAKAZAM_POLICY_AUTHORITY_DIGEST =
-  "8b7562daef4b3d91fff1bea04da5cdd982755b901e58f0e60a780fde17ce9bb1";
+  "145892e43ab6f4a03ebbed84fd148633f9a4de9727ce4294a0eb9b08f329c320";
 
 invariant(
   ALAKAZAM_POLICY_AUTHORITY_DIGEST ===
@@ -268,14 +279,14 @@ export function createAlakazamPolicySnapshot(value) {
       Number.isSafeInteger(value.sourceSubscriptionRevision) &&
       value.sourceSubscriptionRevision > 0 &&
       value.policyId === ALAKAZAM_POLICY_AUTHORITY_ID &&
-      value.holdReason === ALAKAZAM_POLICY_HOLD_REASON &&
+      value.holdReason === null &&
       value.authorityDigest === ALAKAZAM_POLICY_AUTHORITY_DIGEST &&
-      value.commercialEffects === false &&
-      value.providerEffects === false &&
-      value.publicationEffects === false &&
+      value.commercialEffects === true &&
+      value.providerEffects === true &&
+      value.publicationEffects === true &&
       value.automaticRecoveryFromReversalEvidence === false,
     "repository_conflict",
-    "the Alakazam policy snapshot expanded held authority",
+    "the Alakazam policy snapshot changed released authority",
     { status: 500 }
   );
   const retentionWindowId = optionalUuid(
@@ -329,9 +340,9 @@ export function createAlakazamPolicySnapshot(value) {
       value.reversalEventId,
       "snapshot.reversalEventId"
     ),
-    commercialEffects: false,
-    providerEffects: false,
-    publicationEffects: false,
+    commercialEffects: true,
+    providerEffects: true,
+    publicationEffects: true,
     automaticRecoveryFromReversalEvidence: false,
     holdReason: value.holdReason,
     observedAt: requiredIso(value.observedAt, "snapshot.observedAt")

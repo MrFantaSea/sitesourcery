@@ -123,7 +123,7 @@ test("browser audit measures four checkbox labels as effective 44px targets", as
   );
 });
 
-test("hosted customer composition mounts F03 before exact F04 under the unchanged hold", async () => {
+test("hosted customer composition mounts F03 before exact F04 after offer release", async () => {
   const source = await readFile(
     new URL(
       "../../abracadabra/app/abracadabra-customer-control-dom.js",
@@ -133,7 +133,7 @@ test("hosted customer composition mounts F03 before exact F04 under the unchange
   );
   assert.match(
     source,
-    /var ALAKAZAM_PUBLIC_OFFER_STATE = "held";/u
+    /var ALAKAZAM_PUBLIC_OFFER_STATE = "released";/u
   );
   assert.match(
     source,

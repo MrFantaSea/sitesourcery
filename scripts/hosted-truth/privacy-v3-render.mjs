@@ -27,17 +27,17 @@ const BODY_TAG = '<body class="vnext-page legal-page privacy-page">';
 const SOURCE_META_LINE = `  ${HOSTED_PRIVACY_V3_CANDIDATE.sourceStateMeta}`;
 const SOURCE_ASIDE = [
   '<aside class="quote-panel" data-privacy-v3-source-state="unsealed">',
-  '<p class="card-kicker">Not effective — release identity pending</p>',
-  "<h2>Privacy V3 clause-review source</h2>",
-  "<p>This copy is not published by an unsealed build. The version date, effective UTC time, and exact-byte authority are set only after owner review.</p>",
+  '<p class="card-kicker">Draft for review</p>',
+  "<h2>New privacy notice</h2>",
+  "<p>This draft is not effective or published yet. It must receive a version and effective date before release.</p>",
   "</aside>",
 ].join("");
 const FINAL_SUMMARY =
-  "This notice covers the public site, guest preview, account, and Download. Free guest work stays in the current tab. A signed-in customer can retain an editor project and its $5 Download. Alakazam subscriptions remain held.";
+  "This notice covers the public site, free guest preview, accounts, the $20 Download, domains, Care, and The Responder. It explains what Site Sourcery handles, why it is needed, and the choices available to customers.";
 const REQUIRED_SUBSTANTIVE_COPY = Object.freeze([
   "Pressing Make my preview does not by itself include those business facts in a Site Sourcery project API request.",
   "Choosing to retain it as an editor project requires the signed-in account path and accepted project documents.",
-  "Download does not create a public Internet address or an ongoing website-hosting service.",
+  "Download does not put the file online or include hosting.",
   "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
   "Cloudflare processes the query and connection data under its",
   "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
@@ -230,6 +230,8 @@ export function assertRenderedPrivacyV3Page(source, plan) {
     source.includes("sitesourcery:truth-slot:")
     || source.includes("Privacy V3 clause-review source")
     || source.includes("Not effective — release identity pending")
+    || source.includes("Draft for review")
+    || source.includes("This draft is not effective or published yet.")
     || source.includes(HOSTED_PRIVACY_V3_CANDIDATE.sourceStateAttribute)
   ) {
     throw new Error("rendered privacy V3 retains source-only truth");

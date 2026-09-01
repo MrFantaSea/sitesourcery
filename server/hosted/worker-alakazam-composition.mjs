@@ -38,6 +38,16 @@ import {
   createAlakazamRetainedPremiumLifecycle
 } from "./alakazam-retained-premium-lifecycle.mjs";
 import {
+  createLeasedLifecycleWorker,
+  lifecycleWorkerOptionsFromEnvironment
+} from "./leased-lifecycle-worker.mjs";
+import {
+  createPublicationControlWorkerExecutor
+} from "./publication-control-worker-executor.mjs";
+import {
+  createPostgresPublicationControlWorkerRepository
+} from "./publication-control-worker-postgres.mjs";
+import {
   createPostgresAlakazamRetainedPremiumRepository
 } from "./alakazam-retained-premium-postgres.mjs";
 import {
@@ -94,6 +104,7 @@ export function createAlakazamWorkerFactories({
 } = {}) {
   let commonPromise = null;
   let fulfillmentPromise = null;
+  let publicationPromise = null;
   let lifecyclePromise = null;
 
   async function common() {
@@ -251,8 +262,97 @@ export function createAlakazamWorkerFactories({
     return lifecyclePromise;
   }
 
+  async function publicationControl({ loop }) {
+    if (!publicationPromise) {
+      publicationPromise = (async () => {
+        const shared = await common();
+        if (
+          !publicationPort ||
+          typeof publicationPort.readiness !== "function" ||
+          typeof publicationPort.request !== "function" ||
+          typeof publicationPort.rollback !== "function" ||
+          typeof publicationPort.unpublish !== "function"
+        ) {
+          const error = new Error(
+            "The private publication command client is required."
+          );
+          error.code = "WORKER_DEPENDENCY_NOT_READY";
+          throw error;
+        }
+        const options = lifecycleWorkerOptionsFromEnvironment(
+          environment,
+          {
+            prefix: "SITESOURCERY_ALAKAZAM_PUBLICATION_WORKER",
+            intervalMs: loop.intervalMs,
+            errorBackoffMs: loop.errorBackoffMs,
+            maximumBackoffMs: loop.maximumBackoffMs
+          }
+        );
+        const repository =
+          createPostgresPublicationControlWorkerRepository({ authority });
+        const executor = createPublicationControlWorkerExecutor({
+          publicationPort
+        });
+        const publication = await publicationPort.readiness();
+        const enabled =
+          options.enabled &&
+          shared.release.mode === "approved" &&
+          shared.workerPolicy.ready === true &&
+          publication?.ready === true && publication?.held === false;
+        const worker = createLeasedLifecycleWorker({
+          purpose: "alakazam-publication",
+          repository,
+          executor,
+          clock: shared.commerce.clock,
+          enabled,
+          intervalMs: options.intervalMs,
+          errorBackoffMs: options.errorBackoffMs,
+          maximumBackoffMs: options.maximumBackoffMs,
+          batchLimit: options.batchLimit,
+          leaseSeconds: options.leaseSeconds,
+          log
+        });
+        return Object.freeze({
+          worker,
+          async readiness() {
+            const [storage, dependency, currentPublication] =
+              await Promise.all([
+                repository.readiness(),
+                executor.readiness(),
+                publicationPort.readiness()
+              ]);
+            const ready = enabled &&
+              storage?.ready === true && storage?.verified === true &&
+              dependency?.ready === true && dependency?.verified === true &&
+              currentPublication?.ready === true &&
+              currentPublication?.held === false;
+            return Object.freeze({
+              ready,
+              verified: ready,
+              purpose: "alakazam-publication",
+              mode: options.mode,
+              release: shared.release.mode,
+              policy: shared.workerPolicy.state,
+              policyCode: shared.workerPolicy.code,
+              storageReady: storage?.ready === true,
+              publicationTransportReady:
+                currentPublication?.ready === true,
+              publication: currentPublication?.held === false
+                ? "approved"
+                : "held",
+              providerEffects: enabled ? "owner-approved" : "held",
+              code: ready ? null : "ALAKAZAM_PUBLICATION_WORKER_HELD"
+            });
+          }
+        });
+      })();
+    }
+    return publicationPromise;
+  }
+
   return Object.freeze({
     "alakazam-fulfillment": fulfillment,
+    "alakazam-publication": publicationControl,
     "alakazam-retained-lifecycle": retainedLifecycle
   });
 }

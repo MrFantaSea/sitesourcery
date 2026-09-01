@@ -50,10 +50,14 @@ import {
   PAGES_JOINT_LEGAL_V3_ROOT,
 } from "./hosted-truth/pages-legal-v4.mjs";
 import {
-  assertPagesJointLegalV5Artifact,
   createPagesJointLegalV5Plan,
   pagesLegalV5Files,
 } from "./hosted-truth/pages-legal-v5.mjs";
+import {
+  assertPagesJointLegalV7Artifact,
+  createPagesJointLegalV7Plan,
+  pagesLegalV7Files,
+} from "./hosted-truth/pages-legal-v7.mjs";
 
 const DEFAULT_CATALOG_FILE = "data/abracadabra-hosted-catalog.held.json";
 const COMMERCIAL_CONTROL_FILE = "data/abracadabra-commercial-control.json";
@@ -83,43 +87,16 @@ const JOINT_LEGAL_CURRENT_FILES = Object.freeze([
   "legal/website-terms/index.html",
 ]);
 const FIN007_HOSTED_TRUTH_SLOTS = hostedTruthSlots;
-const FIN007_HELD_TRUTH_REQUIREMENTS = Object.freeze({
-  ...heldTruthRequirements,
-  "index.html": Object.freeze(
-    heldTruthRequirements["index.html"].map((phrase) => phrase ===
-      "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400."
-      ? "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350."
-      : phrase),
-  ),
-  "abracadabra/how/index.html": Object.freeze([
-    "Make your preview in six short steps.",
-    "Looking is free. The private Download and Alakazam payment paths remain held",
-    "Start building",
-  ]),
-});
-const FIN007_HOSTED_TRUTH_REQUIREMENTS = Object.freeze({
-  ...hostedTruthRequirements,
-  "index.html": Object.freeze(
-    hostedTruthRequirements["index.html"].map((phrase) => phrase ===
-      "Three ways to start: make a free preview, get a $200 assessment of the site you have, or commission a custom build from $400."
-      ? "Three ways to start: make a free preview, get a $350 assessment of the site you have, or commission a custom build from $350."
-      : phrase),
-  ),
-  "abracadabra/how/index.html": Object.freeze([
-    "Make your preview in six short steps.",
-    "Looking is free. Download is $20 once per saved editor project",
-    "Sign in only when you want to save the project, review its exact one-time $20 quote and delivery terms, and download the accepted HTML after payment.",
-    "Start building",
-  ]),
-});
+const FIN007_HELD_TRUTH_REQUIREMENTS = heldTruthRequirements;
+const FIN007_HOSTED_TRUTH_REQUIREMENTS = hostedTruthRequirements;
 const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   ...hostedStagingAssetSha256,
   "abracadabra/app/abracadabra-api.js":
-    "d9946f089312119a04d504fe87ed166f0f35efd9cfe81eb926d4dd017a17b1a9",
+    "9e53ff3d9ff1d6112ae129b5f63dbb7666ccc8090725b197f72996bed6217408",
   "abracadabra/app/abracadabra-hosted-control.js":
     "cc3336358e99f252a4694d08d307dc37550525c7cf8ebf4e9c00e96fba5a6274",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "fec69c6174482ac42749317312c8f01437688f3ba8ad833d955521971c697257",
+    "fa676a170ccf9a4d98cbbaa6ecc8349481cb90a80a034b1af240cbaedfae9a71",
 });
 
 function lexical(left, right) {
@@ -432,19 +409,19 @@ function hostedFilesForPlans(
   privacyV3Plan,
   jointLegalV3Plan,
   jointLegalV4Plan,
-  jointLegalV5Plan,
+  jointLegalV7Plan,
 ) {
   const legalPlans = [
     jointLegalV3Plan,
     jointLegalV4Plan,
-    jointLegalV5Plan,
+    jointLegalV7Plan,
   ].filter(Boolean);
   if ((privacyV3Plan && legalPlans.length > 0) || legalPlans.length > 1) {
     throw new Error("legal rendering and finalization inputs are mutually exclusive");
   }
   if (legalPlans.length === 0) return hostedFilesForPrivacyV3Plan(privacyV3Plan);
-  if (jointLegalV5Plan) {
-    return pagesLegalV5Files(hostedFileAllowlist, jointLegalV5Plan);
+  if (jointLegalV7Plan) {
+    return pagesLegalV7Files(hostedFileAllowlist, jointLegalV7Plan);
   }
   return Object.freeze([
     ...new Set([
@@ -473,6 +450,13 @@ export function hostedFilesForJointLegalV5({
   root = process.cwd(),
 } = {}) {
   const plan = createPagesJointLegalV5Plan({ root: path.resolve(root) });
+  return pagesLegalV5Files(hostedFileAllowlist, plan);
+}
+
+export function hostedFilesForJointLegalV7({
+  root = process.cwd(),
+} = {}) {
+  const plan = createPagesJointLegalV7Plan({ root: path.resolve(root) });
   return hostedFilesForPlans(null, null, null, plan);
 }
 
@@ -574,11 +558,14 @@ export function assertNoHeldAlakazamCopySemantics(sources) {
   return true;
 }
 
-export function assertHostedAlakazamUiHeld(source) {
+export function assertHostedAlakazamUiReleased(source) {
   const customerControl = String(source);
-  const heldState = 'var ALAKAZAM_PUBLIC_OFFER_STATE = "held";';
-  if (occurrences(customerControl, heldState) !== 1) {
-    throw new Error("hosted customer control must keep Alakazam explicitly held");
+  const releasedState =
+    'var ALAKAZAM_PUBLIC_OFFER_STATE = "released";';
+  if (occurrences(customerControl, releasedState) !== 1) {
+    throw new Error(
+      "hosted customer control must release Alakazam explicitly",
+    );
   }
   const requestStart = customerControl.indexOf(
     "function requestAlakazamAccount(projectId)",
@@ -595,7 +582,7 @@ export function assertHostedAlakazamUiHeld(source) {
     || requestSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
       > requestSource.indexOf(".getAlakazamAccount(selectedProjectId)")
   ) {
-    throw new Error("held Alakazam account reads must fail before any API call");
+    throw new Error("Alakazam release gate must precede every account API call");
   }
   const renderStart = customerControl.indexOf("function renderAlakazamAccount(state)");
   const renderEnd = customerControl.indexOf("function reducedMotion", renderStart);
@@ -607,7 +594,7 @@ export function assertHostedAlakazamUiHeld(source) {
     || renderSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
       > renderSource.indexOf("requestAlakazamAccount(projectId)")
   ) {
-    throw new Error("held Alakazam rendering must return before account loading");
+    throw new Error("Alakazam rendering must preserve its explicit release gate");
   }
   const capabilityStart = customerControl.indexOf("var capabilityRequest =");
   const capabilityEnd = customerControl.indexOf("Promise.all([", capabilityStart);
@@ -620,7 +607,7 @@ export function assertHostedAlakazamUiHeld(source) {
       'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
     ) !== 4
   ) {
-    throw new Error("held Alakazam capabilities must remain false despite server input");
+    throw new Error("Alakazam capabilities must require the explicit release gate");
   }
   const insertionStart = customerControl.indexOf("var alakazamAnchor =");
   const insertionEnd = customerControl.indexOf("function value(name)", insertionStart);
@@ -634,7 +621,7 @@ export function assertHostedAlakazamUiHeld(source) {
       'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
     ) !== 2
   ) {
-    throw new Error("held Alakazam panel must never enter the customer DOM");
+    throw new Error("Alakazam panels must require the explicit release gate");
   }
   return true;
 }
@@ -833,7 +820,7 @@ async function loadAndValidateHeldSources(absoluteRoot) {
     );
   }
   assertNoHeldAlakazamExecutableSemantics(shippedJavascript);
-  assertHostedAlakazamUiHeld(
+  assertHostedAlakazamUiReleased(
     await readFile(
       path.join(
         absoluteRoot,
@@ -1017,7 +1004,7 @@ async function writeHostedArtifact({
   privacyV3Plan,
   jointLegalV3Plan,
   jointLegalV4Plan,
-  jointLegalV5Plan,
+  jointLegalV7Plan,
   artifactFiles,
 }) {
   const jointLegalPlan = jointLegalV4Plan ?? jointLegalV3Plan;
@@ -1029,9 +1016,9 @@ async function writeHostedArtifact({
   for (const file of artifactFiles) {
     const destination = path.join(staging, ...file.split("/"));
     await mkdir(path.dirname(destination), { recursive: true });
-    const finalizedV5Source = jointLegalV5Plan?.sourceByFile.get(file);
-    if (finalizedV5Source) {
-      await copyFile(finalizedV5Source, destination);
+    const finalizedV7Source = jointLegalV7Plan?.sourceByFile.get(file);
+    if (finalizedV7Source) {
+      await copyFile(finalizedV7Source, destination);
       continue;
     }
     const finalizedLegalArtifact = jointLegalPlan?.artifacts.find(
@@ -1204,24 +1191,24 @@ export async function verifyHostedArtifact({
     jointLegalV4FinalizationRoot,
     absoluteRoot,
   );
-  const jointLegalV5Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
+  const jointLegalV7Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
     ? null
-    : createPagesJointLegalV5Plan({ root: absoluteRoot });
+    : createPagesJointLegalV7Plan({ root: absoluteRoot });
   const artifactFiles = hostedFilesForPlans(
     privacyV3Plan,
     jointLegalV3Plan,
     jointLegalV4Plan,
-    jointLegalV5Plan,
+    jointLegalV7Plan,
   );
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
-  assertPrivacyV3CandidateSources({ root: absoluteRoot });
+  if (privacyV3Plan) assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const outputState = await lstat(absoluteOutput);
   if (!outputState.isDirectory() || outputState.isSymbolicLink()) {
     throw new Error(`hosted artifact must be a real directory: ${absoluteOutput}`);
   }
   assertImmutableLegalArtifactSources({ root: absoluteOutput });
-  if (jointLegalV5Plan) {
-    assertPagesJointLegalV5Artifact(absoluteOutput, jointLegalV5Plan);
+  if (jointLegalV7Plan) {
+    assertPagesJointLegalV7Artifact(absoluteOutput, jointLegalV7Plan);
   } else if (jointLegalV3Plan || jointLegalV4Plan) {
     await assertJointLegalArtifact(
       absoluteOutput,
@@ -1290,7 +1277,7 @@ export async function verifyHostedArtifact({
       artifactTextSources.get(file),
     ]),
   ));
-  assertHostedAlakazamUiHeld(
+  assertHostedAlakazamUiReleased(
     artifactTextSources.get(
       "abracadabra/app/abracadabra-customer-control-dom.js",
     ),
@@ -1306,7 +1293,7 @@ export async function verifyHostedArtifact({
     ),
   );
   const applicableTruthRequirements = (
-    jointLegalV3Plan || jointLegalV4Plan || jointLegalV5Plan
+    jointLegalV3Plan || jointLegalV4Plan || jointLegalV7Plan
   )
     ? Object.fromEntries(
       Object.entries(FIN007_HOSTED_TRUTH_REQUIREMENTS).filter(
@@ -1447,9 +1434,9 @@ export async function buildHostedArtifact({
     jointLegalV4FinalizationRoot,
     absoluteRoot,
   );
-  const jointLegalV5Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
+  const jointLegalV7Plan = privacyV3Plan || jointLegalV3Plan || jointLegalV4Plan
     ? null
-    : createPagesJointLegalV5Plan({ root: absoluteRoot });
+    : createPagesJointLegalV7Plan({ root: absoluteRoot });
   if (
     (privacyV3Plan || jointLegalV3Plan)
     && absoluteOutput === path.join(absoluteRoot, "_hosted")
@@ -1460,10 +1447,10 @@ export async function buildHostedArtifact({
     privacyV3Plan,
     jointLegalV3Plan,
     jointLegalV4Plan,
-    jointLegalV5Plan,
+    jointLegalV7Plan,
   );
   assertImmutableLegalArtifactSources({ root: absoluteRoot });
-  assertPrivacyV3CandidateSources({ root: absoluteRoot });
+  if (privacyV3Plan) assertPrivacyV3CandidateSources({ root: absoluteRoot });
   const rootState = await lstat(absoluteRoot);
   if (!rootState.isDirectory() || rootState.isSymbolicLink()) {
     throw new Error(`site root must be a real directory: ${absoluteRoot}`);
@@ -1492,7 +1479,7 @@ export async function buildHostedArtifact({
       privacyV3Plan,
       jointLegalV3Plan,
       jointLegalV4Plan,
-      jointLegalV5Plan,
+      jointLegalV7Plan,
       artifactFiles,
     });
     await verifyHostedArtifact({

@@ -41,6 +41,10 @@ export const ALAKAZAM_CATALOG_VERSION =
   "alakazam.2026-08-02.v1";
 export const ALAKAZAM_TERMS_VERSION =
   "alakazam-owner-contract.2026-08-02.v1";
+export const ALAKAZAM_CANCELLATION_POLICY_VERSION =
+  "alakazam-cancellation.2026-08-31.v1";
+export const ALAKAZAM_CANCELLATION_POLICY =
+  "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export";
 export const ALAKAZAM_DOWNLOAD_CREDIT_MINOR =
   DOWNLOAD_ALAKAZAM_CREDIT_MINOR;
 
@@ -343,7 +347,9 @@ function quoteDisclosure({
         changeKind === "downgrade"
     },
     premiumConfiguration: "preserved_when_inactive",
-    cancellationPolicy: "owner_review_required_before_release"
+    cancellationPolicy: ALAKAZAM_CANCELLATION_POLICY,
+    cancellationPolicyVersion:
+      ALAKAZAM_CANCELLATION_POLICY_VERSION
   };
 }
 

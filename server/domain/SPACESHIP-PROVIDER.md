@@ -1,6 +1,6 @@
 # Spaceship provider boundary
 
-Reviewed **2026-07-28**. This document records the provider facts used by
+Reviewed **2026-08-31**. This document records the provider facts used by
 `adapters/spaceship.mjs`; it is not authorization to call Spaceship.
 
 ## Official sources
@@ -9,7 +9,7 @@ Reviewed **2026-07-28**. This document records the provider facts used by
   key/secret headers, permissions, endpoints, rate limits, schemas, HTTP 202
   semantics, and the exact `spaceship-async-operationid` response header.
 - [Spaceship MCP tools reference](https://www.spaceship.com/knowledgebase/spaceship-mcp/)
-  — updated 2026-07-22; documents the no-charge `domain_register` preview,
+  — updated 2026-08-18; documents the no-charge `domain_register` preview,
   standard and premium USD pricing, the `confirm` boundary, and the remote MCP
   URL.
 - [Universal Terms](https://www.spaceship.com/legal/universal-terms-of-service-agreement/)
@@ -39,25 +39,26 @@ The ordinary API is used only for capabilities it publicly documents:
 | Nameservers | `PUT .../nameservers` plus domain readback | `domains:write`, `domains:read` |
 | DNS records | `GET`, `PUT`, `DELETE /api/v1/dns/records/{domain}` | `dnsrecords:read`, `dnsrecords:write` |
 
-The ordinary availability response documents a registration price only for
-premium names. It does not document a complete no-charge standard-domain price
-response. The adapter therefore never turns ordinary availability data into a
-standard-domain quote and never invents a price.
+The ordinary REST availability response documents a registration price only
+for premium names. It does not document a complete no-charge standard-domain
+price response, so the REST adapter does not invent one. The newer official MCP
+reference does document USD availability pricing for both standard and premium
+names.
 
 Instead, `previewRegistration` requires one narrow injected source. Its output
 must carry the exact provenance
-`spaceship-mcp.domain_register.preview/2026-07-22`, say
+`spaceship-mcp.domain_register.preview/2026-08-18`, say
 `confirmation_required` and `noCharge: true`, bind the A-label domain and
 registration years, contain a current observation time, and supply a safe
 integer USD amount in minor units. Every mismatch fails closed.
 
-The official MCP reference documents the no-charge preview behavior, but its
-public setup guidance only describes the remote URL, interactive sign-in, and
-user-approved access. It does not provide a stable server-to-server OAuth
-client, token storage, refresh, audience, or revocation contract. This
-repository therefore contains no generic MCP transport, no OAuth assumption,
-and no token. A separately reviewed authenticated bridge must implement only
-the narrow preview port.
+The official MCP reference documents a no-charge first call that returns the
+domain, registration term, exact USD charge, privacy and auto-renew choices,
+payment and contact details, and a confirmation token. Registration and spend
+occur only on the second call using that token. Its public setup guidance still
+describes the remote URL, interactive sign-in, and user-approved access rather
+than a general server-to-server credential contract. Production automation
+therefore still needs a reviewed authentication and secret-storage design.
 
 The billed REST registration response is HTTP 202 plus the exact async
 operation header. Its documented response does not contain the final provider
@@ -127,12 +128,11 @@ applicable, and every relevant registry/TLD supplement. Site Sourcery must
 retain the version, digest, timestamp, authenticated actor/session, registrant
 profile digest, and disclosure evidence.
 
-There is a separate unresolved commercial blocker: section 32 of the Universal
-Terms says the Services may not be sold, resold, or commercially exploited
-without Spaceship's prior express written consent. The Domain Registration
-Agreement's third-party-agent language does not erase that clause. Do not launch
-Site Sourcery's middleman domain sale until Spaceship gives written permission
-for this exact model and the permission reference is recorded.
+The commercial-permission blocker is resolved. The owner reports prior express
+written permission from Spaceship by email for Site Sourcery's commercial
+middleman model. The raw email and private identifiers are not stored here.
+Before launch, retain a private reference to that permission in release
+evidence; do not reopen the old “permission missing” loop.
 
 ## Technical completion versus launch authority
 
@@ -150,7 +150,8 @@ Implemented and mock-tested:
 
 Still required before live construction is permitted:
 
-- Spaceship's prior express written resale/commercial-use consent;
+- a private release-evidence reference to the owner-confirmed written
+  resale/commercial-use permission;
 - owner approval naming the environment and exact allowed capabilities;
 - publication-release approval;
 - API credentials in an encrypted secret vault, never environment plaintext;
@@ -170,6 +171,6 @@ Run the non-mutating assessment with exact Node 24.18.0:
 npm run readiness:spaceship
 ```
 
-By default it reports a held/not-ready state and exits non-zero. It does not
+By default it reports a not-ready state and exits non-zero. It does not
 read credential values, contact data, the network, DNS, or Spaceship, and it
 cannot register or bill anything.

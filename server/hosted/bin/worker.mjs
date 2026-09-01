@@ -101,6 +101,7 @@ if (selected.configuration.activation === "held") {
     const publicationPort = selected.configuration.purposes.some(
       (purpose) => [
         "alakazam-fulfillment",
+        "alakazam-publication",
         "project-lifecycle"
       ].includes(purpose)
     )

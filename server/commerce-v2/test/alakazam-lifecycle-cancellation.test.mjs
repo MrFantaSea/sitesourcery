@@ -10,6 +10,7 @@ import {
 import {
   ALAKAZAM_CANCELLATION_FACTS_SCHEMA,
   ALAKAZAM_CANCELLATION_PREVIEW_SCHEMA,
+  ALAKAZAM_CANCELLATION_REQUEST_SCHEMA,
   ALAKAZAM_CANCELLATION_SUBSCRIPTION_SCHEMA,
   ALAKAZAM_EXPORT_GRANT_SCHEMA,
   createAlakazamCancellationService,
@@ -39,7 +40,6 @@ const APPROVED_RELEASE = createAlakazamBillingRelease({
   taxMode: "disabled_by_owner"
 });
 
-// Hypothetical. The owner has not made this ruling.
 const EXAMPLE_POLICY = createAlakazamLifecyclePolicy({
   approved: true,
   policyVersion: "alakazam-lifecycle.2026-08-08.v1",
@@ -116,14 +116,29 @@ function harness({
   facts,
   result,
   subscription,
+  claim,
+  scheduled,
   release = APPROVED_RELEASE,
   policy = createAlakazamLifecyclePolicy()
 } = {}) {
-  const calls = { readbacks: [], writes: [] };
+  const calls = {
+    claims: [],
+    readbacks: [],
+    schedules: [],
+    writes: []
+  };
   const service = createAlakazamCancellationService({
     repository: {
       async readCancellationSubscription() {
         return subscription ?? null;
+      },
+      async claimCancellationRequest(input) {
+        calls.claims.push(input);
+        return claim ?? {
+          status: "reserved",
+          cancellationId: input.cancellationId,
+          state: "dispatching"
+        };
       },
       async findCancellationBySubscription() {
         return resolved;
@@ -146,12 +161,23 @@ function harness({
       async retrieveAlakazamCancellation(input) {
         calls.readbacks.push(input);
         return facts;
+      },
+      async scheduleCancellation(input) {
+        calls.schedules.push(input);
+        return scheduled ?? {
+          subscriptionId:
+            "sub_alakazam_cancel_1",
+          providerStatus: "active",
+          cancelAtPeriodEnd: true,
+          effectiveAt: PERIOD_END
+        };
       }
     },
     clock: { now: () => VERIFIED_AT },
     ids: {
       next(label) {
         return {
+          alakazam_cancellation: CANCELLATION_ID,
           alakazam_cancellation_event: EVENT_ROW_ID,
           alakazam_cancellation_tier_event: TIER_EVENT_ID,
           alakazam_export_grant: GRANT_ID
@@ -170,7 +196,8 @@ test(
     const preview = previewAlakazamCancellation({
       policy: createAlakazamLifecyclePolicy(),
       subscription: cancellationSubscription(),
-      now: REQUESTED_AT
+      now: REQUESTED_AT,
+      effectsAuthorized: false
     });
     assert.equal(
       preview.schema,
@@ -187,7 +214,7 @@ test(
     assert.equal(preview.export.state, "available");
     assert.equal(preview.export.paidThroughAt, PERIOD_END);
     assert.equal(preview.export.availableFrom, REQUESTED_AT);
-    // What happens BEYOND the paid period is not invented.
+    // A held lifecycle authority cannot invent a retention window.
     assert.equal(
       preview.export.retentionState,
       "policy_decision_required"
@@ -196,9 +223,20 @@ test(
     assert.equal(preview.export.exportWindowEndsAt, null);
     assert.equal(
       preview.refundTreatment,
-      "policy_decision_required"
+      "no_partial_period_refund_or_proration"
     );
+    assert.deepEqual(preview.refundExceptions, [
+      "required_by_law",
+      "duplicate_or_unauthorized_charge",
+      "proven_service_failure"
+    ]);
+    assert.equal(preview.cancellationFeeMinor, 0);
     assert.equal(preview.undoAvailable, false);
+    assert.equal(
+      preview.undoTreatment,
+      "resubscribe_separately"
+    );
+    assert.match(preview.disclosureDigest, /^[a-f0-9]{64}$/u);
     assert.equal(preview.actions.requestCancellation, false);
   }
 );
@@ -312,6 +350,145 @@ test(
         })
       ),
       false
+    );
+  }
+);
+
+test(
+  "an approved customer request schedules only the paid-period boundary",
+  async () => {
+    const current = cancellationSubscription();
+    const { service, calls } = harness({
+      subscription: current,
+      policy: EXAMPLE_POLICY
+    });
+    const preview = await service.preview({
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID
+    });
+    assert.equal(preview.actions.requestCancellation, true);
+    assert.equal(preview.actions.reason, null);
+    assert.equal(preview.disclosure.cancellationFeeMinor, 0);
+    assert.equal(preview.disclosure.retainedExitHours, 720);
+    assert.equal(preview.disclosure.exportWindowHours, 336);
+
+    const result = await service.request(
+      {
+        tenantId: TENANT_ID,
+        customerId: CUSTOMER_ID,
+        projectId: PROJECT_ID
+      },
+      {
+        acceptedDisclosureDigest: preview.disclosureDigest
+      }
+    );
+    assert.equal(
+      result.schema,
+      ALAKAZAM_CANCELLATION_REQUEST_SCHEMA
+    );
+    assert.equal(result.status, "provider_confirmation_pending");
+    assert.equal(result.effectiveAt, PERIOD_END);
+    assert.equal(result.servesUntil, PERIOD_END);
+    assert.equal(result.cancellationFeeMinor, 0);
+    assert.equal(result.furtherChargesAfterEffective, false);
+    assert.equal(result.next, "verified_provider_confirmation");
+    assert.equal(calls.claims.length, 1);
+    assert.equal(calls.schedules.length, 1);
+    assert.deepEqual(calls.schedules[0], {
+      stripeSubscriptionId: "sub_alakazam_cancel_1",
+      idempotencyKey:
+        `alakazam:cancel:${CANCELLATION_ID}`,
+      cancellationDigest: preview.disclosureDigest
+    });
+  }
+);
+
+test(
+  "a changed disclosure and a held release never reach Stripe",
+  async () => {
+    const approved = harness({
+      subscription: cancellationSubscription(),
+      policy: EXAMPLE_POLICY
+    });
+    await assert.rejects(
+      () => approved.service.request(
+        {
+          tenantId: TENANT_ID,
+          customerId: CUSTOMER_ID,
+          projectId: PROJECT_ID
+        },
+        { acceptedDisclosureDigest: "a".repeat(64) }
+      ),
+      { code: "alakazam_cancellation_disclosure_changed" }
+    );
+    assert.deepEqual(approved.calls.claims, []);
+    assert.deepEqual(approved.calls.schedules, []);
+
+    const held = harness({
+      subscription: cancellationSubscription(),
+      policy: EXAMPLE_POLICY,
+      release: createAlakazamBillingRelease()
+    });
+    const heldPreview = await held.service.preview({
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID
+    });
+    assert.equal(
+      heldPreview.actions.requestCancellation,
+      false
+    );
+    await assert.rejects(
+      () => held.service.request(
+        {
+          tenantId: TENANT_ID,
+          customerId: CUSTOMER_ID,
+          projectId: PROJECT_ID
+        },
+        {
+          acceptedDisclosureDigest:
+            heldPreview.disclosureDigest
+        }
+      ),
+      { code: "alakazam_cancellation_unavailable" }
+    );
+    assert.deepEqual(held.calls.claims, []);
+    assert.deepEqual(held.calls.schedules, []);
+  }
+);
+
+test(
+  "a retry reuses the durable cancellation ID as Stripe idempotency",
+  async () => {
+    const { service, calls } = harness({
+      subscription: cancellationSubscription(),
+      policy: EXAMPLE_POLICY,
+      claim: {
+        status: "existing",
+        cancellationId: CANCELLATION_ID,
+        state: "dispatching"
+      }
+    });
+    const preview = await service.preview({
+      tenantId: TENANT_ID,
+      customerId: CUSTOMER_ID,
+      projectId: PROJECT_ID
+    });
+    const result = await service.request(
+      {
+        tenantId: TENANT_ID,
+        customerId: CUSTOMER_ID,
+        projectId: PROJECT_ID
+      },
+      {
+        acceptedDisclosureDigest: preview.disclosureDigest
+      }
+    );
+    assert.equal(result.cancellationId, CANCELLATION_ID);
+    assert.equal(
+      calls.schedules[0].idempotencyKey,
+      `alakazam:cancel:${CANCELLATION_ID}`
     );
   }
 );

@@ -35,7 +35,6 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
-  assertPrivacyV3CandidateSources,
   immutableLegalArtifacts,
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
@@ -46,17 +45,14 @@ const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const CANONICAL_PHONE_DISPLAY = "(856) 244-1220";
 const CANONICAL_PHONE_TEL = "tel:+18562441220";
 const CANONICAL_MAILBOX = "sitesourcery@proton.me";
-const HELD_ALAKAZAM_PRICE_DISCLOSURE =
-  "The planned $25, $35, and $50 Alakazam plans are not available.";
-const HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES = new Set([
-  "faq/index.html",
-  "legal/website-terms/index.html",
-]);
 const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
-  "legal/privacy/index.html",
   "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
-  "legal/website-terms/index.html",
   "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
+]);
+const UNPUBLISHED_LEGAL_DRAFT_FILES = new Set([
+  "legal/index.html",
+  "legal/privacy/index.html",
+  "legal/website-terms/index.html",
 ]);
 
 /**
@@ -82,9 +78,9 @@ const ALLOWED_EXTERNAL = new Set([
 ]);
 
 /**
- * Direct public Payment Links are forbidden. The $20 Download uses authenticated
- * server Checkout, while Alakazam remains held. Keep the origin constant only
- * so malformed lookalike links and any accidental public release fail loudly.
+ * Direct public Payment Links are forbidden. The $20 Download and Alakazam use
+ * authenticated server Checkout. Keep the origin constant only so malformed
+ * lookalike links and any accidental public-link release fail loudly.
  */
 const CHECKOUT_ORIGIN = "https://buy.stripe.com/";
 
@@ -126,6 +122,7 @@ function catalogPrices(catalog, commerce) {
     buildAddons: catalog.buildAddons,
     architectureBands: catalog.architectureBands,
     migration: catalog.migration,
+    carePlans: catalog.carePlans,
     professionalServices: catalog.professionalServices,
   }, null);
   for (const offer of commerce.SELLABLE) {
@@ -133,6 +130,11 @@ function catalogPrices(catalog, commerce) {
       offer.amountCents !== null
       && offer.availability !== commerce.OFFER_AVAILABILITY.HELD
     ) amounts.add(offer.amountCents / 100);
+    for (const amount of offer.displayAmountsCents ?? []) {
+      if (offer.availability !== commerce.OFFER_AVAILABILITY.HELD) {
+        amounts.add(amount / 100);
+      }
+    }
   }
   return amounts;
 }
@@ -202,21 +204,8 @@ function checkContact(page, source) {
 }
 
 function checkPrices(page, source, allowed) {
-  let priceSource = source;
-  if (HELD_ALAKAZAM_PRICE_DISCLOSURE_FILES.has(page)) {
-    const disclosureCount = source.split(
-      HELD_ALAKAZAM_PRICE_DISCLOSURE
-    ).length - 1;
-    if (disclosureCount !== 1) {
-      fail(
-        page,
-        `held Alakazam price disclosure must appear exactly once, found ${disclosureCount}`
-      );
-    } else {
-      priceSource = source.replace(HELD_ALAKAZAM_PRICE_DISCLOSURE, "");
-    }
-  }
-  for (const raw of priceSource.match(PRICE) ?? []) {
+  if (UNPUBLISHED_LEGAL_DRAFT_FILES.has(page)) return;
+  for (const raw of source.match(PRICE) ?? []) {
     const amount = Number(raw.replace(/[^\d.]/gu, ""));
     if (amount === 5 && SEALED_FIVE_DOLLAR_LEGAL_V5_FILES.has(page)) {
       continue;
@@ -234,38 +223,6 @@ function checkOfferClaims(page, source, commerce) {
   const offers = new Map(commerce.SELLABLE.map((offer) => [offer.id, offer]));
   const rules = [
     {
-      id: "alacazam.hosting",
-      state: commerce.OFFER_AVAILABILITY.HELD,
-      label: "held Alakazam sale",
-      patterns: [
-        /Abracadabra builds it\. Alakazam keeps it live/iu,
-        /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
-        /Alakazam is the service that keeps it and puts it online/iu,
-        /Live at your own address/iu,
-        /\$25[^<\n]{0,40}(?:month|mo)\b/iu,
-        /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
-        /leaving costs nothing/iu,
-        /Alakazam is (?:active|on)\b/iu,
-      ],
-    },
-    {
-      id: "responder",
-      state: commerce.OFFER_AVAILABILITY.HELD,
-      label: "held Responder sale",
-      patterns: [
-        /\$300\s+setup/iu,
-        /\$250\s+(?:a|per)\s+month/iu,
-        /The Responder[^<\n]{0,80}texts them back/iu,
-        /Answers in seconds|Sent 4 seconds|Switch it off any time/iu,
-      ],
-    },
-    {
-      id: "domain.purchase",
-      state: commerce.OFFER_AVAILABILITY.INQUIRY_ONLY,
-      label: "inquiry-only domain sale",
-      patterns: [/Buy a domain/iu, /rent an address instead/iu],
-    },
-    {
       id: "assessment",
       state: commerce.OFFER_AVAILABILITY.ACCOUNT_ONLY,
       label: "account-only assessment sale",
@@ -281,6 +238,19 @@ function checkOfferClaims(page, source, commerce) {
     for (const pattern of rule.patterns) {
       const match = source.match(pattern);
       if (match) fail(page, `contains ${rule.label} claim ${JSON.stringify(match[0])}`);
+    }
+  }
+  if ([
+    "abracadabra/index.html",
+    "abracadabra/how/index.html",
+    "alakazam/index.html",
+    "faq/index.html",
+  ].includes(page)) {
+    if (source.match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
+      fail(page, "contains stale coming-soon Alakazam copy");
+    }
+    for (const amount of ["$25", "$35", "$50"]) {
+      if (!source.includes(amount)) fail(page, `must plainly show released Alakazam price ${amount}`);
     }
   }
 }
@@ -444,12 +414,13 @@ async function checkRails(pagesSources, commerce, publicCatalog) {
   }
   const expectedOfferAvailability = {
     "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
-    "alacazam.hosting": OFFER_AVAILABILITY.HELD,
-    "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
-    "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+    "alacazam.hosting": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+    "domain.purchase": OFFER_AVAILABILITY.CONTACT_TO_START,
+    "domain.purchase.plus": OFFER_AVAILABILITY.CONTACT_TO_START,
     assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
-    responder: OFFER_AVAILABILITY.HELD,
-    "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+    care: OFFER_AVAILABILITY.CONTACT_TO_START,
+    responder: OFFER_AVAILABILITY.CONTACT_TO_START,
+    "custom.build": OFFER_AVAILABILITY.CONTACT_TO_START,
   };
   const actualOfferAvailability = Object.fromEntries(
     SELLABLE.map((offer) => [offer.id, offer.availability])
@@ -515,6 +486,10 @@ async function checkSeals() {
       ? `/* sitesourcery:truth-slot:${id}:${edge} */`
       : `<!-- sitesourcery:truth-slot:${id}:${edge} -->`;
   for (const slot of slots) {
+    // The current legal sources are explicitly unsealed review drafts. Their
+    // exact bytes are protected by the active legal-review bundle, while the
+    // built site continues to use immutable, separately checked legal files.
+    if (UNPUBLISHED_LEGAL_DRAFT_FILES.has(slot.file)) continue;
     let source;
     try {
       source = await readFile(path.join(ROOT, slot.file), "utf8");
@@ -570,7 +545,6 @@ async function checkSitemap(pages, sources) {
 const pages = (await findPages()).sort();
 try {
   assertImmutableLegalArtifactSources({ root: ROOT });
-  assertPrivacyV3CandidateSources({ root: ROOT });
 } catch (error) {
   fail("legal artifact truth", error.message);
 }

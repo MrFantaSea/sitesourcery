@@ -6565,6 +6565,107 @@ async function verifyAlakazamPolicyAuthority(pool) {
     contract_ready: true
   }]);
 
+  const releasedPolicy = await pool.query(`
+    select
+      policy_id,
+      policy_digest,
+      policy_digest = ss.project_legal_json_digest(policy_document)
+        as digest_ready,
+      state = 'released'
+        and commercial_effects
+        and provider_effects
+        and publication_effects
+        and not automatic_recovery_from_reversal_evidence
+        and hold_reason is null
+        as effects_released,
+      policy_document #>>
+        '{subscription,cancellationPolicyVersion}' =
+          'alakazam-cancellation.2026-08-31.v1'
+        and policy_document #>>
+          '{subscription,cancellationFeeMinor}' = '0'
+        and policy_document #>>
+          '{customerRights,paymentGraceHours}' = '168'
+        and policy_document #>>
+          '{customerRights,retainedExitHours}' = '720'
+        and policy_document #>>
+          '{customerRights,exportWindowHours}' = '720'
+        as customer_rights_ready,
+      has_table_privilege(
+        'service_role', 'ss.alakazam_policy_releases', 'SELECT'
+      )
+        and not has_table_privilege(
+          'service_role', 'ss.alakazam_policy_releases',
+          'INSERT,UPDATE,DELETE'
+        )
+        and not has_table_privilege(
+          'anon', 'ss.alakazam_policy_releases', 'SELECT'
+        )
+        and not has_table_privilege(
+          'authenticated', 'ss.alakazam_policy_releases', 'SELECT'
+        ) as grants_ready,
+      ss.hosted_alakazam_policy_authority_contract_v2() =
+        'canonical-alakazam-policy-authority-v2-released'
+        as contract_ready
+    from ss.alakazam_policy_releases
+  `);
+  assert.deepEqual(releasedPolicy.rows, [{
+    policy_id: "SS-ALAKAZAM-POLICY-2026-08-31-V2",
+    policy_digest:
+      "145892e43ab6f4a03ebbed84fd148633f9a4de9727ce4294a0eb9b08f329c320",
+    digest_ready: true,
+    effects_released: true,
+    customer_rights_ready: true,
+    grants_ready: true,
+    contract_ready: true
+  }]);
+
+  const publicationExecutionV2 = await pool.query(`
+    select
+      to_regclass('ss.publication_control_releases') is not null
+        as releases_ready,
+      to_regclass('ss.publication_control_worker_jobs') is not null
+        as jobs_ready,
+      to_regclass('ss.publication_control_execution_receipts') is not null
+        as receipts_ready,
+      has_table_privilege(
+        'service_role', 'ss.publication_control_releases', 'SELECT,INSERT'
+      )
+        and not has_table_privilege(
+          'service_role', 'ss.publication_control_releases', 'UPDATE,DELETE'
+        )
+        and has_table_privilege(
+          'service_role', 'ss.publication_control_worker_jobs',
+          'SELECT,INSERT,UPDATE'
+        )
+        and not has_table_privilege(
+          'service_role', 'ss.publication_control_worker_jobs', 'DELETE'
+        )
+        and has_table_privilege(
+          'service_role', 'ss.publication_control_execution_receipts',
+          'SELECT,INSERT'
+        )
+        and not has_table_privilege(
+          'service_role', 'ss.publication_control_execution_receipts',
+          'UPDATE,DELETE'
+        )
+        and not has_table_privilege(
+          'anon', 'ss.publication_control_worker_jobs', 'SELECT'
+        )
+        and not has_table_privilege(
+          'authenticated', 'ss.publication_control_releases', 'SELECT'
+        ) as grants_ready,
+      ss.hosted_publication_control_contract_v2() =
+        'canonical-publication-control-v2-released-leased'
+        as contract_ready
+  `);
+  assert.deepEqual(publicationExecutionV2.rows, [{
+    releases_ready: true,
+    jobs_ready: true,
+    receipts_ready: true,
+    grants_ready: true,
+    contract_ready: true
+  }]);
+
   const selectProjection = () => pool.query(
     `select
        organization_id, project_id, customer_user_id, subscription_id,
@@ -6594,17 +6695,44 @@ async function verifyAlakazamPolicyAuthority(pool) {
     false
   );
 
+  const releasedProjection = await pool.query(
+    `select
+       policy_id, authority_digest, state, hold_reason,
+       commercial_effects, provider_effects, publication_effects,
+       automatic_recovery_from_reversal_evidence,
+       lifecycle_state, legacy_evidence_compatible
+     from ss.alakazam_policy_subscription_authority_v2
+     where subscription_id = $1`,
+    [subscriptionId]
+  );
+  assert.deepEqual(releasedProjection.rows, [{
+    policy_id: "SS-ALAKAZAM-POLICY-2026-08-31-V2",
+    authority_digest:
+      "145892e43ab6f4a03ebbed84fd148633f9a4de9727ce4294a0eb9b08f329c320",
+    state: "released",
+    hold_reason: null,
+    commercial_effects: true,
+    provider_effects: true,
+    publication_effects: true,
+    automatic_recovery_from_reversal_evidence: false,
+    lifecycle_state: "pending",
+    legacy_evidence_compatible: true
+  }]);
+
   const repository = createPostgresAlakazamPolicyAuthorityRepository({
     authority: createCanonicalPostgresAuthority({ pool })
   });
   const readiness = await repository.readiness();
   assert.equal(readiness.ready, true);
-  assert.equal(readiness.providerEffects, false);
+  assert.equal(readiness.state, "released");
+  assert.equal(readiness.commercialEffects, true);
+  assert.equal(readiness.providerEffects, true);
+  assert.equal(readiness.publicationEffects, true);
   assert.equal(readiness.automaticRecoveryFromReversalEvidence, false);
   const canonicalPolicy = await repository.policy();
   assert.equal(
     canonicalPolicy.policyId,
-    "SS-ALAKAZAM-POLICY-2026-08-10-V1"
+    "SS-ALAKAZAM-POLICY-2026-08-31-V2"
   );
   const repositoryInput = {
     tenantId: organizationId,
@@ -6616,7 +6744,7 @@ async function verifyAlakazamPolicyAuthority(pool) {
   const replayRepositoryRead = await repository.read(repositoryInput);
   assert.deepEqual(replayRepositoryRead, firstRepositoryRead);
   assert.equal(firstRepositoryRead.lifecycleState, "pending");
-  assert.equal(firstRepositoryRead.providerEffects, false);
+  assert.equal(firstRepositoryRead.providerEffects, true);
 
   const after = await pool.query(`
     select

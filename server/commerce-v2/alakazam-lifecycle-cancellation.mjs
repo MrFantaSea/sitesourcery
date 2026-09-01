@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
 import {
+  ALAKAZAM_CANCELLATION_POLICY,
+  ALAKAZAM_CANCELLATION_POLICY_VERSION,
   ALAKAZAM_PROVIDER_METADATA_SCHEMA,
   resolveAlakazamTier
 } from "./alakazam.mjs";
@@ -15,6 +17,7 @@ import {
 import {
   clone,
   deepFreeze,
+  digest,
   invariant,
   requiredDigest,
   requiredIso,
@@ -36,6 +39,17 @@ export const ALAKAZAM_EXPORT_GRANT_SCHEMA =
   "sitesourcery.alakazam-export-grant/v1";
 export const ALAKAZAM_CANCELLATION_FACTS_SCHEMA =
   "sitesourcery.stripe-alakazam-cancellation/v1";
+export const ALAKAZAM_CANCELLATION_REQUEST_SCHEMA =
+  "sitesourcery.alakazam-cancellation-request/v1";
+
+export const ALAKAZAM_CANCELLATION_REFUND_TREATMENT =
+  "no_partial_period_refund_or_proration";
+export const ALAKAZAM_CANCELLATION_REFUND_EXCEPTIONS =
+  deepFreeze([
+    "required_by_law",
+    "duplicate_or_unauthorized_charge",
+    "proven_service_failure"
+  ]);
 
 const CANCELLABLE_STATES = new Set([
   "active",
@@ -218,11 +232,18 @@ export function projectAlakazamExportGrant({
 export function previewAlakazamCancellation({
   policy,
   subscription,
-  now
+  now,
+  effectsAuthorized = false
 } = {}) {
   const authority = exactAlakazamLifecyclePolicy(policy);
   const current = exactCancellationSubscription(subscription);
   const at = requiredIso(now, "now");
+  invariant(
+    typeof effectsAuthorized === "boolean",
+    "invalid_configuration",
+    "Alakazam cancellation effect authority is invalid",
+    { status: 500 }
+  );
   const eligible =
     CANCELLABLE_STATES.has(current.status) &&
     current.cancelAtPeriodEnd === false &&
@@ -240,6 +261,36 @@ export function previewAlakazamCancellation({
             Date.parse(at)
           ? "period_boundary_passed"
           : null;
+  const disclosure = {
+    schema:
+      "sitesourcery.alakazam-cancellation-disclosure/v1",
+    cancellationPolicy: ALAKAZAM_CANCELLATION_POLICY,
+    cancellationPolicyVersion:
+      ALAKAZAM_CANCELLATION_POLICY_VERSION,
+    projectId: current.projectId,
+    tierId: current.tierId,
+    amountMinor: current.amountMinor,
+    currency: "USD",
+    effectiveAt: current.currentPeriodEndsAt,
+    servesUntil: current.currentPeriodEndsAt,
+    cancellationFeeMinor: 0,
+    furtherChargesAfterEffective: false,
+    refundTreatment:
+      ALAKAZAM_CANCELLATION_REFUND_TREATMENT,
+    refundExceptions: clone(
+      ALAKAZAM_CANCELLATION_REFUND_EXCEPTIONS
+    ),
+    undoAvailable: false,
+    undoTreatment: "resubscribe_separately",
+    retainedExitHours: authority.approved
+      ? authority.retentionHours
+      : null,
+    exportWindowHours: authority.approved
+      ? authority.exportWindowHours
+      : null
+  };
+  const actionAvailable =
+    eligible && authority.approved && effectsAuthorized;
   return deepFreeze({
     schema: ALAKAZAM_CANCELLATION_PREVIEW_SCHEMA,
     projectId: current.projectId,
@@ -251,13 +302,16 @@ export function previewAlakazamCancellation({
     // Service continues to the end of the period already paid for.
     effectiveAt: current.currentPeriodEndsAt,
     servesUntil: current.currentPeriodEndsAt,
+    cancellationFeeMinor: 0,
     // No further charge is made once the provider confirms the stop.
     furtherChargesAfterEffective: false,
-    // OPEN RULING: whether any part of the current period is refunded.
-    refundTreatment: "policy_decision_required",
-    // OPEN RULING: whether a scheduled cancellation may be undone.
+    refundTreatment:
+      ALAKAZAM_CANCELLATION_REFUND_TREATMENT,
+    refundExceptions: clone(
+      ALAKAZAM_CANCELLATION_REFUND_EXCEPTIONS
+    ),
     undoAvailable: false,
-    undoTreatment: "policy_decision_required",
+    undoTreatment: "resubscribe_separately",
     // Once the paid period has already ended there is no remaining
     // paid window to grant, and what survives is purely the open
     // retention ruling.
@@ -270,10 +324,17 @@ export function previewAlakazamCancellation({
             paidThroughAt: current.currentPeriodEndsAt
           })
         : null,
+    disclosure,
+    disclosureDigest: digest(disclosure),
     actions: {
-      // The provider effect is held. A preview never implies a button.
-      requestCancellation: false,
-      reason: "alakazam_cancellation_effect_held"
+      requestCancellation: actionAvailable,
+      reason: !eligible
+        ? ineligibleReason
+        : !authority.approved
+          ? "alakazam_lifecycle_policy_held"
+          : !effectsAuthorized
+            ? "alakazam_cancellation_effect_held"
+            : null
     }
   });
 }
@@ -508,6 +569,70 @@ function exactResolvedCancellation(value, event) {
   });
 }
 
+function exactCancellationScope(value) {
+  exactKeys(
+    value,
+    ["customerId", "projectId", "tenantId"],
+    "invalid_input",
+    "the Alakazam cancellation scope is invalid"
+  );
+  return Object.freeze({
+    tenantId: exactUuid(value.tenantId, "tenantId"),
+    customerId: exactUuid(value.customerId, "customerId"),
+    projectId: exactUuid(value.projectId, "projectId")
+  });
+}
+
+function exactCancellationClaim(value, expected) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      ["reserved", "existing"].includes(value.status) &&
+      UUID.test(value.cancellationId) &&
+      [
+        "dispatching",
+        "scheduled",
+        "reconciliation_required"
+      ].includes(value.state),
+    "repository_conflict",
+    "the durable Alakazam cancellation claim is invalid",
+    { status: 500 }
+  );
+  invariant(
+    value.status === "reserved"
+      ? value.cancellationId === expected.cancellationId &&
+          value.state === "dispatching"
+      : true,
+    "repository_conflict",
+    "the durable Alakazam cancellation claim changed",
+    { status: 500 }
+  );
+  return deepFreeze({
+    status: value.status,
+    cancellationId: value.cancellationId,
+    state: value.state
+  });
+}
+
+function exactProviderCancellation(value, subscription) {
+  invariant(
+    value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      value.subscriptionId ===
+        subscription.stripeSubscriptionId &&
+      typeof value.providerStatus === "string" &&
+      value.cancelAtPeriodEnd === true &&
+      value.effectiveAt ===
+        subscription.currentPeriodEndsAt,
+    "stripe_alakazam_cancellation_mismatch",
+    "Stripe did not schedule the exact Alakazam cancellation",
+    { status: 502 }
+  );
+  return deepFreeze(clone(value));
+}
+
 function validatePorts(repository, provider, clock, ids) {
   for (const [name, value, methods] of [
     [
@@ -515,6 +640,7 @@ function validatePorts(repository, provider, clock, ids) {
       repository,
       [
         "readCancellationSubscription",
+        "claimCancellationRequest",
         "findCancellationBySubscription",
         "confirmCancellationSchedule"
       ]
@@ -522,7 +648,11 @@ function validatePorts(repository, provider, clock, ids) {
     [
       "provider",
       provider,
-      ["readiness", "retrieveAlakazamCancellation"]
+      [
+        "readiness",
+        "retrieveAlakazamCancellation",
+        "scheduleCancellation"
+      ]
     ],
     ["clock", clock, ["now"]],
     ["ids", ids, ["next"]]
@@ -613,22 +743,15 @@ export function createAlakazamCancellationService({
      * would mean, including while the effect itself is held.
      */
     async preview(scope) {
+      const selectedScope = exactCancellationScope(scope);
       const subscription =
         await ports.repository.readCancellationSubscription({
-          tenantId: exactUuid(scope?.tenantId, "tenantId"),
-          customerId: exactUuid(
-            scope?.customerId,
-            "customerId"
-          ),
-          projectId: exactUuid(scope?.projectId, "projectId")
+          ...selectedScope
         });
       if (subscription === null) {
         return deepFreeze({
           schema: ALAKAZAM_CANCELLATION_PREVIEW_SCHEMA,
-          projectId: exactUuid(
-            scope?.projectId,
-            "projectId"
-          ),
+          projectId: selectedScope.projectId,
           eligible: false,
           ineligibleReason: "no_current_subscription",
           tierId: null,
@@ -636,21 +759,137 @@ export function createAlakazamCancellationService({
           currency: "USD",
           effectiveAt: null,
           servesUntil: null,
+          cancellationFeeMinor: 0,
           furtherChargesAfterEffective: false,
-          refundTreatment: "policy_decision_required",
+          refundTreatment:
+            ALAKAZAM_CANCELLATION_REFUND_TREATMENT,
+          refundExceptions: clone(
+            ALAKAZAM_CANCELLATION_REFUND_EXCEPTIONS
+          ),
           undoAvailable: false,
-          undoTreatment: "policy_decision_required",
+          undoTreatment: "resubscribe_separately",
           export: null,
+          disclosure: null,
+          disclosureDigest: null,
           actions: {
             requestCancellation: false,
-            reason: "alakazam_cancellation_effect_held"
+            reason: "no_current_subscription"
           }
         });
       }
       return previewAlakazamCancellation({
         policy: lifecycle,
         subscription,
-        now: exactClock(ports.clock)
+        now: exactClock(ports.clock),
+        effectsAuthorized: authority.approved
+      });
+    },
+
+    /**
+     * Reserve one exact customer request, then ask Stripe to stop the
+     * renewal at the already-paid period boundary. The durable claim is
+     * written before the provider call and its cancellation ID is reused as
+     * the provider idempotency key. Local scheduled state still waits for
+     * verified provider readback through `ingestStripeEvent`.
+     */
+    async request(scope, input) {
+      const selectedScope = exactCancellationScope(scope);
+      exactKeys(
+        input,
+        ["acceptedDisclosureDigest"],
+        "invalid_input",
+        "the Alakazam cancellation request is invalid"
+      );
+      const acceptedDisclosureDigest = requiredDigest(
+        input.acceptedDisclosureDigest,
+        "acceptedDisclosureDigest"
+      );
+      const status = await readiness();
+      invariant(
+        status.ready === true && status.cancellation === true,
+        "alakazam_cancellation_unavailable",
+        "Alakazam cancellation is temporarily unavailable.",
+        { status: 503 }
+      );
+      const subscription =
+        await ports.repository.readCancellationSubscription(
+          selectedScope
+        );
+      invariant(
+        subscription !== null,
+        "alakazam_cancellation_unavailable",
+        "There is no current Alakazam subscription to cancel.",
+        { status: 409 }
+      );
+      const preview = previewAlakazamCancellation({
+        policy: lifecycle,
+        subscription,
+        now: exactClock(ports.clock),
+        effectsAuthorized: true
+      });
+      invariant(
+        preview.eligible === true &&
+          preview.actions.requestCancellation === true,
+        "alakazam_cancellation_unavailable",
+        "This Alakazam subscription cannot be cancelled right now.",
+        { status: 409, details: { reason: preview.ineligibleReason } }
+      );
+      invariant(
+        acceptedDisclosureDigest === preview.disclosureDigest,
+        "alakazam_cancellation_disclosure_changed",
+        "The cancellation details changed. Review them again before confirming.",
+        { status: 409 }
+      );
+      const requestedAt = exactClock(ports.clock);
+      const proposedCancellationId = nextUuid(
+        ports.ids,
+        "alakazam_cancellation"
+      );
+      const claim = exactCancellationClaim(
+        await ports.repository.claimCancellationRequest({
+          cancellationId: proposedCancellationId,
+          subscription: clone(subscription),
+          acceptedDisclosureDigest,
+          requestedAt
+        }),
+        { cancellationId: proposedCancellationId }
+      );
+      invariant(
+        claim.state !== "reconciliation_required",
+        "alakazam_cancellation_reconciliation_required",
+        "This cancellation needs support review before it can continue.",
+        { status: 409 }
+      );
+      invariant(
+        claim.state !== "scheduled",
+        "alakazam_cancellation_already_scheduled",
+        "This Alakazam subscription is already scheduled to end.",
+        { status: 409 }
+      );
+      const providerResult = exactProviderCancellation(
+        await ports.provider.scheduleCancellation({
+          stripeSubscriptionId:
+            subscription.stripeSubscriptionId,
+          idempotencyKey:
+            `alakazam:cancel:${claim.cancellationId}`,
+          cancellationDigest: acceptedDisclosureDigest
+        }),
+        subscription
+      );
+      return deepFreeze({
+        schema: ALAKAZAM_CANCELLATION_REQUEST_SCHEMA,
+        status: "provider_confirmation_pending",
+        provider: "stripe",
+        cancellationId: claim.cancellationId,
+        projectId: subscription.projectId,
+        subscriptionId: subscription.localSubscriptionId,
+        effectiveAt: subscription.currentPeriodEndsAt,
+        servesUntil: subscription.currentPeriodEndsAt,
+        cancellationFeeMinor: 0,
+        furtherChargesAfterEffective: false,
+        acceptedDisclosureDigest,
+        providerStatus: providerResult.providerStatus,
+        next: "verified_provider_confirmation"
       });
     },
 

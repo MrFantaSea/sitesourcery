@@ -70,61 +70,65 @@ const FIXTURES = {
     schema:
       "sitesourcery.alakazam-cancellation-preview/v1",
     projectId: PROJECT_ID,
-    state: "available",
-    accountState: "attention_required",
-    subscription: {
+    eligible: true,
+    ineligibleReason: null,
+    tierId: "alakazam_50",
+    amountMinor: 5000,
+    currency: "USD",
+    effectiveAt: "2026-09-08T11:10:00.000Z",
+    servesUntil: "2026-09-08T11:10:00.000Z",
+    cancellationFeeMinor: 0,
+    furtherChargesAfterEffective: false,
+    refundTreatment:
+      "no_partial_period_refund_or_proration",
+    refundExceptions: [
+      "required_by_law",
+      "duplicate_or_unauthorized_charge",
+      "proven_service_failure"
+    ],
+    undoAvailable: false,
+    undoTreatment: "resubscribe_separately",
+    export: {
+      schema: "sitesourcery.alakazam-export-grant/v1",
+      state: "available",
+      availableFrom: "2026-08-10T11:10:00.000Z",
+      paidThroughAt: "2026-09-08T11:10:00.000Z",
+      retentionState: "granted",
+      policyVersion: "alakazam-lifecycle.2026-08-10.v1",
+      retentionEndsAt: "2026-10-08T11:10:00.000Z",
+      exportWindowEndsAt: "2026-10-08T11:10:00.000Z"
+    },
+    disclosure: {
+      schema:
+        "sitesourcery.alakazam-cancellation-disclosure/v1",
+      cancellationPolicy:
+        "cancel_anytime_period_end_no_fee_no_partial_refund_30_day_export",
+      cancellationPolicyVersion:
+        "alakazam-cancellation.2026-08-31.v1",
+      projectId: PROJECT_ID,
       tierId: "alakazam_50",
-      name: "Alakazam 50",
-      status: "grace",
       amountMinor: 5000,
       currency: "USD",
-      currentPeriodEndsAt: "2026-09-08T11:10:00.000Z"
+      effectiveAt: "2026-09-08T11:10:00.000Z",
+      servesUntil: "2026-09-08T11:10:00.000Z",
+      cancellationFeeMinor: 0,
+      furtherChargesAfterEffective: false,
+      refundTreatment:
+        "no_partial_period_refund_or_proration",
+      refundExceptions: [
+        "required_by_law",
+        "duplicate_or_unauthorized_charge",
+        "proven_service_failure"
+      ],
+      undoAvailable: false,
+      undoTreatment: "resubscribe_separately",
+      retainedExitHours: 720,
+      exportWindowHours: 720
     },
-    effect: {
-      endsAt: "2026-09-08T11:10:00.000Z",
-      keepsAccessUntil: "2026-09-08T11:10:00.000Z",
-      alreadyScheduled: false,
-      website: {
-        state: "live",
-        hostname: "a-really-long-example-address.sitesourcery.me",
-        url: "https://a-really-long-example-address.sitesourcery.me/",
-        publishedUntil: "2026-09-08T11:10:00.000Z",
-        afterEnd: "not_published"
-      },
-      renewalStopped: {
-        tierId: "alakazam_50",
-        amountMinor: 5000,
-        currency: "USD",
-        dueAt: "2026-09-08T11:10:00.000Z",
-        chargedIfCancelled: false,
-        currentTierId: "alakazam_50"
-      },
-      savedSetupKept: true,
-      receiptsKept: true,
-      refund: {
-        state: "owner_review_required",
-        cashRefundMinor: null,
-        providerProration: null
-      }
-    },
-    policy: {
-      cancellationPolicy:
-        "owner_review_required_before_release",
-      released: false,
-      releaseBlocker: "cancellation_policy"
-    },
+    disclosureDigest: "d".repeat(64),
     actions: {
-      confirmCancellation: {
-        available: false,
-        reason:
-          "cancellation_policy_owner_review_required"
-      },
-      billingPortal: {
-        available: false,
-        state: "held",
-        reason: "alakazam_billing_held"
-      },
-      reason: "cancellation_preview_only"
+      requestCancellation: true,
+      reason: null
     }
   },
   states: {
@@ -192,7 +196,7 @@ const PAGE = `<!doctype html>
   .reference { overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
   .notice { padding: 0.75rem; border-radius: 0.5rem; background: rgba(128,128,128,0.15); margin-block-end: 0.5rem; }
   .notice p { margin: 0; }
-  button[disabled] { min-height: 44px; width: 100%; max-width: 22rem; }
+  button { min-height: 44px; width: 100%; max-width: 22rem; }
 </style>
 </head>
 <body>
@@ -497,10 +501,10 @@ for (const viewport of VIEWPORTS) {
           "waiting"
         ]);
 
-        // E-08: the preview shows the consequences and offers no confirmation.
+        // E-08: the preview shows the exact consequences and confirmation.
         assert.match(
           audit.text,
-          /What cancelling would do/u
+          /Review cancellation/u
         );
         assert.match(
           audit.text,
@@ -508,10 +512,11 @@ for (const viewport of VIEWPORTS) {
         );
         assert.match(
           audit.text,
-          /Stays published until September 8, 2026, then comes down\./u
+          /Will not be charged after you confirm\./u
         );
-        assert.match(audit.text, /refund terms/u);
-        assert.equal(audit.buttonDisabled, true);
+        assert.match(audit.text, /Cancellation fee\s+\$0\.00/u);
+        assert.match(audit.text, /30 days/u);
+        assert.equal(audit.buttonDisabled, false);
         assert.ok(
           audit.buttonHeight >= 44,
           `cancel control is only ${audit.buttonHeight}px tall`

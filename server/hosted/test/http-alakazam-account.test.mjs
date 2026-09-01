@@ -109,7 +109,7 @@ test("the production executable composes the account route from canonical projec
   );
   assert.match(
     source,
-    /createHostedAlakazamBillingSurfaces\(\{[\s\S]*?createPostgresAlakazamBillingRepository\(\{\s*authority\s*\}\),\s*account:\s*alakazamAccountService,\s*resolveSession:\s*commerceV2\.resolveSession\s*\}\)/u
+    /createHostedAlakazamBillingSurfaces\(\{[\s\S]*?createPostgresAlakazamBillingRepository\(\{\s*authority\s*\}\),\s*cancellation:\s*alakazamLifecycle\.cancellation,\s*resolveSession:\s*commerceV2\.resolveSession\s*\}\)/u
   );
   assert.match(
     source,
