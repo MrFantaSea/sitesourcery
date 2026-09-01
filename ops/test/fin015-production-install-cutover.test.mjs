@@ -77,8 +77,8 @@ function bundleReceipt() {
       successorInputDigest: FIN015_SUCCESSOR_INPUT_DIGEST,
       ciFinalReceiptFileSha256: FIN015_CI_FINAL_RECEIPT_FILE_SHA256,
       ciFinalReceiptDigest: FIN015_CI_FINAL_RECEIPT_DIGEST,
-      ciRunId: 33462367254,
-      ciRunAttempt: 1,
+      ciRunId: "33462367254",
+      ciRunAttempt: "1",
       originSealSha256: FIN015_ORIGIN_SEAL_SHA256
     },
     evidence: Object.fromEntries(
@@ -280,6 +280,12 @@ test("FIN-015 validates the exact held bundle and action-time install/cutover co
 
 test("FIN-015 rejects bundle tamper and any provider or payment widening", () => {
   for (const mutate of [
+    (receipt) => {
+      receipt.proof.ciRunId = 33462367254;
+    },
+    (receipt) => {
+      receipt.proof.ciRunAttempt = 1;
+    },
     (receipt) => {
       receipt.runtime.providers.twilio = "staging";
     },
