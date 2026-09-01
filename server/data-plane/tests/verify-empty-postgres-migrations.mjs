@@ -985,7 +985,8 @@ async function verifySupportPrivacyCaseLifecycle(pool) {
     ...operatorBase(deletion.id, "support.pg.deletion.deny.0001", 5),
     appealAvailable: true,
     appealBasisDigest: sha("15"),
-    appealDueAt: "2026-09-01T16:00:00.000Z",
+    // The PostgreSQL transition guard compares this field with its real wall clock.
+    appealDueAt: "2099-09-01T16:00:00.000Z",
     denialExplanationDigest: sha("16"),
     denialReasonCode: "legal_exception"
   });
