@@ -420,6 +420,14 @@ test("the API process composes durable publication enqueue without owning provid
   );
   assert.match(
     source,
+    /alakazamPublicationReadiness\?\.ready !== true \|\|[\s\S]*?alakazamPublicationReadiness\?\.authorization !== true \|\|[\s\S]*?alakazamPublicationReadiness\?\.providerEffects !== true \|\|[\s\S]*?alakazamPublicationReadiness\?\.state !== "released"/u
+  );
+  assert.match(
+    source,
+    /\[\s*alakazam35Readiness,\s*alakazam50Readiness,\s*alakazamRetainedPremiumReadiness\s*\]\.some/u
+  );
+  assert.match(
+    source,
     /createHostedApi\(service,\s*\{[\s\S]*?alakazamPublication,/u
   );
   const composition = source.match(

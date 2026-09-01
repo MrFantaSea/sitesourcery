@@ -1404,8 +1404,11 @@ async function start() {
     ].some((entry) =>
       entry?.ready !== true || entry?.state !== "ready"
     ) ||
+    alakazamPublicationReadiness?.ready !== true ||
+    alakazamPublicationReadiness?.authorization !== true ||
+    alakazamPublicationReadiness?.providerEffects !== true ||
+    alakazamPublicationReadiness?.state !== "released" ||
     [
-      alakazamPublicationReadiness,
       alakazam35Readiness,
       alakazam50Readiness,
       alakazamRetainedPremiumReadiness
@@ -1417,7 +1420,7 @@ async function start() {
     )
   ) {
     throw new Error(
-      "Canonical held Custom and Alakazam runtime boundaries are not ready."
+      "Canonical Custom and Alakazam runtime boundaries are not ready."
     );
   }
   const alakazamPolicyReadiness =
