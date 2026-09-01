@@ -17,7 +17,7 @@ const BROWSER = process.env.SITESOURCERY_CHROMIUM ||
   "/private/tmp/sitesourcery-chrome-149.0.7827.55-mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell";
 const EXPECTED_BROWSER = "Google Chrome for Testing 149.0.7827.55";
 const EXPECTED_PANEL_SOURCE_SHA256 =
-  "abc8a93995f32a74424dcf946af3bc0f7ff0aec17d877d6785936f25174e5d14";
+  "fa676a170ccf9a4d98cbbaa6ecc8349481cb90a80a034b1af240cbaedfae9a71";
 const VIEWPORTS = Object.freeze([
   { width: 320, height: 720, mobile: true },
   { width: 390, height: 844, mobile: true },
@@ -32,14 +32,6 @@ const CURRENT_RELEASE_ID =
   "32000000-0000-4000-8000-000000000001";
 const PRIOR_RELEASE_ID =
   "32000000-0000-4000-8000-000000000002";
-const PANEL_EXPORT_NEEDLE = `    confirmedAlakazamDowngradeProjection:
-      confirmedAlakazamDowngradeProjection,
-    alakazamAccountPresentation:`;
-const PANEL_EXPORT_REPLACEMENT = `    confirmedAlakazamDowngradeProjection:
-      confirmedAlakazamDowngradeProjection,
-    createAlakazamPublicationPanel:
-      createAlakazamPublicationPanel,
-    alakazamAccountPresentation:`;
 const sourceBytes = await readFile(
   path.join(
     ROOT,
@@ -50,36 +42,12 @@ const sourceDigest = createHash("sha256")
   .update(sourceBytes)
   .digest("hex");
 const source = sourceBytes.toString("utf8");
-let moduleSource;
-if (sourceDigest === EXPECTED_PANEL_SOURCE_SHA256) {
-  if (
-    !source.includes(PANEL_EXPORT_NEEDLE) ||
-    source.indexOf(PANEL_EXPORT_NEEDLE) !==
-      source.lastIndexOf(PANEL_EXPORT_NEEDLE)
-  ) {
-    throw new Error("Publication panel export seam is not exact");
-  }
-  moduleSource = source.replace(
-    PANEL_EXPORT_NEEDLE,
-    PANEL_EXPORT_REPLACEMENT
-  );
-} else if (
-  source.includes(PANEL_EXPORT_REPLACEMENT) &&
-  source.indexOf(PANEL_EXPORT_REPLACEMENT) ===
-    source.lastIndexOf(PANEL_EXPORT_REPLACEMENT) &&
-  createHash("sha256")
-    .update(source.replace(
-      PANEL_EXPORT_REPLACEMENT,
-      PANEL_EXPORT_NEEDLE
-    ))
-    .digest("hex") === EXPECTED_PANEL_SOURCE_SHA256
-) {
-  moduleSource = source;
-} else {
+if (sourceDigest !== EXPECTED_PANEL_SOURCE_SHA256) {
   throw new Error(
     `Publication panel source drifted: ${sourceDigest}`
   );
 }
+const moduleSource = source;
 const moduleBytes = Buffer.from(moduleSource, "utf8");
 const cssBytes = await readFile(
   path.join(ROOT, "abracadabra/app/abracadabra-app.css")
@@ -99,8 +67,8 @@ const currentReleaseId=${JSON.stringify(CURRENT_RELEASE_ID)};
 const priorReleaseId=${JSON.stringify(PRIOR_RELEASE_ID)};
 let commands=[];
 let sequence=0;
-function command(action,snapshot){sequence+=1;return {commandId:"40000000-0000-4000-8000-"+String(sequence).padStart(12,"0"),action,state:"held",holdReason:"commercial_cutover_not_authorized",snapshotDigest:snapshot.snapshotDigest,commandDigest:String(sequence).repeat(64).slice(0,64),targetReleaseId:action==="rollback"?priorReleaseId:null,targetVersionId:action==="unpublish"?null:(action==="rollback"?priorVersionId:currentVersionId),requestedAt:"2026-08-09T16:00:0"+sequence+".000Z"};}
-function snapshot(mode,recorded=null){const live=mode==="live";return {schema:"sitesourcery.alakazam-publication/v1",projectId,state:"held",holdReason:"commercial_cutover_not_authorized",subscription:{subscriptionId:"33000000-0000-4000-8000-000000000001",revision:7,tierId:"alakazam_35",status:"active"},site:{hostname:"cedar.sitesourcery.me",state:live?"live":"dark",acceptedVersionId:currentVersionId,acceptedArtifactDigest:"6".repeat(64),currentReleaseId:live?currentReleaseId:null,currentVersionId:live?currentVersionId:null,updatedAt:"2026-08-09T15:55:00.000Z"},history:[{releaseId:currentReleaseId,versionId:currentVersionId,artifactDigest:"7".repeat(64),releasedAt:"2026-08-09T15:30:00.000Z",isCurrent:live},{releaseId:priorReleaseId,versionId:priorVersionId,artifactDigest:"8".repeat(64),releasedAt:"2026-08-01T15:30:00.000Z",isCurrent:false}],actions:{publish:!live,rollback:live,unpublish:live,rollbackTargetReleaseId:live?priorReleaseId:null},snapshotDigest:"4".repeat(64),command:recorded};}
+function command(action,snapshot){sequence+=1;return {commandId:"40000000-0000-4000-8000-"+String(sequence).padStart(12,"0"),action,state:"queued",holdReason:null,snapshotDigest:snapshot.snapshotDigest,commandDigest:String(sequence).repeat(64).slice(0,64),targetReleaseId:action==="rollback"?priorReleaseId:null,targetVersionId:action==="unpublish"?null:(action==="rollback"?priorVersionId:currentVersionId),requestedAt:"2026-08-09T16:00:0"+sequence+".000Z"};}
+function snapshot(mode,recorded=null){const live=mode==="live";return {schema:"sitesourcery.alakazam-publication/v1",projectId,state:"released",holdReason:null,subscription:{subscriptionId:"33000000-0000-4000-8000-000000000001",revision:7,tierId:"alakazam_35",status:"active"},site:{hostname:"cedar.sitesourcery.me",state:live?"live":"dark",acceptedVersionId:currentVersionId,acceptedArtifactDigest:"6".repeat(64),currentReleaseId:live?currentReleaseId:null,currentVersionId:live?currentVersionId:null,updatedAt:"2026-08-09T15:55:00.000Z"},history:[{releaseId:currentReleaseId,versionId:currentVersionId,artifactDigest:"7".repeat(64),releasedAt:"2026-08-09T15:30:00.000Z",isCurrent:live},{releaseId:priorReleaseId,versionId:priorVersionId,artifactDigest:"8".repeat(64),releasedAt:"2026-08-01T15:30:00.000Z",isCurrent:false}],actions:{publish:!live,rollback:live,unpublish:live,rollbackTargetReleaseId:live?priorReleaseId:null},snapshotDigest:"4".repeat(64),command:recorded};}
 let mode="live";
 const panel=SiteSourceryAbracadabraCustomerControl.createAlakazamPublicationPanel(document,{command(action,current){const recorded=command(action,current);commands.push(action);panel.render({projectId,phase:"ready",capability:true,snapshot:snapshot(mode,recorded)});panel.focusStatus();}});
 document.querySelector("#mount").append(panel.element);
@@ -328,8 +296,8 @@ try {
       live.buttons.some(({ height }) => height < 44) ||
       JSON.stringify(live.buttons.map(({ action, disabled }) => [action, disabled])) !==
         JSON.stringify([["publish", true], ["rollback", false], ["unpublish", false]]) ||
-      !live.text.includes("Alakazam publication remains held") ||
-      !live.text.includes("no live provider effect")
+      !live.text.includes("Publish makes the accepted version live") ||
+      !live.text.includes("without deleting the project")
     ) {
       throw new Error(
         `Live publication panel failed at ${viewport.width}x${viewport.height}: ${JSON.stringify(live)}`
@@ -339,6 +307,16 @@ try {
       throw new Error("Rollback was not keyboard operable");
     }
     await waitFor(cdp, "publicationCommands().length === 1");
+    const queued = await evaluate(cdp, `(() => {const buttons=[...document.querySelectorAll("[data-alakazam-publication-action]")];return {text:document.querySelector("[data-alakazam-publication]").textContent.replace(/\\s+/g," ").trim(),disabled:buttons.every((button)=>button.disabled)};})()`);
+    if (
+      queued.disabled !== true
+      || !queued.text.includes("Publication change queued")
+      || !queued.text.includes("Refresh publication status")
+    ) {
+      throw new Error(
+        `Queued publication state failed: ${JSON.stringify(queued)}`
+      );
+    }
     await evaluate(cdp, "renderPublication('live')");
     if (!await activate(cdp, "unpublish")) {
       throw new Error("Unpublish was not keyboard operable");
@@ -380,5 +358,5 @@ try {
 }
 
 console.log(
-  "F-08 publication controls browser audit passed: 1 existing held panel × 3 viewports, exact live/dark publish/rollback/unpublish authority, keyboard operation, 44px controls, no horizontal overflow, and no provider effect at 320x720, 390x844, and 1440x1000."
+  "F-08 publication controls browser audit passed: released panel × 3 viewports, exact live/dark publish/rollback/unpublish authority, queued-state duplicate blocking, keyboard operation, 44px controls, and no horizontal overflow at 320x720, 390x844, and 1440x1000."
 );

@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertHeldSourceTruth,
   assertHeldTruthSemantics,
-  assertHostedAlakazamUiHeld,
+  assertHostedAlakazamUiReleased,
   assertNoHeldAlakazamCopySemantics,
   assertNoHeldAlakazamExecutableSemantics,
   buildHostedArtifact,
@@ -437,7 +437,7 @@ test("held Alakazam copy fragments and customer UI fail closed before release", 
     path.join(ROOT, "abracadabra/app/abracadabra-customer-control-dom.js"),
     "utf8",
   );
-  assert.equal(assertHostedAlakazamUiHeld(customerControl), true);
+  assert.equal(assertHostedAlakazamUiReleased(customerControl), true);
 });
 
 test("one hosted build preserves sealed Legal V5 while non-legal pages use current customer offers", async (t) => {

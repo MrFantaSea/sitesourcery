@@ -50,7 +50,7 @@
     "sitesourcery.alakazam-publication/v1";
   var ALAKAZAM_PUBLICATION_HOLD_REASON =
     "commercial_cutover_not_authorized";
-  var ALAKAZAM_PUBLIC_OFFER_STATE = "held";
+  var ALAKAZAM_PUBLIC_OFFER_STATE = "released";
   var ALAKAZAM_ACCOUNT_STATES = [
     "available",
     "activation_pending",
@@ -1154,6 +1154,7 @@
     snapshot
   ) {
     if (value === null) return true;
+    var commandState = text(value.state);
     return exactKeys(
       value,
       [
@@ -1171,9 +1172,19 @@
       && UUID.test(text(value.commandId))
       && ["publish", "rollback", "unpublish"]
         .includes(value.action)
-      && value.state === "held"
-      && value.holdReason ===
-        ALAKAZAM_PUBLICATION_HOLD_REASON
+      && [
+        "held",
+        "queued",
+        "processing",
+        "applied",
+        "reconciliation_required"
+      ].includes(commandState)
+      && (
+        commandState === "held"
+          ? value.holdReason ===
+            ALAKAZAM_PUBLICATION_HOLD_REASON
+          : value.holdReason === null
+      )
       && value.snapshotDigest === snapshot.snapshotDigest
       && SHA256.test(text(value.commandDigest))
       && safeIso(value.requestedAt)
@@ -1209,9 +1220,8 @@
       )
       || value.schema !== ALAKAZAM_PUBLICATION_SCHEMA
       || text(value.projectId) !== text(projectId)
-      || value.state !== "held"
-      || value.holdReason !==
-        ALAKAZAM_PUBLICATION_HOLD_REASON
+      || value.state !== "released"
+      || value.holdReason !== null
       || !SHA256.test(text(value.snapshotDigest))
       || !exactKeys(
         value.subscription,
@@ -14824,11 +14834,14 @@
           || readState.phase === "commanding";
         panel.setAttribute("aria-busy", String(busy));
         retry.disabled = busy;
+        retry.textContent =
+          "Try loading publication authority again";
         retry.hidden = ![
           "error",
           "command_error"
         ].includes(readState.phase);
         if (readState.phase === "loading") {
+          retry.hidden = true;
           status.textContent =
             "Loading exact publication authority…";
           body.appendChild(
@@ -14858,13 +14871,41 @@
           );
           return;
         }
+        var commandState = snapshot.command
+          ? snapshot.command.state
+          : "";
+        var commandOpen = ["queued", "processing"]
+          .includes(commandState);
+        var commandBlocked = commandOpen
+          || commandState === "reconciliation_required";
+        retry.textContent = commandOpen || commandBlocked
+          ? "Refresh publication status"
+          : "Try loading publication authority again";
+        retry.hidden = !(
+          ["error", "command_error"]
+            .includes(readState.phase)
+          || commandOpen
+          || commandState === "reconciliation_required"
+        );
+        var commandStatus = {
+          held:
+            "An older publication request is saved. Publishing is now open, so you can choose an available action below.",
+          queued:
+            "Publication change queued. This page will refresh while it runs.",
+          processing:
+            "Publication change in progress. This page will refresh when it finishes.",
+          applied:
+            "Publication change finished.",
+          reconciliation_required:
+            "The publication result could not be safely confirmed. Site Sourcery review is required; do not submit it again."
+        }[commandState] || "";
         status.textContent = readState.phase === "commanding"
-          ? "Recording the exact customer authorization…"
+          ? "Queueing the publication change…"
           : readState.phase === "command_error"
             ? readState.error
-              || "The authorization was not confirmed. No live publication effect was requested."
+              || "The publication request was not confirmed. Refresh before trying again."
             : snapshot.command
-              ? "Authorization recorded. Publication remains held."
+              ? commandStatus
               : "Exact publication authority loaded.";
         var facts = accountElement(
           documentRef,
@@ -14967,19 +15008,22 @@
             "Publish accepted version",
             "publish",
             snapshot,
-            !busy && capability && snapshot.actions.publish
+            !busy && !commandBlocked
+              && capability && snapshot.actions.publish
           ),
           actionButton(
             "Roll back to prior release",
             "rollback",
             snapshot,
-            !busy && capability && snapshot.actions.rollback
+            !busy && !commandBlocked
+              && capability && snapshot.actions.rollback
           ),
           actionButton(
             "Unpublish website",
             "unpublish",
             snapshot,
-            !busy && capability && snapshot.actions.unpublish
+            !busy && !commandBlocked
+              && capability && snapshot.actions.unpublish
           )
         );
         body.appendChild(controls);
@@ -14989,8 +15033,8 @@
             "p",
             "customer-alakazam-actions-note",
             capability
-              ? "These controls record exact customer authorization only. Alakazam publication remains held; no live provider effect, cancellation, or deletion occurs."
-              : "Customer publication authorization is not open in this held build. No live provider effect can occur."
+              ? "Publish makes the accepted version live. Rollback restores the prior release. Unpublish takes the website offline without deleting the project or ending the subscription."
+              : "Publication controls are temporarily unavailable. No change can be submitted from this page."
           )
         );
         if (snapshot.command) {
@@ -15000,9 +15044,11 @@
               "p",
               "customer-alakazam-command-state",
               accountWords(snapshot.command.action)
-                + " authorization recorded "
+                + " request recorded "
                 + accountDate(snapshot.command.requestedAt)
-                + ". It remains held without a provider effect."
+                + ". Status: "
+                + accountWords(snapshot.command.state)
+                + "."
             )
           );
         }
@@ -15946,6 +15992,8 @@
     };
     var alakazamReadAcceptedVersionId = "";
     var alakazamPublicationSequence = 0;
+    var alakazamPublicationPollCount = 0;
+    var alakazamPublicationPollScheduled = false;
     var alakazamPublicationRead = {
       projectId: "",
       phase: "idle",
@@ -22005,6 +22053,8 @@
 
     function resetAlakazamPublication(projectId) {
       alakazamPublicationSequence += 1;
+      alakazamPublicationPollCount = 0;
+      alakazamPublicationPollScheduled = false;
       alakazamPublicationRead = {
         projectId: text(projectId),
         phase: projectId ? "loading" : "idle",
@@ -22018,6 +22068,38 @@
         targetReleaseId: null,
         commandId: ""
       };
+    }
+
+    function scheduleAlakazamPublicationRefresh(
+      projectId,
+      commandId
+    ) {
+      if (
+        alakazamPublicationPollScheduled
+        || alakazamPublicationPollCount >= 20
+      ) return;
+      var sequence = alakazamPublicationSequence;
+      alakazamPublicationPollScheduled = true;
+      alakazamPublicationPollCount += 1;
+      windowRef.setTimeout(function () {
+        alakazamPublicationPollScheduled = false;
+        if (!alakazamPublicationIsCurrent(
+          sequence,
+          projectId
+        )) return;
+        requestAlakazamPublicationSnapshot(projectId)
+          .then(function (snapshot) {
+            if (
+              !snapshot
+              || !snapshot.command
+              || snapshot.command.commandId !== commandId
+              || !["queued", "processing"]
+                .includes(snapshot.command.state)
+            ) {
+              alakazamPublicationPollCount = 0;
+            }
+          });
+      }, 1500);
     }
 
     function requestAlakazamPublicationSnapshot(projectId) {
@@ -22069,6 +22151,18 @@
             error: ""
           };
           renderAlakazamPublicationPanel();
+          if (
+            snapshot.command
+            && ["queued", "processing"]
+              .includes(snapshot.command.state)
+          ) {
+            scheduleAlakazamPublicationRefresh(
+              selectedProjectId,
+              snapshot.command.commandId
+            );
+          } else {
+            alakazamPublicationPollCount = 0;
+          }
           return snapshot;
         })
         .catch(function (error) {
@@ -22189,10 +22283,10 @@
             snapshot.snapshotDigest
           || confirmed.command.targetReleaseId !==
             targetReleaseId
-          || confirmed.command.state !== "held"
+          || confirmed.command.state !== "queued"
         ) {
           throw new Error(
-            "The held publication authorization was not verified."
+            "The queued publication request was not verified."
           );
         }
         alakazamPublicationAttempt = {
@@ -22202,6 +22296,7 @@
           targetReleaseId: null,
           commandId: ""
         };
+        alakazamPublicationPollCount = 0;
         alakazamPublicationRead = {
           projectId: projectId,
           phase: "ready",
@@ -22210,6 +22305,10 @@
         };
         renderAlakazamPublicationPanel();
         alakazamPublicationPanel.focusStatus();
+        scheduleAlakazamPublicationRefresh(
+          projectId,
+          commandId
+        );
         return confirmed;
       }).catch(function (error) {
         if (!alakazamPublicationIsCurrent(
@@ -22222,7 +22321,7 @@
           snapshot: snapshot,
           error: explain(
             error,
-            "Publication authorization was not confirmed. No live effect was requested."
+            "The publication request was not confirmed. Refresh its status before trying again."
           )
         };
         renderAlakazamPublicationPanel();

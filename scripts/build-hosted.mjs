@@ -92,7 +92,7 @@ const FIN007_HOSTED_STAGING_ASSET_SHA256 = Object.freeze({
   "abracadabra/app/abracadabra-hosted-control.js":
     "cc3336358e99f252a4694d08d307dc37550525c7cf8ebf4e9c00e96fba5a6274",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "5082cd1d2b7453b1bc6547293847fc7f23677785c22f417b1f84414125e734af",
+    "fa676a170ccf9a4d98cbbaa6ecc8349481cb90a80a034b1af240cbaedfae9a71",
 });
 
 function lexical(left, right) {
@@ -547,11 +547,14 @@ export function assertNoHeldAlakazamCopySemantics(sources) {
   return true;
 }
 
-export function assertHostedAlakazamUiHeld(source) {
+export function assertHostedAlakazamUiReleased(source) {
   const customerControl = String(source);
-  const heldState = 'var ALAKAZAM_PUBLIC_OFFER_STATE = "held";';
-  if (occurrences(customerControl, heldState) !== 1) {
-    throw new Error("hosted customer control must keep Alakazam explicitly held");
+  const releasedState =
+    'var ALAKAZAM_PUBLIC_OFFER_STATE = "released";';
+  if (occurrences(customerControl, releasedState) !== 1) {
+    throw new Error(
+      "hosted customer control must release Alakazam explicitly",
+    );
   }
   const requestStart = customerControl.indexOf(
     "function requestAlakazamAccount(projectId)",
@@ -568,7 +571,7 @@ export function assertHostedAlakazamUiHeld(source) {
     || requestSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
       > requestSource.indexOf(".getAlakazamAccount(selectedProjectId)")
   ) {
-    throw new Error("held Alakazam account reads must fail before any API call");
+    throw new Error("Alakazam release gate must precede every account API call");
   }
   const renderStart = customerControl.indexOf("function renderAlakazamAccount(state)");
   const renderEnd = customerControl.indexOf("function reducedMotion", renderStart);
@@ -580,7 +583,7 @@ export function assertHostedAlakazamUiHeld(source) {
     || renderSource.indexOf('ALAKAZAM_PUBLIC_OFFER_STATE !== "released"')
       > renderSource.indexOf("requestAlakazamAccount(projectId)")
   ) {
-    throw new Error("held Alakazam rendering must return before account loading");
+    throw new Error("Alakazam rendering must preserve its explicit release gate");
   }
   const capabilityStart = customerControl.indexOf("var capabilityRequest =");
   const capabilityEnd = customerControl.indexOf("Promise.all([", capabilityStart);
@@ -593,7 +596,7 @@ export function assertHostedAlakazamUiHeld(source) {
       'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
     ) !== 4
   ) {
-    throw new Error("held Alakazam capabilities must remain false despite server input");
+    throw new Error("Alakazam capabilities must require the explicit release gate");
   }
   const insertionStart = customerControl.indexOf("var alakazamAnchor =");
   const insertionEnd = customerControl.indexOf("function value(name)", insertionStart);
@@ -607,7 +610,7 @@ export function assertHostedAlakazamUiHeld(source) {
       'ALAKAZAM_PUBLIC_OFFER_STATE === "released"',
     ) !== 2
   ) {
-    throw new Error("held Alakazam panel must never enter the customer DOM");
+    throw new Error("Alakazam panels must require the explicit release gate");
   }
   return true;
 }
@@ -806,7 +809,7 @@ async function loadAndValidateHeldSources(absoluteRoot) {
     );
   }
   assertNoHeldAlakazamExecutableSemantics(shippedJavascript);
-  assertHostedAlakazamUiHeld(
+  assertHostedAlakazamUiReleased(
     await readFile(
       path.join(
         absoluteRoot,
@@ -1263,7 +1266,7 @@ export async function verifyHostedArtifact({
       artifactTextSources.get(file),
     ]),
   ));
-  assertHostedAlakazamUiHeld(
+  assertHostedAlakazamUiReleased(
     artifactTextSources.get(
       "abracadabra/app/abracadabra-customer-control-dom.js",
     ),

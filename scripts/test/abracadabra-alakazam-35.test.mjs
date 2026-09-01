@@ -125,7 +125,7 @@ test("dedicated API client uses exact routes, CSRF, and idempotency without prov
   assert.doesNotMatch(calls[2].url, /stripe|publish|provider/u);
 });
 
-test("hosted control mounts F03 only for active premium authority while the public offer stays held", async () => {
+test("hosted control mounts F03 only for active premium authority after offer release", async () => {
   const source = await readFile(
     new URL(
       "../../abracadabra/app/abracadabra-customer-control-dom.js",
@@ -133,7 +133,7 @@ test("hosted control mounts F03 only for active premium authority while the publ
     ),
     "utf8"
   );
-  assert.match(source, /var ALAKAZAM_PUBLIC_OFFER_STATE = "held";/u);
+  assert.match(source, /var ALAKAZAM_PUBLIC_OFFER_STATE = "released";/u);
   assert.match(
     source,
     /ALAKAZAM_PUBLIC_OFFER_STATE !== "released"[\s\S]*subscription\.status !== "active"[\s\S]*!\["alakazam_35", "alakazam_50"\]\.includes\(tierId\)/u

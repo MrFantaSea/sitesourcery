@@ -1239,12 +1239,12 @@ function heldRetainedPremiumSnapshot() {
   };
 }
 
-function heldAlakazamPublication(command = null) {
+function releasedAlakazamPublication(command = null) {
   return {
     schema: "sitesourcery.alakazam-publication/v1",
     projectId: PAID_PROJECT_ID,
-    state: "held",
-    holdReason: "commercial_cutover_not_authorized",
+    state: "released",
+    holdReason: null,
     subscription: {
       subscriptionId:
         "33000000-0000-4000-8000-000000000001",
@@ -1609,7 +1609,7 @@ async function startServer() {
           url.pathname ===
             `/api/v1/projects/${PAID_PROJECT_ID}/alakazam/publication`
         ) {
-          json(response, 200, heldAlakazamPublication());
+          json(response, 200, releasedAlakazamPublication());
           return;
         }
         if (
@@ -1944,11 +1944,11 @@ async function startServer() {
           : action === "publish"
             ? PAID_ALAKAZAM_ACCEPTED_VERSION_ID
             : null;
-        json(response, 202, heldAlakazamPublication({
+        json(response, 202, releasedAlakazamPublication({
           commandId: apiRequest.idempotencyKey,
           action,
-          state: "held",
-          holdReason: "commercial_cutover_not_authorized",
+          state: "queued",
+          holdReason: null,
           snapshotDigest: PAID_ALAKAZAM_SNAPSHOT_DIGEST,
           commandDigest: createHash("sha256")
             .update(`publication:${apiRequest.idempotencyKey}`)
@@ -2058,40 +2058,6 @@ async function startServer() {
     }
     try {
       let bytes = await readFile(file);
-      const staticPaidCookie = String(request.headers.cookie || "")
-        .split(";")
-        .map((entry) => entry.trim())
-        .find((entry) =>
-          entry.startsWith(`${PAID_FIXTURE_COOKIE}=`)
-        );
-      const staticFixtureToken = staticPaidCookie
-        ? decodeURIComponent(
-            staticPaidCookie.split("=", 2)[1] || ""
-          )
-        : "";
-      const staticPaidMode =
-        paidFixtures.get(staticFixtureToken)?.mode || "";
-      if (
-        staticPaidMode === "publication"
-        && url.pathname ===
-          "/abracadabra/app/abracadabra-customer-control-dom.js"
-      ) {
-        const source = bytes.toString("utf8");
-        const held =
-          'var ALAKAZAM_PUBLIC_OFFER_STATE = "held";';
-        if (source.split(held).length !== 2) {
-          throw new Error(
-            "Publication browser fixture could not locate the exact held gate."
-          );
-        }
-        bytes = Buffer.from(
-          source.replace(
-            held,
-            'var ALAKAZAM_PUBLIC_OFFER_STATE = "released";'
-          ),
-          "utf8"
-        );
-      }
       response.writeHead(200, {
         "Cache-Control": "no-store",
         "Content-Length": bytes.byteLength,
@@ -3566,7 +3532,7 @@ async function alakazamPublicationJourney(cdp, server, viewport) {
       await waitFor(
         cdp,
         `document.querySelector("[data-alakazam-publication-status]")
-          ?.textContent.includes("Authorization recorded. Publication remains held.")
+          ?.textContent.includes("Publication change queued.")
           && document.querySelector("[data-alakazam-publication]")
             ?.contains(document.activeElement)`,
       );
@@ -3589,6 +3555,14 @@ async function alakazamPublicationJourney(cdp, server, viewport) {
         })()`,
       ),
     });
+    if (request) {
+      await waitFor(
+        cdp,
+        `document.querySelectorAll(
+          "[data-alakazam-publication-action]:not(:disabled)"
+        ).length === 3`,
+      );
+    }
   }
   await releasePaidJourney(cdp, server);
   return { actions, initial };
@@ -5021,10 +4995,10 @@ try {
         PAID_ALAKAZAM_PRIOR_VERSION_ID
       )
       || !publication.initial.text.includes(
-        "Alakazam publication remains held"
+        "Publish makes the accepted version live"
       )
       || !publication.initial.text.includes(
-        "no live provider effect, cancellation, or deletion occurs"
+        "without deleting the project or ending the subscription"
       )
     ) {
       failures.push(
@@ -5055,19 +5029,19 @@ try {
         || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
           .test(request.idempotencyKey || "")
         || !result.retained.statusFocused
-        || result.retained.enabledActions !== 3
+        || result.retained.enabledActions !== 0
         || !result.retained.text.includes(
-          "Authorization recorded. Publication remains held."
+          "Publication change queued."
         )
         || !result.retained.text.includes(
-          `${result.action[0].toUpperCase()}${result.action.slice(1)} authorization recorded`
+          `${result.action[0].toUpperCase()}${result.action.slice(1)} request recorded`
         )
         || !result.retained.text.includes(
-          "It remains held without a provider effect."
+          "Status: Queued."
         )
       ) {
         failures.push(
-          `${viewport.label} ${result.action} held publication command failed: `
+          `${viewport.label} ${result.action} queued publication command failed: `
             + JSON.stringify(result),
         );
       }
@@ -5783,7 +5757,7 @@ try {
   }
   console.log(
     `Current browser audit passed: ${routes.length} hosted routes × ${VIEWPORTS.length} required width modes, `
-      + "exact-width layout, including a 720-pixel source at 200% reflow; four-stage account room; mobile menu; complete maker preview; held Alakazam publish/rollback/unpublish authorization; issued-change plus ready-completion fixtures; H1N Purpose-1 customer/owner change-payment journeys; Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity; retained document and final-state errors; a delayed-authority zero-write race; keyboard activation; and 44px controls at the required 320, 360, 390, 720-at-200%-reflow, 768, and 1440 width modes.",
+      + "exact-width layout, including a 720-pixel source at 200% reflow; four-stage account room; mobile menu; complete maker preview; released Alakazam publish/rollback/unpublish with queued-state blocking and refresh; issued-change plus ready-completion fixtures; H1N Purpose-1 customer/owner change-payment journeys; Purpose-2 paid plus zero-balance immutable handoff with exact owner command/document identity; retained document and final-state errors; a delayed-authority zero-write race; keyboard activation; and 44px controls at the required 320, 360, 390, 720-at-200%-reflow, 768, and 1440 width modes.",
   );
 } catch (error) {
   primaryFailure = error;

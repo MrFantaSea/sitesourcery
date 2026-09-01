@@ -4350,7 +4350,7 @@ test("migration 148 adds separate released publication authority and leased exec
   );
   assert.match(
     migration.sql,
-    /publication_control_releases_validate[\s\S]*new\.released_at >= policy\.approved_at[\s\S]*command\.requested_at = new\.released_at[\s\S]*deferrable initially deferred[\s\S]*publication_control_releases_immutable[\s\S]*before update or delete/iu
+    /validate_publication_control_release[\s\S]*new\.released_at >= policy\.approved_at[\s\S]*command\.requested_at = new\.released_at[\s\S]*publication_control_releases_validate[\s\S]*deferrable initially deferred[\s\S]*publication_control_releases_immutable[\s\S]*before update or delete/iu
   );
   assert.match(
     migration.sql,

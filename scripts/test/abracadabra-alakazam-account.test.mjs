@@ -11,8 +11,8 @@ const customerControl = require(
   "../../abracadabra/app/abracadabra-customer-control-dom.js"
 );
 
-test("the hosted customer surface keeps Alakazam held", () => {
-  assert.equal(customerControl.alakazamPublicOfferState, "held");
+test("the hosted customer surface releases Alakazam", () => {
+  assert.equal(customerControl.alakazamPublicOfferState, "released");
 });
 
 const PROJECT_ID =
@@ -253,8 +253,8 @@ function publication(overrides = {}) {
   const source = {
     schema: "sitesourcery.alakazam-publication/v1",
     projectId: PROJECT_ID,
-    state: "held",
-    holdReason: "commercial_cutover_not_authorized",
+    state: "released",
+    holdReason: null,
     subscription: {
       subscriptionId:
         "33000000-0000-4000-8000-000000000001",
@@ -777,11 +777,11 @@ test("the Abracadabra client reads only the selected project's Alakazam route", 
   );
 });
 
-test("the Abracadabra client reads only the selected project's held publication authority", async () => {
+test("the Abracadabra client reads only the selected project's released publication authority", async () => {
   const calls = [];
   const expected = {
     schema: "sitesourcery.alakazam-publication/v1",
-    state: "held"
+    state: "released"
   };
   const controller = new AbortController();
   const client = createClient({
@@ -807,7 +807,7 @@ test("the Abracadabra client reads only the selected project's held publication 
   assert.equal(calls[0].options.body, undefined);
 });
 
-test("publication commands send only exact held action authority with CSRF and stable identity", async () => {
+test("publication commands send only exact action authority with CSRF and stable identity", async () => {
   const calls = [];
   const commandId =
     "50000000-0000-4000-8000-000000000011";
@@ -818,7 +818,7 @@ test("publication commands send only exact held action authority with CSRF and s
       if (url === "/api/v1/csrf") {
         return response(200, { csrfToken: "csrf-publication" });
       }
-      return response(202, { state: "held" });
+      return response(202, { state: "queued" });
     },
   });
   await client.requestAlakazamPublication(
@@ -865,7 +865,7 @@ test("publication commands send only exact held action authority with CSRF and s
   );
 });
 
-test("the customer validator accepts exact held release history and rejects manufactured authority", () => {
+test("the customer validator accepts released execution states and rejects manufactured authority", () => {
   const snapshot = publication();
   assert.deepEqual(
     customerControl.verifiedAlakazamPublication(
@@ -878,8 +878,8 @@ test("the customer validator accepts exact held release history and rejects manu
     commandId:
       "34000000-0000-4000-8000-000000000001",
     action: "rollback",
-    state: "held",
-    holdReason: "commercial_cutover_not_authorized",
+    state: "queued",
+    holdReason: null,
     snapshotDigest: snapshot.snapshotDigest,
     commandDigest: "d".repeat(64),
     targetReleaseId: PRIOR_RELEASE_ID,
@@ -893,8 +893,34 @@ test("the customer validator accepts exact held release history and rejects manu
     ).command,
     command
   );
+  for (const state of [
+    "processing",
+    "applied",
+    "reconciliation_required",
+  ]) {
+    assert.equal(
+      customerControl.verifiedAlakazamPublication(
+        publication({ command: { ...command, state } }),
+        PROJECT_ID
+      ).command.state,
+      state
+    );
+  }
+  assert.equal(
+    customerControl.verifiedAlakazamPublication(
+      publication({
+        command: {
+          ...command,
+          state: "held",
+          holdReason: "commercial_cutover_not_authorized",
+        },
+      }),
+      PROJECT_ID
+    ).command.state,
+    "held"
+  );
   for (const changed of [
-    publication({ state: "live" }),
+    publication({ state: "held" }),
     publication({ holdReason: "provider_approved" }),
     publication({
       actions: { rollbackTargetReleaseId: CURRENT_RELEASE_ID },
@@ -910,7 +936,11 @@ test("the customer validator accepts exact held release history and rejects manu
       }],
     }),
     publication({
-      command: { ...command, state: "applied" },
+      command: {
+        ...command,
+        state: "applied",
+        holdReason: "provider_approved",
+      },
     }),
   ]) {
     assert.equal(
@@ -923,7 +953,7 @@ test("the customer validator accepts exact held release history and rejects manu
   }
 });
 
-test("the held publication panel source is exact-authority, retry-safe, responsive, and provider-free", async () => {
+test("the released publication panel is exact-authority, retry-safe, and status-aware", async () => {
   const [source, css] = await Promise.all([
     readFile(
       new URL(
@@ -960,14 +990,17 @@ test("the held publication panel source is exact-authority, retry-safe, responsi
   assert.match(panelSource, /Publish accepted version/u);
   assert.match(panelSource, /Roll back to prior release/u);
   assert.match(panelSource, /Unpublish website/u);
-  assert.match(panelSource, /record exact customer authorization only/u);
-  assert.match(panelSource, /no live provider effect, cancellation, or deletion occurs/u);
+  assert.match(panelSource, /Publish makes the accepted version live/u);
+  assert.match(panelSource, /Unpublish takes the website offline without deleting the project/u);
+  assert.match(panelSource, /Refresh publication status/u);
+  assert.match(panelSource, /do not submit it again/u);
   assert.match(requestSource, /snapshot\.actions\[action\] !== true/u);
   assert.match(requestSource, /capabilities\.alakazamPublication !== true/u);
   assert.match(requestSource, /snapshotDigest:\s*snapshot\.snapshotDigest/u);
   assert.match(requestSource, /targetReleaseId:\s*targetReleaseId/u);
   assert.match(requestSource, /idempotencyKey:\s*commandId/u);
-  assert.match(requestSource, /confirmed\.command\.state !== "held"/u);
+  assert.match(requestSource, /confirmed\.command\.state !== "queued"/u);
+  assert.match(requestSource, /scheduleAlakazamPublicationRefresh/u);
   assert.doesNotMatch(
     requestSource,
     /stripe|providerPort|publishProject|rollbackProject|unpublishProject/iu
