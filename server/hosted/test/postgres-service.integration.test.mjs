@@ -96,7 +96,7 @@ import {
 import { createNodeHandler } from "../node-handler.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
 import {
-  createProjectLegalAuthorityV5
+  createProjectLegalAuthorityV7
 } from "../project-legal-authority.mjs";
 import { createAesGcmContactVault } from "../production-ports.mjs";
 import {
@@ -807,36 +807,36 @@ function acceptanceForDisposableProjectAuthority(authority) {
   });
 }
 
-function releasedProjectLegalV5Authority() {
-  return createProjectLegalAuthorityV5({
-    privacyV5: {
-      version: "SS-HOSTED-PRIVACY-2026-08-20-V5",
+function releasedProjectLegalV7Authority() {
+  return createProjectLegalAuthorityV7({
+    privacyV7: {
+      version: "SS-HOSTED-PRIVACY-2026-08-31-V7",
       contentDigest:
-        "5660b786497c3d7a7399f8fdba239e23765a1d5a755e5e39c84e1a94e9c813c5",
+        "084788116b8d59f2e75faedd7cfad5ea14f007782c2a84679287f0d064753b99",
       contentUri:
         "https://sitesourcery.com/legal/privacy/versions/" +
-        "SS-HOSTED-PRIVACY-2026-08-20-V5/",
-      effectiveAt: "2026-08-21T04:00:00.000Z",
-      byteCount: 31316,
+        "SS-HOSTED-PRIVACY-2026-08-31-V7/",
+      effectiveAt: "2026-09-01T04:00:00.000Z",
+      byteCount: 24139,
       artifactUri:
         "https://sitesourcery.com/legal/privacy/versions/" +
-        "SS-HOSTED-PRIVACY-2026-08-20-V5/"
+        "SS-HOSTED-PRIVACY-2026-08-31-V7/"
     },
-    websiteTermsV5: {
-      version: "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5",
+    websiteTermsV7: {
+      version: "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7",
       contentDigest:
-        "8e80d65585e6adb10a838a08348e36876c616b01c9f1f632a12bc48ce674d38a",
+        "f09386d70465ccd1f491c69efefe20f8c89ca9c46d03a7ac9f58990317adfd19",
       contentUri:
         "https://sitesourcery.com/legal/website-terms/versions/" +
-        "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5/",
-      effectiveAt: "2026-08-21T04:00:00.000Z",
-      byteCount: 31764,
+        "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7/",
+      effectiveAt: "2026-09-01T04:00:00.000Z",
+      byteCount: 27358,
       artifactUri:
         "https://sitesourcery.com/legal/website-terms/versions/" +
-        "SS-HOSTED-WEBSITE-TERMS-2026-08-20-V5/"
+        "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7/"
     },
     authorityDigest:
-      "6bcd6a4bad033cfb6bdfa131afa02ec950b9ddd22d2bc2a5fed0834605bc0934"
+      "b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b"
   });
 }
 
@@ -1368,7 +1368,7 @@ test(
       createFinalizationCommitFaultAuthority(authority);
     const payment = createContractPaymentProvider();
     const projectLegalAuthorityConfig = Object.freeze({
-      authority: releasedProjectLegalV5Authority(),
+      authority: releasedProjectLegalV7Authority(),
       diagnostic: null
     });
     let engagementClockNow = NOW;

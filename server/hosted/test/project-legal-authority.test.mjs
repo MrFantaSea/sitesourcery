@@ -11,11 +11,14 @@ import {
   createProjectLegalAuthorityV4Fixture,
   createProjectLegalAuthorityV5,
   createProjectLegalAuthorityV5Fixture,
+  createProjectLegalAuthorityV7,
+  createProjectLegalAuthorityV7Fixture,
   publicProjectLegalAuthority,
   PROJECT_LEGAL_ACCEPTANCE_SCHEMA,
   PROJECT_LEGAL_ACCEPTANCE_STATEMENT,
   PROJECT_LEGAL_V4_ACCEPTANCE_SCHEMA,
   PROJECT_LEGAL_V5_ACCEPTANCE_SCHEMA,
+  PROJECT_LEGAL_V7_ACCEPTANCE_SCHEMA,
   validateProjectLegalAcceptance
 } from "../project-legal-authority.mjs";
 import { canonicalJson, digest } from "../security.mjs";
@@ -186,6 +189,56 @@ function v5Fixture() {
   });
 }
 
+function v7Fixture() {
+  const privacyV7 = {
+    version: "SS-HOSTED-PRIVACY-TEST-V7",
+    contentDigest: "1".repeat(64),
+    contentUri: "https://example.test/privacy/v7",
+    effectiveAt: "2026-09-01T04:00:00.000Z",
+    byteCount: 6666,
+    artifactUri: "https://example.test/privacy/v7.html"
+  };
+  const websiteTermsV7 = {
+    version: "SS-HOSTED-WEBSITE-TERMS-TEST-V7",
+    contentDigest: "2".repeat(64),
+    contentUri: "https://example.test/terms/v7",
+    effectiveAt: privacyV7.effectiveAt,
+    byteCount: 7777,
+    artifactUri: "https://example.test/terms/v7.html"
+  };
+  const documents = [
+    {
+      kind: "privacy",
+      version: privacyV7.version,
+      contentDigest: privacyV7.contentDigest,
+      contentUri: privacyV7.contentUri,
+      effectiveAt: privacyV7.effectiveAt
+    },
+    {
+      kind: "product",
+      version: websiteTermsV7.version,
+      contentDigest: websiteTermsV7.contentDigest,
+      contentUri: "https://sitesourcery.com/legal/website-terms/#self-service",
+      effectiveAt: privacyV7.effectiveAt
+    },
+    {
+      kind: "website",
+      version: websiteTermsV7.version,
+      contentDigest: websiteTermsV7.contentDigest,
+      contentUri: "https://sitesourcery.com/legal/website-terms/",
+      effectiveAt: privacyV7.effectiveAt
+    }
+  ];
+  return createProjectLegalAuthorityV7Fixture({
+    privacyV7,
+    websiteTermsV7,
+    authorityDigest: digest(canonicalJson({
+      documents,
+      schema: "sitesourcery.project-legal-authority/v7"
+    }))
+  });
+}
+
 function createLegalService({
   projectLegalAuthority = null,
   projectLegalAuthorityDiagnostic = null,
@@ -295,6 +348,10 @@ test("production authority fails closed until the explicit sealed digest handoff
     () => createProjectLegalAuthorityV5(),
     (error) => error.code === "LEGAL_CONFIGURATION_REQUIRED" && error.status === 503
   );
+  assert.throws(
+    () => createProjectLegalAuthorityV7(),
+    (error) => error.code === "LEGAL_CONFIGURATION_REQUIRED" && error.status === 503
+  );
 });
 
 test("production bootstrap stays held without constants", () => {
@@ -303,7 +360,7 @@ test("production bootstrap stays held without constants", () => {
   assert.deepEqual(result.diagnostic, {
     state: "held",
     code: "LEGAL_CONFIGURATION_REQUIRED",
-    reason: "Joint Privacy V5 and Website Terms V5 constants are not sealed."
+    reason: "Joint Privacy V7 and Website Terms V7 constants are not sealed."
   });
 });
 
@@ -390,6 +447,72 @@ test("V5 fixture binds the owner-approved schema and immutable IDs", () => {
     validateProjectLegalAcceptance(acceptanceFor(authority), authority).schema,
     PROJECT_LEGAL_V5_ACCEPTANCE_SCHEMA
   );
+});
+
+test("V7 fixture binds the approved plain-English schema and immutable IDs", () => {
+  const authority = v7Fixture();
+  assert.equal(authority.schema, "sitesourcery.project-legal-authority/v7");
+  assert.equal(authority.acceptanceSchema, PROJECT_LEGAL_V7_ACCEPTANCE_SCHEMA);
+  assert.deepEqual(
+    authority.documentBindings.map(({ id }) => id),
+    [
+      "00000000-0000-4000-8000-000000000152",
+      "00000000-0000-4000-8000-000000000153",
+      "00000000-0000-4000-8000-000000000154"
+    ]
+  );
+  assert.equal(
+    validateProjectLegalAcceptance(acceptanceFor(authority), authority).schema,
+    PROJECT_LEGAL_V7_ACCEPTANCE_SCHEMA
+  );
+});
+
+test("production bootstrap selects the exact V7 tuple ahead of retained V5", () => {
+  const configured = createProjectLegalAuthorityFromEnvironment({
+    SITESOURCERY_HOSTED_PRIVACY_V7_VERSION:
+      "SS-HOSTED-PRIVACY-2026-08-31-V7",
+    SITESOURCERY_HOSTED_PRIVACY_V7_SHA256:
+      "084788116b8d59f2e75faedd7cfad5ea14f007782c2a84679287f0d064753b99",
+    SITESOURCERY_HOSTED_PRIVACY_V7_URI:
+      "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-31-V7/",
+    SITESOURCERY_HOSTED_PRIVACY_V7_EFFECTIVE_AT:
+      "2026-09-01T04:00:00.000Z",
+    SITESOURCERY_HOSTED_PRIVACY_V7_BYTE_COUNT: "24139",
+    SITESOURCERY_HOSTED_PRIVACY_V7_ARTIFACT_URI:
+      "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-31-V7/",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_VERSION:
+      "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_SHA256:
+      "f09386d70465ccd1f491c69efefe20f8c89ca9c46d03a7ac9f58990317adfd19",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_URI:
+      "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7/",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_EFFECTIVE_AT:
+      "2026-09-01T04:00:00.000Z",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_BYTE_COUNT: "27358",
+    SITESOURCERY_HOSTED_WEBSITE_TERMS_V7_ARTIFACT_URI:
+      "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7/",
+    SITESOURCERY_HOSTED_LEGAL_V7_AUTHORITY_SHA256:
+      "b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b",
+    SITESOURCERY_HOSTED_PRIVACY_V5_VERSION: ""
+  });
+  assert.equal(configured.diagnostic, null);
+  assert.equal(configured.authority.schema,
+    "sitesourcery.project-legal-authority/v7");
+  assert.equal(configured.authority.acceptanceSchema,
+    PROJECT_LEGAL_V7_ACCEPTANCE_SCHEMA);
+  assert.equal(configured.authority.authorityDigest,
+    "b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b");
+});
+
+test("any partial V7 tuple fails closed instead of falling back to V5", () => {
+  const result = createProjectLegalAuthorityFromEnvironment({
+    SITESOURCERY_HOSTED_PRIVACY_V7_VERSION: "",
+    SITESOURCERY_HOSTED_PRIVACY_V5_VERSION:
+      "SS-HOSTED-PRIVACY-2026-08-20-V5"
+  });
+  assert.equal(result.authority, null);
+  assert.equal(result.diagnostic.reason,
+    "Joint legal V7 constants are incomplete or invalid.");
 });
 
 test("production bootstrap selects the exact V5 tuple ahead of retained V4", () => {

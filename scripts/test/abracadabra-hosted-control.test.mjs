@@ -1243,6 +1243,42 @@ test("legal authority boot is public and fail-closed without breaking the signed
   );
 });
 
+test("Legal V7 is captured as the exact V7 acceptance for project creation", async () => {
+  const legacy = projectLegalAuthorityFixture();
+  const authority = {
+    ...legacy,
+    schema: "sitesourcery.project-legal-authority/v7",
+    documents: legacy.documents.map((document) => ({
+      ...document,
+      version: document.version.replace(/-V3$/u, "-V7"),
+      contentUri: document.kind === "privacy"
+        ? document.contentUri.replace(/-V3\/$/u, "-V7/")
+        : document.contentUri,
+      effectiveAt: "2099-01-02T00:00:00.000Z",
+    })),
+  };
+  const control = createHostedControl({
+    api: baseApi({
+      getProjectLegalAuthority: async () => authority,
+    }),
+    idempotencyFactory: () => "legal-v7-key",
+  });
+  await control.boot();
+  const captured = control.captureProjectLegalAcceptance();
+  assert.equal(
+    captured.legalAcceptance.schema,
+    "sitesourcery.project-legal-acceptance/v7",
+  );
+  assert.equal(
+    captured.legalAcceptance.authorityDigest,
+    authority.authorityDigest,
+  );
+  assert.deepEqual(
+    captured.legalAcceptance.documents,
+    authority.documents,
+  );
+});
+
 test("session and organization changes invalidate an already captured legal snapshot", async () => {
   let createCalls = 0;
   const control = createHostedControl({

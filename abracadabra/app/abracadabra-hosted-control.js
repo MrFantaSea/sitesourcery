@@ -540,13 +540,15 @@
         });
       }
       var acceptanceSchema =
-        authority.schema === "sitesourcery.project-legal-authority/v5"
-          ? "sitesourcery.project-legal-acceptance/v5"
-          : authority.schema === "sitesourcery.project-legal-authority/v4"
-            ? "sitesourcery.project-legal-acceptance/v4"
-            : authority.schema === "sitesourcery.project-legal-authority/v3"
-              ? "sitesourcery.project-legal-acceptance/v3"
-              : null;
+        authority.schema === "sitesourcery.project-legal-authority/v7"
+          ? "sitesourcery.project-legal-acceptance/v7"
+          : authority.schema === "sitesourcery.project-legal-authority/v5"
+            ? "sitesourcery.project-legal-acceptance/v5"
+            : authority.schema === "sitesourcery.project-legal-authority/v4"
+              ? "sitesourcery.project-legal-acceptance/v4"
+              : authority.schema === "sitesourcery.project-legal-authority/v3"
+                ? "sitesourcery.project-legal-acceptance/v3"
+                : null;
       if (!acceptanceSchema) {
         throw new ControlError({
           code: "LEGAL_CONFIGURATION_REQUIRED",

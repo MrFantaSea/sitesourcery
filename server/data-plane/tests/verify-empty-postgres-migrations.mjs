@@ -12,7 +12,11 @@ import { createHostedEngagementBootstrap } from
   "../../hosted/engagement-bootstrap.mjs";
 import { createPostgresEngagementBootstrapRepository } from
   "../../hosted/engagement-bootstrap-postgres.mjs";
-import { createProjectLegalAuthorityV4, createProjectLegalAuthorityV5 } from
+import {
+  createProjectLegalAuthorityV4,
+  createProjectLegalAuthorityV5,
+  createProjectLegalAuthorityV7
+} from
   "../../hosted/project-legal-authority.mjs";
 import { createMailLifecycle } from
   "../../hosted/mail-lifecycle.mjs";
@@ -263,6 +267,35 @@ function releasedJointLegalV5Authority() {
     },
     authorityDigest:
       "6bcd6a4bad033cfb6bdfa131afa02ec950b9ddd22d2bc2a5fed0834605bc0934"
+  });
+}
+
+function releasedJointLegalV7Authority() {
+  return createProjectLegalAuthorityV7({
+    privacyV7: {
+      version: "SS-HOSTED-PRIVACY-2026-08-31-V7",
+      contentDigest:
+        "084788116b8d59f2e75faedd7cfad5ea14f007782c2a84679287f0d064753b99",
+      contentUri:
+        "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-31-V7/",
+      effectiveAt: "2026-09-01T04:00:00.000Z",
+      byteCount: 24_139,
+      artifactUri:
+        "https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-31-V7/"
+    },
+    websiteTermsV7: {
+      version: "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7",
+      contentDigest:
+        "f09386d70465ccd1f491c69efefe20f8c89ca9c46d03a7ac9f58990317adfd19",
+      contentUri:
+        "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7/",
+      effectiveAt: "2026-09-01T04:00:00.000Z",
+      byteCount: 27_358,
+      artifactUri:
+        "https://sitesourcery.com/legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7/"
+    },
+    authorityDigest:
+      "b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b"
   });
 }
 
@@ -1864,12 +1897,13 @@ async function verifyJointLegalV4ReleaseState(pool) {
          where namespace.nspname = 'ss'
            and relation.relname = 'project_legal_acceptance_receipts'
            and constraint_row.conname =
-             'project_legal_acceptance_receipts_schema_version_v5_check'
+             'project_legal_acceptance_receipts_schema_version_v7_check'
            and pg_get_constraintdef(constraint_row.oid, false) =
              'CHECK ((schema_version = ANY (ARRAY[' ||
              '''sitesourcery.project-legal-acceptance/v3''::text, ' ||
              '''sitesourcery.project-legal-acceptance/v4''::text, ' ||
-             '''sitesourcery.project-legal-acceptance/v5''::text])))'
+             '''sitesourcery.project-legal-acceptance/v5''::text, ' ||
+             '''sitesourcery.project-legal-acceptance/v7''::text])))'
       ) as retained_v4_receipt_schema_ready
   `);
   for (const [name, ready] of Object.entries(result.rows[0])) {
@@ -1989,17 +2023,144 @@ async function verifyJointLegalV5ReleaseState(pool) {
          where namespace.nspname = 'ss'
            and relation.relname = 'customer_engagement_invitations'
            and constraint_row.conname =
-             'customer_engagement_invitations_legal_schema_v5_check'
+             'customer_engagement_invitations_legal_schema_v7_check'
            and pg_get_constraintdef(constraint_row.oid, false) =
              'CHECK ((legal_acceptance_schema = ANY (ARRAY[' ||
              '''sitesourcery.project-legal-acceptance/v4''::text, ' ||
-             '''sitesourcery.project-legal-acceptance/v5''::text])))'
+             '''sitesourcery.project-legal-acceptance/v5''::text, ' ||
+             '''sitesourcery.project-legal-acceptance/v7''::text])))'
       ) as engagement_v5_schema_ready
   `);
   for (const [name, ready] of Object.entries(result.rows[0])) {
     assert.equal(ready, true, `Joint legal V5 release state failed: ${name}`);
   }
 }
+
+async function verifyJointLegalV7ReleaseState(pool) {
+  const result = await pool.query(`
+    select
+      ss.hosted_joint_legal_v7_contract() =
+        'canonical-hosted-joint-legal-v7-authority'
+        as v7_contract_ready,
+      (
+        select count(*) = 3
+          from ss.legal_documents document
+         where (
+           document.id = '00000000-0000-4000-8000-000000000152'::uuid
+           and document.kind = 'privacy'
+           and document.version = 'SS-HOSTED-PRIVACY-2026-08-31-V7'
+           and document.content_digest =
+             '084788116b8d59f2e75faedd7cfad5ea14f007782c2a84679287f0d064753b99'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/privacy/versions/SS-HOSTED-PRIVACY-2026-08-31-V7/'
+           and document.effective_at =
+             '2026-09-01T04:00:00.000Z'::timestamptz
+           and document.retired_at is null
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000153'::uuid
+           and document.kind = 'product'
+           and document.version =
+             'SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7'
+           and document.content_digest =
+             'f09386d70465ccd1f491c69efefe20f8c89ca9c46d03a7ac9f58990317adfd19'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/website-terms/#self-service'
+           and document.effective_at =
+             '2026-09-01T04:00:00.000Z'::timestamptz
+           and document.retired_at is null
+         ) or (
+           document.id = '00000000-0000-4000-8000-000000000154'::uuid
+           and document.kind = 'website'
+           and document.version =
+             'SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7'
+           and document.content_digest =
+             'f09386d70465ccd1f491c69efefe20f8c89ca9c46d03a7ac9f58990317adfd19'
+           and document.content_uri =
+             'https://sitesourcery.com/legal/website-terms/'
+           and document.effective_at =
+             '2026-09-01T04:00:00.000Z'::timestamptz
+           and document.retired_at is null
+         )
+      ) as v7_documents_ready,
+      (
+        select count(*) = 2
+          from ss.legal_document_artifacts artifact
+         where (
+           artifact.document_id =
+             '00000000-0000-4000-8000-000000000152'::uuid
+           and artifact.artifact_sha256 =
+             '084788116b8d59f2e75faedd7cfad5ea14f007782c2a84679287f0d064753b99'
+           and artifact.byte_count = 24139
+         ) or (
+           artifact.document_id =
+             '00000000-0000-4000-8000-000000000154'::uuid
+           and artifact.artifact_sha256 =
+             'f09386d70465ccd1f491c69efefe20f8c89ca9c46d03a7ac9f58990317adfd19'
+           and artifact.byte_count = 27358
+         )
+      ) and not exists (
+        select 1 from ss.legal_document_artifacts artifact
+         where artifact.document_id =
+           '00000000-0000-4000-8000-000000000153'::uuid
+      ) as v7_artifacts_ready,
+      (
+        select ss.project_legal_json_digest(jsonb_build_object(
+          'documents', jsonb_build_array(
+            jsonb_build_object(
+              'kind', privacy.kind,
+              'version', privacy.version,
+              'contentDigest', privacy.content_digest,
+              'contentUri', privacy.content_uri,
+              'effectiveAt', to_char(privacy.effective_at at time zone 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            ),
+            jsonb_build_object(
+              'kind', product.kind,
+              'version', product.version,
+              'contentDigest', product.content_digest,
+              'contentUri', product.content_uri,
+              'effectiveAt', to_char(product.effective_at at time zone 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            ),
+            jsonb_build_object(
+              'kind', website.kind,
+              'version', website.version,
+              'contentDigest', website.content_digest,
+              'contentUri', website.content_uri,
+              'effectiveAt', to_char(website.effective_at at time zone 'UTC',
+                'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+            )
+          ),
+          'schema', 'sitesourcery.project-legal-authority/v7'
+        )) = 'b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b'
+          from ss.legal_documents privacy
+          cross join ss.legal_documents product
+          cross join ss.legal_documents website
+         where privacy.id = '00000000-0000-4000-8000-000000000152'::uuid
+           and product.id = '00000000-0000-4000-8000-000000000153'::uuid
+           and website.id = '00000000-0000-4000-8000-000000000154'::uuid
+      ) as v7_authority_digest_ready,
+      (
+        select count(*) = 1
+          from pg_constraint constraint_row
+          join pg_class relation on relation.oid = constraint_row.conrelid
+          join pg_namespace namespace on namespace.oid = relation.relnamespace
+         where namespace.nspname = 'ss'
+           and relation.relname = 'customer_engagement_invitations'
+           and constraint_row.conname =
+             'customer_engagement_invitations_legal_schema_v7_check'
+           and pg_get_constraintdef(constraint_row.oid, false) =
+             'CHECK ((legal_acceptance_schema = ANY (ARRAY[' ||
+             '''sitesourcery.project-legal-acceptance/v4''::text, ' ||
+             '''sitesourcery.project-legal-acceptance/v5''::text, ' ||
+             '''sitesourcery.project-legal-acceptance/v7''::text])))'
+      ) as engagement_v7_schema_ready
+  `);
+  for (const [name, ready] of Object.entries(result.rows[0])) {
+    assert.equal(ready, true, `Joint legal V7 release state failed: ${name}`);
+  }
+}
+
 
 async function verifyCustomerEngagementBootstrapState(pool) {
   const result = await pool.query(`
@@ -2118,7 +2279,7 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
 
   const invitationStart = Date.now() + 60_000;
   let currentTime = new Date(invitationStart).toISOString();
-  const legalAuthority = releasedJointLegalV5Authority();
+  const legalAuthority = releasedJointLegalV7Authority();
   const database = createCanonicalPostgresAuthority({ pool });
   const repository = createPostgresEngagementBootstrapRepository({
     authority: database,
@@ -7906,6 +8067,7 @@ export async function runMigrationVerification({
     } = await applyPostPrivacyMigrations(pool, postPrivacyNames);
     await verifyJointLegalV4ReleaseState(pool);
     await verifyJointLegalV5ReleaseState(pool);
+    await verifyJointLegalV7ReleaseState(pool);
     await verifyCustomerEngagementBootstrapState(pool);
     const customerEngagementProof =
       await verifyCustomerEngagementBootstrapJourney(pool);
