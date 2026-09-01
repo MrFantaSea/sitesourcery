@@ -59,7 +59,7 @@ test("privacy draft discloses Start chooser and Proton handling without simulato
   }
 });
 
-test("privacy separates guest work from retained Download records and discloses Cloudflare DNS preflight", async () => {
+test("privacy separates guest work and discloses hosted, domain, billing, and Responder data", async () => {
   const privacy = await readFile(
     path.join(SITE_ROOT, "legal/privacy/index.html"),
     "utf8",
@@ -69,8 +69,11 @@ test("privacy separates guest work from retained Download records and discloses 
     "Made versions are stored in this tab’s session storage so they can survive a refresh or a payment return.",
     "When you press the Domains page’s check button, the browser cleans the typed candidate and sends its .com, .net, and .org names in NS queries to Cloudflare’s public DNS-over-HTTPS resolver at cloudflare-dns.com.",
     "Cloudflare processes the query and connection data under its",
-    "Site Sourcery’s preflight does not call a registrar availability, pricing, reservation, or purchase API.",
-    "Alakazam is the separate Site Sourcery hosting option and uses its own accepted plan.",
+    "The quick check does not call a registrar and does not prove availability, show a final price, reserve a name, or place an order.",
+    "Alakazam is Site Sourcery’s monthly hosting option.",
+    "Site Sourcery shares those details only after the customer approves the name, price, and job.",
+    "consent records, opt-outs, routing details, replies, and human handoff records",
+    "After Alakazam service ends, the customer has 30 days to read and export saved work.",
   ]) {
     assert.ok(privacy.includes(phrase), phrase);
   }
@@ -93,7 +96,7 @@ test("privacy separates guest work from retained Download records and discloses 
   );
 });
 
-test("website terms draft explains current prices, coming-soon hosting, and separate service agreements", async () => {
+test("website terms draft explains every current service, price, renewal, and exit boundary", async () => {
   const terms = await readFile(
     path.join(SITE_ROOT, "legal/website-terms/index.html"),
     "utf8",
@@ -101,10 +104,19 @@ test("website terms draft explains current prices, coming-soon hosting, and sepa
   for (const phrase of [
     "Creating an account and signing in lets the customer save the project. A completed one-time $20 payment unlocks its HTML Download.",
     "A domain the customer owns is separate from Alakazam. Site Sourcery can register or connect it under written domain terms.",
-    "Alakazam monthly sign-up is not open yet.",
-    "The customer's $20 Download payment will create one $20 credit toward the same project's first Alakazam bill after the customer accepts a plan.",
-    "Alakazam self-service publication is not open yet.",
+    "Download costs $20 once. Alakazam is $25, $35, or $50 a month and renews until you cancel.",
+    "A prior $20 Download purchase creates one $20 credit toward the same project's first Alakazam bill.",
+    "The customer may cancel Alakazam at any time with no cancellation fee.",
+    "If a renewal payment fails, Alakazam gives a seven-day payment grace period.",
+    "An active Alakazam customer can publish, roll back, or unpublish a saved page.",
+    "Site Sourcery can search for, register, connect, renew, transfer, and manage DNS for a customer domain.",
     "The one-time $300 setup and separate $250 monthly service begin only under a customer agreement.",
+    "standard requests such as STOP, CANCEL, END, QUIT, REVOKE, OPTOUT, and UNSUBSCRIBE stop later messages",
+    "Care plans are Host $25, Care Lite $69, Care $119, Care Plus $199, and Partner $349 per month",
+    "The Download sale is final when the accepted HTML file is available through the signed-in Download control.",
+    "the customer will cover reasonable losses and costs from a third-party claim",
+    "A Custom payment becomes final when the work, reserved production time, or milestone tied to it begins.",
+    "Care renews monthly until the customer cancels through the method in the written plan.",
     "the final 50% becomes due only after completion and before final handoff. Completion does not authorize an automatic charge.",
     "The 30-day workmanship correction window begins only when final handoff is recorded after final payment. Completion or launch by itself does not start that clock.",
   ]) {
@@ -112,8 +124,7 @@ test("website terms draft explains current prices, coming-soon hosting, and sepa
   }
   for (const staleClaim of [
     /Alakazam offers four ways to have an address/u,
-    /Alakazam is \$25 per month for keeping a page online/u,
-    /can be cancelled at any time/iu,
+    /coming soon|not open yet/iu,
     /90-day retained exit period/u,
     /keeps serving for 14 days/u,
     /suspension begins on day 15/u,
@@ -123,9 +134,6 @@ test("website terms draft explains current prices, coming-soon hosting, and sepa
     /Make temporary versions, preview them, and download chosen HTML./u,
     /open a working preview, and download a chosen self-contained HTML file./u,
     /The browser may process, compile, display, and download that material on the customer’s device/u,
-    /Alakazam has three plans/iu,
-    /approved three-plan ladder/iu,
-    /difference-only upgrade rule/iu,
     /\bheld\b/iu,
     /\$5(?!\d)/u,
   ]) {

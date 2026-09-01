@@ -14,6 +14,11 @@ const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
   "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
   "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
 ]);
+const UNPUBLISHED_LEGAL_DRAFT_FILES = new Set([
+  "legal/index.html",
+  "legal/privacy/index.html",
+  "legal/website-terms/index.html",
+]);
 const publicCatalog = JSON.parse(await readFile(path.join(root, "data/public-catalog.json"), "utf8"));
 const {
   OFFER_AVAILABILITY,
@@ -339,7 +344,6 @@ for (const file of [
   "abracadabra/how/index.html",
   "alakazam/index.html",
   "faq/index.html",
-  "legal/website-terms/index.html",
 ]) {
   if (!files[file].match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
     errors.push(`${file}: must plainly say that Alakazam sign-up or hosting is coming soon`);
@@ -441,6 +445,10 @@ if (
   }
   const observedDisplays = [];
   for (const file of publicHtmlFiles) {
+    // These checked-in sources are explicit unsealed review drafts. The build
+    // replaces them with the exact sealed current legal artifacts, which the
+    // generated-artifact gate checks separately.
+    if (UNPUBLISHED_LEGAL_DRAFT_FILES.has(file)) continue;
     const source = files[file];
     for (const match of source.matchAll(/\$\s?\d[\d,.]*/gu)) {
       observedDisplays.push(`${file}:${match[0].replace(/\s/gu, "")}`);

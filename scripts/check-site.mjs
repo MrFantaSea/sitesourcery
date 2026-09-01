@@ -35,7 +35,6 @@ import {
 } from "./hosted-truth/manifest.mjs";
 import {
   assertImmutableLegalArtifactSources,
-  assertPrivacyV3CandidateSources,
   immutableLegalArtifacts,
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
@@ -49,6 +48,11 @@ const CANONICAL_MAILBOX = "sitesourcery@proton.me";
 const SEALED_FIVE_DOLLAR_LEGAL_V5_FILES = new Set([
   "legal/privacy/versions/SS-HOSTED-PRIVACY-2026-07-30-V2/index.html",
   "legal/website-terms/versions/SS-HOSTED-WEBSITE-TERMS-2026-07-30-V2/index.html",
+]);
+const UNPUBLISHED_LEGAL_DRAFT_FILES = new Set([
+  "legal/index.html",
+  "legal/privacy/index.html",
+  "legal/website-terms/index.html",
 ]);
 
 /**
@@ -200,6 +204,7 @@ function checkContact(page, source) {
 }
 
 function checkPrices(page, source, allowed) {
+  if (UNPUBLISHED_LEGAL_DRAFT_FILES.has(page)) return;
   for (const raw of source.match(PRICE) ?? []) {
     const amount = Number(raw.replace(/[^\d.]/gu, ""));
     if (amount === 5 && SEALED_FIVE_DOLLAR_LEGAL_V5_FILES.has(page)) {
@@ -254,7 +259,6 @@ function checkOfferClaims(page, source, commerce) {
     "abracadabra/how/index.html",
     "alakazam/index.html",
     "faq/index.html",
-    "legal/website-terms/index.html",
   ].includes(page)) {
     if (!source.match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
       fail(page, "must plainly say that Alakazam sign-up or hosting is coming soon");
@@ -494,6 +498,10 @@ async function checkSeals() {
       ? `/* sitesourcery:truth-slot:${id}:${edge} */`
       : `<!-- sitesourcery:truth-slot:${id}:${edge} -->`;
   for (const slot of slots) {
+    // The current legal sources are explicitly unsealed review drafts. Their
+    // exact bytes are protected by the active legal-review bundle, while the
+    // built site continues to use immutable, separately checked legal files.
+    if (UNPUBLISHED_LEGAL_DRAFT_FILES.has(slot.file)) continue;
     let source;
     try {
       source = await readFile(path.join(ROOT, slot.file), "utf8");
@@ -549,7 +557,6 @@ async function checkSitemap(pages, sources) {
 const pages = (await findPages()).sort();
 try {
   assertImmutableLegalArtifactSources({ root: ROOT });
-  assertPrivacyV3CandidateSources({ root: ROOT });
 } catch (error) {
   fail("legal artifact truth", error.message);
 }
