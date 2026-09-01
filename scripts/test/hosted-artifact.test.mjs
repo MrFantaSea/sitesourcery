@@ -251,7 +251,7 @@ function publicEmails(sources) {
       .map((match) => ({ email: match[0].toLocaleLowerCase("en-US"), file })));
 }
 
-test("reviewed truth inputs are unique, exact, and held mode exposes no hosted account surface", async () => {
+test("reviewed truth inputs are unique and exact while static source exposes no hosted account surface", async () => {
   assert.equal(hostedTruthSlots.length, 26);
   assert.equal(
     new Set(hostedTruthSlots.map(({ id }) => id)).size,
@@ -321,7 +321,7 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
     assert.equal(
       sha256(source.slice(startIndex + start.length, endIndex)),
       slot.sourceSha256,
-      `${slot.id} held digest`,
+      `${slot.id} source digest`,
     );
     assert.equal(
       sha256(await readFile(path.join(ROOT, slot.hostedFragment), "utf8")),
@@ -377,7 +377,7 @@ test("reviewed truth inputs are unique, exact, and held mode exposes no hosted a
   );
 });
 
-test("held truth semantic gate rejects every hosted-only or retired held-product claim", async () => {
+test("source truth semantic gate rejects every hosted-only or retired-product claim", async () => {
   const sources = await readTruthFiles(ROOT, heldTruthRequirements);
   assert.equal(assertHeldTruthSemantics(sources), true);
 
@@ -405,7 +405,7 @@ test("held truth semantic gate rejects every hosted-only or retired held-product
   }
 });
 
-test("held Alakazam copy fragments and customer UI fail closed before release", async () => {
+test("retired Alakazam fragments stay sealed while released customer UI stays server-authorized", async () => {
   const fragmentSources = new Map(
     await Promise.all(
       Object.keys(heldAlakazamCopyFragmentSha256).map(async (file) => [
@@ -414,7 +414,7 @@ test("held Alakazam copy fragments and customer UI fail closed before release", 
       ]),
     ),
   );
-  assert.equal(fragmentSources.size, 13);
+  assert.equal(fragmentSources.size, 6);
   assert.equal(assertNoHeldAlakazamCopySemantics(fragmentSources), true);
   for (const semantic of heldAlakazamCopyForbiddenSemantics) {
     assert.throws(
@@ -426,13 +426,7 @@ test("held Alakazam copy fragments and customer UI fail closed before release", 
     );
   }
 
-  assert.deepEqual(heldAlakazamCustomerArtifactFiles, [
-    "abracadabra/app/index.html",
-    "abracadabra/index.html",
-    "faq/index.html",
-    "index.html",
-    "vnext.js",
-  ]);
+  assert.deepEqual(heldAlakazamCustomerArtifactFiles, []);
   const customerControl = await readFile(
     path.join(ROOT, "abracadabra/app/abracadabra-customer-control-dom.js"),
     "utf8",
@@ -642,10 +636,7 @@ test("one hosted build preserves sealed Legal V5 while non-legal pages use curre
   assert.match(app, /\$20 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
   assert.match(app, /Full \$20 project credit/u);
   assert.match(app, /Sign in for the \$20 Download\./u);
-  assert.match(
-    app,
-    /Alakazam hosting is coming soon\./u,
-  );
+  assert.match(app, /host it with Alakazam for \$25, \$35, or \$50 a month/u);
   assert.doesNotMatch(
     app,
     /Alakazam is the service that keeps it and puts it online|Your \$5 comes off Alakazam/u,
@@ -653,27 +644,27 @@ test("one hosted build preserves sealed Legal V5 while non-legal pages use curre
 
   const landing = sources.get("abracadabra/index.html");
   assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting coming soon/u);
+  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting from \$25 a month/u);
   assert.match(
     landing,
     /Sign in to save the project, then pay \$20 once to download the HTML file and use it anywhere you choose\./u,
   );
   assert.match(
     landing,
-    /Alakazam will put the page online at a Site Sourcery address and add more design controls\. Monthly sign-up is not open yet\./u,
+    /Choose Alakazam for \$25, \$35, or \$50 a month\. It puts the saved page online at a Site Sourcery address and adds more design controls as you move up\./u,
   );
-  assert.match(landing, /<small>coming<\/small>soon/u);
-  assert.match(landing, /class="kd-live"><i><\/i>Coming soon<\/span>/u);
+  assert.match(landing, /<small>from<\/small>\$25/u);
+  assert.match(landing, /class="kd-live"><i><\/i>Ready to start<\/span>/u);
   assert.doesNotMatch(
     landing,
-    /\$25|Keeps It Live|Live at your own address|comes off your first month|leaving costs nothing|class="kd-live"><i><\/i>Live<\/span>/iu,
+    /coming soon|not open yet|Keeps It Live|comes off your first month/iu,
   );
   assert.ok(landing.indexOf("Abracadabra</p>") < landing.indexOf("Alakazam</p>"));
   const guide = sources.get("abracadabra/how/index.html");
   assert.doesNotMatch(guide, /http-equiv="refresh"/u);
   assert.match(guide, /rel="canonical" href="https:\/\/sitesourcery\.com\/abracadabra\/how\/"/u);
   assert.match(guide, /Make your preview in six short steps\./u);
-  assert.match(guide, /Making and testing the page is free\. Download the HTML for \$20\. Alakazam hosting is coming soon\./u);
+  assert.match(guide, /host the saved project with Alakazam for \$25, \$35, or \$50 a month/u);
 
   const faq = sources.get("faq/index.html");
   for (const anchor of [
@@ -685,10 +676,8 @@ test("one hosted build preserves sealed Legal V5 while non-legal pages use curre
   ]) {
     assert.equal(count(faq, `id="${anchor}" data-faq-anchor="${anchor}"`), 1);
   }
-  assert.match(
-    faq,
-    /Alakazam self-service hosting is coming soon\./u,
-  );
+  assert.match(faq, /Alakazam hosting is \$25, \$35, or \$50 a month/u);
+  assert.doesNotMatch(faq, /coming soon|not open yet/iu);
   assert.doesNotMatch(faq, /complete three-plan ladder is approved/iu);
   assert.match(faq, /The Responder is \$300 to set up and \$250 a month\./u);
   assert.match(faq, /the final 50% becomes due after completion and before final handoff\./u);

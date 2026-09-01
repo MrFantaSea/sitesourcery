@@ -78,9 +78,9 @@ const ALLOWED_EXTERNAL = new Set([
 ]);
 
 /**
- * Direct public Payment Links are forbidden. The $20 Download uses authenticated
- * server Checkout, while Alakazam remains held. Keep the origin constant only
- * so malformed lookalike links and any accidental public release fail loudly.
+ * Direct public Payment Links are forbidden. The $20 Download and Alakazam use
+ * authenticated server Checkout. Keep the origin constant only so malformed
+ * lookalike links and any accidental public-link release fail loudly.
  */
 const CHECKOUT_ORIGIN = "https://buy.stripe.com/";
 
@@ -223,20 +223,6 @@ function checkOfferClaims(page, source, commerce) {
   const offers = new Map(commerce.SELLABLE.map((offer) => [offer.id, offer]));
   const rules = [
     {
-      id: "alacazam.hosting",
-      state: commerce.OFFER_AVAILABILITY.HELD,
-      label: "held Alakazam sale",
-      patterns: [
-        /Abracadabra builds it\. Alakazam keeps it live/iu,
-        /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
-        /Alakazam is the service that keeps it and puts it online/iu,
-        /Live at your own address/iu,
-        /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
-        /leaving costs nothing/iu,
-        /Alakazam is (?:active|on)\b/iu,
-      ],
-    },
-    {
       id: "assessment",
       state: commerce.OFFER_AVAILABILITY.ACCOUNT_ONLY,
       label: "account-only assessment sale",
@@ -260,11 +246,12 @@ function checkOfferClaims(page, source, commerce) {
     "alakazam/index.html",
     "faq/index.html",
   ].includes(page)) {
-    if (!source.match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
-      fail(page, "must plainly say that Alakazam sign-up or hosting is coming soon");
+    if (source.match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
+      fail(page, "contains stale coming-soon Alakazam copy");
     }
-    const priceClaim = source.match(/Alakazam[^<\n]{0,100}\$25(?!\d)|\$25(?!\d)[^<\n]{0,100}Alakazam/iu);
-    if (priceClaim) fail(page, `contains unreleased Alakazam price ${JSON.stringify(priceClaim[0])}`);
+    for (const amount of ["$25", "$35", "$50"]) {
+      if (!source.includes(amount)) fail(page, `must plainly show released Alakazam price ${amount}`);
+    }
   }
 }
 
@@ -427,12 +414,13 @@ async function checkRails(pagesSources, commerce, publicCatalog) {
   }
   const expectedOfferAvailability = {
     "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
-    "alacazam.hosting": OFFER_AVAILABILITY.HELD,
-    "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
-    "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+    "alacazam.hosting": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+    "domain.purchase": OFFER_AVAILABILITY.CONTACT_TO_START,
+    "domain.purchase.plus": OFFER_AVAILABILITY.CONTACT_TO_START,
     assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
+    care: OFFER_AVAILABILITY.CONTACT_TO_START,
     responder: OFFER_AVAILABILITY.CONTACT_TO_START,
-    "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+    "custom.build": OFFER_AVAILABILITY.CONTACT_TO_START,
   };
   const actualOfferAvailability = Object.fromEntries(
     SELLABLE.map((offer) => [offer.id, offer.availability])

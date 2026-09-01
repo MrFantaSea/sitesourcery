@@ -183,12 +183,13 @@ for (const offer of SELLABLE) {
 }
 const expectedOfferAvailability = {
   "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
-  "alacazam.hosting": OFFER_AVAILABILITY.HELD,
-  "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
-  "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+  "alacazam.hosting": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+  "domain.purchase": OFFER_AVAILABILITY.CONTACT_TO_START,
+  "domain.purchase.plus": OFFER_AVAILABILITY.CONTACT_TO_START,
   assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
+  care: OFFER_AVAILABILITY.CONTACT_TO_START,
   responder: OFFER_AVAILABILITY.CONTACT_TO_START,
-  "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+  "custom.build": OFFER_AVAILABILITY.CONTACT_TO_START,
 };
 const actualOfferAvailability = Object.fromEntries(
   SELLABLE.map((offer) => [offer.id, offer.availability])
@@ -228,13 +229,13 @@ for (const id of ["domain.purchase", "domain.purchase.plus"]) {
   const offer = SELLABLE.find((candidate) => candidate.id === id);
   if (
     !offer
-    || offer.availability !== OFFER_AVAILABILITY.INQUIRY_ONLY
+    || offer.availability !== OFFER_AVAILABILITY.CONTACT_TO_START
     || offer.checkoutUrl !== null
     || offer.productRef !== null
     || offer.priceRef !== null
   ) {
     errors.push(
-      `server/commerce/rails.mjs: ${id} must remain inquiry-only with no direct provider checkout authority`
+      `server/commerce/rails.mjs: ${id} must remain contact-to-start with no direct provider checkout authority`
     );
   }
 }
@@ -301,22 +302,7 @@ for (const file of publicTextFiles) {
   }
 }
 
-const offerById = new Map(SELLABLE.map((offer) => [offer.id, offer]));
 const availabilityClaimRules = [
-  {
-    id: "alacazam.hosting",
-    state: OFFER_AVAILABILITY.HELD,
-    label: "held Alakazam sale",
-    patterns: [
-      /Abracadabra builds it\. Alakazam keeps it live/iu,
-      /Free to See-\$5 to Download-\$25 a Month Keeps It Live/iu,
-      /Alakazam is the service that keeps it and puts it online/iu,
-      /Live at your own address/iu,
-      /(?:the\s+)?\$5 comes off (?:your first month|Alakazam)/iu,
-      /leaving costs nothing/iu,
-      /Alakazam is (?:active|on)\b/iu,
-    ],
-  },
   {
     id: "assessment",
     state: OFFER_AVAILABILITY.ACCOUNT_ONLY,
@@ -328,6 +314,7 @@ const availabilityClaimRules = [
     ],
   },
 ];
+const offerById = new Map(SELLABLE.map((offer) => [offer.id, offer]));
 for (const [file, source] of Object.entries(files)) {
   for (const rule of availabilityClaimRules) {
     if (offerById.get(rule.id)?.availability !== rule.state) continue;
@@ -345,10 +332,14 @@ for (const file of [
   "alakazam/index.html",
   "faq/index.html",
 ]) {
-  if (!files[file].match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
-    errors.push(`${file}: must plainly say that Alakazam sign-up or hosting is coming soon`);
+  if (files[file].match(/Alakazam[^<\n]{0,120}(?:coming soon|not open yet)|(?:coming soon|not open yet)[^<\n]{0,120}Alakazam/iu)) {
+    errors.push(`${file}: contains stale coming-soon Alakazam copy`);
   }
-  forbidRegex(file, /Alakazam[^<\n]{0,100}\$25(?!\d)|\$25(?!\d)[^<\n]{0,100}Alakazam/iu, "unreleased Alakazam price");
+  for (const amount of ["$25", "$35", "$50"]) {
+    if (!files[file].includes(amount)) {
+      errors.push(`${file}: must plainly show released Alakazam price ${amount}`);
+    }
+  }
 }
 
 const domainPage = files["domains/index.html"] ?? "";

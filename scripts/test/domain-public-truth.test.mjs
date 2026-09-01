@@ -15,7 +15,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
-test("inquiry-only catalog releases no implicit public Checkout rails", async () => {
+test("customer-entry catalog releases no implicit public Checkout rails", async () => {
   const catalog = JSON.parse(
     await readFile(path.join(ROOT, "data/public-catalog.json"), "utf8")
   );
@@ -26,12 +26,13 @@ test("inquiry-only catalog releases no implicit public Checkout rails", async ()
     Object.fromEntries(SELLABLE.map((offer) => [offer.id, offer.availability])),
     {
       "abracadabra.preview": OFFER_AVAILABILITY.ACCOUNT_ONLY,
-      "alacazam.hosting": OFFER_AVAILABILITY.HELD,
-      "domain.purchase": OFFER_AVAILABILITY.INQUIRY_ONLY,
-      "domain.purchase.plus": OFFER_AVAILABILITY.INQUIRY_ONLY,
+      "alacazam.hosting": OFFER_AVAILABILITY.ACCOUNT_ONLY,
+      "domain.purchase": OFFER_AVAILABILITY.CONTACT_TO_START,
+      "domain.purchase.plus": OFFER_AVAILABILITY.CONTACT_TO_START,
       assessment: OFFER_AVAILABILITY.ACCOUNT_ONLY,
+      care: OFFER_AVAILABILITY.CONTACT_TO_START,
       responder: OFFER_AVAILABILITY.CONTACT_TO_START,
-      "custom.build": OFFER_AVAILABILITY.INQUIRY_ONLY,
+      "custom.build": OFFER_AVAILABILITY.CONTACT_TO_START,
     },
   );
 
@@ -52,7 +53,11 @@ test("inquiry-only catalog releases no implicit public Checkout rails", async ()
     assert.equal(offer.productRef, null, id);
     assert.equal(offer.priceRef, null, id);
   }
-  assert.deepEqual(readiness().needsServer, ["abracadabra.preview", "assessment"]);
+  assert.deepEqual(readiness().needsServer, [
+    "abracadabra.preview",
+    "alacazam.hosting",
+    "assessment",
+  ]);
 
   const held = SELLABLE.filter((offer) =>
     offer.availability === OFFER_AVAILABILITY.HELD
@@ -65,11 +70,11 @@ test("inquiry-only catalog releases no implicit public Checkout rails", async ()
   }
 });
 
-test("domain offers have inquiry authority but no direct provider checkout authority", () => {
+test("domain offers have a real contact path but no direct provider checkout authority", () => {
   for (const id of ["domain.purchase", "domain.purchase.plus"]) {
     const offer = SELLABLE.find((candidate) => candidate.id === id);
     assert.ok(offer, id);
-    assert.equal(offer.availability, OFFER_AVAILABILITY.INQUIRY_ONLY);
+    assert.equal(offer.availability, OFFER_AVAILABILITY.CONTACT_TO_START);
     assert.equal(offer.checkoutUrl, null);
     assert.equal(offer.productRef, null);
     assert.equal(offer.priceRef, null);
@@ -243,7 +248,8 @@ test("customer-facing pages show the current offers without internal state label
     readFile(path.join(ROOT, "flyer.html"), "utf8"),
   ]);
 
-  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting coming soon/u);
+  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting from \$25 a month/u);
+  assert.match(landing, /Choose Alakazam for \$25, \$35, or \$50 a month\./u);
   assert.match(home, /Look good online\. Stop losing leads\./u);
   assert.match(home, /\$300 setup · \$250 a month/u);
   assert.match(flyer, /The Responder: \$300 setup \+ \$250 a month/u);

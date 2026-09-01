@@ -17,16 +17,16 @@
  * release authority. `availability` is the explicit customer-entry gate:
  * account-only offers require the authenticated server flow, contact-to-start
  * offers may be advertised and discussed but have no direct checkout,
- * inquiry-only offers require a written quote, held offers cannot be sold, and
+ * inquiry-only offers are retained only for unreleased work, held offers cannot be sold, and
  * only a public-checkout offer may place a Checkout link on the public artifact.
  *
- * THE STATIC-HOSTING CONSTRAINT
+ * THE PUBLIC-PAGE CONSTRAINT
  *
- * sitesourcery.com is served from GitHub Pages. There is no server, no secret
- * can live in the page, and no endpoint can sign anything. A stored provider
- * reference therefore cannot silently turn an offer on. The public
- * catalog is inquiry-only, so this ledger currently releases zero direct public
- * Checkout rails.
+ * Public marketing HTML contains no provider secret or price authority. A
+ * stored provider reference therefore cannot silently turn an offer on. The
+ * public catalog has no payment links, so this ledger releases zero direct
+ * public Checkout rails. Exact self-serve quotes use the authenticated server;
+ * assisted services use a contact-to-start path.
  */
 
 import { invariant } from "../domain/errors.mjs";
@@ -125,48 +125,47 @@ export const SELLABLE = Object.freeze([
       "ACCOUNT ONLY. Seeing the preview is free; $20 buys Download once for "
       + "one retained editor project. The authenticated server creates and "
       + "settles the exact Checkout. No public Payment Link is authorized. "
-      + "The approved full $20 one-use credit toward the first eligible Alakazam invoice "
-      + "remains dormant while Alakazam is held."
+      + "The full $20 becomes a one-use credit toward the same project's first "
+      + "eligible Alakazam invoice."
   }),
   rail({
     id: "alacazam.hosting",
     label: "Alakazam hosting",
-    rail: "billing",
+    rail: "checkout_session",
     amountCents: null,
-    availability: OFFER_AVAILABILITY.HELD,
+    displayAmountsCents: [2_500, 3_500, 5_000],
+    availability: OFFER_AVAILABILITY.ACCOUNT_ONLY,
     taxTreatment: "review_required",
     note:
-      "HELD. The complete tier, feature, support, billing, publication, "
-      + "lifecycle, and customer journey must be released and proven before "
-      + "any subscription can be quoted, purchased, activated, or renewed. "
-      + "No public Checkout or cancellation policy is authorized."
+      "ACCOUNT ONLY. The authenticated server quotes and starts the exact "
+      + "$25, $35, or $50 monthly plan, applies the same-project Download "
+      + "credit once, and retains provider-confirmed settlement. The public "
+      + "site has no direct Checkout link."
   }),
   rail({
     id: "domain.purchase",
     label: "Domain bought on the customer's behalf",
     rail: "billing",
     amountCents: null,
-    availability: OFFER_AVAILABILITY.INQUIRY_ONLY,
+    availability: OFFER_AVAILABILITY.CONTACT_TO_START,
     taxTreatment: "review_required",
     note:
-      "INQUIRY ONLY. Public DNS is a preflight signal, not registrar "
-      + "availability or a quote. No public Checkout, charge, or refund promise "
-      + "is authorized. Release requires an account-bound fresh registrar "
-      + "availability and price readback, written terms, recorded customer "
-      + "authorization, registration evidence, and capture only afterward."
+      "CONTACT TO START. Site Sourcery can check, register, connect, and help "
+      + "manage a customer-owned domain. Public DNS is only a quick preflight; "
+      + "the customer approves a fresh registrar result, exact price, terms, "
+      + "and registrant details before purchase. No public Checkout exists."
   }),
   rail({
     id: "domain.purchase.plus",
     label: "Domain bought on the customer's behalf - .net/.org band",
     rail: "billing",
     amountCents: null,
-    availability: OFFER_AVAILABILITY.INQUIRY_ONLY,
+    availability: OFFER_AVAILABILITY.CONTACT_TO_START,
     taxTreatment: "review_required",
     note:
-      "INQUIRY ONLY. The ending does not change the release boundary: no "
-      + "public price or Checkout authority exists while registrar cost proof "
-      + "is held. The same account-bound fresh readback, written acceptance, "
-      + "registration evidence, and post-registration capture gate applies."
+      "CONTACT TO START. The ending does not change the customer-owned model. "
+      + "A fresh registrar result, exact price, terms, registrant details, and "
+      + "written approval are required before purchase. No public Checkout exists."
   }),
   rail({
     id: "assessment",
@@ -181,6 +180,19 @@ export const SELLABLE = Object.freeze([
       + "assessment scope through the authenticated account. The server then "
       + "creates one exact automatic-tax Checkout and retains provider-confirmed "
       + "settlement evidence. No public Payment Link is authorized."
+  }),
+  rail({
+    id: "care",
+    label: "Website Care",
+    rail: "billing",
+    amountCents: null,
+    displayAmountsCents: [2_500, 6_900, 11_900, 19_900, 34_900],
+    availability: OFFER_AVAILABILITY.CONTACT_TO_START,
+    taxTreatment: "review_required",
+    note:
+      "CONTACT TO START. The public monthly plans are $25, $69, $119, $199, "
+      + "and $349. The customer receives the exact plan, included work, start "
+      + "date, and billing terms before subscription. No public Checkout exists."
   }),
   rail({
     id: "responder",
@@ -202,10 +214,10 @@ export const SELLABLE = Object.freeze([
     label: "Custom build",
     rail: "invoice",
     amountCents: null,
-    availability: OFFER_AVAILABILITY.INQUIRY_ONLY,
+    availability: OFFER_AVAILABILITY.CONTACT_TO_START,
     taxTreatment: "review_required",
     note:
-      "Quoted per job, $350 to $3,600 before art direction and migration. Card "
+      "CONTACT TO START. Quoted per job, $350 to $3,600 before art direction and migration. Card "
       + "and Card Plus invoice in full up front; Site and above split half "
       + "before work and half only after completion and before final handoff. "
       + "Recording completion does not automatically charge the final half."
