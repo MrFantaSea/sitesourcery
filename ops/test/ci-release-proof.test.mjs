@@ -43,6 +43,7 @@ import {
   validateCiReleaseSuccessorInput
 } from "../ci-release-proof-runtime.mjs";
 import {
+  CI_RELEASE_GENERATION_LAYOUT,
   assertCiReleaseSafeEnvironment,
   ciReleaseGitArguments,
   ciReleaseSuccessorInputRelativePath,
@@ -148,9 +149,37 @@ const PREDECESSOR_TREE = "d".repeat(40);
 const HISTORICAL_INPUT_SHA = "9".repeat(40);
 const HISTORICAL_INPUT_PATH =
   `ops/releases/ci-successor-inputs/${HISTORICAL_INPUT_SHA}.json`;
+const CURRENT_LEGAL_V7_CONSTANTS =
+  "ops/releases/legal-v7-20260831/joint-legal-v7-release-constants.json";
 const snapshot = await collectOriginRepositorySnapshot({
   projectRoot,
   layout
+});
+
+test("candidate generation binds the exact current Legal V7 authority", async () => {
+  assert.equal(
+    CI_RELEASE_GENERATION_LAYOUT.legalConstantsPath,
+    CURRENT_LEGAL_V7_CONSTANTS
+  );
+  const current = await collectOriginRepositorySnapshot({
+    projectRoot,
+    layout: {
+      ...CI_RELEASE_GENERATION_LAYOUT,
+      artifactRoot: "ops/releases/legal-v7-20260831/hosted"
+    }
+  });
+  assert.equal(
+    current.legal.authorityDigest,
+    "b03340aa7c62ea111a8aaefcb70222645500fcdea574f6cb7e3c942b38750b9b"
+  );
+  assert.equal(
+    current.legal.privacyVersion,
+    "SS-HOSTED-PRIVACY-2026-08-31-V7"
+  );
+  assert.equal(
+    current.legal.websiteTermsVersion,
+    "SS-HOSTED-WEBSITE-TERMS-2026-08-31-V7"
+  );
 });
 
 function releaseInput() {
