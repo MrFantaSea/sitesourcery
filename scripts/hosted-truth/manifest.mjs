@@ -26,15 +26,15 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "283156703bc2fd55827e09b6637f47198e282f5de97aad9260963e325620a13c",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-how-download-copy.html",
-    hostedSha256: "59148f956fbb5df5c99851622d36ae84f7652b958cfc9a19f53e24a681c72071",
+    hostedSha256: "369c12b24c1084f0d757b78b158ef0f62cf266d115285facf2ccc226cbae2d14",
   }),
   slot({
     id: "abracadabra-how-download-state",
     file: "abracadabra/how/index.html",
     kind: "html",
-    sourceSha256: "376eb74364890ce5a1898c0e2c7b6950580846ba33106bc4f4416bccfe2b7055",
+    sourceSha256: "980a9807c84498a5bd5b42f0929f0ef54620c69417efb13ce9ac1e463d80a7db",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-how-download-state.html",
-    hostedSha256: "f362d7f7eed3fd60413983528d95cfe2acfe34220dc1f51b98ef6f06910c79ab",
+    hostedSha256: "d80dc797afed983a6649e80e5070ba64556b98622046316336397a774afd9ffd",
   }),
   slot({
     id: "abracadabra-how-head",
@@ -50,7 +50,7 @@ export const hostedTruthSlots = Object.freeze([
     kind: "html",
     sourceSha256: "031b3cbe2bf68fbbd3a55768dcb2814b6db760d5ca48c40ac1849aed97017103",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-landing-download-copy.html",
-    hostedSha256: "6142abd1ee1a24969f4f99f5f2628ed65396f9ae5a5c69e008fdae82620fb9bd",
+    hostedSha256: "b50fee09a4d7602d16c4072d495a115adfa304b81980fe2f3e12908da0244a39",
   }),
   slot({
     id: "abracadabra-landing-head",
@@ -64,17 +64,17 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-landing-hero-state",
     file: "abracadabra/index.html",
     kind: "html",
-    sourceSha256: "1ee0429a7a5f9f7fa8cd739c54ce7425d514bd5fffb8bde1c708adbefb817337",
+    sourceSha256: "fc130a9d205479c3cf8c3d1c65d678bee032bae8863af5232e98a3436353501d",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-landing-hero-state.html",
-    hostedSha256: "912848fb28f76899157d31fc5b90c8e5ad2917fb77b4fe97abf5c2ce867ee0d5",
+    hostedSha256: "405494454fe6122ccd661bed22d18491293b1bd6dc2e7117e27c0c6bca047d46",
   }),
   slot({
     id: "contact-download-availability",
     file: "contact/index.html",
     kind: "html",
-    sourceSha256: "1d77d21083b022c24ea78cc9c4910185050049d0a987cd28f195acef9dcf9cb9",
+    sourceSha256: "6666048c38b46a0e2e21e0442fadea3fc6bdb31aa40907bf74719db04d609538",
     hostedFragment: "scripts/hosted-truth/fragments/contact-download-availability.html",
-    hostedSha256: "ac2d488c89f1cd73be33674b40c80ed410b0cf9ec6aa728b4ee526ac3c421e51",
+    hostedSha256: "9ba4a8312c895ae16aaedce8ff34cd7ccdb841a0e427226ce7c84be433fdd38a",
   }),
   slot({
     id: "faq-abracadabra-now",
@@ -104,9 +104,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "faq-paths",
     file: "faq/index.html",
     kind: "html",
-    sourceSha256: "f94b01b4f71a48e7c03a36e00dd7f148779d0bb205c60384465ab5b6d128adc9",
+    sourceSha256: "c2789a8251d68d098bec3077c316519c5988556bdbd6c0d939da1ce4cddd3d13",
     hostedFragment: "scripts/hosted-truth/fragments/faq-paths.html",
-    hostedSha256: "f7140d030f75db2b5cd9cd3116c444e97030e115980aa1c3a93cba15676ee0b5",
+    hostedSha256: "ba849c4821cf1bef5e9f9527f945d746a7264551b9ccbc07924dfbffb5bda777",
   }),
   slot({
     id: "faq-private-sites",
@@ -120,9 +120,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "home-download-availability",
     file: "index.html",
     kind: "html",
-    sourceSha256: "6269d5742102bae0ac6a47c3c4583e1e4a1bd7f57ff0af95412f3c9932a18fb7",
+    sourceSha256: "84d31da6dbad4cd2155bdbd7a1ffa1a796a756f32ab11ab8ebfa9b4c8b8e9a5e",
     hostedFragment: "scripts/hosted-truth/fragments/home-download-availability.html",
-    hostedSha256: "6640a033c79341395ac9b6488dc9f76831bd22872a3368baa3c3531f98aeac74",
+    hostedSha256: "71ca5a9752d925eb6d23f25f25f2a9d01a279fd7f1e154e381b21e3a14f4665f",
   }),
   slot({
     id: "abracadabra-app-head",
@@ -152,7 +152,7 @@ export const hostedTruthSlots = Object.freeze([
     id: "abracadabra-app-hero",
     file: "abracadabra/app/index.html",
     kind: "html",
-    sourceSha256: "1090d9d9850c1e94af44c55aecabbc01347d4c0f6885743b4d6e45cf33f9f3a1",
+    sourceSha256: "d1797dc18c666dde073fec2b6cbc33e2aa6b7761974becc0ce5cf61fd7640103",
     hostedFragment: "scripts/hosted-truth/fragments/abracadabra-app-hero.html",
     hostedSha256: "cf0637001b026761cac5a74a87ec2789156c1e792637ebacdf611f0dba16f5da",
   }),
@@ -312,18 +312,18 @@ export const heldAlakazamExecutableSemantics = Object.freeze([
 
 export const heldTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
-    "Look good online. Stop losing leads.",
+    "Look good online. Make it easy to call you.",
     "$300 setup · $250 a month",
-    "I can check a name, register it in your name, connect it to your website, and help manage it.",
+    "I can find a name, register it in your name, connect it to your website, and help keep it working.",
   ]),
   "abracadabra/index.html": Object.freeze([
-    "Abracadabra Alakazam",
-    "Make a one-page website for your business free · $20 to download · hosting from $25 a month",
+    "Make a one-page website for free.",
+    "Build a one-page site for your business in the browser for free.",
     "Choose Alakazam for $25, $35, or $50 a month.",
   ]),
   "abracadabra/how/index.html": Object.freeze([
-    "Make your preview in six short steps.",
-    "host the saved project with Alakazam for $25, $35, or $50 a month",
+    "Make your page in six short steps.",
+    "Alakazam hosting is $25, $35, or $50 a month",
     "Start building",
   ]),
   "abracadabra/app/index.html": Object.freeze([
@@ -344,18 +344,18 @@ export const heldTruthForbiddenPhrases = Object.freeze({
 
 export const hostedTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
-    "Look good online. Stop losing leads.",
+    "Look good online. Make it easy to call you.",
     "$300 setup · $250 a month",
-    "I can check a name, register it in your name, connect it to your website, and help manage it.",
+    "I can find a name, register it in your name, connect it to your website, and help keep it working.",
   ]),
   "abracadabra/index.html": Object.freeze([
-    "Abracadabra Alakazam",
-    "Make a one-page website for your business free · $20 to download · hosting from $25 a month",
-    "Sign in to save the project, then pay $20 once to download the HTML file",
+    "Make a one-page website for free.",
+    "Build a one-page site for your business in the browser for free.",
+    "Save it when you are ready. The HTML file is $20",
   ]),
   "abracadabra/how/index.html": Object.freeze([
-    "Make your preview in six short steps.",
-    "host the saved project with Alakazam for $25, $35, or $50 a month",
+    "Make your page in six short steps.",
+    "Alakazam hosting is $25, $35, or $50 a month",
     "Start building",
   ]),
   "abracadabra/app/index.html": Object.freeze([

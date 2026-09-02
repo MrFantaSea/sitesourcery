@@ -87,11 +87,11 @@ test("public Domains surface offers hands-on help and labels the DNS quick check
     readFile(path.join(ROOT, "domains/domain-search.js"), "utf8"),
   ]);
 
-  assert.match(page, /Get the right domain and keep it in your name\./u);
+  assert.match(page, /I’ll help you get the right domain—and keep it yours\./u);
   assert.match(page, /You approve the name and price before anything is bought\./u);
   assert.match(page, /What this quick check does/u);
   for (const phrase of [
-    "It asks Cloudflare's public DNS service whether .com, .net, and .org versions already have internet records.",
+    "It asks Cloudflare whether .com, .net, and .org versions already point somewhere online.",
     "It does not reserve the name or prove that it can be bought.",
     "Your business is the owner",
     "I check again right before purchase and buy only after you approve the details.",
@@ -248,9 +248,9 @@ test("customer-facing pages show the current offers without internal state label
     readFile(path.join(ROOT, "flyer.html"), "utf8"),
   ]);
 
-  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting from \$25 a month/u);
+  assert.match(landing, /Build a one-page site for your business in the browser for free\./u);
   assert.match(landing, /Choose Alakazam for \$25, \$35, or \$50 a month\./u);
-  assert.match(home, /Look good online\. Stop losing leads\./u);
+  assert.match(home, /Look good online\. Make it easy to call you\./u);
   assert.match(home, /\$300 setup · \$250 a month/u);
   assert.match(flyer, /The Responder: \$300 setup \+ \$250 a month/u);
   assert.match(flyer, /full \$350 goes toward it/u);
