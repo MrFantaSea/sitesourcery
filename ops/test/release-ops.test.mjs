@@ -115,6 +115,49 @@ test("runtime probe treats an intentional publication hold as healthy", async ()
     }
   );
   assert.equal(fake.calls.length, 5);
+  assert.equal(
+    new Set(
+      fake.calls.map(
+        (call) => call.options.signal
+      )
+    ).size,
+    5
+  );
+  assert.equal(
+    fake.calls.every(
+      (call) =>
+        call.options.signal instanceof
+          AbortSignal &&
+        call.options.signal.aborted === false
+    ),
+    true
+  );
+});
+
+test("runtime probe bounds each sequential request instead of sharing one cumulative timeout", async () => {
+  const fake = probeFetch();
+  const fetchImpl = async (value, options) => {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, 75);
+      options.signal.addEventListener(
+        "abort",
+        () => {
+          clearTimeout(timer);
+          reject(options.signal.reason);
+        },
+        { once: true }
+      );
+    });
+    return fake.fetchImpl(value, options);
+  };
+  const result = await probeRuntime({
+    fetchImpl,
+    expectedOperationsState:
+      DEFAULT_HELD_OPERATIONS_STATE,
+    timeoutMs: 250
+  });
+  assert.equal(result.ok, true);
+  assert.equal(fake.calls.length, 5);
 });
 
 test("runtime probe requires a ready tenant after publication approval", async () => {
