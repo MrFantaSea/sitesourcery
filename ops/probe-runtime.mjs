@@ -31,7 +31,7 @@ async function jsonProbe(
   url,
   {
     expectedStatus,
-    signal,
+    timeoutMs,
     validate
   }
 ) {
@@ -41,7 +41,7 @@ async function jsonProbe(
       Accept: "application/json"
     },
     redirect: "error",
-    signal
+    signal: AbortSignal.timeout(timeoutMs)
   });
   if (response.status !== expectedStatus) {
     throw new Error(
@@ -107,7 +107,6 @@ export async function probeRuntime({
       "Probe timeout must be between 250 and 10000 milliseconds."
     );
   }
-  const signal = AbortSignal.timeout(timeoutMs);
   const apiBase = new URL(
     `http://127.0.0.1:${selectedApiPort}/`
   );
@@ -120,7 +119,7 @@ export async function probeRuntime({
     new URL("api/v1/health", apiBase),
     {
       expectedStatus: 200,
-      signal,
+      timeoutMs,
       validate: (body) =>
         body?.ok === true &&
         body.service ===
@@ -132,7 +131,7 @@ export async function probeRuntime({
     new URL("api/v1/ready", apiBase),
     {
       expectedStatus: 200,
-      signal,
+      timeoutMs,
       validate: (body) =>
         body?.ready === true &&
         body.service ===
@@ -148,7 +147,7 @@ export async function probeRuntime({
       ),
       {
         expectedStatus: 200,
-        signal,
+        timeoutMs,
         validate: (body) =>
           body?.schema ===
             HOSTED_OPERATIONS_STATE_SCHEMA &&
@@ -176,7 +175,7 @@ export async function probeRuntime({
     ),
     {
       expectedStatus: 200,
-      signal,
+      timeoutMs,
       validate: (body) =>
         body?.ok === true &&
         body.service ===
@@ -194,7 +193,7 @@ export async function probeRuntime({
     {
       expectedStatus:
         publication === "approved" ? 200 : 503,
-      signal,
+      timeoutMs,
       validate: (body) =>
         body?.ready ===
         (publication === "approved")
