@@ -632,11 +632,11 @@ test("one hosted build publishes exact Legal V7 while non-legal pages use curren
   );
 
   const landing = sources.get("abracadabra/index.html");
-  assert.match(landing, /Abracadabra Alakazam/u);
-  assert.match(landing, /Make a one-page website for your business free · \$20 to download · hosting from \$25 a month/u);
+  assert.match(landing, /Make a one-page website for free\./u);
+  assert.match(landing, /Build a one-page site for your business in the browser for free\./u);
   assert.match(
     landing,
-    /Sign in to save the project, then pay \$20 once to download the HTML file and use it anywhere you choose\./u,
+    /Save it when you are ready\. The HTML file is \$20, and you can use it anywhere you want\./u,
   );
   assert.match(
     landing,
@@ -652,8 +652,8 @@ test("one hosted build publishes exact Legal V7 while non-legal pages use curren
   const guide = sources.get("abracadabra/how/index.html");
   assert.doesNotMatch(guide, /http-equiv="refresh"/u);
   assert.match(guide, /rel="canonical" href="https:\/\/sitesourcery\.com\/abracadabra\/how\/"/u);
-  assert.match(guide, /Make your preview in six short steps\./u);
-  assert.match(guide, /host the saved project with Alakazam for \$25, \$35, or \$50 a month/u);
+  assert.match(guide, /Make your page in six short steps\./u);
+  assert.match(guide, /Alakazam hosting is \$25, \$35, or \$50 a month/u);
 
   const faq = sources.get("faq/index.html");
   for (const anchor of [
@@ -675,11 +675,11 @@ test("one hosted build publishes exact Legal V7 while non-legal pages use curren
 
   const responder = await readFile(path.join(output, "responder/index.html"), "utf8");
   for (const phrase of [
-    "The Responder sends a quick text",
+    "The Responder texts the caller",
     "$300 setup + $250 a month.",
     "The $300 setup covers your call flow",
-    "The $250 monthly plan keeps the missed-call text-back running",
-    "schedule a hands-on installation",
+    "The $250 monthly plan keeps it running",
+    "I’ll check your phone setup",
   ]) {
     assert.ok(responder.includes(phrase), phrase);
   }
@@ -1295,7 +1295,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      '<h1 id="spark-title">Abracadabra Alakazam</h1>',
+      '<h1 id="spark-title">See your page free. Sign in to save, download, or host it.</h1>',
       '<h1 id="spark-title">Changed product</h1>',
     ),
     "utf8",
@@ -1387,7 +1387,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      '<h1 id="spark-title">Abracadabra Alakazam</h1>',
+      '<h1 id="spark-title">See your page free. Sign in to save, download, or host it.</h1>',
       '<h1 id="spark-title">Changed after last good</h1>',
     ),
     "utf8",

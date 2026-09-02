@@ -450,7 +450,7 @@ test("the Abracadabra lane has a plain HTML door into the maker", () => {
     /<a class="vessel-link" href="\/abracadabra\/app\/#workroom"[^>]*><\/a>/u,
   );
   assert.match(landingHtml, /Click[\s\S]*to[\s\S]*Conjure/u);
-  assert.match(landingHtml, /Make a one-page website for your business free · \$20 to download · hosting from \$25 a month/u);
+  assert.match(landingHtml, /Build a one-page site for your business in the browser for free\. Try every look and pay only if you want the file or hosting\./u);
   assert.match(landingHtml, /Build and test the page free\. Pay \$20 once to download the HTML file and use it anywhere you choose\./u);
   assert.match(
     landingHtml,

@@ -42,7 +42,7 @@ test("customer-copy gate rejects internal availability labels", async () => {
 test("customer-copy gate rejects an overlong heading", async () => {
   const errors = await homeErrors((source) =>
     source.replace(
-      "<h1>Look good online. Stop losing leads.</h1>",
+      "<h1>Look good online. Make it easy to call you.</h1>",
       "<h1>This heading has far too many words for a person scanning the website quickly on a phone today</h1>",
     ));
   assert.match(errors.join("\n"), /heading is \d+ words/u);

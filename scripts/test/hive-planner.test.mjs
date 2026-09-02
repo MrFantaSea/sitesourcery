@@ -780,7 +780,7 @@ test("planner copy stays customer-readable while the public page stays conversat
     true
   );
   for (const phrase of [
-    "Turn one stuck task into a simple plan.",
+    "What keeps falling through the cracks?",
     "Nothing starts on this page",
     "Your choice only changes this page. It is not saved or sent.",
     "This page cannot place an order or start work.",
@@ -796,12 +796,12 @@ test("the public Responder experience is contact-to-start at the approved price"
   assert.ok(main);
 
   for (const phrase of [
-    "The Responder sends a quick text",
+    "The Responder texts the caller",
     "$300 setup + $250 a month.",
     "Know the cost before setup starts.",
     "The $300 setup covers your call flow",
-    "The $250 monthly plan keeps the missed-call text-back running",
-    "schedule a hands-on installation",
+    "The $250 monthly plan keeps it running",
+    "I’ll check your phone setup",
   ]) {
     assert.ok(main.includes(phrase), phrase);
   }
