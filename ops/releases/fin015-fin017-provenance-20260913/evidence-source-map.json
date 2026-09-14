@@ -1,0 +1,669 @@
+{
+  "schema": "sitesourcery.historical-release-provenance/v1",
+  "recordedAt": "2026-09-13T21:20:00-04:00",
+  "workId": "GOV-PROVENANCE",
+  "status": "reconstructed_with_explicit_historical_gaps",
+  "repository": "https://github.com/MrFantaSea/sitesourcery",
+  "coverage": {
+    "fromExclusive": "eab6b34ad5df43337266845e272ce978bbd2ea8f",
+    "throughInclusive": "fcd6f8acbed2cc856c377c270083a25974559f41",
+    "throughTree": "00459e86e8a424b159ccd5df64afb7ff599c97d8"
+  },
+  "canonicalProvenance": "ops/releases/fin015-fin017-provenance-20260913/FIN-015-016-017-PROVENANCE.md",
+  "ledger": {
+    "path": "ops/releases/final-successor-20260811/BUILD-LEDGER.md",
+    "bytes": 36500,
+    "sha256": "5006bb207d2e41bdc31769288cf7cb445adb07226b0a98af096acc954dba81f2",
+    "hashScope": "exact pre-correction prefix",
+    "appendHeading": "GOV-PROVENANCE — FIN-015/016/017 historical correction, 2026-09-13"
+  },
+  "sourceMap": {
+    "path": "/Users/fantaseamac/SITESOURCERY-GOV-PROVENANCE-SOURCE-MAP-2026-09-13.md",
+    "bytes": 31963,
+    "sha256": "037031fc6ebf4535b0a9cb3950dcc30b09cd6bab1cc80166e397ab920a411340",
+    "evidenceClass": "direct_read_only_reconstruction",
+    "containsPrivateValues": false
+  },
+  "evidenceClasses": {
+    "direct": "Original file bytes or Git/GitHub metadata directly read September 13.",
+    "retainedReceipt": "Previously accepted September 13 proof receipt reused, not rerun.",
+    "continuityReference": "Historical assertion whose original result was not read; no direct proof credit."
+  },
+  "chronology": [
+    {
+      "pr": 52,
+      "purpose": "Aug 27, prior Apple-document bridge",
+      "commit": "262ceb4739c6e81aef4991593c810891ebe9c5cd",
+      "tree": "010bf832380de702b9221ac07f68180742e5c348",
+      "changedPaths": 1,
+      "sourceHead": "cd335b336bbbfbbe4b89c02deacfcf052dee17c5",
+      "runs": {
+        "prQuality": "33078067717",
+        "mainQuality": "33078500271",
+        "controlledPages": "33078500261",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 53,
+      "purpose": "Aug 31, offers/Alakazam/Legal V7 foundation",
+      "commit": "e36abec7c8b847a66bca0096ac97914b71106722",
+      "tree": "48c87c505fd6e9276d1e32e0843f466adfb5919c",
+      "changedPaths": 123,
+      "sourceHead": "0a1806efdf232bbc1d509786d043f41e410e1d82",
+      "runs": {
+        "prQuality": "33457235274",
+        "mainQuality": "33457550630",
+        "controlledPages": "33457550666",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 54,
+      "purpose": "Aug 31, Legal V7 runtime acceptance",
+      "commit": "97376ac02d1fe4131ab1e1d6f006274ffec59d5e",
+      "tree": "aadefe6713b314e4a4082e38c8f6e8130bfb67e7",
+      "changedPaths": 21,
+      "sourceHead": "906efeb86db2205db86e871705a6ce35a36e5e22",
+      "runs": {
+        "prQuality": "33459815750",
+        "mainQuality": "33460181611",
+        "controlledPages": "33460181644",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 56,
+      "purpose": "Aug 31, held proof Legal V7 binding",
+      "commit": "8e59f2e9d776dbebbb705d11fcc938beadd7b9cd",
+      "tree": "fe60dcd949ccc1a5004d1d0a5184ee000a7542b4",
+      "changedPaths": 2,
+      "sourceHead": "7dd41190355220c5f6c82853e289234cd5e74916",
+      "runs": {
+        "prQuality": "33461437915",
+        "mainQuality": "33461716290",
+        "controlledPages": "33461716292",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 57,
+      "purpose": "Aug 31, one-file 8e59 successor control",
+      "commit": "961107c823d492457596c4f1830ddcf88b355676",
+      "tree": "525a71b1d8d305fcfe83fb876238a591cf090b1e",
+      "changedPaths": 1,
+      "sourceHead": "851ec3da3c74123bd0cc3cc5cd08e343ccbeeba1",
+      "runs": {
+        "prQuality": "33462082432",
+        "mainQuality": "33462342012",
+        "controlledPages": "33462341971",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 58,
+      "purpose": "Sep 1, FIN-015 database control",
+      "commit": "33964f972d6b2e75dedea6301796a16483a998d9",
+      "tree": "891d12771cea52bafbc89c6dcbc9f81df5016735",
+      "changedPaths": 4,
+      "sourceHead": "a5a43a491e51c87d396dc89a97ff638f78df41eb",
+      "runs": {
+        "prQuality": "33504606946",
+        "mainQuality": "33504982992",
+        "controlledPages": "33504982988",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 59,
+      "purpose": "Sep 1, no-install runtime bundle",
+      "commit": "84c4c5a231949acdbe55e5d7ad6e1b751dd45a75",
+      "tree": "c215f062a8df287d52e20ffd34bdcb71fcd2f405",
+      "changedPaths": 3,
+      "sourceHead": "9e37d96cb338430fc19f4ec543f325595ff08a45",
+      "runs": {
+        "prQuality": "33507859181",
+        "mainQuality": "33508283386",
+        "controlledPages": "33508283484",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 60,
+      "purpose": "Sep 1, install/cutover authority",
+      "commit": "6426ccf371d3762ce52eefeba4ee2eb088e741c8",
+      "tree": "691f6d4cc3a3b78286e65c24dce0fd12251bbc16",
+      "changedPaths": 3,
+      "sourceHead": "6855db057e12497fcc2b0b01dbf49e264fd1dc70",
+      "runs": {
+        "prQuality": "33510382955",
+        "mainQuality": "33510827791",
+        "controlledPages": "33510827741",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 61,
+      "purpose": "Sep 1, receipt decimal-string correction",
+      "commit": "0a873e67233abe43486c045532499f665174e119",
+      "tree": "0cb4da0a8e31a207f24d62c52c1f4aecc8c42c70",
+      "changedPaths": 2,
+      "sourceHead": "0cc32aa696d2cc629df597b2e85e1b6ddb35e94f",
+      "runs": {
+        "prQuality": "33520643786",
+        "mainQuality": "33521118884",
+        "controlledPages": "33521118931",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 62,
+      "purpose": "Sep 1, publication-readiness correction",
+      "commit": "9d66b645de5b36c9fca1884534c41bd068dea92e",
+      "tree": "fd5411cd7dae9b9619e1525f16f058bff29b609b",
+      "changedPaths": 2,
+      "sourceHead": "0b1056499d439aeb9060facd1ef75b1d6632460a",
+      "runs": {
+        "prQuality": "33529888382",
+        "mainQuality": "33530756399",
+        "controlledPages": "33530756339",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 63,
+      "purpose": "Sep 1, one-file 9d66 control",
+      "commit": "9824b0d7a12449e5be4c08503b2b67d89c021968",
+      "tree": "f6b4fc80cb821a621230fedbfdf9fa36d5a385db",
+      "changedPaths": 1,
+      "sourceHead": "7a1224270b69b0a6b15d9f0f288f4062f0154eb3",
+      "runs": {
+        "prQuality": "33533023584",
+        "mainQuality": "33534835632",
+        "controlledPages": "33534835642",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 64,
+      "purpose": "Sep 1, support fixture wall-clock correction",
+      "commit": "e74546a830649ac82a22463e4c08ea29e7edbc9c",
+      "tree": "c5a8c673a5a92d855153e4c52eab8414dda1ffd9",
+      "changedPaths": 1,
+      "sourceHead": "725b0a02c9abb44bc6ddf8983f9cebe6b24e69f2",
+      "runs": {
+        "prQuality": "33561294593",
+        "mainQuality": "33561677949",
+        "controlledPages": "33561678009",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 65,
+      "purpose": "Sep 1, one-file final e745 control",
+      "commit": "58c91c52bf567a0e80af6f08cda85e57c5363fbc",
+      "tree": "f3ec081cab883affa738badce87c7aac7b4514fe",
+      "changedPaths": 1,
+      "sourceHead": "2207973cdc4daec75c74e6df3aba218a6c495959",
+      "runs": {
+        "prQuality": "33565707108",
+        "mainQuality": "33566163259",
+        "controlledPages": "33566163371",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 66,
+      "purpose": "Sep 1, FIN-016 plain copy candidate",
+      "commit": "1126f5bf4993887e4a41571e9671e2fa20e1f136",
+      "tree": "4afbf2ac2bf6f33a028ea4f90de9d2414548dcbf",
+      "changedPaths": 34,
+      "sourceHead": "356a7246574cd71ac6693483814f121a4e3e90f3",
+      "runs": {
+        "prQuality": "33575185562",
+        "mainQuality": "33575481299",
+        "controlledPages": "33575481280",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 67,
+      "purpose": "Sep 1, one-file 1126 control",
+      "commit": "bc5f56b7466e7e8cbaa0bab37a5da6fa90d4cf50",
+      "tree": "0af58b412880d518abe597ad75158328961a9352",
+      "changedPaths": 1,
+      "sourceHead": "7957fd3751bad4665df96a20682075579fccebe2",
+      "runs": {
+        "prQuality": "33576143121",
+        "mainQuality": "33576474952",
+        "controlledPages": "33576474935",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 68,
+      "purpose": "Sep 1, FIN-016 copy-only install control",
+      "commit": "9462d61f97c3bd006e2f325b5612b87abda31b4f",
+      "tree": "75ade5fa00d70c3df875645cda0c4022d7c98c00",
+      "changedPaths": 4,
+      "sourceHead": "4a38aeb5100f3d14b3e49345e7090b0a30327517",
+      "runs": {
+        "prQuality": "33579589324",
+        "mainQuality": "33579905908",
+        "controlledPages": "33579905910",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "pr": 69,
+      "purpose": "Sep 2, FIN-017 monitor timeout",
+      "commit": "fcd6f8acbed2cc856c377c270083a25974559f41",
+      "tree": "00459e86e8a424b159ccd5df64afb7ff599c97d8",
+      "changedPaths": 2,
+      "sourceHead": "6f25d1d93b96c4e0d567578a0aa0cf0b3f763705",
+      "runs": {
+        "prQuality": "33675683388",
+        "mainQuality": "33676138289",
+        "controlledPages": "33676138286",
+        "conclusion": "success",
+        "attempt": 1
+      },
+      "evidenceClass": "direct"
+    }
+  ],
+  "existingRepositoryFiles": [
+    {
+      "path": "ops/releases/fin015-production-upgrade-control/FIN-015-PRODUCTION-UPGRADE-CONTROL.md",
+      "bytes": 2131,
+      "sha256": "b7e57bf876a380bb33c9ddd4127df4dee5dc7d738aa60a8311d5b4353482304e"
+    },
+    {
+      "path": "ops/releases/fin015-production-upgrade-control/ci-held-final-receipt.json",
+      "bytes": 1062,
+      "sha256": "38d818dc7cb10855f92dbf4440ebff27ab28abefb2e8b6c40239dbe92b212158"
+    },
+    {
+      "path": "ops/releases/fin015-production-runtime-control/FIN-015-PRODUCTION-RUNTIME-CONTROL.md",
+      "bytes": 2122,
+      "sha256": "89b02795dedc1a21aa0653867e0ebbe890a961befe3eb1803ef13f88f34ba851"
+    },
+    {
+      "path": "ops/releases/fin015-production-install-cutover-control/FIN-015-PRODUCTION-INSTALL-CUTOVER-CONTROL.md",
+      "bytes": 2237,
+      "sha256": "1ad07a268f927e9ab6253778d38e6b054351c04958e8110184d8063858954f00"
+    },
+    {
+      "path": "ops/releases/fin016-copy-release-control/FIN016-COPY-RELEASE-RUNBOOK.md",
+      "bytes": 5096,
+      "sha256": "a7016aa89f92c67461d42a59c075fe709fa11259d0ab6f1b55f8351e960542ec"
+    },
+    {
+      "path": "ops/releases/fin016-copy-release-control/ci-held-final-receipt.json",
+      "bytes": 1062,
+      "sha256": "0040e6b376239c9117e3d52f604ca0b693d7ac8f286ebf4655ac019930d54607"
+    },
+    {
+      "path": "ops/releases/fin014-monitor-mount-independence/FIN-014-MONITOR-MOUNT-INDEPENDENCE-PRODUCTION-PROVENANCE.md",
+      "bytes": 5436,
+      "sha256": "64461fcab03a20bc63637b73f1a73f06aba53d70af296c59b51b293559919953"
+    },
+    {
+      "path": "ops/releases/fin014-monitor-mount-independence/production-receipt.json",
+      "bytes": 6734,
+      "sha256": "055f00273b141ea34b3fbf7e2d025b56d410f253f7be81020c77885eedee7e7d"
+    },
+    {
+      "path": "ops/releases/legal-v7-20260831/joint-legal-v7-release-constants.json",
+      "bytes": 4256,
+      "sha256": "35d8c1a7f8a07e49398b847fb1f9b34320df29d09352d6fe015ba6f8d56f34c2"
+    }
+  ],
+  "successorInputs": [
+    {
+      "path": "ops/releases/ci-successor-inputs/8e59f2e9d776dbebbb705d11fcc938beadd7b9cd.json",
+      "bytes": 18666,
+      "sha256": "8b19c2037baa3c0f1e0f61e55c4b9c0e5d6ac6379e34d9af3736fe66faa27c3d",
+      "successorDigest": "73aa814666e3aef44f6e1f9ef99035094ac722a1b7051a3a21d224af93a1e20e"
+    },
+    {
+      "path": "ops/releases/ci-successor-inputs/9d66b645de5b36c9fca1884534c41bd068dea92e.json",
+      "bytes": 18673,
+      "sha256": "bcdaeb547546faa53f4ad342f96225b61d4e15bd87bc1bbca3846173b9a03056",
+      "successorDigest": "b8deee104ca73e01188a747041c50fbcd17958211c42aebcb811ef2cbddb92fc"
+    },
+    {
+      "path": "ops/releases/ci-successor-inputs/e74546a830649ac82a22463e4c08ea29e7edbc9c.json",
+      "bytes": 18673,
+      "sha256": "b211dec3d417d985139ed49c995b4facc97dbcee4a237116d1f6754141ae851d",
+      "successorDigest": "8a84214ec1db6df15a05044fa6fc00acbc2ba8968c38550ef5ae244cbcf5f656"
+    },
+    {
+      "path": "ops/releases/ci-successor-inputs/1126f5bf4993887e4a41571e9671e2fa20e1f136.json",
+      "bytes": 18667,
+      "sha256": "a469618c6ea6df553f9e02b5e6044f00c95ebe1bdb7fd679a80ea00660903861",
+      "successorDigest": "615d5fa25cc12d6d83665706635854d59316910f8f179e898e679c2832e7ecde"
+    }
+  ],
+  "heldRuns": [
+    {
+      "candidate": "8e59f2e9d776dbebbb705d11fcc938beadd7b9cd",
+      "control": "961107c823d492457596c4f1830ddcf88b355676",
+      "runId": "33462367254",
+      "attempt": "1",
+      "conclusion": "success",
+      "receiptPath": "ops/releases/fin015-production-upgrade-control/ci-held-final-receipt.json",
+      "receiptDigest": "04a614a7c2fa9c50912cafbe01692013bde062a8f8ba912973d62ec84a256faa",
+      "evidenceClass": "direct"
+    },
+    {
+      "candidate": "9d66b645de5b36c9fca1884534c41bd068dea92e",
+      "control": "9824b0d7a12449e5be4c08503b2b67d89c021968",
+      "runId": "33535300672",
+      "attempt": "1",
+      "conclusion": "failure",
+      "failedStep": "fresh PostgreSQL/cleanup",
+      "finalReceiptIssued": false,
+      "evidenceClass": "direct"
+    },
+    {
+      "candidate": "e74546a830649ac82a22463e4c08ea29e7edbc9c",
+      "control": "58c91c52bf567a0e80af6f08cda85e57c5363fbc",
+      "runId": "33566556042",
+      "jobId": "100050969103",
+      "attempt": "1",
+      "conclusion": "success",
+      "receiptSource": "FIN-015 retained runtime directory / ci-held-final-receipt.json",
+      "receiptDigest": "9cff784b2eaa2f7fd8cb31d20aad3682e6e865c2a8e01a52696ba320fe3c3113",
+      "canonicalCompleteJsonLfSha256": "01d2aff5a487d1faec3f7541b043537d2e364256f5d828e769966e1682f4bba2",
+      "proofDigests": {
+        "browser": "36ada535e8da9b9fc593b60da7be8807161090b6d9fe2e200f23bc9c4540522a",
+        "cleanup": "e8357e4dc9767b46fde672564f64a063cbc3696d025fbc22d5f00bc29f152a40",
+        "full-npm": "05ea24ea8fd272d6aeda0cccd580ad4ea95afab166319dfad0309237df93f14a",
+        "legal-v4": "78c3aa9eb86cdc51c7f01ba6967f89a71d1698f72f469a18c67ca55edfa328d1",
+        "ops": "8a98edb78ad78cf3d4a2d581ec6243e7701dfdce65971fa906204a50f88c87b2",
+        "postgres": "e4295feeb4d0783d4581e8f9f8c5c68b978d05c908d7514d7a998c91553d3e27"
+      },
+      "evidenceClass": "direct"
+    },
+    {
+      "candidate": "1126f5bf4993887e4a41571e9671e2fa20e1f136",
+      "control": "bc5f56b7466e7e8cbaa0bab37a5da6fa90d4cf50",
+      "runId": "33576768242",
+      "jobId": "100082346141",
+      "attempt": "1",
+      "conclusion": "success",
+      "receiptPath": "ops/releases/fin016-copy-release-control/ci-held-final-receipt.json",
+      "receiptDigest": "8870e564b300ad095f171ff672eecf908aec1b8477a578a5123b5a5c4d8d6a7a",
+      "evidenceClass": "direct"
+    }
+  ],
+  "releaseEvidence": {
+    "FIN-015": {
+      "databaseUpgrade": {
+        "evidenceClass": "direct",
+        "path": "/home/simtech/sitesourcery-production/evidence/fin015-protected-upgrade-receipt.json",
+        "bytes": 4369,
+        "sha256": "ed47b2ff47a2212eb0251968c5fec20a7c6fb47cd7c4d40e7c85850830c770ec",
+        "completedAt": "2026-09-01T15:36:20.537Z",
+        "candidate": "8e59f2e9d776dbebbb705d11fcc938beadd7b9cd",
+        "migrationsBefore": 98,
+        "migrationsAfter": 102,
+        "relationsBefore": 294,
+        "relationsAfter": 299,
+        "predecessorRelationsPreserved": 294,
+        "rowLoss": false,
+        "preUpgradeBackupManifestSha256": "6680221d0917f40c4d030f264e0a5da2fe876edc4941fb9394dbd6948c139257",
+        "runtimeSelectionAuthorized": false
+      },
+      "finalRuntime": {
+        "evidenceClass": "direct",
+        "root": "/home/simtech/sitesourcery-production/run/fin015-publication-readiness-e74546a-20260901",
+        "candidate": "e74546a830649ac82a22463e4c08ea29e7edbc9c",
+        "tree": "c5a8c673a5a92d855153e4c52eab8414dda1ffd9",
+        "epoch": "fin015-publication-readiness-e74546a-20260901",
+        "files": [
+          {
+            "path": "ci-held-final-receipt.json",
+            "bytes": 1062,
+            "sha256": "a9d90d4735abb1dd501605f332d0eef3314f691deed60df7ca12fce77aa0e249"
+          },
+          {
+            "path": "e74546a830649ac82a22463e4c08ea29e7edbc9c.json",
+            "bytes": 18673,
+            "sha256": "b211dec3d417d985139ed49c995b4facc97dbcee4a237116d1f6754141ae851d"
+          },
+          {
+            "path": "final-release-epoch-v2.json",
+            "bytes": 2737,
+            "sha256": "a3a43f75f3ca8c1716ea68d2ab6f5019e1f728ce4b1bc4bcb48f24e72dd3e858"
+          },
+          {
+            "path": "origin-installed-readback.json",
+            "bytes": 4036,
+            "sha256": "c97f6fbb3a6f646813ce0cf75c4c82f54310f10dca3fdcf3c569ac9cdd35ff7c"
+          },
+          {
+            "path": "origin-release-input.json",
+            "bytes": 2685,
+            "sha256": "1189e6df58705c4b8717d13b329ff9a710faeef0b122e96aed1f2eccf0ad85ab"
+          },
+          {
+            "path": "origin-seal.json",
+            "bytes": 66937,
+            "sha256": "bc267a85cce2a9f06ec8181158e0674bcb88d42865a09c59ce53ea1802779603"
+          },
+          {
+            "path": "post-cutover-live.json",
+            "bytes": 540,
+            "sha256": "7194c7a179d942ab3d90edbbef071aed0a91b089bfd71a4ddc54d66d584eab40"
+          },
+          {
+            "path": "post-cutover-ready.json",
+            "bytes": 6300,
+            "sha256": "4790c376c949be7707a689cea068df5316fd5dc09c28827701025b4fdd4f72ad"
+          },
+          {
+            "path": "cutover.sh",
+            "bytes": 10338,
+            "sha256": "af456888dbd6cab5ab99959f3a6c5f23258a5b26323929bddedcba3865b41967"
+          },
+          {
+            "path": "cutover-complete.sh",
+            "bytes": 11299,
+            "sha256": "3e6c235b987425c228bd7156a127f9c30fc701ed50c662a8c1923231fe94291e"
+          },
+          {
+            "path": "cutover-final.sh",
+            "bytes": 10988,
+            "sha256": "83790f5c65ad2099faffc82a7463774e182902c749076a71de002e731db1ca9c"
+          },
+          {
+            "path": "cutover-retry.sh",
+            "bytes": 10988,
+            "sha256": "8ceabf6a1d288d0054facfef0460f1f3295306f713b807d24588b77cc6b2cf6c"
+          },
+          {
+            "path": "cutover-runtime-final.sh",
+            "bytes": 10919,
+            "sha256": "7c3387342d56e94efaee9dd8ed3bc6b69c9062191599a9f5c1b904aaaf5e5eea"
+          },
+          {
+            "path": "cutover-verified.sh",
+            "bytes": 11307,
+            "sha256": "8f36d6dd6a9a76e0bba2f1d35a236d46ece1ed3e50ab555041a2df928b8eccbd"
+          }
+        ],
+        "live": true,
+        "ready": true,
+        "migrations": 102,
+        "matrix": "v2",
+        "capabilityExternalEffects": false,
+        "scriptExecutionEvidence": "Continuity plus retained result files; script bytes alone are not an execution receipt."
+      }
+    },
+    "FIN-016": {
+      "candidate": "1126f5bf4993887e4a41571e9671e2fa20e1f136",
+      "tree": "4afbf2ac2bf6f33a028ea4f90de9d2414548dcbf",
+      "installControl": "9462d61f97c3bd006e2f325b5612b87abda31b4f",
+      "epoch": "plain-language-release-1126f5b-20260901",
+      "migrationDelta": 0,
+      "retainedRoot": "/home/simtech/sitesourcery-production/run/fin016-copy-release-1126f5b-20260902",
+      "historicalOriginalAccess": "EACCES as simtech; no bypass",
+      "historicalHashes": {
+        "action": "5d1ca85301bb1583f5006b7dc61d9e723da6351af666dc37ae8b40598fa44351",
+        "plan": "6b0340f8272c4a72b57ff37c6a52c314f7f5e27d0a64ca3cab021f4bf64db046",
+        "bundleEmbeddedDigest": "51d07cd5e9a3b2004509426b66ab1f402746001138c9ee4582f829bcabf6fc3b",
+        "live": "133e83cc9b9d0c4e9ee095343884aa52bb12a1c5bb688e5f396e35fb696fc853",
+        "ready": "fd4d1a3e2aace53eedc28e86aa1d590eb3094825905e9dfa905c950da7b09945",
+        "routes21": "609d0dadf17107ace4cdf4d15c62a1f4d79885c7ff786d62c36a0507d84ce58f",
+        "preSelectionBackup": "e414f310d1648adedf60c5a6387d11a991b6e7ae6a41edcf78efa591b8494fe5"
+      },
+      "historicalHashesEvidenceClass": "continuityReference",
+      "currentInstalledEvidence": [
+        "E0",
+        "E1",
+        "D0"
+      ],
+      "freshInteractiveVisualAcceptanceClaimed": false
+    },
+    "FIN-017": {
+      "candidate": "fcd6f8acbed2cc856c377c270083a25974559f41",
+      "tree": "00459e86e8a424b159ccd5df64afb7ff599c97d8",
+      "kind": "monitor-only overlay; API stays FIN-016",
+      "root": "/home/simtech/sitesourcery-production/run/fin017-monitor-timeout-fcd6f8a",
+      "files": [
+        {
+          "path": "probe-runtime.mjs",
+          "bytes": 5627,
+          "sha256": "754c9a89fd1a90ba96439efbc3caaf36135c52baeb73ceb4846d93c956608d3a"
+        },
+        {
+          "path": "release-abe26e0.active-before.conf",
+          "bytes": 913,
+          "sha256": "7f872f919b75743e3b6a0c578dcd16944a080d729a04e6a7866a26356e542821"
+        },
+        {
+          "path": "release-abe26e0.rollback.conf",
+          "bytes": 913,
+          "sha256": "7f872f919b75743e3b6a0c578dcd16944a080d729a04e6a7866a26356e542821"
+        },
+        {
+          "path": "release-fcd6f8a.conf",
+          "bytes": 877,
+          "sha256": "3c8c03a0d33bbeea6a29fadaf88b7e8e283b8b49555ae5faf77fae110fa6f1b5"
+        }
+      ],
+      "filesEvidenceClass": "direct",
+      "historicalResultsEvidenceClass": "continuityReference",
+      "manualRecoveryAt": "2026-09-02T20:03:03.872Z",
+      "unattendedAt": [
+        "2026-09-02T20:08:15.474Z",
+        "2026-09-02T20:13:35.471Z"
+      ],
+      "historicalResultFilesAvailable": false,
+      "currentAcceptedFunctionalEvidence": "D0"
+    }
+  },
+  "currentRecovery": [
+    {
+      "id": "E0",
+      "evidenceClass": "retainedReceipt",
+      "path": "/Users/fantaseamac/SITESOURCERY-INCIDENT-2026-09-13-E0-CYCLE-RECEIPT.md",
+      "bytes": 10405,
+      "sha256": "416805e7e7534ccf107098a1ae1bd5029312569fb03060ce0d22f4e9391cd7b4",
+      "result": "one fresh verified encrypted backup; all 299 relations equal before/after; current source closure"
+    },
+    {
+      "id": "E1",
+      "evidenceClass": "retainedReceipt",
+      "path": "/Users/fantaseamac/SITESOURCERY-INCIDENT-2026-09-13-E1-RESTORE-RECEIPT.md",
+      "bytes": 7655,
+      "sha256": "9a61482d6d964c2b3fedc0e30349e1e893c8f12c6c9cadebc6ce2e4ca1866c66",
+      "result": "one isolated restore; complete 299 relation equality; all 9320 app entries; disposables removed, evidence retained"
+    },
+    {
+      "id": "D0",
+      "evidenceClass": "retainedReceipt",
+      "path": "/Users/fantaseamac/SITESOURCERY-INCIDENT-2026-09-13-D0-COMPLETION-RECEIPT.md",
+      "bytes": 5854,
+      "sha256": "38087dbd6b6603839de2a92778d6293d63b5f44ff682dfb7dc5459b55e810b51",
+      "result": "one approved operations recovery; normal schedules restored; two real unattended six-green/no-new-mail cycles"
+    }
+  ],
+  "openHistoricalClaims": [
+    {
+      "id": "FIN016-ORIGINAL-RECEIPTS",
+      "status": "open",
+      "reason": "Original action/plan/bundle/live/ready/21-route records not accessible as simtech; continuity hashes are not a new direct read.",
+      "reproofNeededForCurrentRuntime": false
+    },
+    {
+      "id": "FIN017-ORIGINAL-RESULTS",
+      "status": "open",
+      "reason": "Historical manual/unattended results and delivery reconciliation not present in the finite retained run directory; current D0 acceptance does not manufacture September 2 history.",
+      "reproofNeededForCurrentRuntime": false
+    }
+  ],
+  "effectPosture": {
+    "thisCorrection": "evidence-only; zero production/provider/customer effects",
+    "existingReleasedPurposes": [
+      "Download-only Stripe boundary",
+      "approved registration/recovery mail",
+      "approved owner-operations alerts"
+    ],
+    "unreleasedPurposesRemainHeld": true,
+    "workerActivation": false,
+    "capabilityExternalEffects": false,
+    "allPurposeCustomerCompletion": false,
+    "otherProjectsChanged": false
+  },
+  "cleanup": {
+    "newDisposableResources": [],
+    "historicalRecoveryCleanup": "accepted E0/E1/D0 receipts; all incident temporaries accounted for",
+    "preservedEvidenceRetired": false
+  },
+  "proofScope": {
+    "historicalRuns": "previous successful/failed runs read, not rerun",
+    "local": "strict JSON, Git ancestry/tree, file hash and append-only ledger validation; independent review",
+    "protectedReview": "required; results belong to this evidence commit's GitHub checks, not fabricated here",
+    "localFullProductAndPostgres": "inapplicable to evidence-only delta; exact implementation proof reused; mandatory protected CI remains"
+  },
+  "hashSemantics": {
+    "fileSha256": "actual retained file bytes",
+    "receiptDigest": "canonical sorted-key payload excluding digest, with one LF, per existing exact receipt schema",
+    "canonicalCompleteJsonLfSha256": "canonical complete JSON including digest plus LF; not original serialization",
+    "originEpochComparison": "epoch comparison receipt hash is not the raw origin-installed-readback.json file hash"
+  }
+}
