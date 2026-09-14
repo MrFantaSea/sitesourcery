@@ -562,3 +562,36 @@ recovery email, other provider effect, customer or database mutation,
 application restart, deployment, public/DNS mutation, payment, or spend
 occurred. The monitor correction is live and accepted; Zen recovery, Twilio,
 Apple, and elapsed-time gates remain separate.
+
+## GOV-PROVENANCE — FIN-015/016/017 historical correction, 2026-09-13
+
+This append preserves all prior ledger text. Earlier 100/100 language describes
+the engineering/held denominator, not all-purpose customer-live completion.
+Canonical chronology and machine evidence are in
+[FIN-015/016/017 provenance](../fin015-fin017-provenance-20260913/FIN-015-016-017-PROVENANCE.md)
+and [its source map](../fin015-fin017-provenance-20260913/evidence-source-map.json).
+
+FIN-015: direct original database receipt binds the 98→102 migration upgrade to
+8e59f2e and its actual pre-upgrade backup, preserving all294 predecessor relations.
+Separate final e74546a runtime selection is now linked to its recovered exact
+held receipt, successful run33566556042, origin/input/epoch and live/ready files.
+The earlier checked-in receipt is retained; intermediate failures are not erased.
+
+FIN-016: protected1126f5b/4afbf2ac and held run33576768242 are exact; the copy-only
+release did not change LegalV7 or the102migrations. Historical action/plan/bundle/
+route originals remain inaccessible as simtech and explicitly open; current1126
+installed/source/backup/restore operation is independently supported by accepted
+September13 E0/E1/D0. No historical visual or route result is manufactured.
+
+FIN-017: protectedfcd6f8a/00459e86 is a monitor-only overlay, not a new API
+candidate. Probe and prior/new drop-in byte identities are directly recovered;
+original September2 result/mail receipts remain a continuity-backed open claim.
+Accepted September13 D0 separately proves current monitoring, one recovery and
+two unattended sixgreen/no-new-mail cycles. No completed operation was repeated.
+
+This evidence-only correction reuses implementation proof and follows protected
+review; no production install, provider/customer effect, worker activation,
+payment, legal/DNS change, evidence retirement or other-project change occurs.
+The July Pages hold and separate installed-epoch/edge binding already have distinct
+consumers; no redundant runtime index is added. Future provenance CI enforcement,
+unfinished engineering and purpose-specific release/owner gates remain separate.
