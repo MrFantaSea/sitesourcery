@@ -44,6 +44,8 @@ import {
 } from "../ci-release-proof-runtime.mjs";
 import {
   CI_RELEASE_GENERATION_LAYOUT,
+  CI_PROVENANCE_DIRECTORY,
+  CI_PROVENANCE_LEDGER,
   assertCiReleaseSafeEnvironment,
   ciReleaseGitArguments,
   ciReleaseSuccessorInputRelativePath,
@@ -54,10 +56,12 @@ import {
   verifyCiReleaseCandidate,
   verifyCiReleaseGenerationState,
   verifyCiReleaseGitCheckout,
-  verifyCiReleaseSuccessorControl
+  verifyCiReleaseSuccessorControl,
+  verifyCiCandidateProvenance
 } from "../ci-release-proof-repository.mjs";
 import {
   proveDatabaseAbsent,
+  runCiReleaseProofCli,
   writeCiReleaseSuccessorInputAnchored
 } from "../ci-release-proof.mjs";
 import {
@@ -949,6 +953,169 @@ test("successor control requires the exact one-file C2-to-K2 graph", async () =>
     );
   } finally {
     await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+async function candidateProvenanceFixture(mutate = () => {}) {
+  const fixture = await gitSecurityFixture();
+  const root = fixture.root;
+  try {
+    const ledgerPath = path.join(root, CI_PROVENANCE_LEDGER);
+    await mkdir(path.dirname(ledgerPath), { recursive: true });
+    const previousLedger = Buffer.from("# Preserved ledger\n\nHistorical proof stays.\n");
+    await writeFile(ledgerPath, previousLedger);
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "historical base"]);
+    const base = await git(root, ["rev-parse", "HEAD"]);
+    await writeFile(path.join(root, "tracked.txt"), "implementation\n");
+    await git(root, ["commit", "-am", "implementation"]);
+    const implementation = await git(root, ["rev-parse", "HEAD"]);
+    const implementationTree = await git(root, ["rev-parse", "HEAD^{tree}"]);
+    const directory = `${CI_PROVENANCE_DIRECTORY}/${implementation}`;
+    const markdown = Buffer.from(`# Provenance\n${implementation}\n${implementationTree}\n${base}\n`);
+    const append = Buffer.from(`\n[Provenance](../ci-provenance/${implementation}/provenance.md)\n[Proof](../ci-provenance/${implementation}/proof.json)\n`);
+    const record = {
+      schema: "sitesourcery.candidate-provenance/v1",
+      implementation: { commitSha: implementation, treeSha: implementationTree, baseCommitSha: base },
+      provenanceSha256: sha256Bytes(markdown),
+      ledger: { previousByteCount: previousLedger.length, previousSha256: sha256Bytes(previousLedger), appendSha256: sha256Bytes(append) },
+      proofs: {
+        focused: { command: "node --test focused.test.mjs", exitCode: 0, logSha256: "a".repeat(64) },
+        fullNpm: { command: "npm test", exitCode: 0, logSha256: "b".repeat(64) },
+        review: { status: "passed", summary: "Fixture adversarial review." },
+        postgres: { status: "not_applicable", reason: "No data changes in fixture." }
+      },
+      disposables: { status: "removed", summary: "Fixture resources removed." }
+    };
+    await mkdir(path.join(root, directory), { recursive: true });
+    await writeFile(path.join(root, directory, "provenance.md"), markdown);
+    await writeFile(ledgerPath, Buffer.concat([previousLedger, append]));
+    const context = { root, base, implementation, implementationTree, directory, ledgerPath, record };
+    await mutate(context);
+    await writeFile(path.join(root, directory, "proof.json"), `${JSON.stringify(record)}\n`);
+    await git(root, ["add", "."]);
+    await git(root, ["commit", "-m", "separate evidence"]);
+    return { ...context, evidence: await git(root, ["rev-parse", "HEAD"]), evidenceTree: await git(root, ["rev-parse", "HEAD^{tree}"]) };
+  } catch (error) {
+    await rm(root, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+test("provenance binds real evidence, PR merge, squash and exact successor control graphs", async () => {
+  const f = await candidateProvenanceFixture();
+  const check = () => verifyCiCandidateProvenance({ projectRoot: f.root });
+  const checkout = (sha) => git(f.root, ["checkout", "--detach", sha]);
+  try {
+    assert.equal((await check()).implementationSha, f.implementation);
+    const prMerge = await git(f.root, ["commit-tree", f.evidenceTree, "-p", f.base, "-p", f.evidence, "-m", "PR merge"]);
+    await checkout(prMerge);
+    assert.equal((await check()).candidateSha, f.evidence);
+    const squash = await git(f.root, ["commit-tree", f.evidenceTree, "-p", f.base, "-m", "protected squash"]);
+    await checkout(squash);
+    // I is deliberately not an ancestor of the protected squash.
+    await assert.rejects(git(f.root, ["merge-base", "--is-ancestor", f.implementation, squash]));
+    assert.equal((await check()).candidateSha, squash);
+    let output = "";
+    assert.equal((await runCiReleaseProofCli({
+      arguments_: ["provenance", "--root", f.root],
+      environment: {}, writeOutput: (value) => { output += value; }
+    })).status, "verified");
+    assert.equal(JSON.parse(output).implementationSha, f.implementation);
+
+    const epoch = structuredClone(releaseInput().epoch);
+    epoch.source = { commitSha: squash, treeSha: f.evidenceTree };
+    const input = createCiReleaseSuccessorInput({
+      originReleaseInput: createOriginReleaseInput({ releaseId: squash, epoch }),
+      migrationInventory: migrationInventory(), legalV4Pages: successorInput().legalV4Pages
+    });
+    const inputPath = ciReleaseSuccessorInputRelativePath(squash);
+    await mkdir(path.dirname(path.join(f.root, inputPath)), { recursive: true });
+    await writeFile(path.join(f.root, inputPath), `${canonicalJson(input)}\n`);
+    await git(f.root, ["add", inputPath]);
+    await git(f.root, ["commit", "-m", "exact control"]);
+    const control = await git(f.root, ["rev-parse", "HEAD"]);
+    assert.equal((await check()).controlSha, control);
+    const controlTree = await git(f.root, ["rev-parse", "HEAD^{tree}"]);
+    const controlMerge = await git(f.root, ["commit-tree", controlTree, "-p", squash, "-p", control, "-m", "control PR merge"]);
+    await checkout(controlMerge);
+    assert.equal((await check()).candidateSha, squash);
+
+    await checkout(f.implementation);
+    await assert.rejects(check(), /exactly one new canonical provenance/u);
+    await checkout(squash);
+    const unavailableImplementation = async (args, root) => {
+      if (args.includes(f.implementation)) throw new Error("retained implementation unavailable");
+      const { stdout } = await executeFile("git", args, { cwd: root, encoding: "utf8" });
+      return args[0] === "cat-file" ? stdout : stdout.trim();
+    };
+    await assert.rejects(verifyCiCandidateProvenance({ projectRoot: f.root, gitRunner: unavailableImplementation }), /unavailable or invalid/u);
+    const wrongMerge = await git(f.root, ["commit-tree", f.implementationTree, "-p", f.base, "-p", f.evidence, "-m", "unproved merge changes"]);
+    await checkout(wrongMerge);
+    await assert.rejects(check(), /preserve the exact source evidence tree/u);
+    const wrongBase = await git(f.root, ["commit-tree", f.evidenceTree, "-p", f.implementation, "-p", f.evidence, "-m", "wrong base"]);
+    await checkout(wrongBase);
+    await assert.rejects(check(), /PR merge base differs/u);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("provenance rejects unproved, stale, incomplete and rewritten evidence", async (t) => {
+  const cases = [
+    ["failed full suite", ({ record }) => { record.proofs.fullNpm.exitCode = 1; }, /fullNpm proof must have passed/u],
+    ["missing focused proof", ({ record }) => { delete record.proofs.focused; }, /exact fields/u],
+    ["missing PostgreSQL reason", ({ record }) => { record.proofs.postgres.reason = ""; }, /inapplicability reason/u],
+    ["failed applicable PostgreSQL", ({ record }) => { record.proofs.postgres = { status: "failed", receiptSha256: "c".repeat(64) }; }, /PostgreSQL proof must have passed/u],
+    ["unfinished cleanup", ({ record }) => { record.disposables.status = "pending"; }, /absent or removed/u],
+    ["missing review", ({ record }) => { record.proofs.review.status = "pending"; }, /review must have passed/u],
+    ["stale tree", ({ record }) => { record.implementation.treeSha = "0".repeat(40); }, /base or tree drifted/u],
+    ["circular or wrong identity", ({ record }) => { record.implementation.commitSha = "0".repeat(40); }, /earlier implementation/u],
+    ["changed markdown", ({ root, directory }) => writeFile(path.join(root, directory, "provenance.md"), "changed\n"), /Canonical provenance bytes/u],
+    ["rewritten ledger", async ({ ledgerPath }) => {
+      const old = await readFile(ledgerPath, "utf8");
+      await writeFile(ledgerPath, old.replace("Historical", "Rewritten!"));
+    }, /preserve its exact prefix/u],
+    ["unrelated candidate code", ({ root }) => writeFile(path.join(root, "tracked.txt"), "unproved\n"), /only two evidence files/u],
+    ["extra metadata", ({ record }) => { record.skip = true; }, /exact fields/u]
+  ];
+  for (const [name, mutate, expected] of cases) {
+    await t.test(name, async () => {
+      const f = await candidateProvenanceFixture(mutate);
+      try {
+        await assert.rejects(verifyCiCandidateProvenance({ projectRoot: f.root }), expected);
+      } finally {
+        await rm(f.root, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test("provenance rejects evidence symlinks and modified checkout without clearing flags", async () => {
+  const f = await candidateProvenanceFixture();
+  try {
+    const md = path.join(f.root, f.directory, "provenance.md");
+    await rm(md);
+    await symlink("../../../tracked.txt", md);
+    await git(f.root, ["add", "."]);
+    await git(f.root, ["commit", "--amend", "--no-edit"]);
+    await assert.rejects(verifyCiCandidateProvenance({ projectRoot: f.root }), /exact regular Git files/u);
+    await writeFile(path.join(f.root, "untracked.txt"), "not proved\n");
+    await assert.rejects(verifyCiCandidateProvenance({ projectRoot: f.root }), /identity or status drifted/u);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("candidate provenance is mandatory in Site quality and both held proof boundaries", async () => {
+  const quality = await readFile(path.join(projectRoot, ".github/workflows/site-quality.yml"), "utf8");
+  assert.match(quality, /fetch-depth: 0/u);
+  assert.match(quality, /run: node ops\/ci-release-proof\.mjs provenance --root "\$GITHUB_WORKSPACE"/u);
+  assert.doesNotMatch(quality, /continue-on-error:/u);
+  const cli = await readFile(path.join(projectRoot, "ops/ci-release-proof.mjs"), "utf8");
+  for (const command of ["input", "final"]) {
+    const body = cli.slice(cli.indexOf(`if (command === "${command}")`));
+    assert.ok(body.indexOf("await verifyCiCandidateProvenance") < body.indexOf("return "));
   }
 });
 

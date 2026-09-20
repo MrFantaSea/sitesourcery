@@ -200,7 +200,7 @@ async function defaultGitRunner(arguments_, projectRoot) {
       GIT_CONFIG_NOSYSTEM: "1"
     }
   });
-  return result.stdout.trim();
+  return arguments_[0] === "cat-file" ? result.stdout : result.stdout.trim();
 }
 
 async function requireGit(gitRunner, projectRoot, arguments_, label) {
@@ -448,32 +448,13 @@ export function ciReleaseSuccessorInputRelativePath(candidateSha) {
   );
 }
 
-export async function verifyCiReleaseSuccessorControl({
-  controlRoot,
-  inputPath,
-  expectedInputSha256,
-  candidateSha,
-  workflowSha,
-  gitRunner = defaultGitRunner
+async function readCiReleaseSuccessorControlGraph({
+  projectRoot,
+  candidate,
+  workflow,
+  gitRunner
 }) {
-  const candidate = exactCommit(candidateSha, "CI successor candidate");
-  const workflow = exactCommit(workflowSha, "CI successor workflow");
   const expectedRelativePath = ciReleaseSuccessorInputRelativePath(candidate);
-  const expectedInputPath = inside(
-    controlRoot,
-    path.join(controlRoot, ...expectedRelativePath.split("/")),
-    "CI successor control input"
-  );
-  if (path.resolve(inputPath) !== expectedInputPath) {
-    fail("CI successor input path is not the exact candidate-named control file.");
-  }
-
-  await verifyCiReleaseGitCheckout({
-    projectRoot: controlRoot,
-    expectedHead: workflow,
-    gitRunner
-  });
-
   const [
     parentLine,
     changedPaths,
@@ -482,25 +463,25 @@ export async function verifyCiReleaseSuccessorControl({
   ] = await Promise.all([
     requireGit(
       gitRunner,
-      controlRoot,
+      projectRoot,
       ["rev-list", "--parents", "-n", "1", workflow],
       "CI successor parent graph"
     ),
     requireGit(
       gitRunner,
-      controlRoot,
+      projectRoot,
       ["diff-tree", "--no-commit-id", "--name-status", "-r", candidate, workflow, "--"],
       "CI successor changed paths"
     ),
     requireGit(
       gitRunner,
-      controlRoot,
+      projectRoot,
       ["ls-tree", "-r", "--name-only", candidate, "--", CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY],
       "CI candidate successor-input inventory"
     ),
     requireGit(
       gitRunner,
-      controlRoot,
+      projectRoot,
       ["ls-tree", "-r", "--name-only", workflow, "--", CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY],
       "CI workflow successor-input inventory"
     )
@@ -532,6 +513,41 @@ export async function verifyCiReleaseSuccessorControl({
   ) {
     fail("CI workflow must retain every historical input and add only the exact candidate input.");
   }
+  return { expectedRelativePath, workflowInputPaths };
+}
+
+export async function verifyCiReleaseSuccessorControl({
+  controlRoot,
+  inputPath,
+  expectedInputSha256,
+  candidateSha,
+  workflowSha,
+  gitRunner = defaultGitRunner
+}) {
+  const candidate = exactCommit(candidateSha, "CI successor candidate");
+  const workflow = exactCommit(workflowSha, "CI successor workflow");
+  const expectedRelativePath = ciReleaseSuccessorInputRelativePath(candidate);
+  const expectedInputPath = inside(
+    controlRoot,
+    path.join(controlRoot, ...expectedRelativePath.split("/")),
+    "CI successor control input"
+  );
+  if (path.resolve(inputPath) !== expectedInputPath) {
+    fail("CI successor input path is not the exact candidate-named control file.");
+  }
+
+  await verifyCiReleaseGitCheckout({
+    projectRoot: controlRoot,
+    expectedHead: workflow,
+    gitRunner
+  });
+
+  const { workflowInputPaths } = await readCiReleaseSuccessorControlGraph({
+    projectRoot: controlRoot,
+    candidate,
+    workflow,
+    gitRunner
+  });
   await requireSuccessorInputFiles(
     controlRoot,
     workflowInputPaths,
@@ -550,6 +566,188 @@ export async function verifyCiReleaseSuccessorControl({
     workflowSha: workflow,
     inputPath: expectedRelativePath,
     successorInput
+  });
+}
+
+export const CI_PROVENANCE_DIRECTORY = "ops/releases/ci-provenance";
+export const CI_PROVENANCE_LEDGER =
+  "ops/releases/final-successor-20260811/BUILD-LEDGER.md";
+const PROVENANCE_BASELINE = Object.freeze({
+  commit: "d180bbcbdda786c3988c9f3fa6704558d42581f6",
+  tree: "57bda0977042aa88e38b69f78cbcfd3d7993eb0f"
+});
+
+function proofText(value, label) {
+  if (typeof value !== "string" || value.trim() === "" || value.length > 4096) {
+    fail(`${label} requires nonempty bounded text.`);
+  }
+}
+
+function proofDigest(value, label) {
+  if (!/^[a-f0-9]{64}$/u.test(value ?? "")) {
+    fail(`${label} requires an exact SHA-256.`);
+  }
+}
+
+function validateCandidateProof(record) {
+  exactObject(record, [
+    "schema", "implementation", "provenanceSha256", "ledger", "proofs", "disposables"
+  ], "Candidate provenance");
+  if (record.schema !== "sitesourcery.candidate-provenance/v1") {
+    fail("Candidate provenance schema is invalid.");
+  }
+  exactObject(record.implementation, ["commitSha", "treeSha", "baseCommitSha"], "Implementation");
+  for (const [key, value] of Object.entries(record.implementation)) exactCommit(value, key);
+  proofDigest(record.provenanceSha256, "Canonical provenance");
+  exactObject(record.ledger, ["previousByteCount", "previousSha256", "appendSha256"], "Ledger proof");
+  if (!Number.isSafeInteger(record.ledger.previousByteCount) || record.ledger.previousByteCount <= 0) {
+    fail("Ledger prefix byte count must be positive.");
+  }
+  proofDigest(record.ledger.previousSha256, "Ledger prefix");
+  proofDigest(record.ledger.appendSha256, "Ledger append");
+  exactObject(record.proofs, ["focused", "fullNpm", "review", "postgres"], "Candidate proofs");
+  for (const step of ["focused", "fullNpm"]) {
+    const proof = exactObject(record.proofs[step], ["command", "exitCode", "logSha256"], step);
+    proofText(proof.command, `${step} command`);
+    proofDigest(proof.logSha256, `${step} log`);
+    if (proof.exitCode !== 0) fail(`${step} proof must have passed.`);
+  }
+  if (record.proofs.fullNpm.command !== "npm test") fail("Complete npm test proof is required.");
+  exactObject(record.proofs.review, ["status", "summary"], "Review proof");
+  if (record.proofs.review.status !== "passed") fail("Candidate review must have passed.");
+  proofText(record.proofs.review.summary, "Review summary");
+  const pg = record.proofs.postgres;
+  if (pg?.status === "not_applicable") {
+    exactObject(pg, ["status", "reason"], "PostgreSQL disposition");
+    proofText(pg.reason, "PostgreSQL inapplicability reason");
+  } else {
+    exactObject(pg, ["status", "receiptSha256"], "PostgreSQL proof");
+    if (pg.status !== "passed") fail("Applicable PostgreSQL proof must have passed.");
+    proofDigest(pg.receiptSha256, "PostgreSQL receipt");
+  }
+  exactObject(record.disposables, ["status", "summary"], "Disposable cleanup");
+  if (!["none_created", "removed"].includes(record.disposables.status)) {
+    fail("Disposable resources must be absent or removed.");
+  }
+  proofText(record.disposables.summary, "Disposable cleanup summary");
+  return record;
+}
+
+// Evidence describes earlier implementation I, never its own enclosing commit.
+// A protected squash need not contain I in its ancestry, but I must be retained.
+export async function verifyCiCandidateProvenance({
+  projectRoot,
+  gitRunner = defaultGitRunner
+}) {
+  const checkout = await verifyCiReleaseGitCheckout({ projectRoot, gitRunner });
+  const run = (args, label) => requireGit(gitRunner, checkout.projectRoot, args, label);
+  const parents = async (commit) => {
+    const graph = (await run(["rev-list", "--parents", "-n", "1", commit], "Provenance parent graph")).split(" ");
+    if (graph[0] !== commit || graph.length < 2 || graph.length > 3) {
+      fail("Candidate must have one parent or an exact two-parent PR merge.");
+    }
+    graph.forEach((entry) => exactCommit(entry, "Provenance graph commit"));
+    return graph.slice(1);
+  };
+  const tree = (commit) => run(["rev-parse", `${commit}^{tree}`], "Provenance tree");
+  const diff = (from, to) => run([
+    "diff-tree", "--no-commit-id", "--no-renames", "--name-status", "-r", from, to, "--"
+  ], "Provenance changed paths");
+  const blob = async (commit, selected) => {
+    const entry = await run(["ls-tree", commit, "--", selected], "Provenance file mode");
+    const match = /^100644 blob ([a-f0-9]{40})\t(.+)$/u.exec(entry);
+    if (!match || match[2] !== selected) fail("Provenance must use exact regular Git files.");
+    return Buffer.from(await run(["cat-file", "blob", match[1]], "Provenance file bytes"), "utf8");
+  };
+
+  let candidate = checkout.head;
+  let prBase;
+  let candidateParents = await parents(candidate);
+  if (candidateParents.length === 2) {
+    [prBase, candidate] = candidateParents;
+    if (await tree(candidate) !== checkout.tree) fail("PR merge must preserve the exact source evidence tree.");
+    candidateParents = await parents(candidate);
+  }
+  if (candidateParents.length !== 1) fail("Evidence candidate must have a sole parent.");
+  let controlSha;
+  const controlPath = ciReleaseSuccessorInputRelativePath(candidateParents[0]);
+  if (await diff(candidateParents[0], candidate) === `A\t${controlPath}`) {
+    controlSha = candidate;
+    candidate = candidateParents[0];
+    await readCiReleaseSuccessorControlGraph({
+      projectRoot: checkout.projectRoot, candidate, workflow: controlSha, gitRunner
+    });
+    const input = validateCiReleaseSuccessorInput(parseJsonObject(
+      (await blob(controlSha, controlPath)).toString("utf8"), "Provenance successor input"
+    ));
+    if (input.originReleaseInput.epoch.source.commitSha !== candidate ||
+        input.originReleaseInput.epoch.source.treeSha !== await tree(candidate)) {
+      fail("Provenance successor input must bind its exact candidate.");
+    }
+    if (prBase && prBase !== candidate) fail("Control PR base must be its exact candidate.");
+    candidateParents = await parents(candidate);
+  }
+  if (candidate === PROVENANCE_BASELINE.commit && await tree(candidate) === PROVENANCE_BASELINE.tree) {
+    if (prBase || controlSha) fail("Historical baseline cannot authorize a new merge or control.");
+    return Object.freeze({ status: "historical_baseline", candidateSha: candidate });
+  }
+  if (candidateParents.length !== 1) fail("Evidence candidate must have a sole parent.");
+  const changed = lines(await diff(candidateParents[0], candidate));
+  const proofPaths = changed.filter((entry) => new RegExp(
+    `^A\\t${CI_PROVENANCE_DIRECTORY}/[a-f0-9]{40}/proof\\.json$`, "u"
+  ).test(entry));
+  if (proofPaths.length !== 1) fail("Candidate requires exactly one new canonical provenance proof.");
+  const proofPath = proofPaths[0].slice(2);
+  const implementationSha = proofPath.split("/").at(-2);
+  const markdownPath = `${CI_PROVENANCE_DIRECTORY}/${implementationSha}/provenance.md`;
+  const record = validateCandidateProof(parseJsonObject(
+    (await blob(candidate, proofPath)).toString("utf8"), "Candidate provenance"
+  ));
+  const implementation = record.implementation;
+  if (implementation.commitSha !== implementationSha || implementationSha === candidate) {
+    fail("Provenance must name its earlier implementation, without circular identity.");
+  }
+  const implementationParents = await parents(implementationSha);
+  if (implementationParents.length !== 1 || implementationParents[0] !== implementation.baseCommitSha ||
+      await tree(implementationSha) !== implementation.treeSha) {
+    fail("Implementation base or tree drifted from provenance.");
+  }
+  if (![implementationSha, implementation.baseCommitSha].includes(candidateParents[0])) {
+    fail("Evidence candidate must directly follow its implementation or protected squash base.");
+  }
+  if (prBase && !controlSha && prBase !== implementation.baseCommitSha) {
+    fail("PR merge base differs from the proved implementation base.");
+  }
+  const implementationChanges = lines(await diff(implementation.baseCommitSha, implementationSha));
+  if (implementationChanges.length === 0 || implementationChanges.some((entry) => {
+    const selected = entry.slice(2);
+    return selected === CI_PROVENANCE_LEDGER ||
+      selected.startsWith(`${CI_PROVENANCE_DIRECTORY}/`) ||
+      selected.startsWith(`${CI_RELEASE_SUCCESSOR_INPUT_DIRECTORY}/`);
+  })) fail("Implementation must be nonempty and separate from preserved proof/control evidence.");
+  const expectedDelta = [`A\t${markdownPath}`, `A\t${proofPath}`, `M\t${CI_PROVENANCE_LEDGER}`].sort();
+  if (JSON.stringify(lines(await diff(implementationSha, candidate)).sort()) !== JSON.stringify(expectedDelta)) {
+    fail("Implementation-to-candidate delta must contain only two evidence files and the ledger append.");
+  }
+  const [markdown, previousLedger, ledger] = await Promise.all([
+    blob(candidate, markdownPath), blob(implementationSha, CI_PROVENANCE_LEDGER), blob(candidate, CI_PROVENANCE_LEDGER)
+  ]);
+  if (sha256Bytes(markdown) !== record.provenanceSha256 ||
+      ![implementationSha, implementation.treeSha, implementation.baseCommitSha].every(
+        (identity) => markdown.toString("utf8").includes(identity)
+      )) fail("Canonical provenance bytes or implementation identities drifted.");
+  const append = ledger.subarray(previousLedger.length);
+  if (record.ledger.previousByteCount !== previousLedger.length ||
+      sha256Bytes(previousLedger) !== record.ledger.previousSha256 ||
+      !ledger.subarray(0, previousLedger.length).equals(previousLedger) || append.length === 0 ||
+      sha256Bytes(append) !== record.ledger.appendSha256 ||
+      !["provenance.md", "proof.json"].every((name) => append.toString("utf8").includes(
+        `(../ci-provenance/${implementationSha}/${name})`
+      ))) fail("Build Ledger must preserve its exact prefix and link both new evidence files.");
+  return Object.freeze({
+    status: "verified", headSha: checkout.head, candidateSha: candidate,
+    implementationSha, implementationTreeSha: implementation.treeSha,
+    baseSha: implementation.baseCommitSha, controlSha: controlSha ?? null, proofPath
   });
 }
 

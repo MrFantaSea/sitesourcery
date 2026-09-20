@@ -32,6 +32,84 @@ The successor input must bind all of the following to the same candidate:
 Missing, stale, reordered, extra, or changed evidence fails closed. There is no
 default migration count and no branch-tip fallback.
 
+## Current-candidate provenance gate
+
+Site quality now runs `node ops/ci-release-proof.mjs provenance --root .` as a
+mandatory step. The held workflow's existing `input` and `final` commands call
+the same verifier. Local `npm test` can still test an implementation before its
+evidence commit exists; the standalone gate is deliberately separate.
+
+For each new implementation commit **I**, retain its exact sole parent **B** and
+tree. Run focused tests, review and the complete clean pinned-Node `npm test`
+ladder on I. The latter includes operations, both site projections and browser
+coverage. Record applicable PostgreSQL proof or an explicit reason it does not
+apply, plus the disposition of every task-created disposable resource.
+
+Create a separate evidence commit **E** with exactly these changes from I:
+
+- add `ops/releases/ci-provenance/<I>/provenance.md`;
+- add `ops/releases/ci-provenance/<I>/proof.json`;
+- append `ops/releases/final-successor-20260811/BUILD-LEDGER.md`.
+
+The Markdown names full I, its tree and B and explains the change, tests,
+review, cleanup and remaining limitations. The ledger preserves every old byte
+and links both new files using `../ci-provenance/<I>/provenance.md` and
+`../ci-provenance/<I>/proof.json`. Hash the actual UTF-8 bytes including trailing
+newlines. JSON has exactly this shape (replace placeholders with actual values):
+
+```json
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": { "commitSha": "I", "treeSha": "I_TREE", "baseCommitSha": "B" },
+  "provenanceSha256": "SHA256_OF_MARKDOWN",
+  "ledger": {
+    "previousByteCount": 1,
+    "previousSha256": "SHA256_OF_LEDGER_AT_I",
+    "appendSha256": "SHA256_OF_ADDED_BYTES"
+  },
+  "proofs": {
+    "focused": { "command": "EXACT_COMMAND", "exitCode": 0, "logSha256": "ACTUAL_LOG_SHA256" },
+    "fullNpm": { "command": "npm test", "exitCode": 0, "logSha256": "ACTUAL_LOG_SHA256" },
+    "review": { "status": "passed", "summary": "Who reviewed what, findings and resolution." },
+    "postgres": { "status": "not_applicable", "reason": "Specific reason no data proof applies." }
+  },
+  "disposables": { "status": "removed", "summary": "Exact created resources and absence readback." }
+}
+```
+
+For applicable PostgreSQL proof use exactly `status: passed` and an actual
+`receiptSha256`. If no disposable resources were created, use `none_created`
+with an explanation. Log digests reference retained test output; this gate checks
+the evidence contract and Git binding, not the truth of a human attestation or
+the contents of an unavailable external log. CI also executes the full suite
+itself. Evidence contains no secrets or private customer/provider identifiers.
+
+Supported graphs are local E with sole parent I, an actual two-parent PR merge
+with base B and source E's exact tree, and protected squash C with sole parent B
+and I's tree plus exactly the evidence delta. I is deliberately **not required
+to be an ancestor of C**: retain the source branch/object so CI can read I.
+Missing objects fail; a branch tip is never a substitute. Checkout uses full
+history. Do not delete the retained source branch after squash.
+
+An exact one-file C→K successor-control commit is also checked by the existing
+control graph contract; its input must bind C's commit/tree, and all historical
+inputs remain unchanged. The gate validates C's provenance through K. A control
+PR merge must have C as its base and preserve K's exact tree.
+
+No evidence embeds its own enclosing commit SHA. Implementation must be separate
+from the ledger, canonical evidence and successor-control inputs. Unexpected
+code changes in E/C, changed history, stale identities, invalid modes/symlinks,
+dirty checkout, Git graph/index overrides, missing proof or pending cleanup fail.
+Only exact pre-guard d180bbcbdda786c3988c9f3fa6704558d42581f6 and tree
+57bda0977042aa88e38b69f78cbcfd3d7993eb0f have historical-baseline status; this
+does not grant a new merge/control or rewrite old receipts. Existing FIN-016/017
+original-history gaps remain explicitly open. No runtime index or v1 release
+receipt format changes.
+
+This mandatory workflow step does not itself change GitHub branch protection.
+Current required-check policy must be reported separately from workflow results.
+No held run, production install or provider effect is authorized by this change.
+
 ## Proof sequence
 
 1. GitHub pauses at the protected environment for the required reviewer.

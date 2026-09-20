@@ -40,6 +40,7 @@ import {
   verifyCiReleaseGenerationState,
   verifyCiLegalV4Artifact,
   verifyCiReleaseCandidate,
+  verifyCiCandidateProvenance,
   verifyCiReleaseFinal
 } from "./ci-release-proof-repository.mjs";
 
@@ -554,6 +555,13 @@ export async function runCiReleaseProofCli({
   assertCiReleaseSafeEnvironment(environment);
   const { command, values } = parseArgs(arguments_);
 
+  if (command === "provenance") {
+    exactFlags(values, ["--root"]);
+    const proof = await verifyCiCandidateProvenance({ projectRoot: values.get("--root") });
+    writeOutput(`${JSON.stringify(proof)}\n`);
+    return proof;
+  }
+
   if (command === "generate") {
     exactFlags(values, [
       "--root",
@@ -639,6 +647,7 @@ export async function runCiReleaseProofCli({
       projectRoot: values.get("--root"),
       successorInput: control.successorInput
     });
+    await verifyCiCandidateProvenance({ projectRoot: values.get("--root") });
     writeOutput(`${control.successorInput.digest}\n`);
     return control.successorInput;
   }
@@ -767,6 +776,7 @@ export async function runCiReleaseProofCli({
     if (control.successorInput.digest !== successorInput.digest) {
       fail("CI final proof successor control drifted after input verification.");
     }
+    await verifyCiCandidateProvenance({ projectRoot: values.get("--root") });
     const evidenceRoot = await requireDirectory(
       environment.CI_RELEASE_EVIDENCE_ROOT,
       "CI release evidence root"
