@@ -595,3 +595,19 @@ payment, legal/DNS change, evidence retirement or other-project change occurs.
 The July Pages hold and separate installed-epoch/edge binding already have distinct
 consumers; no redundant runtime index is added. Future provenance CI enforcement,
 unfinished engineering and purpose-specific release/owner gates remain separate.
+
+## GOV-PROVENANCE-CI — current-candidate guard, 2026-09-20
+
+Implementation `434aa1384c2ad7a31ea0c7992f648bb12927e43f`, tree `7ff87c19a762c698ee82019da6b153bde123674a`, base
+`d180bbcbdda786c3988c9f3fa6704558d42581f6`. Five-file bounded correction complete;
+43 focused tests and clean pinned-Node full npm proof passed, including
+24 routes × six browser widths. Full proof: 2,421 pass, 20 explicit existing
+skips; no fresh PostgreSQL drill applies to this metadata/CI-only change.
+All 51 new temporary fixture directories removed; private tools/evidence retained.
+
+[Canonical provenance](../ci-provenance/434aa1384c2ad7a31ea0c7992f648bb12927e43f/provenance.md)
+and [machine proof](../ci-provenance/434aa1384c2ad7a31ea0c7992f648bb12927e43f/proof.json)
+bind earlier implementation, clean proof, self-review and cleanup without naming
+their enclosing commit. Source branch retained for post-squash verification.
+Required-check settings, historical open claims and all production effects are
+unchanged. No subsequent implementation item is opened by this completion.
