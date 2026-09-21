@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "434aa1384c2ad7a31ea0c7992f648bb12927e43f",
+    "treeSha": "7ff87c19a762c698ee82019da6b153bde123674a",
+    "baseCommitSha": "d180bbcbdda786c3988c9f3fa6704558d42581f6"
+  },
+  "provenanceSha256": "572c1f7101950b6359f91c52b1ffd249363039610adee1ecd853a25900cb1835",
+  "ledger": {
+    "previousByteCount": 38654,
+    "previousSha256": "d3817b0103eeaf7f05758ab81b11a9f54ebb9cf29fe7255d1fb1d77ab7bd3022",
+    "appendSha256": "11571077f4e9df98da6c8da25526cb9643a6fbbee36cac372b029d08760f6e9d"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/ci-release-proof.test.mjs",
+      "exitCode": 0,
+      "logSha256": "db252f8fa0655844aec2992176e999af6d4e16b10ac5948daacee2dfa66bd01b"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "f738b9068401628231f97b119ef3c8eed0daa4d908c7c39f5b4fa826b96c2fa5"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root adversarial self-review of exact five-file correction, graph/evidence failure cases and CLI/workflow wiring; no independent-review claim."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "No product data behavior or migration changed; existing PostgreSQL receipt/cleanup validation exercised by operations fixtures."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "All 51 run-created fixture directories removed with absence readback; runner/private browser exited. Pinned private test tools, ignored build outputs and outside-repository evidence retained."
+  }
+}
