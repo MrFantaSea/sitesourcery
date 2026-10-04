@@ -137,6 +137,38 @@ test("projects an exact installed held topology without claiming external proces
   assert.deepEqual(validateCapabilityProcessMatrixSnapshot(snapshot), snapshot);
 });
 
+test("alternate hosted listener is exact and rejects stale or unsafe capability reports", async () => {
+  const matrix = createCapabilityProcessMatrix({
+    loadRows: async () => installedRows(),
+    processes: installedProcesses(),
+    installationState: "installed",
+    hostedApiPort: 18988
+  });
+  const snapshot = await matrix.snapshot();
+  assert.equal(snapshot.processes.find(({ key }) => key === "hosted_api").listener,
+    "127.0.0.1:18988");
+  assert.equal(snapshot.processes.find(({ key }) => key === "tenant_runtime").listener,
+    "127.0.0.1:8080");
+  assert.deepEqual(validateCapabilityProcessMatrixSnapshot(snapshot, { hostedApiPort: 18988 }), snapshot);
+  assert.deepEqual(await matrix.assertStartup(snapshot), snapshot);
+  assert.throws(() => validateCapabilityProcessMatrixSnapshot(snapshot), /drifted/u);
+
+  for (const listener of ["127.0.0.1:8788", "0.0.0.0:18988", "127.0.0.1:80"]) {
+    const changed = {
+      ...snapshot,
+      processes: snapshot.processes.map((process) => process.key === "hosted_api"
+        ? { ...process, listener } : process)
+    };
+    await assert.rejects(matrix.assertStartup(changed), /drifted/u);
+  }
+  for (const hostedApiPort of [0, 1023, 65536, NaN]) {
+    assert.throws(() => createCapabilityProcessMatrix({
+      loadRows: async () => installedRows(),
+      processes: installedProcesses(), hostedApiPort
+    }), /unprivileged TCP port/u);
+  }
+});
+
 test("installed truth rejects candidate engineering and invented runtime state", async () => {
   assert.throws(
     () => createCapabilityProcessMatrix({

@@ -1,3 +1,4 @@
+import { deploymentProfileFields, originDeploymentProfile } from "./origin-deployment-profiles.mjs";
 import {
   canonicalJson,
   safeIdentifier,
@@ -7,6 +8,7 @@ import {
   SHAPE_EPOCH_ID,
   releaseEpochBindingSha256
 } from "./release-epoch.mjs";
+import { WORKER_PURPOSES } from "../server/hosted/worker-config.mjs";
 
 export const ORIGIN_RELEASE_INPUT_SCHEMA =
   "sitesourcery.origin-release-input/v1";
@@ -27,7 +29,7 @@ export const ORIGIN_WORKER_CONTRACT_SCHEMA =
 export const ORIGIN_ENVIRONMENT_CLASSIFICATION_SCHEMA =
   "sitesourcery.origin-environment-classification/v1";
 
-export const ORIGIN_HOST_ROLE = "dell_origin_hq_database";
+export const ORIGIN_HOST_ROLE = originDeploymentProfile().hostRole;
 export const ORIGIN_UNION_BASE_COMMIT =
   "5458d9641fd42c9a1b436c6af6bb6600b60bce74";
 
@@ -46,45 +48,13 @@ export const ORIGIN_HELD_AUTHORITY = deepFreeze({
   enabledCapabilities: []
 });
 
-export const ORIGIN_LOOPBACK_EXPECTATIONS = deepFreeze({
-  hostedApi: "127.0.0.1:8788",
-  tenantRuntime: "127.0.0.1:8080",
-  originGateway: "127.0.0.1:8081",
-  tunnelMetrics: "127.0.0.1:20241",
-  publicTcpListeners: [],
-  cloudflareIngressCatchAll: "http_status:404",
-  tunnelTransport: "outbound_only"
-});
+export const ORIGIN_LOOPBACK_EXPECTATIONS = originDeploymentProfile().listeners;
 
-export const ORIGIN_WORKER_PATHS = deepFreeze({
-  apiEntrypoint: "server/hosted/bin/server.mjs",
-  tenantEntrypoint: "server/selfhost/bin/server.mjs",
-  workerEntrypoint: "server/hosted/bin/worker.mjs",
-  publicationCommandTransport:
-    "server/hosted/publication-command-transport.mjs",
-  notificationMailPrivateRenderer:
-    "ops/notification-mail-private-renderer.mjs",
-  hostedUnit: "ops/sitesourcery-hosted.service.held",
-  tenantUnit: "ops/sitesourcery-tenant.service.held",
-  unit: "ops/sitesourcery-workers.service.held",
-  hostedEnvironmentSchema: "ops/hosted.env.example",
-  tenantEnvironmentSchema: "ops/tenant.env.example",
-  environmentSchema: "ops/workers.env.example"
-});
+export const ORIGIN_WORKER_PATHS = originDeploymentProfile().workerPaths;
 
-export const ORIGIN_WORKER_PURPOSES = Object.freeze([
-  "export",
-  "cancellation",
-  "notification-mail",
-  "alakazam-fulfillment",
-  "alakazam-retained-lifecycle",
-  "responder-fulfillment",
-  "provider-reconciliation",
-  "responder-retention",
-  "project-lifecycle",
-  "domain-lifecycle",
-  "care-lifecycle"
-]);
+// Keep new origin evidence aligned with the runtime. Historical contracts may
+// retain any already-valid canonical subset, including the old eleven purposes.
+export const ORIGIN_WORKER_PURPOSES = WORKER_PURPOSES;
 
 const IDENTITY_FIELDS = Object.freeze([
   "sourceCommitSha",
@@ -338,9 +308,9 @@ function validateOriginEnvironmentEvidence(value, label) {
   return value;
 }
 
-function workerFileBinding(value, field) {
+function workerFileBinding(value, field, profile) {
   exactObject(value, ["path", "sha256"], `Origin worker ${field}`);
-  if (value.path !== ORIGIN_WORKER_PATHS[field]) {
+  if (value.path !== profile.workerPaths[field]) {
     fail(`Origin worker ${field} path is invalid.`);
   }
   digest(value.sha256, `Origin worker ${field} digest`);
@@ -410,6 +380,7 @@ export function originWorkerContractSha256(value) {
 }
 
 export function validateOriginWorkerContract(value) {
+  const profile = originDeploymentProfile(value.deploymentProfile);
   exactObject(
     value,
     [
@@ -431,7 +402,8 @@ export function validateOriginWorkerContract(value) {
       "apiWorkerMode",
       "apiWorkerLoopCount",
       "workerOwnsPublicListener",
-      "allowsProviderEffects"
+      "allowsProviderEffects",
+      ...Object.keys(deploymentProfileFields(value))
     ],
     "Origin held worker contract"
   );
@@ -457,7 +429,7 @@ export function validateOriginWorkerContract(value) {
     "tenantEnvironmentSchema",
     "environmentSchema"
   ]) {
-    workerFileBinding(value[field], field);
+    workerFileBinding(value[field], field, profile);
   }
   exactObject(
     value.publicationCommand,
@@ -487,7 +459,9 @@ export function validateOriginWorkerContract(value) {
   return value;
 }
 
-function validateOriginWorkerEvidence(value, label) {
+function validateOriginWorkerEvidence(value, label, deploymentProfile) {
+  const profile = originDeploymentProfile(deploymentProfile);
+  if (value.contract?.deploymentProfile !== deploymentProfile) fail(`${label} deployment profile mismatch.`);
   exactObject(
     value,
     [
@@ -514,12 +488,12 @@ function validateOriginWorkerEvidence(value, label) {
   );
   if (
     value.domain !== "origin-worker-runtime" ||
-    value.fileCount !== Object.keys(ORIGIN_WORKER_PATHS).length
+    value.fileCount !== Object.keys(profile.workerPaths).length
   ) {
     fail(`${label} must bind the exact worker runtime files.`);
   }
   const paths = value.files.map((entry) => entry.path);
-  const expectedPaths = Object.values(ORIGIN_WORKER_PATHS).sort((left, right) =>
+  const expectedPaths = Object.values(profile.workerPaths).sort((left, right) =>
     left.localeCompare(right)
   );
   if (canonicalJson(paths) !== canonicalJson(expectedPaths)) {
@@ -539,7 +513,7 @@ function validateOriginWorkerEvidence(value, label) {
     "environmentSchema"
   ]) {
     const file = value.files.find(
-      (entry) => entry.path === ORIGIN_WORKER_PATHS[field]
+      (entry) => entry.path === profile.workerPaths[field]
     );
     if (file?.sha256 !== value.contract[field].sha256) {
       fail(`${label} ${field} digest drifted from its exact file.`);
@@ -554,6 +528,7 @@ function validateOriginWorkerEvidence(value, label) {
 
 function successorEpochPayload(epoch) {
   return {
+    ...deploymentProfileFields(epoch),
     schema: epoch.schema,
     epochId: epoch.epochId,
     supersedes: epoch.supersedes,
@@ -636,7 +611,8 @@ export function validateOriginReleaseInput(value) {
       "ingress",
       "rollback",
       "authority",
-      "bindingSha256"
+      "bindingSha256",
+      ...Object.keys(deploymentProfileFields(value.epoch))
     ],
     "Origin successor epoch"
   );
@@ -773,6 +749,7 @@ export function validateOriginReleaseInput(value) {
 
 function sealPayload(value) {
   return {
+    ...deploymentProfileFields(value),
     schema: value.schema,
     releaseId: value.releaseId,
     hostRole: value.hostRole,
@@ -808,6 +785,7 @@ function exactDigestMatch(actual, expected, label) {
 
 export function createOriginSeal({ releaseInput, observed }) {
   const input = validateOriginReleaseInput(releaseInput);
+  const profile = originDeploymentProfile(input.epoch.deploymentProfile);
   exactObject(
     observed,
     [
@@ -857,7 +835,7 @@ export function createOriginSeal({ releaseInput, observed }) {
     input.epoch.environmentSchema.classificationSha256,
     "Origin environment classification"
   );
-  validateOriginWorkerEvidence(observed.worker, "Observed worker runtime");
+  validateOriginWorkerEvidence(observed.worker, "Observed worker runtime", input.epoch.deploymentProfile);
   exactDigestMatch(
     observed.worker.sha256,
     input.epoch.worker.manifestSha256,
@@ -950,9 +928,10 @@ export function createOriginSeal({ releaseInput, observed }) {
     "Origin legal manifest"
   );
   const payload = {
+    ...deploymentProfileFields(input.epoch),
     schema: ORIGIN_SEAL_SCHEMA,
     releaseId: input.releaseId,
-    hostRole: ORIGIN_HOST_ROLE,
+    hostRole: profile.hostRole,
     unionBaseCommitSha: ORIGIN_UNION_BASE_COMMIT,
     successorEpochId: input.epoch.epochId,
     successorEpochBindingSha256: input.epoch.bindingSha256,
@@ -967,7 +946,7 @@ export function createOriginSeal({ releaseInput, observed }) {
     legal: structuredClone(observed.legal),
     ingress: {
       ...structuredClone(observed.ingress),
-      expectations: structuredClone(ORIGIN_LOOPBACK_EXPECTATIONS)
+      expectations: structuredClone(profile.listeners)
     },
     rollback: structuredClone(input.epoch.rollback),
     authority: structuredClone(ORIGIN_HELD_AUTHORITY)
@@ -979,6 +958,7 @@ export function createOriginSeal({ releaseInput, observed }) {
 }
 
 export function validateOriginSeal(value) {
+  const profile = originDeploymentProfile(value.deploymentProfile);
   exactObject(
     value,
     [
@@ -1000,11 +980,12 @@ export function validateOriginSeal(value) {
       "ingress",
       "rollback",
       "authority",
-      "sealSha256"
+      "sealSha256",
+      ...Object.keys(deploymentProfileFields(value))
     ],
     "Origin seal"
   );
-  if (value.schema !== ORIGIN_SEAL_SCHEMA || value.hostRole !== ORIGIN_HOST_ROLE) {
+  if (value.schema !== ORIGIN_SEAL_SCHEMA || value.hostRole !== profile.hostRole) {
     fail("Origin seal identity is invalid.");
   }
   if (value.unionBaseCommitSha !== ORIGIN_UNION_BASE_COMMIT) {
@@ -1041,7 +1022,7 @@ export function validateOriginSeal(value) {
     value.environmentSchema,
     "Origin seal environment schema"
   );
-  validateOriginWorkerEvidence(value.worker, "Origin seal worker runtime");
+  validateOriginWorkerEvidence(value.worker, "Origin seal worker runtime", value.deploymentProfile);
   requireManifestRoot(
     value.artifact,
     value.layout.artifactRoot,
@@ -1157,8 +1138,13 @@ export function validateOriginSeal(value) {
     "Origin seal rollback artifact"
   );
   exactHeldAuthority(value.authority);
-  if (canonicalJson(value.ingress?.expectations) !== canonicalJson(ORIGIN_LOOPBACK_EXPECTATIONS)) {
+  if (canonicalJson(value.ingress?.expectations) !== canonicalJson(profile.listeners)) {
     fail("Origin seal loopback expectations are invalid.");
+  }
+  if (value.deploymentProfile) {
+    for (const [field, paths] of [["units", profile.unitPaths], ["environmentSchema", profile.environmentPaths], ["ingress", profile.ingressPaths]]) {
+      if (canonicalJson(value[field].files.map(file => file.path).sort()) !== canonicalJson([...paths].sort())) fail(`Origin HQ ${field} paths drifted.`);
+    }
   }
   if (value.sealSha256 !== originSealSha256(value)) {
     fail("Origin seal digest is invalid.");
@@ -1194,6 +1180,7 @@ export function expectedOriginInstalledWorker(seal) {
 
 function readbackPayload(value) {
   return {
+    ...deploymentProfileFields(value),
     schema: value.schema,
     sealSha256: value.sealSha256,
     hostRole: value.hostRole,
@@ -1220,10 +1207,12 @@ export function createOriginInstalledReadback({
   authority
 }) {
   const selectedSeal = validateOriginSeal(seal);
+  const profile = originDeploymentProfile(selectedSeal.deploymentProfile);
   const value = {
+    ...deploymentProfileFields(selectedSeal),
     schema: ORIGIN_INSTALLED_READBACK_SCHEMA,
     sealSha256: selectedSeal.sealSha256,
-    hostRole: ORIGIN_HOST_ROLE,
+    hostRole: profile.hostRole,
     observedAt,
     identity,
     worker,
@@ -1237,6 +1226,7 @@ export function createOriginInstalledReadback({
 }
 
 export function validateOriginInstalledReadback(value) {
+  const profile = originDeploymentProfile(value.deploymentProfile);
   exactObject(
     value,
     [
@@ -1248,13 +1238,14 @@ export function validateOriginInstalledReadback(value) {
       "worker",
       "listeners",
       "authority",
-      "digest"
+      "digest",
+      ...Object.keys(deploymentProfileFields(value))
     ],
     "Origin installed readback"
   );
   if (
     value.schema !== ORIGIN_INSTALLED_READBACK_SCHEMA ||
-    value.hostRole !== ORIGIN_HOST_ROLE
+    value.hostRole !== profile.hostRole
   ) {
     fail("Origin installed readback identity is invalid.");
   }
@@ -1273,8 +1264,9 @@ export function validateOriginInstalledReadback(value) {
       digest(value.identity[field], `Installed ${field}`);
     }
   }
+  if (value.worker?.deploymentProfile !== value.deploymentProfile) fail("Origin installed worker deployment profile mismatch.");
   validateOriginWorkerContract(value.worker);
-  if (canonicalJson(value.listeners) !== canonicalJson(ORIGIN_LOOPBACK_EXPECTATIONS)) {
+  if (canonicalJson(value.listeners) !== canonicalJson(profile.listeners)) {
     fail("Origin installed listener readback is not exactly loopback-only.");
   }
   exactHeldAuthority(value.authority);
@@ -1301,6 +1293,9 @@ export function compareOriginInstalledReadback({ seal, readback }) {
   const expected = expectedOriginInstalledIdentity(selectedSeal);
   const expectedWorker = expectedOriginInstalledWorker(selectedSeal);
   const mismatches = [];
+  if (selectedSeal.deploymentProfile !== selectedReadback.deploymentProfile || selectedSeal.hostRole !== selectedReadback.hostRole || canonicalJson(selectedSeal.ingress.expectations) !== canonicalJson(selectedReadback.listeners)) {
+    mismatches.push("DEPLOYMENT_PROFILE_MISMATCH");
+  }
   for (const field of IDENTITY_FIELDS) {
     if (selectedReadback.identity[field] !== expected[field]) {
       mismatches.push(`IDENTITY_${field.replaceAll(/([A-Z])/gu, "_$1").toUpperCase()}_MISMATCH`);
@@ -1351,6 +1346,7 @@ function planDigest(value, excludedField) {
 
 export function createOriginInstallPlan(seal) {
   const selected = validateOriginSeal(seal);
+  if (selected.deploymentProfile) fail("HQ installation and rollback require the reviewed HQ installation packet; legacy Dell plans are unsupported.");
   const releaseRoot = `/opt/sitesourcery/releases/${selected.releaseId}`;
   const commands = [
     command("verify-release-directory", ["test", "-d", releaseRoot]),
@@ -1374,7 +1370,7 @@ export function createOriginInstallPlan(seal) {
   const payload = {
     schema: ORIGIN_INSTALL_PLAN_SCHEMA,
     state: "held",
-    hostRole: ORIGIN_HOST_ROLE,
+    hostRole: selected.hostRole,
     releaseId: selected.releaseId,
     sealSha256: selected.sealSha256,
     releaseRoot,
@@ -1402,6 +1398,7 @@ export function createOriginInstallPlan(seal) {
 
 export function createOriginRollbackPlan(seal) {
   const selected = validateOriginSeal(seal);
+  if (selected.deploymentProfile) fail("HQ installation and rollback require the reviewed HQ installation packet; legacy Dell plans are unsupported.");
   const predecessorRoot =
     `/opt/sitesourcery/releases/${selected.rollback.predecessorCommitSha}`;
   const commands = [
@@ -1424,7 +1421,7 @@ export function createOriginRollbackPlan(seal) {
   const payload = {
     schema: ORIGIN_ROLLBACK_PLAN_SCHEMA,
     state: "held",
-    hostRole: ORIGIN_HOST_ROLE,
+    hostRole: selected.hostRole,
     sealSha256: selected.sealSha256,
     predecessor: structuredClone(selected.rollback),
     predecessorRoot,

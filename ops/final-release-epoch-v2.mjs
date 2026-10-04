@@ -1,3 +1,4 @@
+import { originDeploymentProfile } from "./origin-deployment-profiles.mjs";
 import { constants as filesystemConstants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import path from "node:path";
@@ -544,7 +545,8 @@ export async function readInstalledFinalReleaseEpochV2({
   originSealPath,
   expectedOriginSealFileSha256,
   installedReadbackPath,
-  expectedInstalledReadbackFileSha256
+  expectedInstalledReadbackFileSha256,
+  runtimeBinding
 }) {
   const selectedEpochPath = exactInstalledPath(
     epochPath,
@@ -582,11 +584,39 @@ export async function readInstalledFinalReleaseEpochV2({
       expectedSha256: expectedInstalledReadbackFileSha256
     })
   ]);
-  return validateInstalledFinalReleaseEpochV2Chain({
+  const verifiedEpoch = validateInstalledFinalReleaseEpochV2Chain({
     epoch,
     originSeal: sealValue,
     installedReadback: readbackValue
   });
+  if (runtimeBinding !== undefined) {
+    validateOriginRuntimeBinding({
+      originSeal: sealValue,
+      installedReadback: readbackValue,
+      runtimeBinding: {
+        ...runtimeBinding,
+        repositoryRoot: await realpath(runtimeBinding.repositoryRoot)
+      }
+    });
+  }
+  return verifiedEpoch;
+}
+
+// Called by API startup with actual configuration, after externally anchored files
+// have passed validation. The installed reader resolves the source symlink first.
+export function validateOriginRuntimeBinding({ originSeal, installedReadback, runtimeBinding }) {
+  const seal = validateOriginSeal(originSeal);
+  const readback = validateOriginInstalledReadback(installedReadback);
+  const profile = originDeploymentProfile(seal.deploymentProfile);
+  if (compareOriginInstalledReadback({ seal, readback }).state !== "verified" ||
+      runtimeBinding?.listener !== readback.listeners.hostedApi ||
+      (seal.deploymentProfile && (
+        runtimeBinding.repositoryRoot !== `${profile.releaseBase}/${seal.source.commitSha}` ||
+        runtimeBinding.dataRoot !== profile.dataRoot
+      ))) {
+    fail("FINAL_RELEASE_RUNTIME_MISMATCH", "Running API listener, release directory, or protected data root does not match the installed release.");
+  }
+  return true;
 }
 
 export function validateInstalledFinalReleaseEpochV2Chain({
