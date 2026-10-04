@@ -611,3 +611,84 @@ bind earlier implementation, clean proof, self-review and cleanup without naming
 their enclosing commit. Source branch retained for post-squash verification.
 Required-check settings, historical open claims and all production effects are
 unchanged. No subsequent implementation item is opened by this completion.
+
+## C2 — connected local customer journey, 2026-09-21 (release incomplete)
+
+Implementation `7390a0707713d4913e0422869b7ea43797bdb076`, tree
+`e52e61785bbf5b95986190fc6a93934fefcf4a32`, fixes Download receipt amount
+readback and monotonic risk holds for delayed provider signals.
+[Local proof/provenance](../../CORE-REVENUE-E2E-01-LOCAL-PROOF.md) records exact
+source/log digests, root self-review, verification and cleanup.
+
+Real Chrome/HTTP/PG16: verified account → existing-account invitation → accepted
+project → $20 simulated purchase → HTML delivery → owner support response/closure
+→ fresh page readback; refunds and delayed-dispute replay/Checkout hold also pass.
+Focused proof4pass/12explicit skips; clean canonical ladder2428pass/20existing
+skips, both builds and144browser views. All owned databases/processes/temp state
+removed. Active C2 source and evidence remain retained.
+
+C2 remains OPEN. A paid-project deletion FK failure is reproduced and its test
+is preserved; wider foundation journeys, registration for invitation-only
+accounts, support correspondence/HQ UI, live providers, protected GitHub release
+and deployment remain unaccepted. Exact six background held/unmounted/denied
+endpoint responses in the narrow fixture do not accept their products. No live
+application/provider effect, public release or whole-system completion occurred.
+
+## C2 — paid Download purge correction, 2026-09-21 (local; release incomplete)
+
+Implementation `191a198ffe810d07b25b04d3bde1b83f27fccf91` / tree
+`9ab14c1b85eadb3e9d32e840f9d184788103360b` retains Download financial/risk
+lineage while sealed deletion removes SQL content. Three live-version FKs
+become guarded live-reference checks. Pending Checkout refuses deletion; final
+receipt separates removed and retained counts. Exact migration inventory is103;
+historical FIN015102 production authority remains unmodified and rejects103.
+
+[Local proof and provenance](../../CORE-REVENUE-E2E-01-LOCAL-PROOF.md) binds
+populated upgrade + fresh PG16/browser proofs5pass/11skip each,7local lifecycle
+jobs, late dispute/replay, review and cleanup. Canonical stages2430pass/20skip,
+both builds,144browser views. Passed unchanged stages through hosted-service
+are reused from856c322; only historical ops test differs on191a198, where ops
+and remaining stages pass. Not one full npm invocation at the final hash.
+All owned test resources removed; source/evidence preserved. No deployment,
+production migration, provider effect or GitHub release. This supersedes the
+prior paid-FK failure, not broader C2 or full erasure: selfhost release copies
+still need project-scoped removal plus a finalization fence next.
+
+## R1-B — HQ API port compatibility, 2026-10-03 EDT (local; not deployed)
+
+The hosted API accepts an explicitly configured unprivileged TCP port while
+retaining the default `127.0.0.1:8788` and exact loopback restriction. The same
+validated port now feeds the capability matrix; startup validation rejects a
+snapshot reporting another port. Tenant port8080 and existing Dell deployment,
+origin-seal and proxy contracts are unchanged.
+
+Pinned Node24.18.0 focused checks:25 passed,0 failed/skipped. Tests cover default
+and alternate ports, unsafe host/port rejection, actual entrypoint ordering
+before database pool creation, alternate-port ready/capabilities envelopes and
+API/tenant probe separation. Root review and a bounded independent read-only
+review found no blocking issue. No database/application data semantics changed;
+no new PostgreSQL migration or provider test was required.
+
+Evidence is retained at
+`/Users/fantaseamac/SITESOURCERY-RELOCATION-2026-10-03/port-compatibility/`.
+The three pre-existing dirty selfhost erasure files remain byte-identical and
+untested; this focused proof does not accept that work or the whole candidate.
+No production deployment/service change, public routing, provider request,
+GitHub push, new spending or crypto interaction occurred. HQ installation must
+use matching proxy/probe settings and new truthful deployment evidence; the old
+Dell contracts alone do not accept a changed HQ topology. R1-B installation,
+R2/R3 release blockers and R4–R8 remain open.
+
+## R1-B — consolidated HQ candidate proof, 2026-10-04
+
+Implementation `be47cbef2f3eba92f809f40fc7e000bba21bd27e`, tree `dc08217fd998722fc32b9edc2449e682af7892ed`, base `fc6a4cfb0a870d5163abd868a1c7ecdf00f61f78`.
+Clean current candidate passes full pinned-Node npm test: 2447pass/20existing skips,
+both builds and144browser views. Exact-byte focused100 and prior PG upgrade/fresh
+proofs reused with their original identities and limits. Original67-line local
+ledger suffix above is preserved; unfinished three-file erasure diff is excluded.
+
+[Canonical provenance](../ci-provenance/be47cbef2f3eba92f809f40fc7e000bba21bd27e/provenance.md)
+and [machine proof](../ci-provenance/be47cbef2f3eba92f809f40fc7e000bba21bd27e/proof.json)
+bind the clean source, actual logs, scoped reuse, review and fixture cleanup.
+No new runtime deployment, production migration, provider/public-routing/spend
+or crypto effect. GitHub exact release and HQ application acceptance remain next.
