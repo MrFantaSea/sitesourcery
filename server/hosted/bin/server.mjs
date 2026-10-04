@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHostedListenerConfiguration } from "../hosted-listener-config.mjs";
 
 import {
   readInstalledFinalReleaseEpochV2,
@@ -334,10 +335,10 @@ const moduleRoot = path.resolve(
   ".."
 );
 const repositoryRoot = path.resolve(moduleRoot, "../..");
-const host = process.env.SITESOURCERY_HOSTED_HOST ?? "127.0.0.1";
-const apiPort = Number(
-  process.env.SITESOURCERY_HOSTED_PORT ?? "8788"
-);
+const { host, port: apiPort } = createHostedListenerConfiguration({
+  host: process.env.SITESOURCERY_HOSTED_HOST,
+  port: Number(process.env.SITESOURCERY_HOSTED_PORT ?? "8788")
+});
 const dataRoot = path.resolve(
   process.env.SITESOURCERY_DATA_ROOT ??
     "/var/lib/sitesourcery"
@@ -378,28 +379,6 @@ function secret(name, minimumBytes = 32) {
     );
   }
   return value;
-}
-
-if (host !== "127.0.0.1") {
-  throw new Error(
-    "The hosted API must bind to loopback behind the reviewed reverse proxy."
-  );
-}
-if (apiPort !== 8788) {
-  throw new Error(
-    "SITESOURCERY_HOSTED_PORT must remain the reviewed 127.0.0.1:8788 boundary."
-  );
-}
-for (const [name, value] of [
-  ["SITESOURCERY_HOSTED_PORT", apiPort]
-]) {
-  if (
-    !Number.isSafeInteger(value) ||
-    value < 1024 ||
-    value > 65535
-  ) {
-    throw new Error(`${name} must be an unprivileged TCP port.`);
-  }
 }
 
 const postgresBudgetConfiguration =
@@ -473,6 +452,7 @@ async function start() {
   const releaseIdentity =
     releaseIdentityFromFinalEpochV2(
       await readInstalledFinalReleaseEpochV2({
+        runtimeBinding: { listener: `${host}:${apiPort}`, repositoryRoot, dataRoot },
         epochPath: requiredEnvironment(
           "SITESOURCERY_RELEASE_EPOCH_FILE"
         ),
@@ -1490,6 +1470,7 @@ async function start() {
     careReadiness.mailReservation?.deliveryEffects === false &&
     careCommerceReadiness.mailReservationReady === true;
   const capabilityProcessMatrix = createCapabilityProcessMatrix({
+    hostedApiPort: apiPort,
     installationState: "installed",
     processes: {
       public_static: installedRow("static"),

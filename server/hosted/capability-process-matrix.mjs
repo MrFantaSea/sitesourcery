@@ -1,3 +1,5 @@
+import { createHostedListenerConfiguration } from "./hosted-listener-config.mjs";
+
 export const CAPABILITY_PROCESS_MATRIX_SCHEMA =
   "sitesourcery.capability-process-matrix/v2";
 
@@ -164,7 +166,14 @@ function runtimeStateForProcess(key, installationState) {
     : "not_asserted";
 }
 
-function validateProcesses(value, installationState = "not_installed") {
+function validateProcesses(
+  value,
+  installationState = "not_installed",
+  hostedApiPort = 8788
+) {
+  const hostedListener = createHostedListenerConfiguration({
+    port: hostedApiPort
+  }).listener;
   releaseStateForInstallation(installationState);
   exactObject(
     value,
@@ -185,7 +194,7 @@ function validateProcesses(value, installationState = "not_installed") {
     return Object.freeze({
       key,
       role: definition.role,
-      listener: definition.listener,
+      listener: key === "hosted_api" ? hostedListener : definition.listener,
       engineeringState: status.engineeringState,
       effectState: status.effectState,
       installationState,
@@ -221,7 +230,13 @@ function validateRows(value, installationState = "not_installed") {
   });
 }
 
-export function validateCapabilityProcessMatrixSnapshot(value) {
+export function validateCapabilityProcessMatrixSnapshot(
+  value,
+  { hostedApiPort = 8788 } = {}
+) {
+  const hostedListener = createHostedListenerConfiguration({
+    port: hostedApiPort
+  }).listener;
   exactObject(
     value,
     [
@@ -308,7 +323,9 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
       if (
         process.key !== key ||
         process.role !== definition.role ||
-        process.listener !== definition.listener ||
+        process.listener !== (
+          key === "hosted_api" ? hostedListener : definition.listener
+        ) ||
         process.installationState !== value.installationState ||
         process.runtimeState !== runtimeStateForProcess(
           key,
@@ -323,7 +340,8 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
         code: process.code
       }];
     })),
-    value.installationState
+    value.installationState,
+    hostedApiPort
   );
   const startupReady = rows.every((row) =>
     row.startupRequired !== true || row.engineeringState === "ready"
@@ -346,13 +364,18 @@ export function validateCapabilityProcessMatrixSnapshot(value) {
 export function createCapabilityProcessMatrix({
   loadRows,
   processes,
+  hostedApiPort = 8788,
   installationState = "not_installed"
 }) {
   if (typeof loadRows !== "function") {
     throw new TypeError("Capability process row loader is required.");
   }
   const releaseState = releaseStateForInstallation(installationState);
-  const processSnapshot = validateProcesses(processes, installationState);
+  const processSnapshot = validateProcesses(
+    processes,
+    installationState,
+    hostedApiPort
+  );
   let active = null;
 
   async function snapshot() {
@@ -370,7 +393,7 @@ export function createCapabilityProcessMatrix({
           row.startupRequired !== true || row.engineeringState === "ready"
         ),
         externalEffects: false
-      });
+      }, { hostedApiPort });
     })();
     try {
       return await active;
@@ -382,7 +405,7 @@ export function createCapabilityProcessMatrix({
   async function assertStartup(value = null) {
     const selected = value === null
       ? await snapshot()
-      : validateCapabilityProcessMatrixSnapshot(value);
+      : validateCapabilityProcessMatrixSnapshot(value, { hostedApiPort });
     if (selected.startupReady !== true) {
       const error = new Error(
         "Hosted capability-process matrix has an unfinished required row."

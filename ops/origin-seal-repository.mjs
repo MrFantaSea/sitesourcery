@@ -1,3 +1,4 @@
+import { deploymentProfileFields, originDeploymentProfile } from "./origin-deployment-profiles.mjs";
 import { execFile } from "node:child_process";
 import {
   lstat,
@@ -35,31 +36,15 @@ const executeFile = promisify(execFile);
 const MAXIMUM_FILES = 100_000;
 const MAXIMUM_TOTAL_BYTES = 4 * 1024 * 1024 * 1024;
 
-export const ORIGIN_UNIT_PATHS = Object.freeze([
-  "ops/production-rehearsal/sitesourcery-cloudflared.user.service",
-  "ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service",
-  "ops/sitesourcery-hosted.service.held",
-  "ops/sitesourcery-tenant.service.held",
-  ORIGIN_WORKER_PATHS.unit
-]);
+export const ORIGIN_UNIT_PATHS = originDeploymentProfile().unitPaths;
 
-export const ORIGIN_ENVIRONMENT_SCHEMA_PATHS = Object.freeze([
-  "ops/caddy.env.example",
-  "ops/hosted.env.example",
-  "ops/tenant.env.example",
-  ORIGIN_WORKER_PATHS.environmentSchema
-]);
+export const ORIGIN_ENVIRONMENT_SCHEMA_PATHS = originDeploymentProfile().environmentPaths;
 
 export const ORIGIN_WORKER_RUNTIME_PATHS = Object.freeze(
   Object.values(ORIGIN_WORKER_PATHS)
 );
 
-export const ORIGIN_INGRESS_PATHS = Object.freeze([
-  "ops/Caddyfile.cloudflare-tunnel.candidate.held",
-  "ops/cloudflared-sitesourcery-production-dell.yml",
-  "ops/production-rehearsal/sitesourcery-cloudflared.user.service",
-  "ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service"
-]);
+export const ORIGIN_INGRESS_PATHS = originDeploymentProfile().ingressPaths;
 
 function fail(message) {
   throw new Error(message);
@@ -360,11 +345,12 @@ function environmentVariableNames(source, sourcePath) {
   }));
 }
 
-export async function collectOriginEnvironmentSchema(projectRoot) {
+export async function collectOriginEnvironmentSchema(projectRoot, deploymentProfile) {
+  const profile = originDeploymentProfile(deploymentProfile);
   const manifest = await collectOriginPathManifest({
     projectRoot,
     domain: "origin-environment-schema",
-    relativePaths: [...ORIGIN_ENVIRONMENT_SCHEMA_PATHS]
+    relativePaths: [...profile.environmentPaths]
   });
   const variables = (
     await Promise.all(
@@ -400,9 +386,9 @@ export async function collectOriginEnvironmentSchema(projectRoot) {
   });
 }
 
-function workerFileBinding(manifest, field) {
+function workerFileBinding(manifest, field, profile) {
   const selected = manifest.files.find(
-    (entry) => entry.path === ORIGIN_WORKER_PATHS[field]
+    (entry) => entry.path === profile.workerPaths[field]
   );
   if (!selected) fail(`Origin worker ${field} file is missing.`);
   return Object.freeze({
@@ -411,11 +397,12 @@ function workerFileBinding(manifest, field) {
   });
 }
 
-export async function collectOriginWorkerRuntime(projectRoot) {
+export async function collectOriginWorkerRuntime(projectRoot, deploymentProfile) {
+  const profile = originDeploymentProfile(deploymentProfile);
   const manifest = await collectOriginPathManifest({
     projectRoot,
     domain: "origin-worker-runtime",
-    relativePaths: [...ORIGIN_WORKER_RUNTIME_PATHS]
+    relativePaths: Object.values(profile.workerPaths)
   });
   const [
     apiSource,
@@ -431,25 +418,25 @@ export async function collectOriginWorkerRuntime(projectRoot) {
   ] =
     await Promise.all([
       readFile(
-        inside(projectRoot, ORIGIN_WORKER_PATHS.apiEntrypoint, "Origin API entrypoint"),
+        inside(projectRoot, profile.workerPaths.apiEntrypoint, "Origin API entrypoint"),
         "utf8"
       ),
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.tenantEntrypoint,
+          profile.workerPaths.tenantEntrypoint,
           "Origin tenant entrypoint"
         ),
         "utf8"
       ),
       readFile(
-        inside(projectRoot, ORIGIN_WORKER_PATHS.workerEntrypoint, "Origin worker entrypoint"),
+        inside(projectRoot, profile.workerPaths.workerEntrypoint, "Origin worker entrypoint"),
         "utf8"
       ),
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.publicationCommandTransport,
+          profile.workerPaths.publicationCommandTransport,
           "Origin publication command transport"
         ),
         "utf8"
@@ -457,7 +444,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.hostedUnit,
+          profile.workerPaths.hostedUnit,
           "Origin hosted unit"
         ),
         "utf8"
@@ -465,19 +452,19 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.tenantUnit,
+          profile.workerPaths.tenantUnit,
           "Origin tenant unit"
         ),
         "utf8"
       ),
       readFile(
-        inside(projectRoot, ORIGIN_WORKER_PATHS.unit, "Origin worker unit"),
+        inside(projectRoot, profile.workerPaths.unit, "Origin worker unit"),
         "utf8"
       ),
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.hostedEnvironmentSchema,
+          profile.workerPaths.hostedEnvironmentSchema,
           "Origin hosted environment schema"
         ),
         "utf8"
@@ -485,7 +472,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.tenantEnvironmentSchema,
+          profile.workerPaths.tenantEnvironmentSchema,
           "Origin tenant environment schema"
         ),
         "utf8"
@@ -493,7 +480,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       readFile(
         inside(
           projectRoot,
-          ORIGIN_WORKER_PATHS.environmentSchema,
+          profile.workerPaths.environmentSchema,
           "Origin worker environment schema"
         ),
         "utf8"
@@ -534,7 +521,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
         "Description=Site Sourcery hosted API and sole publication writer",
         "EnvironmentFile=/etc/sitesourcery/hosted.env",
         "server/hosted/bin/server.mjs",
-        "ReadWritePaths=/var/lib/sitesourcery"
+        `ReadWritePaths=${profile.dataRoot}`
       ],
       "hosted"
     ],
@@ -542,19 +529,19 @@ export async function collectOriginWorkerRuntime(projectRoot) {
       tenantUnit,
       [
         "Description=Site Sourcery read-only tenant serving runtime",
-        "Requires=sitesourcery-hosted.service",
+        `Requires=${profile.apiUnitName}`,
         "EnvironmentFile=/etc/sitesourcery/tenant.env",
         "server/selfhost/bin/server.mjs",
-        "ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery/tenant-runtime"
+        `ReadOnlyPaths=${profile.currentRoot} /etc/sitesourcery ${profile.dataRoot}/tenant-runtime`
       ],
       "tenant"
     ],
     [
       workerUnit,
       [
-        "Requires=sitesourcery-hosted.service",
-        "ReadOnlyPaths=/opt/sitesourcery/current /etc/sitesourcery /var/lib/sitesourcery/tenant-runtime",
-        "ReadWritePaths=/var/lib/sitesourcery/private-exports"
+        `Requires=${profile.apiUnitName}`,
+        `ReadOnlyPaths=${profile.currentRoot} /etc/sitesourcery ${profile.dataRoot}/tenant-runtime`,
+        `ReadWritePaths=${profile.dataRoot}/private-exports`
       ],
       "worker"
     ]
@@ -605,7 +592,7 @@ export async function collectOriginWorkerRuntime(projectRoot) {
     fail("Origin private publication command transport drifted.");
   }
   for (const line of [
-    "SITESOURCERY_DATABASE_SSL=require",
+    `SITESOURCERY_DATABASE_SSL=${profile.databaseSsl}`,
     "SITESOURCERY_ALAKAZAM_MODE=held",
     "SITESOURCERY_ALAKAZAM_LIFECYCLE_MODE=held",
     "SITESOURCERY_RESPONDER_FULFILLMENT_WORKER_MODE=held"
@@ -627,28 +614,42 @@ export async function collectOriginWorkerRuntime(projectRoot) {
     /SITESOURCERY_PUBLICATION_COMMAND_/u.test(tenantEnvironment) ||
     !tenantEnvironment.includes("SITESOURCERY_TENANT_PORT=8080") ||
     !tenantEnvironment.includes(
-      "SITESOURCERY_DATA_ROOT=/var/lib/sitesourcery/tenant-runtime"
+      `SITESOURCERY_DATA_ROOT=${profile.dataRoot}/tenant-runtime`
     ) ||
     hostedEnvironment.includes("SITESOURCERY_TENANT_PORT=")
   ) {
     fail("Origin private command or tenant environment authority drifted.");
   }
+  if (deploymentProfile) {
+    for (const unit of [hostedUnit, tenantUnit, workerUnit]) {
+      for (const line of [`User=mrfantasea`, `Group=mrfantasea`, `WorkingDirectory=${profile.currentRoot}`, `ProtectHome=read-only`, `RequiresMountsFor=/srv/sitesourcery-storage`]) {
+        if (!unit.split(/\r?\n/u).includes(line)) fail("Origin HQ unit placement drifted.");
+      }
+      if (!unit.includes(`ExecStart=${profile.nodePath} ${profile.currentRoot}/`) || /(?:^|[\s=])\/opt\/sitesourcery|\/var\/lib\/sitesourcery|User=sitesourcery/u.test(unit)) fail("Origin HQ executable or data placement drifted.");
+    }
+    for (const env of [hostedEnvironment, workerEnvironment]) {
+      for (const line of [`SITESOURCERY_DATA_ROOT=${profile.dataRoot}`, `SITESOURCERY_EXPORT_ROOT=${profile.dataRoot}/private-exports`, `SITESOURCERY_DATABASE_SSL=${profile.databaseSsl}`]) {
+        if (!env.split(/\r?\n/u).includes(line)) fail("Origin HQ data placement drifted.");
+      }
+    }
+  }
   const contract = Object.freeze({
+    ...(deploymentProfile === undefined ? {} : deploymentProfileFields({ deploymentProfile })),
     schema: ORIGIN_WORKER_CONTRACT_SCHEMA,
     activation: "held",
-    apiEntrypoint: workerFileBinding(manifest, "apiEntrypoint"),
-    tenantEntrypoint: workerFileBinding(manifest, "tenantEntrypoint"),
-    workerEntrypoint: workerFileBinding(manifest, "workerEntrypoint"),
+    apiEntrypoint: workerFileBinding(manifest, "apiEntrypoint", profile),
+    tenantEntrypoint: workerFileBinding(manifest, "tenantEntrypoint", profile),
+    workerEntrypoint: workerFileBinding(manifest, "workerEntrypoint", profile),
     publicationCommandTransport:
-      workerFileBinding(manifest, "publicationCommandTransport"),
-    hostedUnit: workerFileBinding(manifest, "hostedUnit"),
-    tenantUnit: workerFileBinding(manifest, "tenantUnit"),
-    unit: workerFileBinding(manifest, "unit"),
+      workerFileBinding(manifest, "publicationCommandTransport", profile),
+    hostedUnit: workerFileBinding(manifest, "hostedUnit", profile),
+    tenantUnit: workerFileBinding(manifest, "tenantUnit", profile),
+    unit: workerFileBinding(manifest, "unit", profile),
     hostedEnvironmentSchema:
-      workerFileBinding(manifest, "hostedEnvironmentSchema"),
+      workerFileBinding(manifest, "hostedEnvironmentSchema", profile),
     tenantEnvironmentSchema:
-      workerFileBinding(manifest, "tenantEnvironmentSchema"),
-    environmentSchema: workerFileBinding(manifest, "environmentSchema"),
+      workerFileBinding(manifest, "tenantEnvironmentSchema", profile),
+    environmentSchema: workerFileBinding(manifest, "environmentSchema", profile),
     publicationCommand: Object.freeze({
       transport: "unix",
       path: "/run/sitesourcery/publication-command-v1.sock",
@@ -671,7 +672,8 @@ export async function collectOriginWorkerRuntime(projectRoot) {
   });
 }
 
-async function verifyIngressAndHolds(projectRoot) {
+async function verifyIngressAndHolds(projectRoot, deploymentProfile) {
+  const profile = originDeploymentProfile(deploymentProfile);
   const read = async (relativePath) =>
     readFile(inside(projectRoot, relativePath, "Origin authority file"), "utf8");
   const [
@@ -684,24 +686,24 @@ async function verifyIngressAndHolds(projectRoot) {
     releaseControlSource,
     commercialControlSource
   ] = await Promise.all([
-    read("ops/Caddyfile.cloudflare-tunnel.candidate.held"),
-    read("ops/cloudflared-sitesourcery-production-dell.yml"),
-    read("ops/production-rehearsal/sitesourcery-origin-cloudflare.user.service"),
-    read("ops/production-rehearsal/sitesourcery-cloudflared.user.service"),
-    read("ops/hosted.env.example"),
-    read("ops/tenant.env.example"),
+    read(profile.caddyPath),
+    read(profile.tunnelPath),
+    read(profile.gatewayUnit),
+    read(profile.tunnelUnit),
+    read(profile.workerPaths.hostedEnvironmentSchema),
+    read(profile.workerPaths.tenantEnvironmentSchema),
     read("data/release-control.json"),
     read("data/abracadabra-commercial-control.json")
   ]);
   const requiredCaddy = [
     ":8081 {",
     "bind 127.0.0.1",
-    "reverse_proxy 127.0.0.1:8788",
-    "root * /opt/sitesourcery/current/_hosted",
+    `reverse_proxy ${profile.listeners.hostedApi}`,
+    `root * ${profile.currentRoot}/_hosted`,
     "@wrong_host not host sitesourcery.com www.sitesourcery.com",
     "request_body {",
     "max_size 1MB",
-    "Cache-Control \"no-store\""
+    deploymentProfile ? 'Cache-Control "no-store, no-transform"' : 'Cache-Control "no-store"'
   ];
   if (
     requiredCaddy.some((token) => !caddy.includes(token)) ||
@@ -719,8 +721,8 @@ async function verifyIngressAndHolds(projectRoot) {
     }
   }
   if (
-    !originUnit.includes("http://127.0.0.1:8788/api/v1/ready") ||
-    !originUnit.includes("CLOUDFLARE_TUNNEL_APPROVED") ||
+    !originUnit.includes(`http://${profile.listeners.hostedApi}/api/v1/ready`) ||
+    !originUnit.includes(deploymentProfile ? "RUNTIME_APPROVED" : "CLOUDFLARE_TUNNEL_APPROVED") ||
     !tunnelUnit.includes("http://127.0.0.1:8081/api/v1/ready") ||
     !tunnelUnit.includes("--metrics 127.0.0.1:20241") ||
     !tunnelUnit.includes("CLOUDFLARE_TUNNEL_APPROVED")
@@ -729,7 +731,7 @@ async function verifyIngressAndHolds(projectRoot) {
   }
   for (const line of [
     "SITESOURCERY_HOSTED_HOST=127.0.0.1",
-    "SITESOURCERY_HOSTED_PORT=8788",
+    `SITESOURCERY_HOSTED_PORT=${profile.listeners.hostedApi.split(":")[1]}`,
     "SITESOURCERY_REGISTRATION_MAIL_MODE=held",
     "SITESOURCERY_RECOVERY_MAIL_MODE=held",
     "SITESOURCERY_STRIPE_MODE=held"
@@ -741,7 +743,7 @@ async function verifyIngressAndHolds(projectRoot) {
   for (const line of [
     "SITESOURCERY_TENANT_HOST=127.0.0.1",
     "SITESOURCERY_TENANT_PORT=8080",
-    "SITESOURCERY_DATA_ROOT=/var/lib/sitesourcery/tenant-runtime"
+    `SITESOURCERY_DATA_ROOT=${profile.dataRoot}/tenant-runtime`
   ]) {
     if (!tenantEnvironment.includes(line)) {
       fail("Origin tenant environment schema lost its read-only boundary.");
@@ -752,6 +754,15 @@ async function verifyIngressAndHolds(projectRoot) {
       .test(tenantEnvironment)
   ) {
     fail("Origin tenant environment gained a forbidden authority.");
+  }
+  if (deploymentProfile) {
+    const bindings = [...caddy.matchAll(/^\s*bind\s+(.+)$/gmu)].map(match => match[1]);
+    const proxies = [...caddy.matchAll(/^\s*reverse_proxy\s+(.+)$/gmu)].map(match => match[1].trim());
+    if (bindings.length !== 1 || bindings[0] !== "127.0.0.1" || proxies.length !== 1 || proxies[0] !== `${profile.listeners.hostedApi} {` || /\/opt\/sitesourcery|127\.0\.0\.1:8788|0\.0\.0\.0/u.test(caddy)) fail("Origin HQ gateway placement drifted.");
+    for (const unit of [originUnit, tunnelUnit]) {
+      if (!unit.includes("User=mrfantasea") || !unit.includes("ProtectHome=read-only") || /\/home\/simtech|%h\/|--user/u.test(unit)) fail("Origin HQ gateway or tunnel unit placement drifted.");
+    }
+    if (!tunnelConfiguration.includes("credentials-file: /etc/sitesourcery/cloudflared.json")) fail("Origin HQ tunnel credentials path drifted.");
   }
   const releaseControl = parseJsonObject(
     releaseControlSource,
@@ -776,9 +787,11 @@ async function verifyIngressAndHolds(projectRoot) {
 
 export async function collectOriginRepositorySnapshot({
   projectRoot,
-  layout
+  layout,
+  deploymentProfile
 }) {
-  await verifyIngressAndHolds(projectRoot);
+  const profile = originDeploymentProfile(deploymentProfile);
+  await verifyIngressAndHolds(projectRoot, deploymentProfile);
   const [
     artifact,
     units,
@@ -797,10 +810,10 @@ export async function collectOriginRepositorySnapshot({
       collectOriginPathManifest({
         projectRoot,
         domain: "origin-units",
-        relativePaths: [...ORIGIN_UNIT_PATHS]
+        relativePaths: [...profile.unitPaths]
       }),
-      collectOriginEnvironmentSchema(projectRoot),
-      collectOriginWorkerRuntime(projectRoot),
+      collectOriginEnvironmentSchema(projectRoot, deploymentProfile),
+      collectOriginWorkerRuntime(projectRoot, deploymentProfile),
       collectOriginMigrationInventory({
         projectRoot,
         migrationRoot: layout.migrationRoot
@@ -809,7 +822,7 @@ export async function collectOriginRepositorySnapshot({
       collectOriginPathManifest({
         projectRoot,
         domain: "origin-ingress",
-        relativePaths: [...ORIGIN_INGRESS_PATHS]
+        relativePaths: [...profile.ingressPaths]
       })
     ]);
   return Object.freeze({
@@ -924,7 +937,8 @@ export async function verifyOriginReleaseRepository({
   );
   const snapshot = await collectOriginRepositorySnapshot({
     projectRoot,
-    layout: input.epoch.layout
+    layout: input.epoch.layout,
+    deploymentProfile: input.epoch.deploymentProfile
   });
   return createOriginSeal({
     releaseInput: input,

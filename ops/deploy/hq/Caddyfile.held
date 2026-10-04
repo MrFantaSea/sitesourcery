@@ -1,0 +1,100 @@
+# HELD HQ candidate. Loopback gateway; publication and tunnel activation remain separate.
+{
+	admin off
+	auto_https off
+	persist_config off
+
+	servers {
+		timeouts {
+			read_body 10s
+			read_header 10s
+			write 30s
+			idle 2m
+		}
+		max_header_size 32KB
+		trusted_proxies static 127.0.0.1/32 ::1/128
+		trusted_proxies_strict
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
+}
+
+:8081 {
+	bind 127.0.0.1
+	encode zstd gzip
+
+	@www host www.sitesourcery.com
+	handle @www {
+		header -Server
+		redir https://sitesourcery.com{uri} 308
+	}
+
+	@wrong_host not host sitesourcery.com www.sitesourcery.com
+	handle @wrong_host {
+		header -Server
+		respond 421
+	}
+
+	redir /about.html https://sitesourcery.com/about/ 308
+	redir /alacazam/index.html https://sitesourcery.com/alakazam/ 308
+	redir /automation.html https://sitesourcery.com/hive/ 308
+	redir /contact.html https://sitesourcery.com/contact/ 308
+	redir /faq.html https://sitesourcery.com/faq/ 308
+	redir /how-it-works.html https://sitesourcery.com/custom/process/ 308
+	redir /pricing.html https://sitesourcery.com/custom/scope/ 308
+	redir /privacy.html https://sitesourcery.com/legal/privacy/ 308
+	redir /terms.html https://sitesourcery.com/legal/website-terms/ 308
+	redir /thanks.html https://sitesourcery.com/contact/ 308
+	redir /the-difference.html https://sitesourcery.com/about/#the-difference 308
+	redir /the-meter.html https://sitesourcery.com/custom/process/#scope 308
+	redir /the-moat.html https://sitesourcery.com/about/#the-difference 308
+	redir /the-responder.html https://sitesourcery.com/responder/ 308
+
+	@sitesourcery_internal path /_sitesourcery /_sitesourcery/*
+	handle @sitesourcery_internal {
+		header -Server
+		respond 404
+	}
+
+	@hosted_api path /api /api/*
+	handle @hosted_api {
+		request_body {
+			max_size 1MB
+		}
+		header {
+			Cache-Control "no-store, no-transform"
+			-Server
+		}
+		reverse_proxy 127.0.0.1:18988 {
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 20s
+			}
+			header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+			header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+			header_up X-Forwarded-Proto https
+			health_uri /api/v1/health
+			health_interval 15s
+			health_timeout 3s
+		}
+	}
+
+	handle {
+		root * /home/mrfantasea/.local/share/sitesourcery-production/current/_hosted
+		try_files {path} {path}/index.html =404
+		header {
+			Cache-Control "no-store, no-transform"
+			-Server
+			Referrer-Policy "strict-origin-when-cross-origin"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "SAMEORIGIN"
+			Permissions-Policy "camera=(), geolocation=(), microphone=()"
+			Strict-Transport-Security "max-age=31536000"
+		}
+		file_server
+	}
+	handle_errors {
+		root * /home/mrfantasea/.local/share/sitesourcery-production/current/_hosted
+		rewrite * /404.html
+		file_server
+	}
+}

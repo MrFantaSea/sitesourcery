@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "6fbd5ec86d7d6efc178a6dd8f476d595f5cd9e24",
+    "treeSha": "e263658efd14bbca6aead827eae6dba221092f89",
+    "baseCommitSha": "fc6a4cfb0a870d5163abd868a1c7ecdf00f61f78"
+  },
+  "provenanceSha256": "d1945041550935750afa4b2c4be51fdcab2fe8fa9435ca505c185613a1e8cd5b",
+  "ledger": {
+    "previousByteCount": 39719,
+    "previousSha256": "9d236be3283ee92e68a89fe483b9d49a7115bab46b484699bb2def150b11427e",
+    "appendSha256": "f979eba752d7e289c4624dff0b5db79a8050b5ad92b9ee0f79186f879cf50213"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/origin-hq-profile.test.mjs",
+      "exitCode": 0,
+      "logSha256": "7cc9e262c7c1251c8982c4e32930a0a65c017890944f1f1543d7732527e84fd8"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "884d0b596eba578ae1575603873ad97f2efefda69ebd9222003a56fb7df4c229"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root scope and source review; independent bounded packaging review CLEAR. Existing HQ profile review corrected before focused proof. Exact42-file normalization plus one test-only correction for mixed legacy/HQ evidence; no dirty erasure files or credentials. No new comprehensive product audit claim."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "ffdfb111c2315d791d210e28492fbc3671f8e2dccfe198d3f2ddef63ccea7a9a"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Private scratch removed after zero owned-process readback: 296directories/440files. Source, ignored artifacts, pinned tools and evidence retained. Earlier PG cleanup receipt reverified; no DB started this local run."
+  }
+}

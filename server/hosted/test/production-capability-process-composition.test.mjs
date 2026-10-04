@@ -66,8 +66,9 @@ function service() {
   };
 }
 
-function api(failedKey = null) {
+function api(failedKey = null, hostedApiPort = 8788) {
   const matrix = createCapabilityProcessMatrix({
+    hostedApiPort,
     loadRows: async () => rowStates(failedKey),
     processes: processStates()
   });
@@ -117,6 +118,18 @@ test("strict capabilities and readiness expose the same exact green matrix", asy
     ready.capabilityProcessMatrix,
     capabilities.capabilityProcessMatrix
   );
+});
+
+test("readiness and capabilities report the configured alternate API listener", async () => {
+  const selected = api(null, 18988);
+  for (const path of ["ready", "capabilities"]) {
+    const response = await selected.fetch(new Request(`${ORIGIN}/api/v1/${path}`));
+    assert.equal(response.status, 200);
+    const body = await response.json();
+    assert.equal(body.capabilityProcessMatrix.processes.find(
+      ({ key }) => key === "hosted_api"
+    ).listener, "127.0.0.1:18988");
+  }
 });
 
 test("strict readiness singleflights the shared service readiness fanout", async () => {
@@ -227,7 +240,9 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
     source.indexOf("await capabilityProcessMatrix.assertStartup(") <
       source.indexOf("await listen(apiServer, apiPort)")
   );
-  assert.match(source, /apiPort !== 8788/u);
+  assert.match(source, /const \{ host, port: apiPort \} = createHostedListenerConfiguration\(/u);
+  assert.match(source, /hostedApiPort: apiPort/u);
+  assert.match(source, /server\.listen\(port, host\)/u);
   assert.match(tenantSource, /port !== 8080/u);
   assert.match(tenantSource, /SelfHostRuntime\.openServing/u);
 });

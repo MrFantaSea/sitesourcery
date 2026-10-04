@@ -34,7 +34,8 @@ import {
   expectedOriginInstalledIdentity,
   expectedOriginInstalledWorker,
   validateOriginReleaseInput,
-  validateOriginSeal
+  validateOriginSeal,
+  validateOriginWorkerContract
 } from "../origin-seal-runtime.mjs";
 
 const projectRoot = path.resolve(
@@ -223,6 +224,23 @@ test("worker evidence binds entrypoints unit environment held purposes and split
   );
   assert.equal(snapshot.worker.contract.workerOwnsPublicListener, false);
   assert.equal(snapshot.worker.contract.allowsProviderEffects, false);
+});
+
+test("current publication purpose preserves valid historical eleven-purpose contracts", () => {
+  assert.equal(ORIGIN_WORKER_PURPOSES.length, 12);
+  assert.ok(ORIGIN_WORKER_PURPOSES.includes("alakazam-publication"));
+  const historical = {
+    ...snapshot.worker.contract,
+    selectedPurposes: ORIGIN_WORKER_PURPOSES.filter((p) => p !== "alakazam-publication")
+  };
+  assert.equal(historical.selectedPurposes.length, 11);
+  assert.equal(validateOriginWorkerContract(historical), historical);
+  assert.throws(() => validateOriginWorkerContract({
+    ...historical, selectedPurposes: [...historical.selectedPurposes].reverse()
+  }), /canonical order/u);
+  assert.throws(() => validateOriginWorkerContract({
+    ...historical, allowsProviderEffects: true
+  }), /effect-free/u);
 });
 
 test("environment inventory projects names and classifications without values", () => {

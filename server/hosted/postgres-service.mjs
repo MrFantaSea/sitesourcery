@@ -8762,6 +8762,13 @@ function createCanonicalPostgresRuntime({
             })
         );
       } catch (error) {
+        if (error?.code === "PSS01") {
+          throw new HostedError(
+            "PROJECT_PAYMENT_RECONCILIATION_REQUIRED",
+            "Resolve the pending Download payment before deleting this project.",
+            { status: 409 }
+          );
+        }
         throw translatePostgres(error);
       }
     },

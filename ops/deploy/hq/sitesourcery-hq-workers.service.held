@@ -1,0 +1,63 @@
+# WORKERS_HOLD — candidate only. Do not install, enable, or start without the
+# completed owner gate in SITESOURCERY-WORKERS-01-HELD-RUNBOOK.md.
+
+[Unit]
+Description=Site Sourcery bounded hosted workers
+After=local-fs.target network-online.target sitesourcery-hq-api.service
+Wants=network-online.target
+RequiresMountsFor=/srv/sitesourcery-storage
+Requires=sitesourcery-hq-api.service
+ConditionPathExists=/etc/sitesourcery/WORKERS_APPROVED
+ConditionPathExists=!/etc/sitesourcery/WORKERS_HOLD
+ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE
+
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=mrfantasea
+Group=mrfantasea
+WorkingDirectory=/home/mrfantasea/.local/share/sitesourcery-production/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/workers.env
+ExecStartPre=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/assert-runtime.mjs
+ExecStart=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/bin/worker.mjs
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=30s
+TimeoutStopSec=25s
+KillSignal=SIGTERM
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/home/mrfantasea/.local/share/sitesourcery-production/current /etc/sitesourcery /srv/sitesourcery-storage/production/app/tenant-runtime
+ReadWritePaths=/srv/sitesourcery-storage/production/app/private-exports
+RuntimeDirectory=sitesourcery
+RuntimeDirectoryMode=0750
+MemoryMax=1G
+CPUQuota=100%
+LimitNOFILE=4096
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target
