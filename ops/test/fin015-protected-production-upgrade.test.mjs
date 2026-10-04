@@ -1,5 +1,26 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { copyFile, mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+// FIN-015 authorizes its historical 98-to-102 transition, never a later tree.
+// Reconstruct those exact source bytes; the production verifier checks all
+// pinned manifest hashes before the fixture is supplied to orchestration.
+async function retainedMigrationInventory(t) {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "sitesourcery-fin015-inventory-"));
+  t.after(() => rm(projectRoot, { recursive: true, force: true }));
+  const target = path.join(projectRoot, "server/data-plane/supabase/migrations");
+  await mkdir(target, { recursive: true });
+  const source = new URL("../../server/data-plane/supabase/migrations/", import.meta.url);
+  const last = FIN015_MIGRATIONS.at(-1).name;
+  for (const name of (await readdir(source)).sort()) {
+    if (name.endsWith(".sql") && name <= last) {
+      await copyFile(new URL(name, source), path.join(target, name));
+    }
+  }
+  return collectFin015MigrationInventory({ projectRoot });
+}
 
 import {
   FIN015_CANDIDATE_COMMIT,
@@ -193,8 +214,8 @@ test("FIN-015 validates the exact protected successor input and held CI receipt"
   assert.equal(authority.ciFinalReceipt.workflowSha, FIN015_HELD_CONTROL_COMMIT);
 });
 
-test("FIN-015 binds the exact 98-to-102 four-file migration inventory", async () => {
-  const inventory = await collectFin015MigrationInventory();
+test("FIN-015 binds the exact 98-to-102 four-file migration inventory", async (t) => {
+  const inventory = await retainedMigrationInventory(t);
   assert.equal(inventory.predecessor.count, 98);
   assert.equal(inventory.successor.count, 102);
   assert.equal(
@@ -213,6 +234,12 @@ test("FIN-015 binds the exact 98-to-102 four-file migration inventory", async ()
     })),
     structuredClone(FIN015_MIGRATIONS)
   );
+});
+
+test("FIN-015 refuses the current successor tree under its historical authority", async () => {
+  await assert.rejects(collectFin015MigrationInventory(), error =>
+    error instanceof Fin015ProtectedUpgradeFailure &&
+    error.code === "FIN015_UPGRADE_CONTROL_INVALID");
 });
 
 test("FIN-015 control requires fresh paired backup, quiesce, exact authority, and separate cutover", () => {
@@ -260,12 +287,14 @@ test("FIN-015 rejects stale backup, expired authority, live runtime, or lifted e
   }
 });
 
-test("FIN-015 applies only migrations 146-149 under lock and preserves all predecessor rows", async () => {
+test("FIN-015 applies only migrations 146-149 under lock and preserves all predecessor rows", async (t) => {
+  const historicalInventory = await retainedMigrationInventory(t);
   const pool = fakePool();
   let snapshots = 0;
   const receipt = await upgradeFin015ProtectedProduction(pool, {
     control: control(),
     now: NOW,
+    inventory: async () => historicalInventory,
     snapshot: async () => snapshot({ successor: snapshots++ > 0 }),
     heldInvariantProof: async () => ({ lifecycle_state_held: true }),
     successorInvariantProof: async () => ({
@@ -321,13 +350,15 @@ test("FIN-015 applies only migrations 146-149 under lock and preserves all prede
   assert.equal(pool.queries.at(-1).sql, "release");
 });
 
-test("FIN-015 refuses migration while another production database connection exists", async () => {
+test("FIN-015 refuses migration while another production database connection exists", async (t) => {
+  const historicalInventory = await retainedMigrationInventory(t);
   const pool = fakePool({ otherConnectionCount: 1 });
   await assert.rejects(
     () =>
       upgradeFin015ProtectedProduction(pool, {
         control: control(),
         now: NOW,
+        inventory: async () => historicalInventory,
         snapshot: async () => snapshot(),
         heldInvariantProof: async () => ({}),
         successorInvariantProof: async () => ({})

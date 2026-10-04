@@ -83,6 +83,10 @@ import {
   createPostgresCustomServicesOwner
 } from "../custom-services-owner-postgres.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
+import {
+  createPostgresProjectLifecycleRepository,
+  createProjectLifecycleExecutor
+} from "../project-lifecycle-postgres.mjs";
 import { createHostedApi } from "../http.mjs";
 import { createPostgresIdentityBridge } from "../identity-postgres.mjs";
 import {
@@ -117,6 +121,8 @@ import {
 import { createSelfHostPublicationPort } from "../selfhost-publication-port.mjs";
 import { createSparkCompilerPort } from "../spark-compiler-port.mjs";
 import { createStripeWebhookRouter } from "../stripe-webhook-router.mjs";
+import { createSupportCaseService } from "../support-cases.mjs";
+import { createPostgresSupportCaseRepository } from "../support-cases-postgres.mjs";
 import { openReviewedBrowser } from "./reviewed-browser-support.mjs";
 
 const { Pool } = pg;
@@ -128,7 +134,19 @@ const DATABASE_URL =
   process.env.SITESOURCERY_PG_SERVICE_TEST_URL ?? null;
 const CORE_REVENUE_E2E_ONLY =
   process.env.SITESOURCERY_CORE_REVENUE_E2E_ONLY === "1";
-const NOW = "2026-07-28T20:00:00.000Z";
+const DELETION_UPGRADE_PROOF = process.env.SITESOURCERY_DELETION_UPGRADE_PROOF === "1";
+const RETAINED_PURGE_MIGRATION = "202609210150_download_retained_project_purge.sql";
+
+// Capture one fixture epoch per process. Identity and authority SQL intentionally
+// use the database wall clock, so a historical fixed date expires valid sessions.
+const NOW = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString();
+const fromNow = (milliseconds) =>
+  new Date(Date.parse(NOW) + milliseconds).toISOString();
+const downloadRequestEvidence = Object.freeze({
+  requestId: "core-download-local-request",
+  clientAddress: "127.0.0.1",
+  userAgentDigest: createHash("sha256").update("local-contract-client").digest("hex")
+});
 const MIGRATIONS = new URL(
   "../../data-plane/supabase/migrations/",
   import.meta.url
@@ -415,7 +433,7 @@ function createContractPaymentProvider() {
           url:
             `https://checkout.stripe.com/c/pay/cs_test_hosted_${checkoutSequence}`,
           expiresAt:
-            "2026-07-28T20:30:00.000Z"
+            fromNow(30 * 60 * 1000)
         };
       },
       async createServiceAssessmentCheckout(input) {
@@ -540,7 +558,25 @@ function createContractPaymentProvider() {
             "cs_test_download_",
             ""
           );
+        const billingIdentity = {
+          email: input.checkoutIdentity.email,
+          name: "Synthetic customer",
+          address: {
+            city: "Mickleton", country: "US", line1: "1 Test Street",
+            line2: null, postalCode: "08056", state: "NJ"
+          }
+        };
         return {
+          verifiedEmailDigest: input.checkoutIdentity.emailDigest,
+          accountCreatedAt: input.checkoutIdentity.accountCreatedAt,
+          accountActivatedAt: input.checkoutIdentity.activatedAt,
+          possessionEvidenceDigest: input.checkoutIdentity.possessionEvidenceDigest,
+          billingIdentity,
+          billingIdentityDigest: commerceDigest(billingIdentity),
+          threeDS: { requested: "any", supported: true, result: "authenticated" },
+          chargeId: `ch_test_download_${checkoutNumber}`,
+          riskLevel: "normal",
+          riskScore: 10,
           schema:
             "sitesourcery.stripe-download-payment-facts/v2",
           provider: "stripe",
@@ -550,9 +586,9 @@ function createContractPaymentProvider() {
           customerId:
             `cus_test_hosted_customer_${checkoutNumber}`,
           paymentStatus: "paid",
-          amountMinor: 500,
+          amountMinor: 2000,
           taxMinor: 0,
-          totalMinor: 500,
+          totalMinor: 2000,
           taxMode: "disabled_by_owner",
           currency: "USD",
           purposeDigest: input.purposeDigest
@@ -607,7 +643,7 @@ function createContractPaymentProvider() {
           providerStatus: "active",
           cancelAtPeriodEnd: true,
           effectiveAt:
-            "2026-08-28T20:00:00.000Z"
+            fromNow(31 * 24 * 60 * 60 * 1000)
         };
       },
       async verifyWebhook({
@@ -657,6 +693,7 @@ async function migrateEmptyDatabase(
     .filter((name) => name.endsWith(".sql"))
     .sort();
   for (const name of names) {
+    if (DELETION_UPGRADE_PROOF && name === RETAINED_PURGE_MIGRATION) continue;
     if (beforeMigration) {
       await beforeMigration(name, pool);
     }
@@ -1011,7 +1048,7 @@ async function seedPaidSubscription(
         price.rows[0].billing_policy_id,
         price.rows[0].currency,
         Number(price.rows[0].unit_amount_minor),
-        "2026-08-28T20:00:00.000Z"
+        fromNow(31 * 24 * 60 * 60 * 1000)
       ]
     );
   });
@@ -1268,8 +1305,28 @@ test(
         void_fenced: true
       }
     );
-    const authority = createCanonicalPostgresAuthority({ pool });
-    assert.equal((await authority.assertReady()).ready, true);
+    const currentAuthority = createCanonicalPostgresAuthority({ pool });
+    let awaitingRetentionUpgrade = DELETION_UPGRADE_PROOF;
+    // Build the pre-150 population under its prior runtime readiness contract.
+    // The new runtime is checked separately and must reject that exact schema.
+    // No database query, service transaction, or financial result is mocked.
+    const authority = DELETION_UPGRADE_PROOF ? {
+      ...currentAuthority,
+      async readiness() {
+        const result = await currentAuthority.readiness();
+        if (!awaitingRetentionUpgrade) return result;
+        assert.equal(result.code, "DATABASE_NOT_MIGRATED");
+        assert.deepEqual(result.missing, ["commerce_v2_retained_purge_contract"]);
+        const { code, ...priorContract } = result;
+        return { ...priorContract, ready: true, missing: [] };
+      }
+    } : currentAuthority;
+    if (DELETION_UPGRADE_PROOF) {
+      assert.equal(databaseWasPreMigrated, false, "upgrade proof requires its own empty database");
+      assert.deepEqual((await currentAuthority.readiness()).missing, ["commerce_v2_retained_purge_contract"]);
+    } else {
+      assert.equal((await authority.assertReady()).ready, true);
+    }
     const recoveredLegacy = await pool.query(
       `select *
          from ss.export_requests
@@ -1859,7 +1916,7 @@ test(
     );
     assert.equal(
       recoveryMessages[0].expiresAt,
-      "2026-07-28T20:30:00.000Z"
+      fromNow(30 * 60 * 1000)
     );
     assert.deepEqual(
       await service.requestRecovery({
@@ -2503,7 +2560,7 @@ test(
                 url:
                   "https://checkout.stripe.com/c/pay/alakazam_setup_fence",
                 expiresAt:
-                  "2026-07-28T20:30:00.000Z"
+                  fromNow(30 * 60 * 1000)
               };
             },
             async createAlakazamUpgradeCheckout() {
@@ -2600,12 +2657,14 @@ test(
       );
     assert.equal(downloadQuote.offerId, "spark_download");
     assert.deepEqual(downloadQuote.price, {
-      amountMinor: 500,
+      amountMinor: 2000,
       currency: "USD",
       billing: "one_time",
       interval: null
     });
     const downloadCheckoutInput = {
+      ...downloadRequestEvidence,
+      purchaseTermsAccepted: true,
       acceptedDisclosureDigest:
         downloadQuote.disclosureDigest,
       commandId: "download-checkout-0001"
@@ -2642,7 +2701,7 @@ test(
     const downloadPurpose =
       payment.calls.downloadCheckout[0].purpose;
     const downloadMetadata = {
-      schema: "sitesourcery_download_checkout_v2",
+      schema: "sitesourcery_download_checkout_v3",
       tenant_id: downloadPurpose.tenantId,
       customer_id: downloadPurpose.customerId,
       project_id: downloadPurpose.projectId,
@@ -2708,9 +2767,9 @@ test(
         receiptId:
           paidProject.project.entitlements[0]
             .payment.receiptId,
-        amountMinor: 500,
+        amountMinor: 2000,
         taxMinor: 0,
-        totalMinor: 500,
+        totalMinor: 2000,
         taxMode: "disabled_by_owner",
         currency: "USD",
         settledAt: NOW
@@ -2731,7 +2790,8 @@ test(
     const paidDownload = await downloadCommerce.download(
       actor,
       projectId,
-      version.version.id
+      version.version.id,
+        downloadRequestEvidence
     );
     assert.deepEqual(paidDownload.bytes, compiled.htmlBytes);
     assert.equal(paidDownload.sha256, compiled.artifactDigest);
@@ -2740,7 +2800,8 @@ test(
         await downloadCommerce.download(
           actor,
           projectId,
-          version.version.id
+          version.version.id,
+        downloadRequestEvidence
         )
       ).bytes,
       compiled.htmlBytes
@@ -2754,7 +2815,7 @@ test(
         livemode: false,
         payment_intent: "pi_test_download_1",
         currency: "usd",
-        amount: 500,
+        amount: 2000,
         amount_refunded: 100,
         refunded: false
       }
@@ -2777,7 +2838,8 @@ test(
       downloadCommerce.download(
         actor,
         projectId,
-        version.version.id
+        version.version.id,
+        downloadRequestEvidence
       ),
       (error) =>
         error?.code ===
@@ -2792,8 +2854,8 @@ test(
         livemode: false,
         payment_intent: "pi_test_download_1",
         currency: "usd",
-        amount: 500,
-        amount_refunded: 500,
+        amount: 2000,
+        amount_refunded: 2000,
         refunded: true
       }
     );
@@ -2852,60 +2914,6 @@ test(
         }
       ]
     );
-    const postRevocationDispute = stripeEvent(
-      "evt_test_download_dispute_after_revoked_1",
-      "charge.dispute.created",
-      {
-        id: "dp_test_download_after_revoked_1",
-        livemode: false,
-        payment_intent: "pi_test_download_1",
-        currency: "usd",
-        amount: 500,
-        status: "needs_response"
-      }
-    );
-    assert.deepEqual(
-      await stripeWebhook.ingestStripeWebhook({
-        rawBody: rawEvent(postRevocationDispute),
-        signature: "contract-signature-valid"
-      }),
-      {
-        status: "processed",
-        projectId,
-        entitlementId:
-          paidProject.project.entitlements[0].id,
-        entitlementState: "revoked",
-        reason: "payment_fully_refunded"
-      }
-    );
-    assert.deepEqual(
-      (
-        await pool.query(
-          `select prior_state, prior_reason,
-                  resulting_state, reason,
-                  result ->> 'reason' as result_reason
-             from ss.commerce_v2_download_reversal_events
-            where id = $1`,
-          [postRevocationDispute.id]
-        )
-      ).rows,
-      [
-        {
-          prior_state: "revoked",
-          prior_reason: "payment_fully_refunded",
-          resulting_state: "revoked",
-          reason: "payment_dispute_open",
-          result_reason: "payment_fully_refunded"
-        }
-      ]
-    );
-    assert.deepEqual(
-      (
-        await service.getProject(actor, projectId)
-      ).project.entitlements,
-      []
-    );
-
     const expiryProject = await service.createProject(
       actor,
       organizationId,
@@ -2955,9 +2963,9 @@ test(
       { commandId: "version-accept-expiry-0001" }
     );
     commerceV2ClockNow =
-      "2026-08-02T12:00:00.000Z";
+      fromNow(112 * 60 * 60 * 1000);
     payment.setNextDownloadCheckoutExpiry(
-      "2026-08-02T12:30:00.000Z"
+      fromNow((112 * 60 + 30) * 60 * 1000)
     );
     const expiringQuote =
       await downloadCommerce.createQuote(
@@ -2969,6 +2977,8 @@ test(
         }
       );
     const expiringCheckoutInput = {
+      ...downloadRequestEvidence,
+      purchaseTermsAccepted: true,
       acceptedDisclosureDigest:
         expiringQuote.disclosureDigest,
       commandId: "download-checkout-expiry-0001"
@@ -2986,7 +2996,7 @@ test(
       expiringCheckout.checkout.id
     );
     commerceV2ClockNow =
-      "2026-08-02T13:00:00.000Z";
+      fromNow(113 * 60 * 60 * 1000);
     await assert.rejects(
       downloadCommerce.prepareCheckout(
         actor,
@@ -3035,6 +3045,8 @@ test(
         expiryProjectId,
         replacementQuote.quoteId,
         {
+          ...downloadRequestEvidence,
+          purchaseTermsAccepted: true,
           acceptedDisclosureDigest:
             replacementQuote.disclosureDigest,
           commandId:
@@ -3205,7 +3217,7 @@ test(
         status: "active",
         current_period_end: Math.floor(
           Date.parse(
-            "2026-08-28T20:00:00.000Z"
+            fromNow(31 * 24 * 60 * 60 * 1000)
           ) / 1000
         ),
         metadata: checkoutMetadata,
@@ -3255,7 +3267,7 @@ test(
               period: {
                 end: Math.floor(
                   Date.parse(
-                    "2026-08-28T20:00:00.000Z"
+                    fromNow(31 * 24 * 60 * 60 * 1000)
                   ) / 1000
                 )
               }
@@ -3625,7 +3637,7 @@ test(
             "EXPORT_CLAIM_UNAVAILABLE"
         );
 
-        selectedNow = "2026-07-28T20:00:02.000Z";
+        selectedNow = fromNow(2_000);
         const recovered =
           await recoveryWorker.processExport(exportId, {
             workerId: "export-worker-before-new"
@@ -3706,7 +3718,7 @@ test(
         assert.equal(prepared.state, "building");
         assert.equal(prepared.object_key, written.saved.key);
 
-        selectedNow = "2026-07-28T20:00:02.000Z";
+        selectedNow = fromNow(2_000);
         const recovered =
           await recoveryWorker.processExport(exportId, {
             workerId: "export-worker-after-new"
@@ -4086,8 +4098,8 @@ test(
             randomUUID(),
             retentionProjectId,
             `sub_test_retention_${randomUUID()}`,
-            "2026-07-28T19:59:00.000Z",
-            "2026-07-20T20:00:00.000Z",
+            fromNow(-60_000),
+            fromNow(-8 * 24 * 60 * 60 * 1000),
             projectId
           ]
         );
@@ -4157,7 +4169,7 @@ test(
     );
     assert.equal(
       cancelled.subscription.cancelAt,
-      "2026-08-28T20:00:00.000Z"
+      fromNow(31 * 24 * 60 * 60 * 1000)
     );
     assert.equal(
       payment.calls.cancellation.length,
@@ -4303,23 +4315,6 @@ test(
       ).status,
       404
     );
-    const deleted = await service.deleteProject(actor, projectId, {
-      commandId: "project-delete-0001"
-    });
-    assert.equal(deleted.state, "purging");
-    assert.equal(deleted.deleted, false);
-    const ownedDeleted =
-      await service.deleteProject(
-        actor,
-        ownedProjectId,
-        {
-          commandId:
-            "project-delete-owned-0001"
-        }
-      );
-    assert.equal(ownedDeleted.state, "purging");
-    assert.equal(ownedDeleted.deleted, false);
-
     await t.test(
       "browser API crosses CSRF, secure cookies, HTTP, and PostgreSQL for one account",
       { skip: CORE_REVENUE_E2E_ONLY },
@@ -4474,11 +4469,11 @@ test(
       }
     );
     await t.test(
-      "CORE-REVENUE-E2E-01 crosses inquiry, invitation, activation, Download receipt, and reversal",
+      "CORE-REVENUE-E2E-01 crosses activation, $20 Download, delivery, owner support, and reversal",
       async () => {
         assert.ok(
           engagementBootstrap,
-          "released joint Legal V4 is required for the revenue journey"
+          "released joint Legal V7 is required for the revenue journey"
         );
         await pool.query(
           `insert into ss.operator_profiles (
@@ -4530,13 +4525,20 @@ test(
         engagementClockNow = new Date(
           Date.now() + 1000
         ).toISOString();
+        const supportCases = createSupportCaseService({
+          repository: createPostgresSupportCaseRepository({ authority }),
+          mailLifecycle,
+          clock: commerceV2.clock
+        });
+        assert.equal((await supportCases.readiness()).ready, true);
         const api = createHostedApi(service, {
           downloadCommerce,
           alakazamAccount,
           customServicesAccount,
           customServicesOwner,
           engagementBootstrap,
-          stripeWebhook
+          stripeWebhook,
+          supportCases
         });
         const browserServer =
           await startHostedBrowserServer(api);
@@ -4563,6 +4565,12 @@ test(
             navigate,
             waitFor
           } = reviewedBrowser;
+          const browserHttpFailures = [];
+          cdp.on("Network.responseReceived", ({ response }) => {
+            if (response.status >= 400) browserHttpFailures.push({
+              pathname: new URL(response.url).pathname, status: response.status
+            });
+          });
 
           await navigate(
             `${browserServer.origin}/custom/#what-it-costs`
@@ -4602,6 +4610,30 @@ test(
             forms: 0
           });
 
+          // FIN-012 requires registration email-possession evidence before payment.
+          // Activate through the real HTTP path; only mailbox delivery is local/fake.
+          await navigate(`${browserServer.origin}/abracadabra/app/`);
+          await waitFor("Boolean(globalThis.SiteSourceryAbracadabraAPI)");
+          const pendingRegistration = await evaluate(`(async () => {
+            let sequence = 0;
+            globalThis.__coreRegistrationClient = globalThis
+              .SiteSourceryAbracadabraAPI.createClient({ baseUrl: "/api/v1",
+                idempotencyFactory: () => "core-registration-" + (++sequence) });
+            return globalThis.__coreRegistrationClient.register({
+              name: "J-02 Browser Customer",
+              organizationName: "J-02 Browser Customer Organization",
+              email: ${JSON.stringify(email)}, password: ${JSON.stringify(password)}
+            });
+          })()`, true);
+          assert.equal(pendingRegistration.verificationRequired, true);
+          const registrationMessage = registrationSink.readForTest(email)[0];
+          assert.ok(registrationMessage);
+          const registrationToken = decodeURIComponent(
+            new URL(registrationMessage.verificationUrl).hash.slice("#verify-registration=".length)
+          );
+          const verifiedCustomer = await evaluate(`globalThis.__coreRegistrationClient
+            .completeRegistration({ token: ${JSON.stringify(registrationToken)} })`, true);
+          assert.equal(verifiedCustomer.user.email, email);
           const operatorCsrf = "i".repeat(32);
           const invitationResponse = await fetch(
             new Request(
@@ -4622,9 +4654,8 @@ test(
                 body: JSON.stringify({
                   customerEmail: email,
                   customerName: "J-02 Browser Customer",
-                  organizationId: null,
-                  organizationName:
-                    "J-02 Browser Customer Organization",
+                  organizationId: verifiedCustomer.organization.id,
+                  organizationName: null,
                   projectName,
                   provenance: "direct_custom_inquiry",
                   site: { kind: "new_site" },
@@ -4664,7 +4695,7 @@ test(
                 ]
               )
             ).rows[0],
-            { users: 0, projects: 0, engagements: 0 }
+            { users: 1, projects: 0, engagements: 0 }
           );
 
           const appUrl =
@@ -4725,6 +4756,7 @@ test(
           assert.equal(claimResponse.status, 201);
           const activated = claimResponse.body;
           assert.equal(activated.user.email, email);
+          assert.equal(activated.user.id, verifiedCustomer.user.id);
           assert.equal(
             activated.organization.name,
             "J-02 Browser Customer Organization"
@@ -4814,6 +4846,7 @@ test(
                     ${JSON.stringify(projectId)},
                     quote.quoteId,
                     {
+                      purchaseTermsAccepted: true,
                       acceptedDisclosureDigest:
                         quote.disclosureDigest
                     }
@@ -4846,7 +4879,7 @@ test(
             );
             assert.equal(browserCommerce.quote.offerId, "spark_download");
             assert.deepEqual(browserCommerce.quote.price, {
-              amountMinor: 500,
+              amountMinor: 2000,
               currency: "USD",
               billing: "one_time",
               interval: null
@@ -4881,7 +4914,7 @@ test(
               ""
             );
             const metadata = {
-              schema: "sitesourcery_download_checkout_v2",
+              schema: "sitesourcery_download_checkout_v3",
               tenant_id: providerRequest.purpose.tenantId,
               customer_id: providerRequest.purpose.customerId,
               project_id: providerRequest.purpose.projectId,
@@ -4953,7 +4986,7 @@ test(
             assert.equal(
               paidReadback.project.project.entitlements[0].payment
                 .totalMinor,
-              500
+              2000
             );
             assert.equal(paidReadback.download.status, 200);
             assert.equal(
@@ -4996,7 +5029,7 @@ test(
                      and project_id = $2
                      and customer_user_id = $3
                      and payment_status = 'paid'
-                     and total_minor = 500) as receipts,
+                     and total_minor = 2000) as receipts,
                  (select count(*)::integer
                     from ss.commerce_v2_project_entitlements
                    where organization_id = $1
@@ -5017,6 +5050,142 @@ test(
               entitlements: 1
             });
 
+            // Support timestamps must not use the payment fixture's future clock:
+            // its database trigger stamps mutations with the real wall clock.
+            commerceV2ClockNow = new Date().toISOString();
+            // Continue the same paid customer/project through durable owner support.
+            // Correspondence remains digest-only; no mail provider is called.
+            const customerSupport = (pathname, body = null, commandId = null) =>
+              evaluate(`(async () => {
+                const body = ${JSON.stringify(body)};
+                const headers = {};
+                if (body) {
+                  const csrf = await (await fetch("/api/v1/csrf")).json();
+                  headers["X-CSRF-Token"] = csrf.csrfToken;
+                  headers["Content-Type"] = "application/json";
+                  headers["Idempotency-Key"] = ${JSON.stringify(commandId)};
+                }
+                const response = await fetch(${JSON.stringify(pathname)}, {
+                  method: body ? "POST" : "GET", credentials: "same-origin",
+                  headers, ...(body ? { body: JSON.stringify(body) } : {})
+                });
+                return { status: response.status, body: await response.json() };
+              })()`, true);
+            const requestAs = async (token, pathname, body = null, commandId = null) => {
+              const headers = {
+                Cookie: `ss_session=${token}; ss_csrf=${operatorCsrf}`
+              };
+              if (body) Object.assign(headers, {
+                Origin: browserServer.origin, "X-CSRF-Token": operatorCsrf,
+                "Content-Type": "application/json", "Idempotency-Key": commandId
+              });
+              const response = await fetch(browserServer.origin + pathname, {
+                method: body ? "POST" : "GET", headers,
+                ...(body ? { body: JSON.stringify(body) } : {})
+              });
+              return { status: response.status, body: await response.json() };
+            };
+            const opening = {
+              evidenceDigests: [commerceDigest("Synthetic download support request")],
+              organizationId: activated.organization.id, parentCaseId: null,
+              projectId, requestKind: "support", scopeKind: "project",
+              requesterReferenceDigest: commerceDigest(activated.user.id)
+            };
+            const opened = await customerSupport(
+              "/api/v1/support-cases", opening, "core-support-open-1"
+            );
+            assert.equal(opened.status, 201, JSON.stringify(opened.body));
+            assert.equal(opened.body.state, "open");
+            assert.equal(opened.body.scope.projectId, projectId);
+            assert.deepEqual(await customerSupport(
+              "/api/v1/support-cases", opening, "core-support-open-1"
+            ), opened);
+            const caseId = opened.body.id;
+            const operatorPath = `/api/v1/operator/support-cases/${caseId}`;
+            const operatorOrganizationId = otherRegistered.organization.id;
+            const queue = await requestAs(otherRegistered.sessionToken,
+              `/api/v1/operator/support-cases?operatorOrganizationId=${operatorOrganizationId}`);
+            assert.equal(queue.status, 200, JSON.stringify(queue.body));
+            assert.equal(queue.body.cases.find((item) => item.id === caseId)
+              .requesterUserId, activated.user.id);
+            const deniedOperator = await requestAs(sessionCookie.value,
+              `/api/v1/operator/support-cases?operatorOrganizationId=${activated.organization.id}`);
+            assert.equal(deniedOperator.status, 404);
+            assert.equal(deniedOperator.body.error.code, "SUPPORT_CASE_UNAVAILABLE");
+            const foreignRead = await requestAs(otherRegistered.sessionToken,
+              `/api/v1/support-cases/${caseId}?organizationId=${otherRegistered.organization.id}`);
+            assert.equal(foreignRead.status, 404);
+            assert.equal(foreignRead.body.error.code, "SUPPORT_CASE_UNAVAILABLE");
+            let supportRevision = opened.body.revision;
+            const ownerStep = async (suffix, fields) => {
+              const result = await requestAs(otherRegistered.sessionToken,
+                `${operatorPath}/${suffix}`,
+                { operatorOrganizationId, expectedRevision: supportRevision, ...fields },
+                `core-support-${suffix}-1`);
+              assert.equal(result.status, 200, JSON.stringify(result.body));
+              assert.equal(result.body.revision, supportRevision + 1);
+              supportRevision = result.body.revision;
+              return result;
+            };
+            await ownerStep("assignment", { assignedOperatorId: otherActor.userId });
+            await ownerStep("deadline", {
+              basisDigest: commerceDigest("Synthetic support response deadline"),
+              responseDueAt: fromNow(24 * 60 * 60 * 1000)
+            });
+            await ownerStep("review", {});
+            const responseDigest = commerceDigest("Synthetic owner response recorded");
+            const responseRevision = supportRevision;
+            const responded = await ownerStep("response", { responseDigest });
+            assert.equal(responded.body.state, "responded");
+            assert.deepEqual(await requestAs(otherRegistered.sessionToken,
+              `${operatorPath}/response`, {
+                operatorOrganizationId, expectedRevision: responseRevision, responseDigest
+              }, "core-support-response-1"), responded);
+            const customerCase = await customerSupport(
+              `/api/v1/support-cases/${caseId}?organizationId=${activated.organization.id}`);
+            assert.equal(customerCase.status, 200);
+            assert.equal(customerCase.body.state, "responded");
+            assert.equal(customerCase.body.decision.digest, responseDigest);
+            assert.equal(customerCase.body.deadline.status, "met");
+            assert.deepEqual(customerCase.body.audit.map((event) => event.kind),
+              ["opened", "assigned", "deadline_set", "review_started", "response_recorded"]);
+            assert.equal(Object.hasOwn(customerCase.body, "requesterReferenceDigest"), false);
+            const closed = await ownerStep("closure", {
+              closureReasonCode: "completed",
+              closureEvidenceDigest: commerceDigest("Synthetic support resolved")
+            });
+            assert.equal(closed.body.state, "closed");
+            // A fresh page must recover the paid project and closed case from
+            // durable state and the existing secure session, without another charge.
+            await navigate(appUrl);
+            await waitFor("Boolean(globalThis.SiteSourceryAbracadabraAPI)");
+            const reloaded = await evaluate(`(async () => {
+              globalThis.__siteSourceryJ02Client = globalThis
+                .SiteSourceryAbracadabraAPI.createClient({ baseUrl: "/api/v1" });
+              const project = await globalThis.__siteSourceryJ02Client.getProject(
+                ${JSON.stringify(projectId)});
+              const file = await fetch(project.project.entitlements[0].downloadUrl);
+              return { project, status: file.status, html: await file.text() };
+            })()`, true);
+            assert.equal(reloaded.status, 200);
+            assert.equal(reloaded.html, paidReadback.download.html);
+            assert.equal(reloaded.project.project.entitlements[0].payment.receiptId,
+              paidReadback.project.project.entitlements[0].payment.receiptId);
+            const reloadedCase = await customerSupport(
+              `/api/v1/support-cases/${caseId}?organizationId=${activated.organization.id}`);
+            assert.equal(reloadedCase.status, 200);
+            assert.equal(reloadedCase.body.state, "closed");
+            assert.equal(reloadedCase.body.decision.digest, responseDigest);
+            assert.equal(payment.calls.downloadCheckout.length,
+              providerCallBaseline.downloadCheckout + 1);
+
+            const caseRows = await pool.query(`select
+              (select count(*)::integer from ss.hosted_support_cases where id = $1) as cases,
+              (select count(*)::integer from ss.hosted_support_case_commands where case_id = $1) as commands,
+              (select count(*)::integer from ss.hosted_support_case_events where case_id = $1) as events`, [caseId]);
+            assert.deepEqual(caseRows.rows[0], { cases: 1, commands: 6, events: 6 });
+            t.diagnostic("C2: same customer/project $20 paid receipt, HTML delivery, owner support open/replay/assignment/deadline/response/replay/closure and foreign-customer denials passed; providers fake.");
+
             const paymentIntentId =
               `pi_test_download_${checkoutNumber}`;
             const partialRefund = stripeEvent(
@@ -5027,7 +5196,7 @@ test(
                 livemode: false,
                 payment_intent: paymentIntentId,
                 currency: "usd",
-                amount: 500,
+                amount: 2000,
                 amount_refunded: 100,
                 refunded: false
               }
@@ -5064,8 +5233,8 @@ test(
                 livemode: false,
                 payment_intent: paymentIntentId,
                 currency: "usd",
-                amount: 500,
-                amount_refunded: 500,
+                amount: 2000,
+                amount_refunded: 2000,
                 refunded: true
               }
             );
@@ -5176,7 +5345,27 @@ test(
               `new Promise((resolve) => setTimeout(resolve, 100))`,
               true
             );
-            assert.deepEqual([...new Set(browserErrors)], []);
+            // The narrow composition intentionally leaves these adjacent products
+            // held/unmounted. Account reload probes them; no other failed request
+            // or JavaScript error is accepted as part of this proof.
+            assert.deepEqual([...new Set(browserHttpFailures.map(
+              ({ status, pathname }) => `${status} ${pathname}`
+            ))].sort(), [
+              "403 /api/v1/operator/custom-services/assessment-requests",
+              "404 /api/v1/care",
+              "404 /api/v1/responder",
+              "503 /api/v1/operator/custom-services/assessment-jobs",
+              "503 /api/v1/operator/custom-services/custom-build-jobs",
+              "503 /api/v1/operator/custom-services/custom-build-opportunities"
+            ]);
+            const expectedHttpMessages = new Set([
+              "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+              "Failed to load resource: the server responded with a status of 404 (Not Found)",
+              "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+            ]);
+            assert.deepEqual([...new Set(browserErrors)].filter(
+              (message) => !expectedHttpMessages.has(message)
+            ), []);
           }
 
         } finally {
@@ -6406,7 +6595,7 @@ test(
           const browserDownloadPurpose =
             browserDownloadRequest.purpose;
           const browserDownloadMetadata = {
-            schema: "sitesourcery_download_checkout_v2",
+            schema: "sitesourcery_download_checkout_v3",
             tenant_id:
               browserDownloadPurpose.tenantId,
             customer_id:
@@ -6493,7 +6682,7 @@ test(
           assert.equal(
             downloadReturnState.project.entitlements[0]
               .payment.totalMinor,
-            500
+            2000
           );
           const downloadedHtml = await evaluate(
             `(async () => {
@@ -6634,6 +6823,325 @@ test(
           }
           await browserServer.close();
         }
+      }
+    );
+    // This dispute deliberately holds all new Download Checkouts. Run it after
+    // purchase journeys; keep the old event time to cover delayed delivery.
+    const gateBeforeDispute = (await pool.query(
+      "select state, revision, state_changed_at from ss.commerce_v2_download_checkout_gate"
+    )).rows[0];
+    assert.equal(gateBeforeDispute.state, "open");
+    const postRevocationDispute = stripeEvent(
+      "evt_test_download_dispute_after_revoked_1",
+      "charge.dispute.created",
+      {
+        id: "dp_test_download_after_revoked_1",
+        livemode: false,
+        payment_intent: "pi_test_download_1",
+        currency: "usd",
+        amount: 2000,
+        status: "needs_response"
+      }
+    );
+    assert.deepEqual(
+      await stripeWebhook.ingestStripeWebhook({
+        rawBody: rawEvent(postRevocationDispute),
+        signature: "contract-signature-valid"
+      }),
+      {
+        status: "processed",
+        projectId,
+        entitlementId:
+          paidProject.project.entitlements[0].id,
+        entitlementState: "revoked",
+        reason: "payment_fully_refunded"
+      }
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          `select prior_state, prior_reason,
+                  resulting_state, reason,
+                  result ->> 'reason' as result_reason
+             from ss.commerce_v2_download_reversal_events
+            where id = $1`,
+          [postRevocationDispute.id]
+        )
+      ).rows,
+      [
+        {
+          prior_state: "revoked",
+          prior_reason: "payment_fully_refunded",
+          resulting_state: "revoked",
+          reason: "payment_dispute_open",
+          result_reason: "payment_fully_refunded"
+        }
+      ]
+    );
+    assert.deepEqual(
+      (
+        await service.getProject(actor, projectId)
+      ).project.entitlements,
+      []
+    );
+
+    const gateAfterDispute = (await pool.query(`select state, revision::integer as revision,
+      state_changed_at >= $1::timestamptz as monotonic
+      from ss.commerce_v2_download_checkout_gate`,
+      [gateBeforeDispute.state_changed_at])).rows[0];
+    assert.deepEqual(gateAfterDispute, {
+      state: "held", revision: Number(gateBeforeDispute.revision) + 1, monotonic: true
+    });
+    assert.ok(Date.parse(NOW) < new Date(gateBeforeDispute.state_changed_at).getTime());
+    assert.deepEqual(await stripeWebhook.ingestStripeWebhook({
+      rawBody: rawEvent(postRevocationDispute), signature: "contract-signature-valid"
+    }), { status: "processed", projectId,
+      entitlementId: paidProject.project.entitlements[0].id,
+      entitlementState: "revoked", reason: "payment_fully_refunded" });
+    assert.equal((await pool.query(
+      "select count(*)::integer as count from ss.commerce_v2_download_gate_transitions"
+    )).rows[0].count, 1);
+    const heldProject = await service.createProject(actor, organizationId, {
+      name: "New purchase after dispute", legalAcceptance: projectLegalAcceptance,
+      visibility: "public", address: { kind: "licensed", label: "post-dispute-proof" },
+      commandId: "project-create-after-dispute"
+    });
+    const heldProjectId = heldProject.project.id;
+    await service.saveDraft(actor, heldProjectId, {
+      rawFacts, expectedRevision: 1, commandId: "draft-after-dispute"
+    });
+    const heldVersion = await service.createVersion(actor, heldProjectId, {
+      rawFacts, previewDigest: compiled.artifactDigest, reviewAttested: true,
+      commandId: "version-after-dispute"
+    });
+    await service.markVersionReady(actor, heldProjectId, heldVersion.version.id,
+      { commandId: "ready-after-dispute" });
+    await service.acceptVersion(actor, heldProjectId, heldVersion.version.id,
+      { commandId: "accept-after-dispute" });
+    const heldQuote = await downloadCommerce.createQuote(actor, heldProjectId, {
+      versionId: heldVersion.version.id, commandId: "download-quote-after-dispute"
+    });
+    const effectsBeforeHeldAttempt = payment.calls.downloadCheckout.length;
+    await assert.rejects(downloadCommerce.prepareCheckout(actor, heldProjectId, heldQuote.quoteId, {
+      ...downloadRequestEvidence, purchaseTermsAccepted: true,
+      acceptedDisclosureDigest: heldQuote.disclosureDigest,
+      commandId: "download-checkout-after-dispute"
+    }), { code: "COMMERCE_V2_DOWNLOAD_CHECKOUT_HELD", status: 503 });
+    assert.equal(payment.calls.downloadCheckout.length, effectsBeforeHeldAttempt);
+    const recordedDispute = (await pool.query(`select provider_created_at
+      from ss.commerce_v2_download_reversal_events where id = $1`,
+      [postRevocationDispute.id])).rows[0];
+    assert.equal(recordedDispute.provider_created_at.toISOString(), NOW);
+    t.diagnostic("C2: delayed dispute held Checkout once without restoring refunded entitlement; original provider event time retained.");
+    await t.test(
+      "paid-project deletion removes content and retains payment evidence",
+      async () => {
+        const evidenceTables = [
+          "commerce_v2_commands", "commerce_v2_download_quotes",
+          "commerce_v2_checkout_preparations", "commerce_v2_download_dispatches",
+          "commerce_v2_download_stripe_events", "commerce_v2_download_payment_receipts",
+          "commerce_v2_project_entitlements", "commerce_v2_download_reversal_events",
+          "commerce_v2_download_checkout_attempts", "commerce_v2_download_access_events",
+          "commerce_v2_download_fraud_warning_events", "commerce_v2_download_dispute_dossiers"
+        ];
+        async function evidenceFor(id) {
+          const result = {};
+          for (const table of evidenceTables) {
+            result[table] = (await pool.query(`select count(*)::integer as count,
+              coalesce(jsonb_agg(to_jsonb(row) order by to_jsonb(row)::text), '[]')::text as rows
+              from ss.${table} row where organization_id = $1 and project_id = $2`,
+              [organizationId, id])).rows[0];
+          }
+          return result;
+        }
+        const paidEvidence = await evidenceFor(projectId);
+        const heldEvidence = await evidenceFor(heldProjectId);
+        assert.ok(paidEvidence.commerce_v2_download_payment_receipts.count > 0);
+        assert.ok(paidEvidence.commerce_v2_download_access_events.count > 0);
+        assert.ok(paidEvidence.commerce_v2_download_dispute_dossiers.count > 0);
+        assert.equal(heldEvidence.commerce_v2_download_payment_receipts.count, 0);
+        assert.equal(heldEvidence.commerce_v2_download_checkout_attempts.count, 1);
+        if (DELETION_UPGRADE_PROOF) {
+          await pool.query(await readFile(new URL(RETAINED_PURGE_MIGRATION, MIGRATIONS), "utf8"));
+          awaitingRetentionUpgrade = false;
+          assert.deepEqual(await evidenceFor(projectId), paidEvidence);
+          assert.deepEqual(await evidenceFor(heldProjectId), heldEvidence);
+          t.diagnostic("C2 deletion: migration 150 upgraded populated 102-file schema without changing financial/risk rows.");
+        }
+        assert.equal((await authority.assertReady()).ready, true);
+        assert.deepEqual((await pool.query(`select
+          count(*)::integer as count from pg_trigger
+          where tgfoid = 'ss.require_download_live_version()'::regprocedure
+            and not tgisinternal`)).rows[0], { count: 3 });
+        // A setting alone is not a seal; ordinary deletion and key rewriting
+        // must retain the same referential protection as the former FKs.
+        for (const forgedSetting of [false, true]) {
+          await assert.rejects(authority.service({ actorKind: "system" }, async client => {
+            if (forgedSetting) await client.query(
+              "select set_config('app.terminal_purge_project_id', $1, true)", [projectId]);
+            await client.query("delete from ss.site_versions where id = $1", [version.version.id]);
+          }), { code: "23503", message: "referenced Download version requires sealed terminal deletion" });
+        }
+        await assert.rejects(authority.service({ actorKind: "system" }, client => client.query(
+          "update ss.site_versions set id = $2 where id = $1",
+          [version.version.id, randomUUID()]
+        )), { code: "23503" });
+        await assert.rejects(service.deleteProject(otherActor, projectId, {
+          commandId: "delete-wrong-tenant-0001"
+        }), { code: "FORBIDDEN", status: 403 });
+        const pendingEvidence = await evidenceFor(expiryProjectId);
+        await assert.rejects(service.deleteProject(actor, expiryProjectId, {
+          commandId: "delete-unresolved-payment-0001"
+        }), { code: "PROJECT_PAYMENT_RECONCILIATION_REQUIRED", status: 409 });
+        assert.deepEqual(await evidenceFor(expiryProjectId), pendingEvidence);
+        assert.equal((await pool.query("select lifecycle from ss.projects where id = $1",
+          [expiryProjectId])).rows[0].lifecycle, "active");
+        assert.equal((await pool.query("select count(*)::integer as count from ss.deletion_requests where project_id = $1",
+          [expiryProjectId])).rows[0].count, 0);
+
+        // The unpaid custom-domain project exercises ordinary quote/content
+        // purge as well as the two retained-evidence cases.
+        await service.saveDraft(actor, ownedProjectId, {
+          rawFacts, expectedRevision: 1, commandId: "delete-unpaid-draft"
+        });
+        const unpaidVersion = await service.createVersion(actor, ownedProjectId, {
+          rawFacts, previewDigest: compiled.artifactDigest, reviewAttested: true,
+          commandId: "delete-unpaid-version"
+        });
+        await service.markVersionReady(actor, ownedProjectId, unpaidVersion.version.id,
+          { commandId: "delete-unpaid-ready" });
+        await service.acceptVersion(actor, ownedProjectId, unpaidVersion.version.id,
+          { commandId: "delete-unpaid-accept" });
+        await downloadCommerce.createQuote(actor, ownedProjectId, {
+          versionId: unpaidVersion.version.id, commandId: "delete-unpaid-quote"
+        });
+        const selectedProjects = [projectId, heldProjectId, ownedProjectId];
+        const providerCallSnapshot = () => Object.fromEntries(Object.entries(payment.calls)
+          .map(([kind, calls]) => [kind, { count: calls.length, digest: createHash("sha256").update(JSON.stringify(calls)).digest("hex") }]));
+        const providerCallsBefore = providerCallSnapshot();
+        for (const id of selectedProjects) {
+          const input = { commandId: `delete-retained-${id}` };
+          const deleted = await service.deleteProject(actor, id, input);
+          assert.equal(deleted.state, "purging");
+          assert.equal(deleted.deleted, false);
+          assert.deepEqual(await service.deleteProject(actor, id, input), deleted);
+          const row = (await pool.query(`select project.lifecycle, project.name,
+            serving.state as serving, request.removal_counts
+            from ss.projects project join ss.project_serving_projection serving on serving.project_id = project.id
+            join ss.deletion_requests request on request.project_id = project.id
+            where project.id = $1`, [id])).rows[0];
+          assert.equal(row.lifecycle, "deleting");
+          assert.equal(row.name, null);
+          assert.equal(row.serving, "dark");
+          assert.ok(row.removal_counts.versions > 0);
+          if (id !== ownedProjectId) {
+            assert.equal(row.removal_counts.commerceV2DownloadQuotes, 0);
+            assert.ok(row.removal_counts.retainedDownloadEvidence.commerceV2DownloadCheckoutAttempts > 0);
+          } else {
+            assert.equal(row.removal_counts.commerceV2DownloadQuotes, 1);
+            assert.equal(row.removal_counts.retainedDownloadEvidence, undefined);
+            const unpaidEvidence = await evidenceFor(id);
+            assert.ok(Object.values(unpaidEvidence).every(row => row.count === 0));
+          }
+          for (const table of ["site_versions", "artifacts", "fact_sets", "project_drafts",
+            "support_messages", "support_tickets", "export_requests"]) {
+            assert.equal((await pool.query(`select count(*)::integer as count from ss.${table}
+              where project_id = $1`, [id])).rows[0].count, 0, `${table} content erased`);
+          }
+        }
+        assert.deepEqual(await evidenceFor(projectId), paidEvidence);
+        assert.deepEqual(await evidenceFor(heldProjectId), heldEvidence);
+        await assert.rejects(authority.service({ actorKind: "system" }, client => client.query(
+          "delete from ss.commerce_v2_download_checkout_attempts where project_id = $1", [projectId]
+        )), { code: "55000" });
+        await assert.rejects(downloadCommerce.download(actor, projectId, version.version.id,
+          { ...downloadRequestEvidence, requestId: "deleted-download-denied" }),
+          error => error.status === 404 || error.status === 409);
+        await assert.rejects(downloadCommerce.createQuote(actor, projectId, {
+          versionId: version.version.id, commandId: "deleted-quote-denied"
+        }), error => error.status === 404 || error.status === 409);
+
+        const lifecycle = createPostgresProjectLifecycleRepository({ authority });
+        const executor = createProjectLifecycleExecutor({
+          objectStore: exportStore, publicationPort: serviceOptions.publicationPort
+        });
+        const jobs = (await pool.query(`select job_type, payload from ss.lifecycle_jobs
+          where project_id = any($1::uuid[])`, [selectedProjects])).rows;
+        assert.ok(jobs.some(job => job.job_type === "delete_blob"));
+        assert.ok(jobs.some(job => job.job_type === "unpublish_project"));
+        const existingExports = (await exportStore.backupManifest()).entries;
+        assert.ok(existingExports.some(object => jobs.some(job =>
+          job.job_type === "delete_blob" && job.payload.objectKey === object.key)),
+          "at least one queued export object exists before deletion");
+        const workerId = "project-lifecycle-deletion-proof";
+        const observedAt = fromNow(5 * 60 * 1000);
+        let completed = 0;
+        for (; completed < 50; completed += 1) {
+          const selected = await lifecycle.claimNext({ workerId, observedAt, leaseSeconds: 300 });
+          if (!selected) break;
+          assert.ok(selectedProjects.includes(selected.projectId), "only approved local deletion jobs");
+          const result = await executor.execute(selected);
+          const completion = { jobId: selected.jobId, fence: selected.fence, workerId, observedAt, result };
+          assert.equal((await lifecycle.completeClaim(completion)).status, "succeeded");
+          await assert.rejects(lifecycle.completeClaim(completion), {
+            code: "PROJECT_LIFECYCLE_LEASE_LOST", status: 409
+          });
+        }
+        assert.equal(completed, jobs.length);
+        for (const job of jobs.filter(job => job.job_type === "delete_blob")) {
+          assert.equal((await exportStore.delete({ key: job.payload.objectKey })).deleted, false,
+            "worker already removed the real local export object");
+        }
+        for (const job of jobs.filter(job => job.job_type === "unpublish_project")) {
+          const binding = tenantRuntime.control.lookup(job.payload.hostname);
+          assert.ok(!binding || binding.status === "dark", "publication is dark after the worker");
+        }
+        for (const id of selectedProjects) {
+          const final = (await pool.query(`select project.lifecycle, project.name,
+            request.state, tombstone.removal_counts
+            from ss.projects project join ss.deletion_requests request on request.project_id = project.id
+            join ss.project_deletion_tombstones tombstone on tombstone.project_id = project.id
+            where project.id = $1`, [id])).rows[0];
+          assert.equal(final.lifecycle, "deleted");
+          assert.equal(final.name, null);
+          assert.equal(final.state, "completed");
+          assert.equal(final.removal_counts.retainedDownloadEvidence?.commerceV2DownloadPaymentReceipts ?? 0,
+            id === projectId ? paidEvidence.commerce_v2_download_payment_receipts.count : 0);
+          assert.deepEqual(await service.deleteProject(actor, id, { commandId: `delete-final-${id}` }),
+            { deleted: true, projectId: id, state: "completed" });
+        }
+        assert.deepEqual(await evidenceFor(projectId), paidEvidence);
+        assert.deepEqual(await evidenceFor(heldProjectId), heldEvidence);
+        assert.deepEqual(providerCallSnapshot(), providerCallsBefore, "deletion creates no provider effects");
+        const retainedReversalResult = { status: "processed", projectId,
+          entitlementId: paidProject.project.entitlements[0].id,
+          entitlementState: "revoked", reason: "payment_fully_refunded" };
+        assert.deepEqual(await stripeWebhook.ingestStripeWebhook({
+          rawBody: rawEvent(postRevocationDispute), signature: "contract-signature-valid"
+        }), retainedReversalResult);
+        assert.deepEqual(await evidenceFor(projectId), paidEvidence);
+        const lateDispute = stripeEvent("evt_test_download_dispute_after_deletion_1",
+          "charge.dispute.closed", { ...postRevocationDispute.data.object, status: "won" });
+        assert.deepEqual(await stripeWebhook.ingestStripeWebhook({
+          rawBody: rawEvent(lateDispute), signature: "contract-signature-valid"
+        }), retainedReversalResult);
+        const afterLateDispute = await evidenceFor(projectId);
+        for (const table of evidenceTables) {
+          if (["commerce_v2_download_reversal_events", "commerce_v2_download_dispute_dossiers"].includes(table)) {
+            assert.equal(afterLateDispute[table].count, paidEvidence[table].count + 1);
+          } else {
+            assert.deepEqual(afterLateDispute[table], paidEvidence[table]);
+          }
+        }
+        await assert.rejects(downloadCommerce.download(actor, projectId, version.version.id,
+          { ...downloadRequestEvidence, requestId: "deleted-after-late-dispute" }),
+          error => error.status === 404 || error.status === 409);
+        const { webhook: beforeWebhook, ...beforeEffects } = providerCallsBefore;
+        const { webhook: afterWebhook, ...afterEffects } = providerCallSnapshot();
+        assert.deepEqual(afterEffects, beforeEffects);
+        assert.equal(afterWebhook.count, beforeWebhook.count + 2,
+          "only the two explicitly supplied local webhook envelopes were verified");
+        t.diagnostic(`C2 deletion: paid, risk-held, and unpaid projects completed; ${completed} real local lifecycle jobs; financial evidence unchanged; pending payment and cross-tenant deletion denied.`);
       }
     );
     await authority.close();

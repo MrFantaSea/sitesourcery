@@ -171,6 +171,7 @@
         "bindingSha256"
       ],
       "properties": {
+        "deploymentProfile": { "const": "hq-local-v1" },
         "schema": {
           "const": "sitesourcery.release-epoch-successor-input/v1"
         },

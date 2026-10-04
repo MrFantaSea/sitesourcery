@@ -1,3 +1,4 @@
+import { deploymentProfileFields } from "./origin-deployment-profiles.mjs";
 import { execFile } from "node:child_process";
 import { constants as fileConstants } from "node:fs";
 import {
@@ -839,6 +840,7 @@ export async function verifyCiReleaseGeneratedOutput({
 export async function createCiReleaseSuccessorInputFromRepository({
   projectRoot,
   epochId,
+  deploymentProfile,
   rollback,
   gitRunner = defaultGitRunner
 }) {
@@ -874,7 +876,8 @@ export async function createCiReleaseSuccessorInputFromRepository({
 
   const snapshot = await collectOriginRepositorySnapshot({
     projectRoot: absoluteRoot,
-    layout: CI_RELEASE_GENERATION_LAYOUT
+    layout: CI_RELEASE_GENERATION_LAYOUT,
+    deploymentProfile
   });
   const legalV4Pages = await collectOriginTreeManifest({
     projectRoot: absoluteRoot,
@@ -884,6 +887,7 @@ export async function createCiReleaseSuccessorInputFromRepository({
   const originReleaseInput = createOriginReleaseInput({
     releaseId: initial.head,
     epoch: {
+      ...(deploymentProfile === undefined ? {} : deploymentProfileFields({ deploymentProfile })),
       schema: ORIGIN_SUCCESSOR_EPOCH_SCHEMA,
       epochId,
       supersedes: {

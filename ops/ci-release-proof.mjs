@@ -450,9 +450,9 @@ function parseArgs(arguments_) {
   return { command, values };
 }
 
-function exactFlags(values, flags) {
+function exactFlags(values, flags, optional = []) {
   if (
-    JSON.stringify([...values.keys()].sort()) !==
+    JSON.stringify([...values.keys()].filter(flag => !optional.includes(flag)).sort()) !==
     JSON.stringify([...flags].sort())
   ) {
     fail("CI release proof command contains missing or unexpected flags.");
@@ -569,7 +569,7 @@ export async function runCiReleaseProofCli({
       "--rollback-commit",
       "--rollback-tree",
       "--rollback-artifact-root"
-    ]);
+    ], ["--deployment-profile"]);
     const projectRoot = await requireDirectory(
       values.get("--root"),
       "CI successor candidate root"
@@ -577,6 +577,7 @@ export async function runCiReleaseProofCli({
     const generated = await createCiReleaseSuccessorInputFromRepository({
       projectRoot,
       epochId: values.get("--epoch-id"),
+      deploymentProfile: values.get("--deployment-profile"),
       rollback: {
         predecessorCommitSha: values.get("--rollback-commit"),
         predecessorTreeSha: values.get("--rollback-tree"),

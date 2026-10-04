@@ -134,6 +134,14 @@ test("runtime probe treats an intentional publication hold as healthy", async ()
   );
 });
 
+test("runtime probe uses the selected API port without moving the tenant probe", async () => {
+  const fake = probeFetch();
+  assert.equal((await probeRuntime({ fetchImpl: fake.fetchImpl, apiPort: 18988 })).ok, true);
+  assert.deepEqual(fake.calls.map(({ url }) => new URL(url).port), [
+    "18988", "18988", "18988", "8080", "8080"
+  ]);
+});
+
 test("runtime probe bounds each sequential request instead of sharing one cumulative timeout", async () => {
   const fake = probeFetch();
   const fetchImpl = async (value, options) => {

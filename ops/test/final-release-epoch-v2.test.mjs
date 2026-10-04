@@ -1,3 +1,4 @@
+import { originDeploymentProfile } from "../origin-deployment-profiles.mjs";
 import assert from "node:assert/strict";
 import {
   chmod,
@@ -31,7 +32,8 @@ import {
   readInstalledFinalReleaseEpochV2,
   releaseIdentityFromFinalEpochV2,
   validateInstalledFinalReleaseEpochV2Chain,
-  validateFinalReleaseEpochV2
+  validateFinalReleaseEpochV2,
+  validateOriginRuntimeBinding
 } from "../final-release-epoch-v2.mjs";
 import {
   ORIGIN_HELD_AUTHORITY,
@@ -88,9 +90,12 @@ function clone(value) {
 
 function epochFromSnapshot({
   sourceCommitSha = SOURCE_COMMIT,
-  sourceTreeSha = SOURCE_TREE
+  sourceTreeSha = SOURCE_TREE,
+  snapshot: selectedSnapshot = snapshot,
+  deploymentProfile
 } = {}) {
   return {
+    ...(deploymentProfile === undefined ? {} : { deploymentProfile }),
     schema: ORIGIN_SUCCESSOR_EPOCH_SCHEMA,
     epochId: "final-epoch-v2-fixture",
     supersedes: {
@@ -107,33 +112,33 @@ function epochFromSnapshot({
       commitSha: sourceCommitSha,
       treeSha: sourceTreeSha
     },
-    artifact: { manifestSha256: snapshot.artifact.sha256 },
-    units: { manifestSha256: snapshot.units.sha256 },
+    artifact: { manifestSha256: selectedSnapshot.artifact.sha256 },
+    units: { manifestSha256: selectedSnapshot.units.sha256 },
     environmentSchema: {
-      manifestSha256: snapshot.environmentSchema.sha256,
+      manifestSha256: selectedSnapshot.environmentSchema.sha256,
       classificationSha256:
-        snapshot.environmentSchema.classificationSha256
+        selectedSnapshot.environmentSchema.classificationSha256
     },
     worker: {
-      manifestSha256: snapshot.worker.sha256,
-      contractSha256: snapshot.worker.contractSha256
+      manifestSha256: selectedSnapshot.worker.sha256,
+      contractSha256: selectedSnapshot.worker.contractSha256
     },
     migration: {
-      count: snapshot.migration.count,
-      latest: snapshot.migration.latest,
-      manifestSha256: snapshot.migration.sha256
+      count: selectedSnapshot.migration.count,
+      latest: selectedSnapshot.migration.latest,
+      manifestSha256: selectedSnapshot.migration.sha256
     },
     legal: {
-      authorityDigest: snapshot.legal.authorityDigest,
-      privacyVersion: snapshot.legal.privacyVersion,
-      privacySha256: snapshot.legal.privacySha256,
-      privacyByteCount: snapshot.legal.privacyByteCount,
-      websiteTermsVersion: snapshot.legal.websiteTermsVersion,
-      websiteTermsSha256: snapshot.legal.websiteTermsSha256,
-      websiteTermsByteCount: snapshot.legal.websiteTermsByteCount,
-      manifestSha256: snapshot.legal.sha256
+      authorityDigest: selectedSnapshot.legal.authorityDigest,
+      privacyVersion: selectedSnapshot.legal.privacyVersion,
+      privacySha256: selectedSnapshot.legal.privacySha256,
+      privacyByteCount: selectedSnapshot.legal.privacyByteCount,
+      websiteTermsVersion: selectedSnapshot.legal.websiteTermsVersion,
+      websiteTermsSha256: selectedSnapshot.legal.websiteTermsSha256,
+      websiteTermsByteCount: selectedSnapshot.legal.websiteTermsByteCount,
+      manifestSha256: selectedSnapshot.legal.sha256
     },
-    ingress: { manifestSha256: snapshot.ingress.sha256 },
+    ingress: { manifestSha256: selectedSnapshot.ingress.sha256 },
     rollback: {
       predecessorCommitSha: PREDECESSOR_COMMIT,
       predecessorTreeSha: PREDECESSOR_TREE,
@@ -255,12 +260,12 @@ function ciFinalReceipt(input) {
   });
 }
 
-function seal(origin = originInput()) {
+function seal(origin = originInput(), selectedSnapshot = snapshot) {
   return createOriginSeal({
     releaseInput: origin,
     observed: {
       source: clone(origin.epoch.source),
-      ...clone(snapshot)
+      ...clone(selectedSnapshot)
     }
   });
 }
@@ -272,7 +277,7 @@ function readback(selectedSeal, identity = null) {
     identity:
       identity ?? expectedOriginInstalledIdentity(selectedSeal),
     worker: expectedOriginInstalledWorker(selectedSeal),
-    listeners: clone(ORIGIN_LOOPBACK_EXPECTATIONS),
+    listeners: clone(originDeploymentProfile(selectedSeal.deploymentProfile).listeners),
     authority: clone(ORIGIN_HELD_AUTHORITY)
   });
 }
@@ -622,4 +627,25 @@ test("v2 schema stays generic while every retained v1 authority byte remains imm
     );
     assert.equal(sha256Bytes(bytes), expected, relativePath);
   }
+});
+
+
+test("HQ candidate binds CI, final epoch, exact listener and actual release/data placement", async () => {
+  const deploymentProfile = "hq-local-v1";
+  const hqSnapshot = await collectOriginRepositorySnapshot({ projectRoot, layout, deploymentProfile });
+  const origin = originInput({ snapshot: hqSnapshot, deploymentProfile });
+  const input = successorInput({ origin });
+  const selectedSeal = seal(origin, hqSnapshot);
+  const selectedReadback = readback(selectedSeal);
+  const epoch = finalEpoch({ input, selectedSeal, selectedReadback, ciReceipt: ciFinalReceipt(input) });
+  assert.deepEqual(validateInstalledFinalReleaseEpochV2Chain({ epoch, originSeal: selectedSeal, installedReadback: selectedReadback }), epoch);
+  const profile = originDeploymentProfile(deploymentProfile);
+  const runtimeBinding = { listener: profile.listeners.hostedApi, repositoryRoot: `${profile.releaseBase}/${SOURCE_COMMIT}`, dataRoot: profile.dataRoot };
+  const verify = (binding) => validateOriginRuntimeBinding({ originSeal: selectedSeal, installedReadback: selectedReadback, runtimeBinding: binding });
+  assert.equal(verify(runtimeBinding), true);
+  for (const drift of [
+    { listener: "127.0.0.1:8788" }, { listener: "0.0.0.0:18988" },
+    { repositoryRoot: `${profile.releaseBase}/${"b".repeat(40)}` },
+    { repositoryRoot: profile.currentRoot }, { dataRoot: "/var/lib/sitesourcery" }
+  ]) assert.throws(() => verify({ ...runtimeBinding, ...drift }), /does not match the installed release/u);
 });

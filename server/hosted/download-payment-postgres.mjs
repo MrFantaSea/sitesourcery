@@ -342,12 +342,12 @@ async function holdDownloadCheckoutGate(
     signalType,
     signalId,
     evidenceDigest,
-    reason,
-    changedAt
+    reason
   }
 ) {
   const gate = await client.query(
-    `select state, revision
+    `select state, revision,
+            greatest(clock_timestamp(), state_changed_at)::text as observed_at
        from ss.commerce_v2_download_checkout_gate
       where singleton = true
       for update`
@@ -361,6 +361,9 @@ async function holdDownloadCheckoutGate(
   if (gate.rows[0].state === "held") {
     return false;
   }
+  // Provider events may arrive late. The gate changes when we observe the
+  // signal; its original timestamp remains in the immutable event evidence.
+  const changedAt = gate.rows[0].observed_at;
   await client.query(
     `insert into ss.commerce_v2_download_gate_transitions (
        prior_state, resulting_state, reason,
@@ -1981,8 +1984,7 @@ export function createPostgresDownloadPaymentRepository({
               signalId: event.eventId,
               evidenceDigest: event.payloadDigest,
               reason:
-                "stripe_actionable_early_fraud_warning",
-              changedAt: event.providerCreatedAt
+                "stripe_actionable_early_fraud_warning"
             });
             await storeDownloadDisputeDossier(client, {
               receiptId: receipt.receiptId,
@@ -2286,8 +2288,7 @@ export function createPostgresDownloadPaymentRepository({
               signalType: event.eventType,
               signalId: event.eventId,
               evidenceDigest: event.payloadDigest,
-              reason: "stripe_download_dispute_created",
-              changedAt: event.providerCreatedAt
+              reason: "stripe_download_dispute_created"
             });
           }
           if (event.eventType.startsWith("charge.dispute.")) {
@@ -2467,6 +2468,7 @@ export function createPostgresDownloadPaymentRepository({
                  entitlement.accepted_disclosure_digest,
                  entitlement.activated_at,
                  receipt.id as receipt_id,
+                 receipt.amount_minor,
                  receipt.tax_minor,
                  receipt.total_minor,
                  receipt.tax_mode,

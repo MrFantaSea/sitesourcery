@@ -1,0 +1,61 @@
+# PUBLICATION_HOLD — template only. Do not copy, enable, or start.
+
+[Unit]
+Description=Site Sourcery hosted API and sole publication writer
+After=local-fs.target network-online.target
+Wants=network-online.target
+RequiresMountsFor=/srv/sitesourcery-storage
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE
+
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=mrfantasea
+Group=mrfantasea
+WorkingDirectory=/home/mrfantasea/.local/share/sitesourcery-production/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/hosted.env
+ExecStartPre=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/assert-runtime.mjs
+ExecStartPre=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/ops/verify-final-release-epoch-v2.mjs --epoch ${SITESOURCERY_RELEASE_EPOCH_FILE} --epoch-sha256 ${SITESOURCERY_RELEASE_EPOCH_SHA256} --origin-seal ${SITESOURCERY_ORIGIN_SEAL_FILE} --origin-seal-sha256 ${SITESOURCERY_ORIGIN_SEAL_FILE_SHA256} --installed-readback ${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE} --installed-readback-sha256 ${SITESOURCERY_ORIGIN_INSTALLED_READBACK_FILE_SHA256}
+ExecStart=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/bin/server.mjs
+Restart=on-failure
+RestartSec=10s
+TimeoutStartSec=30s
+TimeoutStopSec=20s
+KillSignal=SIGTERM
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectClock=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+RemoveIPC=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+ReadOnlyPaths=/home/mrfantasea/.local/share/sitesourcery-production/current /etc/sitesourcery
+ReadWritePaths=/srv/sitesourcery-storage/production/app
+RuntimeDirectory=sitesourcery
+RuntimeDirectoryMode=0750
+MemoryMax=1G
+CPUQuota=100%
+LimitNOFILE=8192
+TasksMax=256
+
+[Install]
+WantedBy=multi-user.target

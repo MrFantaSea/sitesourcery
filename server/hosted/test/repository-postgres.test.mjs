@@ -93,6 +93,7 @@ function readyRow(overrides = {}) {
     commerce_v2_entitlements_ready: true,
     commerce_v2_reversals_ready: true,
     commerce_v2_settlement_contract_ready: true,
+    commerce_v2_retained_purge_contract_ready: true,
     alakazam_subscriptions_ready: true,
     alakazam_quotes_ready: true,
     alakazam_dispatches_ready: true,
@@ -144,6 +145,13 @@ function readyRow(overrides = {}) {
     ...overrides
   };
 }
+
+test("canonical readiness rejects the pre-retention deletion schema", async () => {
+  const authority = createCanonicalPostgresAuthority({
+    pool: fakePool(readyRow({ commerce_v2_retained_purge_contract_ready: false }))
+  });
+  assert.deepEqual((await authority.readiness()).missing, ["commerce_v2_retained_purge_contract"]);
+});
 
 test("canonical readiness rejects missing migrations and any ss_hosted shadow", async () => {
   let authority = createCanonicalPostgresAuthority({

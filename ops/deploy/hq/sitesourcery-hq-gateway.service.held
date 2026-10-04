@@ -1,0 +1,38 @@
+# HELD CANDIDATE: no Cloudflare tunnel is started by this unit.
+[Unit]
+Description=Site Sourcery HQ loopback gateway and static website
+After=sitesourcery-hq-api.service
+Requires=sitesourcery-hq-api.service
+ConditionPathExists=/etc/sitesourcery/RUNTIME_APPROVED
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=mrfantasea
+Group=mrfantasea
+ExecStartPre=/home/mrfantasea/.local/opt/sitesourcery/caddy-2.11.4/caddy validate --config /etc/sitesourcery/Caddyfile.hq --adapter caddyfile
+ExecStartPre=/usr/bin/curl --fail --silent --show-error --max-time 15 http://127.0.0.1:18988/api/v1/ready
+ExecStart=/home/mrfantasea/.local/opt/sitesourcery/caddy-2.11.4/caddy run --config /etc/sitesourcery/Caddyfile.hq --adapter caddyfile
+Restart=on-failure
+RestartSec=10s
+TimeoutStopSec=30s
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=yes
+CapabilityBoundingSet=
+MemoryMax=1G
+CPUQuota=100%
+TasksMax=128
+ReadOnlyPaths=/home/mrfantasea/.local/share/sitesourcery-production/current /etc/sitesourcery
+
+[Install]
+WantedBy=multi-user.target

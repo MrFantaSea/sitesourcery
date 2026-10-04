@@ -116,6 +116,8 @@ const READINESS_QUERY = `
       as commerce_v2_reversals_ready,
     to_regprocedure('ss.hosted_runtime_contract_v22()') is not null
       as commerce_v2_settlement_contract_ready,
+    to_regprocedure('ss.hosted_runtime_contract_v150()') is not null
+      as commerce_v2_retained_purge_contract_ready,
     to_regclass('ss.alakazam_subscriptions') is not null
       as alakazam_subscriptions_ready,
     to_regclass('ss.alakazam_change_quotes') is not null

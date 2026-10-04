@@ -12,7 +12,7 @@ Every command below remains owner-gated.
   PG-OPS `workerReservedConnections`. API plus worker process budgets equal the
   unchanged configured total.
 - The exact process-purpose registry is `export`, `cancellation`,
-  `notification-mail`, `alakazam-fulfillment`,
+  `notification-mail`, `alakazam-fulfillment`, `alakazam-publication`,
   `alakazam-retained-lifecycle`, `responder-fulfillment`,
   `provider-reconciliation`, `responder-retention`, `project-lifecycle`,
   `domain-lifecycle`, and `care-lifecycle`. Unknown, duplicate, reordered,
@@ -85,6 +85,11 @@ Independent monitoring and dead-man timers intentionally remain outside this
 worker process so a worker-process failure cannot disable its own detector.
 Their held units, timers, readiness, alert delivery, and recovery proof are the
 W10 implementation; they must never be collapsed into this failure domain.
+
+The current Dell release alignment is described in
+[SITESOURCERY-WORKER-ALIGNMENT.md](SITESOURCERY-WORKER-ALIGNMENT.md). It reuses
+the installed API release and corrects the old FIN-010 worker selection without
+activating any job. Historical FIN-010/origin receipts remain historical.
 
 ## Held installation plan
 
