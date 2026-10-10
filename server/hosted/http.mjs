@@ -970,7 +970,9 @@ export function createHostedApi(
   }
   const readinessBoundary =
     createReadinessSnapshot({
-      check: loadServiceReadiness,
+      check: typeof service.coreReadiness === "function"
+        ? () => service.coreReadiness()
+        : loadServiceReadiness,
       ...(readinessPolicy ?? {})
     });
   const downloadBoundary =
@@ -1685,6 +1687,11 @@ export function createHostedApi(
     (() => `req_${randomToken(12)}`);
   const nextCsrfToken =
     typeof csrfTokens === "function" ? csrfTokens : () => randomToken(32);
+  // Local matrix validation stays bounded without probing remote features.
+  const matrixBoundary = createCapabilitiesSnapshot({
+    load: () => capabilityProcessMatrix?.snapshot() ?? null,
+    ...(capabilitiesPolicy ?? {})
+  });
   const capabilitiesBoundary =
     createCapabilitiesSnapshot({
       async load() {
@@ -2196,12 +2203,12 @@ export function createHostedApi(
           const [readiness, capabilities] = await Promise.all([
             readinessBoundary.read(),
             strictCapabilityProcessMatrix
-              ? capabilitiesBoundary.read()
+              ? matrixBoundary.read()
               : null
           ]);
           const capabilityMatrix = strictCapabilityProcessMatrix
             ? capabilities?.ok === true
-              ? capabilities.value?.capabilityProcessMatrix ?? null
+              ? capabilities.value ?? null
               : null
             : null;
           const matrixReady = strictCapabilityProcessMatrix

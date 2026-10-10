@@ -4,6 +4,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  rm,
   symlink,
   writeFile
 } from "node:fs/promises";
@@ -189,4 +190,16 @@ test("backup manifest and cleanup enumerate only exact private objects", async (
     key: saved.key
   });
   assert.deepEqual((await store.backupManifest()).entries, []);
+});
+
+test("absent export deletion handles missing parents and rejects a substituted parent", async (t) => {
+  const root = await storeRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const store = await createPrivateExportObjectStore({ root });
+  const key = store.key(identity);
+  assert.deepEqual(await store.delete({ key }), { deleted: false, key });
+  const outside = path.join(root, "outside");
+  await mkdir(outside);
+  await symlink(outside, path.join(root, "exports", identity.organizationId));
+  await assert.rejects(store.delete({ key }), { code: "OBJECT_PATH_UNSAFE" });
 });

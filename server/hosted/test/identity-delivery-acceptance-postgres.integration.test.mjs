@@ -67,6 +67,7 @@ test(
       max: 4
     });
     const now = new Date().toISOString();
+    const runId = randomUUID();
     const clock = { now: () => now };
     const registrationSends = [];
     const recoverySends = [];
@@ -105,7 +106,7 @@ test(
                   accepted: true,
                   provider: "mail-final-fixture",
                   providerMessageId:
-                    `registration-${registrationSends.length}`,
+                    `registration-${runId}-${registrationSends.length}`,
                   idempotencyKey: input.idempotencyKey,
                   payloadDigest: input.payloadDigest,
                   acceptedAt: now
@@ -127,7 +128,7 @@ test(
                 accepted: true,
                 provider: "mail-final-fixture",
                 providerMessageId:
-                  `recovery-${recoverySends.length}`,
+                  `recovery-${runId}-${recoverySends.length}`,
                 idempotencyKey: input.idempotencyKey,
                 payloadDigest: input.payloadDigest,
                 acceptedAt: now

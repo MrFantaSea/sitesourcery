@@ -304,6 +304,7 @@ async function requestJson(request) {
 }
 
 function json(response, value) {
+  if (response.writableEnded) return;
   response.writeHead(200, {
     "cache-control": "no-store",
     "content-type": "application/json; charset=utf-8"
@@ -311,7 +312,7 @@ function json(response, value) {
   response.end(JSON.stringify(value));
 }
 
-async function fixtureServer() {
+async function fixtureServer({ support = false, scenario = {} } = {}) {
   const paths = Object.freeze({
     "/": "../../operator/index.html",
     "/operator/": "../../operator/index.html",
@@ -341,11 +342,30 @@ async function fixtureServer() {
   )));
   const requests = [];
   let resolved = false;
+  const conversation = {schema:"sitesourcery.support-conversation/v1",ticket:{id:IDS.ticket,organizationId:IDS.organization,projectId:IDS.project,
+    subject:"Fixture support question",state:"open",createdAt:NOW,updatedAt:NOW},nextBeforeId:null,
+    messages:[{id:IDS.event,authorKind:"customer",body:"Please help <img src=x onerror=alert(1)>",createdAt:NOW}]};
   const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     const recorded = { method: request.method, pathname: url.pathname };
     requests.push(recorded);
+    if (scenario.handle && await scenario.handle({ request, response, url, recorded })) return;
     if (url.pathname.startsWith("/api/v1/")) {
+      if (request.method === "POST" && url.pathname === "/api/v1/operator/work-queue/refresh") {
+        recorded.body = await requestJson(request);
+        json(response, adjacentQueue(resolved));
+        return;
+      }
+      if(support && url.pathname===`/api/v1/operator/support-tickets/${IDS.ticket}` && request.method==="GET") {
+        json(response,conversation);return;
+      }
+      if(support && url.pathname===`/api/v1/operator/support-tickets/${IDS.ticket}/messages` && request.method==="POST") {
+        recorded.body=await requestJson(request);recorded.idempotency=request.headers["idempotency-key"];
+        recorded.csrf=request.headers["x-csrf-token"];
+        conversation.messages.push({id:IDS.observation,authorKind:"support",body:recorded.body.message,createdAt:NOW});
+        conversation.ticket.state=recorded.body.resolve?"resolved":"waiting_customer";
+        json(response,conversation);return;
+      }
       if (
         request.method === "POST" && url.pathname ===
           "/api/v1/operator/adjacent-integrations/resolutions"
@@ -392,7 +412,7 @@ async function fixtureServer() {
         return;
       }
       if (url.pathname === "/api/v1/organizations") {
-        json(response, { organizations: [{
+        json(response, { organizations: scenario.organizations || [{
           id: IDS.organization,
           name: "FIN004U Operations",
           role: "owner",
@@ -402,7 +422,12 @@ async function fixtureServer() {
         return;
       }
       if (url.pathname === "/api/v1/operator/work-queue") {
-        json(response, adjacentQueue(resolved));
+        const queue=adjacentQueue(resolved);
+        if(support)queue.items.push({schema:"sitesourcery.operator-work-queue-item/v1",id:IDS.ticket,
+          source:{table:"ss.support_tickets",id:IDS.ticket,revision:2,digest:"a".repeat(64),state:"open"},
+          organizationId:IDS.organization,projectId:IDS.project,kind:"support_ticket",severity:"normal",status:"open",
+          deadlineAt:null,repair:null,openedAt:NOW,revision:2,digest:"a".repeat(64),updatedAt:NOW});
+        json(response, queue);
         return;
       }
       if (url.pathname === "/api/v1/operator/support-cases") {
@@ -658,3 +683,249 @@ for (const viewport of VIEWPORTS) {
     }
   );
 }
+
+
+for(const width of [390,1440]) test(`support conversation owner opens and replies at ${width}px`,async()=>{
+  const site=await fixtureServer({support:true});let browser;
+  try{
+    browser=await openReviewedBrowser({origin:site.origin,viewport:{width,height:900,mobile:width<500}});
+    await browser.navigate(site.origin+"/operator/");
+    await browser.waitFor('document.querySelector("[data-support-ticket-id]") && document.querySelector("#operator-board").getAttribute("aria-busy")==="false"');
+    await browser.evaluate('document.querySelector("[data-support-ticket-id]").click()');
+    await browser.waitFor('!document.querySelector("#operator-ticket-detail").hidden && !document.querySelector("#operator-ticket-reply button").disabled');
+    assert.equal(await browser.evaluate('document.querySelectorAll("#operator-ticket-messages img, #operator-ticket-messages script").length'),0);
+    await browser.evaluate(`(()=>{const form=document.querySelector("#operator-ticket-reply");form.elements.message.value="Actual browser owner reply";form.elements.resolve.checked=true;form.requestSubmit();})()`);
+    await browser.waitFor('document.querySelector("#operator-ticket-messages").textContent.includes("Actual browser owner reply") && !document.querySelector("#operator-ticket-reply button").disabled');
+    assert.equal(await browser.evaluate('document.querySelector("#operator-ticket-reply textarea").value'),"");
+    assert.equal(await browser.evaluate('document.documentElement.scrollWidth<=innerWidth+1'),true);
+    const writes=site.requests.filter(request=>request.method==="POST");assert.equal(writes.length,1);
+    assert.deepEqual(writes[0].body,{operatorOrganizationId:IDS.organization,message:"Actual browser owner reply",resolve:true});
+    assert.match(writes[0].idempotency,/^support-reply-/);assert.equal(writes[0].csrf,"fin004u-browser-csrf-token");
+    assert.deepEqual(browser.browserErrors,[]);
+  }finally{await browser?.close();await site.close();}
+});
+
+const PANEL_KEYS = ["queue", "cases", "care", "responder", "number-bindings", "adjacent-contracts", "adjacent-trace"];
+const CARE_PATH = `/api/v1/operator/care/organizations/${IDS.organization}`;
+const RESPONDER_PATH = `/api/v1/operator/responder/organizations/${IDS.organization}`;
+const QUEUE_PATH = "/api/v1/operator/work-queue";
+const REFRESH_PATH = "/api/v1/operator/work-queue/refresh";
+const OTHER_ORG = "20000000-0000-4000-8000-000000000002";
+
+function failure(response, status = 503, message = "Fixture service unavailable") {
+  if (response.writableEnded) return;
+  response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
+  response.end(JSON.stringify({ error: { code: "FIXTURE_UNAVAILABLE", message } }));
+}
+
+async function panelReadback(browser) {
+  return browser.evaluate(`Object.fromEntries(${JSON.stringify(PANEL_KEYS)}.map(key => {
+    const node = document.getElementById("operator-" + key + "-status");
+    return [key, {state: node.dataset.state, text: node.textContent, time: node.querySelector("time")?.dateTime || null}];
+  }))`);
+}
+
+async function settled(browser) {
+  await browser.waitFor('document.querySelector("#operator-board").getAttribute("aria-busy") === "false"');
+}
+
+function expectedNetworkErrorsOnly(browser) {
+  assert.deepEqual(browser.browserErrors.filter(error =>
+    !/^Failed to load resource: the server responded with a status of (401|503)\b/u.test(error)
+  ), []);
+}
+
+test("owner panels render independent successes before a delayed or failed sibling; refresh recovers", async () => {
+  let releaseCare;
+  let failResponder = true;
+  const site = await fixtureServer({ scenario: { handle: ({ url, response }) => {
+    if (url.pathname === CARE_PATH && !releaseCare) {
+      releaseCare = () => json(response, careSnapshot());
+      return true;
+    }
+    if (url.pathname === RESPONDER_PATH && failResponder) {
+      failure(response, 503, "Responder unavailable <img src=x onerror=alert(1)>");
+      return true;
+    }
+    return false;
+  } } });
+  let browser;
+  try {
+    browser = await openReviewedBrowser({ origin: site.origin });
+    await browser.navigate(site.origin + "/operator/");
+    await browser.waitFor('document.querySelector("#operator-queue-status").dataset.state === "fresh" && document.querySelector("#operator-responder-status").dataset.state === "error"');
+    const pending = await panelReadback(browser);
+    assert.equal(pending.care.state, "loading");
+    assert.equal(pending.responder.time, null);
+    assert.match(pending.responder.text, /Responder unavailable <img/u);
+    assert.equal(await browser.evaluate('document.querySelector("#queue-count").textContent'), "1");
+    assert.equal(await browser.evaluate('document.querySelectorAll("#operator-responder-status img").length'), 0);
+    assert.equal(await browser.evaluate('document.querySelector("#operator-board").getAttribute("aria-busy")'), "true");
+    releaseCare();
+    await settled(browser);
+    const initial = await panelReadback(browser);
+    assert.equal(Object.values(initial).filter(panel => panel.state === "fresh").length, 6);
+    assert.equal(await browser.evaluate('document.querySelector("#operator-refresh").disabled'), false);
+    failResponder = false;
+    await browser.evaluate('document.querySelector("#operator-refresh").click()');
+    await browser.waitFor('document.querySelector("#operator-responder-status").dataset.state === "fresh"');
+    await settled(browser);
+    const recovered = await panelReadback(browser);
+    assert.equal(Object.values(recovered).every(panel => panel.state === "fresh" && panel.time), true);
+    assert.equal(await browser.evaluate('document.documentElement.scrollWidth <= innerWidth + 1'), true);
+    expectedNetworkErrorsOnly(browser);
+  } finally {
+    releaseCare?.();
+    await browser?.close();
+    await site.close();
+  }
+});
+
+test("failed and malformed panels retain visibly stale last-good results; source POST failure does not block reads", async () => {
+  let failing = false;
+  const site = await fixtureServer({ scenario: { handle: ({ url, response }) => {
+    if (!failing) return false;
+    if (url.pathname === RESPONDER_PATH || url.pathname === REFRESH_PATH) {
+      failure(response); return true;
+    }
+    if (url.pathname === CARE_PATH) { json(response, { malformed: true }); return true; }
+    if (url.pathname === QUEUE_PATH) { json(response, adjacentQueue(true)); return true; }
+    return false;
+  } } });
+  let browser;
+  try {
+    browser = await openReviewedBrowser({ origin: site.origin });
+    await browser.navigate(site.origin + "/operator/");
+    await settled(browser);
+    const before = await panelReadback(browser);
+    const content = await browser.evaluate('["care", "responder"].map(key => document.querySelector("#operator-" + key + "-surface").textContent)');
+    failing = true;
+    await browser.evaluate('document.querySelector("#operator-refresh").click()');
+    await browser.waitFor('document.querySelector("#operator-care-status").dataset.state === "stale"');
+    await settled(browser);
+    const failed = await panelReadback(browser);
+    for (const key of ["care", "responder"]) {
+      assert.equal(failed[key].state, "stale");
+      assert.equal(failed[key].time, before[key].time);
+      assert.match(failed[key].text, /Stale.*Last successful refresh:/u);
+    }
+    assert.equal(Object.values(failed).filter(panel => panel.state === "fresh").length, 5);
+    assert.equal(await browser.evaluate('document.querySelector("#queue-count").textContent'), "0");
+    assert.deepEqual(await browser.evaluate('["care", "responder"].map(key => document.querySelector("#operator-" + key + "-surface").textContent)'), content);
+    assert.match(await browser.evaluate('document.querySelector("#operator-error").textContent'), /Source refresh failed/u);
+    failing = false;
+    await browser.evaluate('document.querySelector("#operator-refresh").click()');
+    await browser.waitFor('document.querySelector("#operator-care-status").dataset.state === "fresh"');
+    await settled(browser);
+    assert.equal(Object.values(await panelReadback(browser)).every(panel => panel.state === "fresh"), true);
+    expectedNetworkErrorsOnly(browser);
+  } finally {
+    await browser?.close();
+    await site.close();
+  }
+});
+
+test("organization changes discard delayed prior-scope successes and failures without releasing the new refresh", async () => {
+  const releases = [];
+  let releaseNewCare;
+  const organizations = [IDS.organization, OTHER_ORG].map((id, index) => ({
+    id, name: "Fixture organization " + index, role: "owner", state: "active", createdAt: NOW
+  }));
+  const scoped = value => JSON.parse(JSON.stringify(value).replaceAll(IDS.organization, OTHER_ORG));
+  const site = await fixtureServer({ scenario: { organizations, handle: ({ url, response }) => {
+    const other = url.searchParams.get("operatorOrganizationId") === OTHER_ORG || url.pathname.includes(OTHER_ORG);
+    if (!other && url.pathname === QUEUE_PATH) { releases.push(() => json(response, adjacentQueue(false))); return true; }
+    if (!other && url.pathname === RESPONDER_PATH) { releases.push(() => failure(response, 401)); return true; }
+    if (!other) return false;
+    if (url.pathname.includes("/care/")) { releaseNewCare = () => json(response, scoped(careSnapshot())); return true; }
+    if (url.pathname.endsWith("/number-bindings")) json(response, scoped(numberBindings()));
+    else if (url.pathname.includes("/responder/")) json(response, scoped(responderSnapshot()));
+    else if (url.pathname === QUEUE_PATH) json(response, adjacentQueue(true));
+    else if (url.pathname.endsWith("/contracts")) json(response, adjacentContracts());
+    else if (url.pathname.endsWith("/trace")) json(response, scoped(adjacentTrace(true)));
+    else return false;
+    return true;
+  } } });
+  let browser;
+  try {
+    browser = await openReviewedBrowser({ origin: site.origin });
+    await browser.navigate(site.origin + "/operator/");
+    await browser.waitFor('document.querySelector("#operator-care-status").dataset.state === "fresh"');
+    // Force the scope-change event during in-flight reads to exercise the fence.
+    await browser.evaluate(`(() => { const select=document.querySelector("#operator-organization"); select.value=${JSON.stringify(OTHER_ORG)}; select.dispatchEvent(new Event("change")); })()`);
+    await browser.waitFor('document.querySelector("#operator-queue-status").dataset.state === "fresh" && document.querySelector("#operator-responder-status").dataset.state === "fresh"');
+    assert.equal((await panelReadback(browser)).care.time, null);
+    assert.equal(await browser.evaluate('document.querySelectorAll("#operator-care-surface [data-care-surface]").length'), 0);
+    releases.forEach(release => release());
+    await browser.waitFor('document.querySelector("#operator-queue-status").dataset.state === "fresh"');
+    // Allow the released responses and their browser continuations to settle.
+    await browser.evaluate('new Promise(resolve => setTimeout(resolve, 100))', true);
+    assert.equal(await browser.evaluate('document.querySelector("#operator-organization").value'), OTHER_ORG);
+    assert.equal(await browser.evaluate('document.querySelector("#queue-count").textContent'), "0");
+    assert.equal(await browser.evaluate('document.querySelector("#operator-board").getAttribute("aria-busy")'), "true");
+    assert.equal((await panelReadback(browser)).care.state, "loading");
+    releaseNewCare();
+    await settled(browser);
+    assert.equal(Object.values(await panelReadback(browser)).every(panel => panel.state === "fresh"), true);
+    expectedNetworkErrorsOnly(browser);
+  } finally {
+    releases.forEach(release => release());
+    releaseNewCare?.();
+    await browser?.close();
+    await site.close();
+  }
+});
+
+test("expired sessions clear old panels; reconnect ignores late previous-session reads", async () => {
+  let expire = false;
+  let releaseOldCare;
+  let releaseNewResponder;
+  let reconnected = false;
+  const site = await fixtureServer({ scenario: { handle: ({ url, response }) => {
+    if (expire && url.pathname === CARE_PATH && !reconnected) {
+      releaseOldCare = () => json(response, careSnapshot()); return true;
+    }
+    if (expire && url.pathname === RESPONDER_PATH && !reconnected) { failure(response, 401); return true; }
+    if (reconnected && url.pathname === RESPONDER_PATH) {
+      releaseNewResponder = () => json(response, responderSnapshot()); return true;
+    }
+    return false;
+  } } });
+  let browser;
+  try {
+    browser = await openReviewedBrowser({ origin: site.origin });
+    await browser.navigate(site.origin + "/operator/");
+    await settled(browser);
+    expire = true;
+    await browser.evaluate('document.querySelector("#operator-refresh").click()');
+    await browser.waitFor('document.querySelector("#operator-session-status").textContent.includes("Session expired")');
+    const expired = await panelReadback(browser);
+    assert.equal(Object.values(expired).every(panel => panel.time === null && panel.state === "unavailable"), true);
+    assert.equal(await browser.evaluate('document.querySelectorAll("#operator-board .operator-card, #operator-board [data-care-surface], #operator-board [data-responder-surface]").length'), 0);
+    assert.equal(await browser.evaluate('document.querySelector("#operator-refresh").disabled'), true);
+    reconnected = true;
+    await browser.evaluate('document.querySelector("#operator-reconnect").click()');
+    try {
+      await browser.waitFor('document.querySelector("#operator-care-status").dataset.state === "fresh"');
+    } catch (error) {
+      throw new Error(error.message + JSON.stringify({
+        panels: await panelReadback(browser), requests: site.requests,
+        session: await browser.evaluate('document.querySelector("#operator-session-status").textContent'),
+        errors: browser.browserErrors
+      }));
+    }
+    releaseOldCare();
+    await browser.evaluate('new Promise(resolve => setTimeout(resolve, 100))', true);
+    assert.equal(await browser.evaluate('document.querySelector("#operator-board").getAttribute("aria-busy")'), "true");
+    assert.equal((await panelReadback(browser)).responder.state, "loading");
+    releaseNewResponder();
+    await settled(browser);
+    assert.equal(Object.values(await panelReadback(browser)).every(panel => panel.state === "fresh"), true);
+    assert.equal(site.requests.filter(request => request.pathname === "/api/v1/me").length, 2);
+    expectedNetworkErrorsOnly(browser);
+  } finally {
+    releaseOldCare?.(); releaseNewResponder?.();
+    await browser?.close();
+    await site.close();
+  }
+});

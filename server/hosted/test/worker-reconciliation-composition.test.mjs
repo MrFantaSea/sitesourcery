@@ -31,7 +31,7 @@ function repositoryFactory() {
     runDetection() {},
     escalateAbandonedClaim() {},
     recordReadback() {},
-    listReadbackCandidates() {},
+    claimReadbackCandidates() {},
     listOpenCases() {}
   };
 }

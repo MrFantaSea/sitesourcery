@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "757cae571abd28083197021ba09dbfc38a5b9a5e",
+    "treeSha": "252469b355a2a6a6b29662f3d1193c1c33ef16e1",
+    "baseCommitSha": "fe42ef27ad80ef4960e5077b17d4a114d5f74ef2"
+  },
+  "provenanceSha256": "a434e57247d209381b06dfd83cf247e8820a92234c4bc183afe00f0457d05716",
+  "ledger": {
+    "previousByteCount": 44875,
+    "previousSha256": "55ceaf275caf8bd411510d2717b6461c3509a2814616a019f13786ec92153047",
+    "appendSha256": "a695f95f63e933b626a55798edb1ba868cc598947d79076176a27777143bda5a"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test --test-name-pattern='real aligned held worker' ops/test/worker-release-alignment.test.mjs",
+      "exitCode": 0,
+      "logSha256": "338dd763c187551f53242b74b2d2c012a56970693c63a2ed085f344248721716"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "b79b151b3200af9b4b13a913a31026036c33eb616e45cd420f8d40bb8e3c7d8d"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root verified exact100-path accepted assembly; deferred ledger plus two current asset hashes and two precise runtime/test assertions are the only differences from integrated source. No additional whole-system audit claim."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "2ff87ae48a1b4c37201d84f961d51db14603871d9fe82aa3c33026ad006ea8ad"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned test processes exited and private release scratch is empty after removing153 top-level fixtures from retained attempts. Five earlier scoped PG databases were dropped. Existing PG server and all source, toolchains and evidence retained."
+  }
+}

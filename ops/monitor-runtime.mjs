@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import {
   OPERATIONS_REPORT_SCHEMA,
   createHeldAlertAdapter,
@@ -33,11 +35,64 @@ function validCount(value) {
   );
 }
 
+export function validateDiskVolumes(input) {
+  if (input === undefined) return undefined;
+  if (!Array.isArray(input) || input.length < 1 || input.length > 8) {
+    throw new Error("Monitoring disk volumes must name between one and eight reviewed volumes.");
+  }
+  const names = new Set();
+  const paths = new Set();
+  return Object.freeze(Array.from(input).map((volume) => {
+    if (!volume || typeof volume !== "object" || Array.isArray(volume) ||
+      Object.keys(volume).sort().join(",") !== "minimumFreeBytes,minimumFreeRatio,name,path" ||
+      typeof volume.name !== "string" || !/^[a-z][a-z0-9_-]{0,31}$/u.test(volume.name) ||
+      typeof volume.path !== "string" || volume.path.length > 1024 ||
+      volume.path.includes("\0") || !path.isAbsolute(volume.path) ||
+      path.resolve(volume.path) !== volume.path ||
+      !validCount(volume.minimumFreeBytes) || volume.minimumFreeBytes === 0 ||
+      typeof volume.minimumFreeRatio !== "number" || !Number.isFinite(volume.minimumFreeRatio) ||
+      volume.minimumFreeRatio <= 0 || volume.minimumFreeRatio >= 1 ||
+      names.has(volume.name) || paths.has(volume.path)) {
+      throw new Error("Monitoring disk volume configuration is invalid.");
+    }
+    names.add(volume.name);
+    paths.add(volume.path);
+    return Object.freeze({ ...volume });
+  }));
+}
+
+function volumeChecks(disk, volumes) {
+  const readings = disk?.volumes;
+  const names = new Set(volumes.map((volume) => volume.name));
+  const coverageValid = Array.isArray(readings) && readings.length === volumes.length &&
+    Array.from(readings).every((reading) => reading && typeof reading === "object" &&
+      names.has(reading.name)) &&
+    new Set(readings.map((reading) => reading.name)).size === volumes.length;
+  return volumes.map((volume) => {
+    const reading = coverageValid ? readings.find((entry) => entry.name === volume.name) : null;
+    const available = reading?.available === true &&
+      validCount(reading.freeBytes) && validCount(reading.totalBytes) &&
+      reading.totalBytes > 0 && reading.freeBytes <= reading.totalBytes;
+    const ok = available && reading.freeBytes >= volume.minimumFreeBytes &&
+      reading.freeBytes / reading.totalBytes >= volume.minimumFreeRatio;
+    return {
+      name: volume.name,
+      ok,
+      code: !available ? "DISK_PROBE_UNAVAILABLE" : ok ? null : "DISK_CAPACITY_LOW",
+      freeBytes: available ? reading.freeBytes : null,
+      totalBytes: available ? reading.totalBytes : null,
+      minimumFreeBytes: volume.minimumFreeBytes,
+      minimumFreeRatio: volume.minimumFreeRatio
+    };
+  });
+}
+
 function validateThresholds(input = {}) {
   const selected = {
     ...DEFAULT_THRESHOLDS,
     ...input
   };
+  selected.diskVolumes = validateDiskVolumes(input.diskVolumes);
   for (const field of [
     "backupMaxAgeMs",
     "diskMinimumFreeBytes",
@@ -313,29 +368,50 @@ export async function runOperationsMonitor({
     )
   ) {
     const disk = byName.get("disk").value;
-    const ratio =
-      typeof disk?.freeBytes === "number" &&
-      typeof disk?.totalBytes === "number" &&
-      disk.totalBytes > 0
-        ? disk.freeBytes / disk.totalBytes
-        : -1;
-    const ok =
-      ratio >= limits.diskMinimumFreeRatio &&
-      disk.freeBytes >=
-        limits.diskMinimumFreeBytes;
-    checks.push({
-      name: "disk",
-      ok,
-      code: ok ? null : "DISK_CAPACITY_LOW"
-    });
-    if (!ok) {
-      alerts.push(
-        alert(
-          "DISK_CAPACITY_LOW",
-          "critical",
-          "Site Sourcery storage is below its reviewed reserve."
-        )
-      );
+    if (limits.diskVolumes) {
+      const volumes = volumeChecks(disk, limits.diskVolumes);
+      const unavailableVolumes = volumes.filter((volume) => volume.code === "DISK_PROBE_UNAVAILABLE");
+      const lowVolumes = volumes.filter((volume) => volume.code === "DISK_CAPACITY_LOW");
+      checks.push({
+        name: "disk",
+        ok: volumes.every((volume) => volume.ok),
+        code: unavailableVolumes.length ? "DISK_PROBE_UNAVAILABLE" :
+          lowVolumes.length ? "DISK_CAPACITY_LOW" : null,
+        volumes
+      });
+      if (unavailableVolumes.length) alerts.push(alert(
+        "DISK_PROBE_UNAVAILABLE", "critical",
+        "Storage capacity could not be checked: " + unavailableVolumes.map((volume) => volume.name).join(", ") + "."
+      ));
+      if (lowVolumes.length) alerts.push(alert(
+        "DISK_CAPACITY_LOW", "critical",
+        "Site Sourcery storage is below its reviewed reserve: " + lowVolumes.map((volume) => volume.name).join(", ") + "."
+      ));
+    } else {
+      const ratio =
+        typeof disk?.freeBytes === "number" &&
+        typeof disk?.totalBytes === "number" &&
+        disk.totalBytes > 0
+          ? disk.freeBytes / disk.totalBytes
+          : -1;
+      const ok =
+        ratio >= limits.diskMinimumFreeRatio &&
+        disk.freeBytes >=
+          limits.diskMinimumFreeBytes;
+      checks.push({
+        name: "disk",
+        ok,
+        code: ok ? null : "DISK_CAPACITY_LOW"
+      });
+      if (!ok) {
+        alerts.push(
+          alert(
+            "DISK_CAPACITY_LOW",
+            "critical",
+            "Site Sourcery storage is below its reviewed reserve."
+          )
+        );
+      }
     }
   }
 

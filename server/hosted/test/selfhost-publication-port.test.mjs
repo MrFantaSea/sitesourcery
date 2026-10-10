@@ -259,6 +259,14 @@ function alakazamProof() {
   };
 }
 
+test("publication port rejects a runtime without terminal erasure", () => {
+  const method = async () => {};
+  assert.throws(() => createSelfHostPublicationPort({ runtime: {
+    installRelease: method, reserveHostname: method, activate: method, rollback: method,
+    setHostnameGate: method, readiness: method, control: {}, releases: {}
+  } }), { code: "PUBLICATION_CONFIGURATION_ERROR" });
+});
+
 test("publication hold performs no mutation and lifting it cannot publish a queued row", async () => {
   const context = await harness(true);
   const before = context.runtime.control.snapshot();
@@ -523,6 +531,7 @@ test("publication adapter is in-process and does not expose a network control su
   assert.equal(context.port.kind, "private-in-process-selfhost");
   assert.deepEqual(Object.keys(context.port).sort(), [
     "kind",
+    "purgeProject",
     "readiness",
     "request",
     "rollback",

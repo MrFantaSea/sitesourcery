@@ -21,6 +21,7 @@ import {
 import {
   probeRuntime
 } from "./probe-runtime.mjs";
+import { validateDiskVolumes } from "./monitor-runtime.mjs";
 
 const { Pool } = pg;
 const execFileAsync = promisify(execFile);
@@ -191,6 +192,7 @@ async function present(filePath) {
 export function createProductionMonitoringProbes({
   databaseUrl,
   dataRoot,
+  diskVolumes,
   backupDestinationRoot,
   sourceFailureDomainId,
   certificateFile,
@@ -200,8 +202,26 @@ export function createProductionMonitoringProbes({
   apiPort = 8788,
   tenantPort = 8080,
   timeoutMs = 3000,
-  fetchImpl = globalThis.fetch
+  fetchImpl = globalThis.fetch,
+  statfsImpl = statfs
 }) {
+  const monitoredVolumes = validateDiskVolumes(diskVolumes);
+  if (typeof statfsImpl !== "function") throw new Error("Filesystem probe is required.");
+  async function readDiskCapacity(volumePath) {
+    const filesystem = await statfsImpl(volumePath, { bigint: true });
+    if (typeof filesystem?.bavail !== "bigint" || typeof filesystem?.bsize !== "bigint" ||
+      typeof filesystem?.blocks !== "bigint" || filesystem.bavail < 0n ||
+      filesystem.bsize <= 0n || filesystem.blocks <= 0n ||
+      filesystem.bavail > filesystem.blocks) {
+      throw new Error("Filesystem capacity is invalid.");
+    }
+    const freeBytes = filesystem.bavail * filesystem.bsize;
+    const totalBytes = filesystem.blocks * filesystem.bsize;
+    if (freeBytes > BigInt(Number.MAX_SAFE_INTEGER) || totalBytes > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new Error("Filesystem capacity exceeds safe monitor precision.");
+    }
+    return Object.freeze({ freeBytes: Number(freeBytes), totalBytes: Number(totalBytes) });
+  }
   const edgeIsExactlyHeld =
     expectedOperationsState?.publication ===
       "held" &&
@@ -361,26 +381,15 @@ export function createProductionMonitoringProbes({
     },
 
     async disk() {
-      const filesystem = await statfs(dataRoot, {
-        bigint: true
-      });
-      const freeBytes =
-        filesystem.bavail * filesystem.bsize;
-      const totalBytes =
-        filesystem.blocks * filesystem.bsize;
-      if (
-        freeBytes >
-          BigInt(Number.MAX_SAFE_INTEGER) ||
-        totalBytes >
-          BigInt(Number.MAX_SAFE_INTEGER)
-      ) {
-        throw new Error(
-          "Filesystem capacity exceeds safe monitor precision."
-        );
-      }
+      if (!monitoredVolumes) return readDiskCapacity(dataRoot);
       return Object.freeze({
-        freeBytes: Number(freeBytes),
-        totalBytes: Number(totalBytes)
+        volumes: Object.freeze(await Promise.all(monitoredVolumes.map(async (volume) => {
+          try {
+            return Object.freeze({ name: volume.name, available: true, ...await readDiskCapacity(volume.path) });
+          } catch {
+            return Object.freeze({ name: volume.name, available: false });
+          }
+        })))
       });
     },
 

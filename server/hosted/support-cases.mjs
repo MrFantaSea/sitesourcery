@@ -1,3 +1,4 @@
+import { SUPPORT_TICKET_METHODS } from "./support-tickets-postgres.mjs";
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 import { canonicalJson, digest } from "./security.mjs";
@@ -267,6 +268,7 @@ function heldError() {
 }
 
 const METHODS = Object.freeze([
+  ...SUPPORT_TICKET_METHODS,
   "openAuthenticated", "recordManual", "assign", "updateIdentity",
   "setDeadline", "startReview", "respond", "deny", "close",
   "addEvidence", "reserveNotification", "readCustomerCase",
@@ -314,6 +316,7 @@ export function createSupportCaseService({ repository, mailLifecycle, clock } = 
   );
   const at = () => currentTime(clock);
   return Object.freeze({
+    ...Object.fromEntries(SUPPORT_TICKET_METHODS.map(name => [name, input => repository[name](input)])),
     kind: "support-case-lifecycle",
     mode: "repository",
     providerEffects: false,

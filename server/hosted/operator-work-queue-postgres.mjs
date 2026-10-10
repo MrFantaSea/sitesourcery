@@ -131,6 +131,20 @@ async function readActive(client) {
          from ss.operator_work_queue_items
         where status <> 'resolved'
        union all
+       select ticket.id, 'ss.support_tickets'::text, ticket.id::text,
+              messages.revision, ss.service_json_digest(jsonb_build_object('ticketId',ticket.id,'state',ticket.state,'revision',messages.revision)),
+              ticket.state, ticket.organization_id, ticket.project_id,
+              'support_ticket'::text, 'normal'::text,
+              case when ticket.state='waiting_customer' then 'in_progress' else 'open' end,
+              null::timestamptz, null::text, ticket.created_at, messages.revision,
+              ss.service_json_digest(jsonb_build_object('ticketId',ticket.id,'state',ticket.state,'revision',messages.revision)),ticket.updated_at
+         from ss.support_tickets ticket
+         join ss.projects project on project.organization_id=ticket.organization_id and project.id=ticket.project_id
+         join ss.organizations organization on organization.id=ticket.organization_id
+         cross join lateral (select count(*)+1 as revision from ss.support_messages message
+           where message.ticket_id=ticket.id) messages
+        where ticket.state not in ('closed','resolved') and project.lifecycle='active' and organization.state='active'
+       union all
        select projection.id,
               'ss.alakazam_invoice_finalization_projection'::text,
               projection.id::text, projection.revision,

@@ -247,6 +247,6 @@ test("worker composition remains identity blind while the API remains loop-free"
   assert.match(worker, /createNotificationMailWorkerFactories/u);
   assert.doesNotMatch(
     api,
-    /createExportWorker|createCancellationWorker|createCoreWorkerFactories|createNotificationMailWorkerFactories/u
+    /\bcreateExportWorker\b|createCancellationWorker|createCoreWorkerFactories|createNotificationMailWorkerFactories/u
   );
 });

@@ -120,9 +120,9 @@ export const hostedTruthSlots = Object.freeze([
     id: "home-download-availability",
     file: "index.html",
     kind: "html",
-    sourceSha256: "84d31da6dbad4cd2155bdbd7a1ffa1a796a756f32ab11ab8ebfa9b4c8b8e9a5e",
+    sourceSha256: "79070d37847ac3633ea421ba608767492e8638ad066d2ac7a0a7aebeeed192eb",
     hostedFragment: "scripts/hosted-truth/fragments/home-download-availability.html",
-    hostedSha256: "71ca5a9752d925eb6d23f25f25f2a9d01a279fd7f1e154e381b21e3a14f4665f",
+    hostedSha256: "7756427bcff7137ce322896e618c02a707d60774c13e8c3c13842c0d0162d511",
   }),
   slot({
     id: "abracadabra-app-head",
@@ -196,7 +196,7 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-alakazam-retained-premium.js":
     "5cc58c5211c0983be18bd4645702bdc13bfb4d4d7008b605624560120ebe22d1",
   "abracadabra/app/abracadabra-api.js":
-    "36aeadada43d6b9619095e8be38e96b3ab05f00759ee12b0220a838de3e330e7",
+    "0bbc8bea1130bfcb760f0481d31654b941146958aa7446e6a6dddb55547a7eea",
   "abracadabra/app/abracadabra-billing-views.js":
     "ab279cc5d8560716e7f6236bfbff4aae1204abe1339a3deee21af7e14215c2fa",
   "abracadabra/app/abracadabra-care-surfaces.css":
@@ -206,9 +206,9 @@ export const hostedStagingAssetSha256 = Object.freeze({
   "abracadabra/app/abracadabra-control-mode.js":
     "24015f383c2642951ddf5260a62f5a2e38fdbf98d02653d834feb854683f8dc8",
   "abracadabra/app/abracadabra-customer-control-dom.js":
-    "fa676a170ccf9a4d98cbbaa6ecc8349481cb90a80a034b1af240cbaedfae9a71",
+    "cf922571dabc1a09d52bd8f90ddba56e4c0fcb5af3af2110e57bbcb8d2fcb8f9",
   "abracadabra/app/abracadabra-hosted-control.js":
-    "3202c0177df5a216197e0f253317360d649d2e2e667311d692b5b006ec655a2a",
+    "d19a4b5df1e88de4bb91cf924de8e05e1db9837c1ad7205fcab167b93d12a3b5",
   "abracadabra/app/abracadabra-responder-surfaces.css":
     "f087bd1da001450a7a522be70c0840df66037fb0d83e08dfe29f5f1f0399fd4f",
   "abracadabra/app/abracadabra-responder-surfaces.js":
@@ -312,9 +312,9 @@ export const heldAlakazamExecutableSemantics = Object.freeze([
 
 export const heldTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
-    "Look good online. Make it easy to call you.",
+    "Website builds and repairs.",
     "$300 setup · $250 a month",
-    "I can find a name, register it in your name, connect it to your website, and help keep it working.",
+    "Domain search, registration in your name, and connection to your website.",
   ]),
   "abracadabra/index.html": Object.freeze([
     "Make a one-page website for free.",
@@ -344,9 +344,9 @@ export const heldTruthForbiddenPhrases = Object.freeze({
 
 export const hostedTruthRequirements = Object.freeze({
   "index.html": Object.freeze([
-    "Look good online. Make it easy to call you.",
+    "Website builds and repairs.",
     "$300 setup · $250 a month",
-    "I can find a name, register it in your name, connect it to your website, and help keep it working.",
+    "Domain search, registration in your name, and connection to your website.",
   ]),
   "abracadabra/index.html": Object.freeze([
     "Make a one-page website for free.",

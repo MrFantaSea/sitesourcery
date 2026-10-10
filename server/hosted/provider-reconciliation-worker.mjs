@@ -67,7 +67,7 @@ function validatePorts(repository, readback, clock, enabled) {
     typeof repository.runDetection !== "function" ||
     typeof repository.escalateAbandonedClaim !== "function" ||
     typeof repository.recordReadback !== "function" ||
-    typeof repository.listReadbackCandidates !== "function" ||
+    typeof repository.claimReadbackCandidates !== "function" ||
     typeof repository.listOpenCases !== "function"
   ) {
     throw configurationError("The reconciliation repository is invalid.");
@@ -211,8 +211,11 @@ export function createProviderReconciliationWorker({
       readbackReady = readiness?.ready === true &&
         readiness?.verified === true;
       if (readbackReady) {
-        const listed = await ports.repository.listReadbackCandidates({
-          limit: maximumReadbacksPerCycle
+        // Reserve before any provider read. The durable timestamp rotates expired,
+        // incomplete and interrupted attempts behind other cases across restarts.
+        const listed = await ports.repository.claimReadbackCandidates({
+          limit: maximumReadbacksPerCycle,
+          observedAt: now()
         });
         for (const candidate of listed.candidates) {
           if (signal?.aborted) break;

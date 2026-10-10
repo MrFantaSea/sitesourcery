@@ -261,6 +261,8 @@
     var retryTasks = Object.create(null);
     var operationSequence = 0;
     var selectionEpoch = 0;
+    var supportEpoch = 0;
+    var supportReplyCommand = null;
     var sessionEpoch = 0;
     var legalAuthorityEpoch = 0;
     var commerceEpoch = 0;
@@ -284,6 +286,8 @@
       subscription: null,
       cancellationPreview: null,
       exportJob: null,
+      supportTickets: null,
+      supportConversation: null,
       commerceQuote: null,
       downloadQuote: null,
       domainSearchResults: [],
@@ -319,6 +323,8 @@
         subscription: clone(state.subscription),
         cancellationPreview: clone(state.cancellationPreview),
         exportJob: clone(state.exportJob),
+        supportTickets: clone(state.supportTickets),
+        supportConversation: clone(state.supportConversation),
         commerceQuote: clone(state.commerceQuote),
         downloadQuote: clone(state.downloadQuote),
         domainSearchResults: clone(state.domainSearchResults),
@@ -391,6 +397,10 @@
       state.subscription = null;
       state.cancellationPreview = null;
       state.exportJob = null;
+      state.supportTickets = null;
+      state.supportConversation = null;
+      supportEpoch += 1;
+      supportReplyCommand = null;
       resetDomains();
     }
 
@@ -680,6 +690,10 @@
       state.subscription = null;
       state.cancellationPreview = null;
       state.exportJob = null;
+      state.supportTickets = null;
+      state.supportConversation = null;
+      supportEpoch += 1;
+      supportReplyCommand = null;
       resetDomains();
       var organizationPayload = await api.listOrganizations();
       if (expectedSessionEpoch !== sessionEpoch) return null;
@@ -855,6 +869,10 @@
       state.subscription = null;
       state.cancellationPreview = null;
       state.exportJob = null;
+      state.supportTickets = null;
+      state.supportConversation = null;
+      supportEpoch += 1;
+      supportReplyCommand = null;
       resetDomains();
       selectionEpoch += 1;
       return task("projects", function () {
@@ -886,6 +904,10 @@
         state.subscription = null;
         state.cancellationPreview = null;
         state.exportJob = null;
+      state.supportTickets = null;
+      state.supportConversation = null;
+      supportEpoch += 1;
+      supportReplyCommand = null;
         resetDomains();
         replaceProject(project);
         return project;
@@ -973,6 +995,10 @@
             state.project = project;
             state.cancellationPreview = null;
             state.exportJob = null;
+      state.supportTickets = null;
+      state.supportConversation = null;
+      supportEpoch += 1;
+      supportReplyCommand = null;
             selectionEpoch += 1;
           }
           return project;
@@ -1493,6 +1519,70 @@
       });
     }
 
+    function supportResult(value, projectId, ticketId) {
+      if (!value || value.schema !== "sitesourcery.support-conversation/v1" ||
+          !value.ticket || value.ticket.projectId !== projectId || value.ticket.organizationId !== state.organizationId ||
+          value.ticket.id !== ticketId || !Array.isArray(value.messages) ||
+          !value.messages.every(function (message) { return typeof message.body === "string" &&
+            message.body.length <= 4000 && ["customer", "support", "system"].includes(message.authorKind); })) {
+        throw new ControlError({ code: "SUPPORT_RESPONSE_INVALID", message: "The conversation could not be verified. Refresh and try again." });
+      }
+      return value;
+    }
+    function listSupportTickets(beforeId) {
+      var projectId = assertProject(), epoch = selectionEpoch, accountEpoch = sessionEpoch;
+      var input = { organizationId: assertOrganization(), projectId: projectId, beforeId: beforeId || null };
+      return task("listSupportTickets", async function () {
+        var value = await api.listSupportTickets(input);
+        if (epoch !== selectionEpoch || accountEpoch !== sessionEpoch) return null;
+        if (!value || value.schema !== "sitesourcery.support-ticket-list/v1" || !Array.isArray(value.tickets) ||
+          !value.tickets.every(function (ticket) { return ticket.projectId === projectId && ticket.organizationId === input.organizationId; })) {
+          throw new ControlError({code:"SUPPORT_RESPONSE_INVALID",message:"The conversation list could not be verified."});
+        }
+        if (beforeId && state.supportTickets) value.tickets = state.supportTickets.tickets.concat(value.tickets);
+        state.supportTickets = value;
+        return value;
+      });
+    }
+    function getSupportTicket(ticketId, beforeId) {
+      var projectId = assertProject(), epoch = selectionEpoch, accountEpoch = sessionEpoch, requestEpoch = ++supportEpoch;
+      var input = { organizationId: assertOrganization(), projectId: projectId, beforeId: beforeId || null };
+      if (!beforeId && state.supportConversation && state.supportConversation.ticket.id !== ticketId) state.supportConversation = null;
+      return task("getSupportTicket", async function () {
+        var value = await api.getSupportTicket(ticketId, input);
+        if (epoch !== selectionEpoch || accountEpoch !== sessionEpoch || requestEpoch !== supportEpoch) return null;
+        supportResult(value,projectId,ticketId);
+        if (beforeId && state.supportConversation && state.supportConversation.ticket.id === ticketId) {
+          value.messages = value.messages.concat(state.supportConversation.messages);
+        }
+        state.supportConversation = value;
+        return value;
+      });
+    }
+    function replySupportTicket(message) {
+      var projectId = assertProject(), epoch = selectionEpoch, accountEpoch = sessionEpoch, requestEpoch = supportEpoch;
+      var selected = state.supportConversation;
+      if (!selected) throw new ControlError({code:"SUPPORT_TICKET_REQUIRED",message:"Open a conversation first."});
+      var ticketId = selected.ticket.id;
+      var input = {organizationId:assertOrganization(),projectId:projectId,message:String(message || "").trim()};
+      var signature = JSON.stringify([ticketId,input]);
+      if (!supportReplyCommand || supportReplyCommand.signature !== signature) {
+        supportReplyCommand = {signature:signature,key:idempotencyFactory()};
+      }
+      var key = supportReplyCommand.key;
+      var retryCall = function () {
+        return task("replySupportTicket", async function () {
+          if (epoch !== selectionEpoch || accountEpoch !== sessionEpoch || requestEpoch !== supportEpoch) return null;
+          var value = await api.replySupportTicket(ticketId,input,{idempotencyKey:key});
+          if (epoch !== selectionEpoch || accountEpoch !== sessionEpoch || requestEpoch !== supportEpoch) return null;
+          state.supportConversation = supportResult(value,projectId,ticketId);
+          supportReplyCommand = null;
+          return value;
+        }, {write:true,retry:retryCall});
+      };
+      return retryCall();
+    }
+
     function requestExport() {
       var projectId = assertProject();
       var expectedSelectionEpoch = selectionEpoch;
@@ -1620,6 +1710,10 @@
             state.subscription = null;
             state.cancellationPreview = null;
             state.exportJob = null;
+      state.supportTickets = null;
+      state.supportConversation = null;
+      supportEpoch += 1;
+      supportReplyCommand = null;
             resetDomains();
             selectionEpoch += 1;
           }
@@ -2200,6 +2294,9 @@
       unpublish: unpublish,
       setVisibility: setVisibility,
       createSupportTicket: createSupportTicket,
+      listSupportTickets: listSupportTickets,
+      getSupportTicket: getSupportTicket,
+      replySupportTicket: replySupportTicket,
       requestExport: requestExport,
       getExport: getExport,
       retryExport: retryExport,

@@ -216,6 +216,7 @@ export class ControlStore {
   async registerRelease({ projectId, releaseId, manifestDigest, totalBytes, fileCount }) {
     return this.#mutate((next) => {
       safeId(projectId, "projectId");
+      requireLiveProject(next, projectId);
       safeId(releaseId, "releaseId");
       invariant(
         typeof manifestDigest === "string" && /^[a-f0-9]{64}$/u.test(manifestDigest),
@@ -264,6 +265,7 @@ export class ControlStore {
       "TLS state is invalid"
     );
     return this.#mutate((next) => {
+      requireLiveProject(next, projectId);
       const current = next.hostnames[normalized];
       if (current) {
         invariant(
@@ -371,6 +373,35 @@ export class ControlStore {
     };
   }
 
+  assertProjectLive(projectId) {
+    safeId(projectId, "projectId");
+    invariant(this.isReady(), "CONTROL_UNAVAILABLE", "control store is not ready");
+    requireLiveProject(this.state, projectId);
+  }
+
+  async sealProjectDeletion({ projectId, organizationId, deletionRequestId }) {
+    for (const [key, value] of Object.entries({ projectId, organizationId, deletionRequestId })) {
+      safeId(value, key);
+    }
+    return this.#mutate((next) => {
+      const previous = Object.hasOwn(next.deletedProjects ?? {}, projectId)
+        ? next.deletedProjects[projectId] : null;
+      invariant(!previous || (previous.organizationId === organizationId &&
+        previous.deletionRequestId === deletionRequestId),
+      "PROJECT_DELETION_CONFLICT", "terminal project identity conflicts");
+      if (previous) return false;
+      next.deletedProjects = { ...next.deletedProjects, [projectId]: {
+        organizationId, deletionRequestId
+      } };
+      for (const [key, binding] of Object.entries(next.hostnames)) {
+        if (binding.projectId === projectId) delete next.hostnames[key];
+      }
+      for (const [key, release] of Object.entries(next.releases)) {
+        if (release.projectId === projectId) delete next.releases[key];
+      }
+    });
+  }
+
   async #mutate(mutator) {
     invariant(
       !this.readOnly,
@@ -380,13 +411,25 @@ export class ControlStore {
     const job = this.#tail.then(async () => {
       invariant(this.isReady(), "CONTROL_UNAVAILABLE", "control store is not ready");
       const next = structuredClone(this.state);
-      await mutator(next);
+      if (await mutator(next) === false) return structuredClone(this.state);
       next.revision += 1;
       next.updatedAt = this.clock();
       validateState(next);
       const envelope = jsonEnvelope(CONTROL_SCHEMA, next);
-      await persistEnvelope(this.currentPath, this.revisionsPath, envelope);
+      try {
+        await persistEnvelope(this.currentPath, this.revisionsPath, envelope);
+      } catch (error) {
+        // Rename may already have committed a terminal fence before fsync
+        // failed. Never overwrite it from the old in-memory state on retry.
+        this.state = null;
+        this.checksum = null;
+        this.error = error;
+        throw error;
+      }
       this.state = next;
+      this.checksum = envelope.checksum;
+      this.lastRevision = next.revision;
+      this.lastChecksum = envelope.checksum;
       return structuredClone(next);
     });
     this.#tail = job.catch(() => {});
@@ -452,7 +495,16 @@ function validateState(value) {
     "CONTROL_CORRUPT",
     "state maps are invalid"
   );
+  invariant(value.deletedProjects === undefined || (value.deletedProjects &&
+    typeof value.deletedProjects === "object" && !Array.isArray(value.deletedProjects)),
+  "CONTROL_CORRUPT", "terminal project map is invalid");
+  for (const [projectId, tombstone] of Object.entries(value.deletedProjects ?? {})) {
+    safeId(projectId, "deleted project");
+    safeId(tombstone?.organizationId, "deleted organization");
+    safeId(tombstone?.deletionRequestId, "deletion request");
+  }
   for (const [hostname, binding] of Object.entries(value.hostnames)) {
+    requireLiveProject(value, binding.projectId);
     invariant(normalizeHostname(hostname) === hostname, "CONTROL_CORRUPT", "hostname key invalid");
     invariant(binding.hostname === hostname, "CONTROL_CORRUPT", "binding identity invalid");
     safeId(binding.projectId, "binding.projectId");
@@ -469,6 +521,7 @@ function validateState(value) {
     if (binding.previousReleaseId !== null) safeId(binding.previousReleaseId, "previousReleaseId");
   }
   for (const [key, release] of Object.entries(value.releases)) {
+    requireLiveProject(value, release.projectId);
     safeId(release.projectId, "release.projectId");
     safeId(release.releaseId, "release.releaseId");
     invariant(key === `${release.projectId}:${release.releaseId}`, "CONTROL_CORRUPT", "release key invalid");
@@ -482,4 +535,9 @@ function validateState(value) {
     nonNegativeInteger(release.fileCount, "release.fileCount");
   }
   return value;
+}
+
+function requireLiveProject(state, projectId) {
+  invariant(!Object.hasOwn(state.deletedProjects ?? {}, projectId),
+    "PROJECT_DELETED", "terminally deleted projects cannot be published");
 }

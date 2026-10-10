@@ -15,6 +15,17 @@ const RESULTS = Object.freeze({
   project_deleted: "succeeded"
 });
 
+function assertErasure(result, { organizationId, projectId, deletionRequestId }) {
+  invariant(UUID.test(organizationId ?? "") && UUID.test(projectId ?? "") &&
+    UUID.test(deletionRequestId ?? "") &&
+    result?.schema === "sitesourcery.publication-erasure/v1" &&
+    result.organizationId === organizationId && result.projectId === projectId &&
+    result.deletionRequestId === deletionRequestId && result.erased === true &&
+    result.published === false && result.terminal === true,
+  "PROJECT_LIFECYCLE_EFFECT_UNCONFIRMED",
+  "Terminal publication erasure was not confirmed for this deletion.", { status: 503 });
+}
+
 function exactInstant(value, field) {
   const selected = value instanceof Date ? value.toISOString() : value;
   invariant(
@@ -68,13 +79,16 @@ export function createPostgresProjectLifecycleRepository({ authority } = {}) {
               as contract_ready,
             to_regclass('ss.project_lifecycle_job_receipts') is not null
               as receipts_ready,
+            to_regprocedure('ss.require_publication_erasure_v1()') is not null
+              as erasure_ready,
             (select count(*)::integer
                from ss.artifact_replicas replica
               where replica.deleted_at is null) as external_replicas
         `)
       );
       const row = result.rows[0] ?? {};
-      const ready = row.contract_ready === true && row.receipts_ready === true;
+      const ready = row.contract_ready === true && row.receipts_ready === true &&
+        row.erasure_ready === true;
       return Object.freeze({
         ready,
         verified: ready,
@@ -186,6 +200,7 @@ export function createPostgresProjectLifecycleRepository({ authority } = {}) {
         `select * from ss.lifecycle_jobs
           where id = $1 and state = 'running' and locked_by = $2
             and lease_fence = $3 and lease_expires_at > $4
+            and lease_expires_at > clock_timestamp()
           for update`,
         [jobId, workerId, fence, at]
       );
@@ -202,6 +217,10 @@ export function createPostgresProjectLifecycleRepository({ authority } = {}) {
         { status: 409 }
       );
       if (job.job_type === "finalize_deletion") {
+        assertErasure(result.result, {
+          organizationId: job.organization_id, projectId: job.project_id,
+          deletionRequestId: job.payload?.deletionRequestId
+        });
         const pending = await client.query(`
           select count(*)::integer as count
             from ss.lifecycle_jobs
@@ -215,7 +234,6 @@ export function createPostgresProjectLifecycleRepository({ authority } = {}) {
           "Project publication or object deletion is not complete.",
           { status: 409 }
         );
-        await client.query("select ss.finalize_terminal_project_purge($1)", [job.project_id]);
       } else {
         await client.query(`
           update ss.lifecycle_jobs
@@ -241,11 +259,15 @@ export function createPostgresProjectLifecycleRepository({ authority } = {}) {
           organization_id, project_id, lifecycle_job_id, lease_fence,
           receipt_kind, result_digest, recorded_at
         ) values ($1, $2, $3, $4, $5, $6, $7)
-        on conflict (lifecycle_job_id) do nothing
       `, [
         job.organization_id, job.project_id, jobId, fence,
         result.receiptKind, resultDigest, at
       ]);
+      if (job.job_type === "finalize_deletion") {
+        // The database checks this exact running lease/receipt before allowing
+        // the terminal state. Receipt and finalization commit or roll back together.
+        await client.query("select ss.finalize_terminal_project_purge($1)", [job.project_id]);
+      }
       return Object.freeze({
         status: RESULTS[result.receiptKind],
         jobId,
@@ -298,7 +320,8 @@ export function createPostgresProjectLifecycleRepository({ authority } = {}) {
 export function createProjectLifecycleExecutor({ objectStore, publicationPort } = {}) {
   invariant(
     objectStore && typeof objectStore.delete === "function" &&
-      publicationPort && typeof publicationPort.unpublish === "function",
+      publicationPort && typeof publicationPort.unpublish === "function" &&
+      typeof publicationPort.purgeProject === "function",
     "PROJECT_LIFECYCLE_CONFIGURATION_REQUIRED",
     "The project lifecycle object deletion port is required.",
     { status: 500 }
@@ -317,9 +340,17 @@ export function createProjectLifecycleExecutor({ objectStore, publicationPort } 
         });
       }
       if (selected.jobType === "finalize_deletion") {
+        const identity = {
+          organizationId: selected.organizationId, projectId: selected.projectId,
+          deletionRequestId: selected.payload?.deletionRequestId
+        };
+        invariant(Object.values(identity).every((value) => UUID.test(value ?? "")),
+          "PROJECT_LIFECYCLE_JOB_INVALID", "The deletion identity is invalid.", { status: 409 });
+        const erased = await publicationPort.purgeProject(identity);
+        assertErasure(erased, identity);
         return Object.freeze({
           receiptKind: "project_deleted",
-          result: { databaseFinalization: "required" }
+          result: erased
         });
       }
       if (selected.jobType === "unpublish_project") {
@@ -351,10 +382,16 @@ export function createProjectLifecycleExecutor({ objectStore, publicationPort } 
         "The project lifecycle job is not allowlisted.",
         { status: 409 }
       );
+      invariant(selected.payload.storageKind === "private_export" &&
+        selected.payload.objectKey.startsWith(`exports/${selected.organizationId}/${selected.projectId}/`),
+      "PROJECT_LIFECYCLE_STORAGE_UNSUPPORTED",
+      "This deletion requires a verified object storage adapter.", { status: 409 });
       const deleted = await objectStore.delete({ key: selected.payload.objectKey });
+      invariant(deleted?.key === selected.payload.objectKey && typeof deleted.deleted === "boolean",
+        "PROJECT_LIFECYCLE_EFFECT_UNCONFIRMED", "Object absence was not confirmed.", { status: 503 });
       return Object.freeze({
         receiptKind: "blob_deleted",
-        result: { deleted: deleted?.deleted === true }
+        result: { absent: true, deleted: deleted.deleted, key: deleted.key }
       });
     }
   });

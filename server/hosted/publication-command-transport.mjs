@@ -18,7 +18,7 @@ export const PUBLICATION_SERVER_STATE_SCHEMA =
 export const DEFAULT_PUBLICATION_COMMAND_SOCKET =
   "/run/sitesourcery/publication-command-v1.sock";
 
-const OPERATIONS = new Set(["request", "rollback", "unpublish"]);
+const OPERATIONS = new Set(["request", "rollback", "unpublish", "purgeProject"]);
 const SHA256 = /^[a-f0-9]{64}$/u;
 const BASE64URL = /^[A-Za-z0-9_-]{43}$/u;
 const MINIMUM_BODY_BYTES = 1024 * 1024;
@@ -156,6 +156,10 @@ export function publicationCommandConfigurationFromEnvironment(
 }
 
 function encodedInput(operation, input) {
+  if (operation === "purgeProject") {
+    return strictClone(exactObject(input,
+      ["organizationId", "projectId", "deletionRequestId"], "Project erasure command"));
+  }
   if (operation === "unpublish") {
     return strictClone(
       exactObject(input, ["hostname", "projectId"], "Unpublish command")
@@ -203,6 +207,10 @@ function encodedInput(operation, input) {
 }
 
 function decodedInput(operation, input) {
+  if (operation === "purgeProject") {
+    return strictClone(exactObject(input,
+      ["organizationId", "projectId", "deletionRequestId"], "Project erasure command"));
+  }
   if (operation === "unpublish") {
     return strictClone(
       exactObject(input, ["hostname", "projectId"], "Unpublish command")
@@ -551,6 +559,7 @@ export function createPublicationCommandServer({
       typeof publicationPort.request === "function" &&
       typeof publicationPort.rollback === "function" &&
       typeof publicationPort.unpublish === "function" &&
+      typeof publicationPort.purgeProject === "function" &&
       configuration && typeof log === "function",
     "PUBLICATION_COMMAND_CONFIGURATION_INVALID",
     "Publication command server dependencies are invalid.",
@@ -1007,6 +1016,7 @@ export function createPublicationCommandClient({
     readiness,
     request: (input) => command("request", input),
     rollback: (input) => command("rollback", input),
-    unpublish: (input) => command("unpublish", input)
+    unpublish: (input) => command("unpublish", input),
+    purgeProject: (input) => command("purgeProject", input)
   });
 }

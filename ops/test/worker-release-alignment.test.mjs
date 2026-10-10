@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
 import net from "node:net";
 import path from "node:path";
 import { test } from "node:test";
@@ -93,12 +94,16 @@ test("rejects predecessor authority, unit, unexpected environment and missing sh
     { ...input, previousWorkerText: input.previousWorkerText.replace('"shutdownDeadlineMs":20000', '"shutdownDeadlineMs":999') }
   ]) assert.throws(() => prepareWorkerAlignment(altered));
 });
-test("real aligned held worker exits cleanly with12 purposes and never connects to a database", async () => {
+test("real aligned held worker exits cleanly with12 purposes and never connects to a database", async (t) => {
+  const runtimeDirectory = await mkdtemp(path.join(os.tmpdir(), "ss-held-worker-health-"));
+  t.after(() => rm(runtimeDirectory, { recursive: true, force: true }));
+  const healthPath = path.join(runtimeDirectory, "export-health.json");
   const server = net.createServer((socket) => { connections++; socket.destroy(); });
   let connections = 0;
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
     const env = decode(prepareWorkerAlignment(fixtures()).environmentText);
+    env.SITESOURCERY_EXPORT_WORKER_HEALTH_PATH = healthPath;
     env.SITESOURCERY_DATABASE_URL = `postgresql://synthetic@127.0.0.1:${server.address().port}/unused`;
     const { stdout, stderr } = await promisify(execFile)(process.execPath,
       [path.join(root, "server/hosted/bin/worker.mjs")],
@@ -109,5 +114,6 @@ test("real aligned held worker exits cleanly with12 purposes and never connects 
     assert.equal(event.ready, false);
     assert.deepEqual(event.purposes, WORKER_PURPOSES);
     assert.equal(stderr, ""); assert.equal(connections, 0);
+    assert.equal(JSON.parse(await readFile(healthPath, "utf8")).state, "held");
   } finally { await new Promise((resolve) => server.close(resolve)); }
 });

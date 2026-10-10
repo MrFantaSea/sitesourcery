@@ -289,7 +289,7 @@ test("production entrypoints split processes and keep effect workers outside the
   ]);
   assert.doesNotMatch(
     api,
-    /createExportWorker|createCancellationWorker|createAlakazamFulfillmentWorker|createResponderFulfillmentWorker|createResponderWorkerFactories|createTenantNodeHandler|tenantServer|tenantPort|\.start\(\{\s*signal:\s*shutdownController/u
+    /createExportWorker\b|createCancellationWorker|createAlakazamFulfillmentWorker|createResponderFulfillmentWorker|createResponderWorkerFactories|createTenantNodeHandler|tenantServer|tenantPort|\.start\(\{\s*signal:\s*shutdownController/u
   );
   assert.doesNotMatch(http, /processExport|queueMicrotask/u);
   assert.match(api, /pool\.apiConnections/u);

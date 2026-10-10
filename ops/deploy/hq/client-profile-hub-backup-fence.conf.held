@@ -1,0 +1,9 @@
+# HELD: install as a drop-in for mrfantasea user client-profile-hub.service.
+# Its automatic owner-session renewal writes directly to hosted PostgreSQL.
+[Unit]
+ConditionPathIsMountPoint=/srv/sitesourcery-storage
+ConditionPathExists=!/srv/sitesourcery-storage/production/backup-control/BACKUP_QUIESCE
+
+[Service]
+KillMode=control-group
+TimeoutStopSec=25s

@@ -17,7 +17,7 @@ const BROWSER = process.env.SITESOURCERY_CHROMIUM ||
   "/private/tmp/sitesourcery-chrome-149.0.7827.55-mac-arm64/chrome-headless-shell-mac-arm64/chrome-headless-shell";
 const EXPECTED_BROWSER = "Google Chrome for Testing 149.0.7827.55";
 const EXPECTED_PANEL_SOURCE_SHA256 =
-  "fa676a170ccf9a4d98cbbaa6ecc8349481cb90a80a034b1af240cbaedfae9a71";
+  "cf922571dabc1a09d52bd8f90ddba56e4c0fcb5af3af2110e57bbcb8d2fcb8f9";
 const VIEWPORTS = Object.freeze([
   { width: 320, height: 720, mobile: true },
   { width: 390, height: 844, mobile: true },

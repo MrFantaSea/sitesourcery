@@ -2038,6 +2038,64 @@
       supportFallback
     );
 
+    var conversations = accountElement(documentRef, "div", "customer-support-conversations");
+    conversations.setAttribute("data-customer-support-conversations", "");
+    support.appendChild(conversations);
+    var supportThreadIdentity = null;
+    var supportReplyDraft = "";
+    function supportAction(action) {
+      Promise.resolve().then(action).catch(function () {});
+    }
+    function renderConversations(enabled) {
+      var thread = current.supportConversation;
+      var identity = thread && thread.ticket.id;
+      if (supportThreadIdentity !== identity) { supportReplyDraft = ""; supportThreadIdentity = identity; }
+      conversations.replaceChildren();
+      function button(label, action, marker) {
+        var result = accountElement(documentRef,"button","spark-button",label);
+        result.type="button"; result.disabled=!enabled;
+        if(marker) result.setAttribute(marker, "");
+        result.addEventListener("click",function(){ if(!result.disabled) supportAction(action); });
+        return result;
+      }
+      conversations.appendChild(button("Refresh conversations",function(){return actions.supportList();},"data-customer-support-refresh"));
+      var list=current.supportTickets;
+      if(list) {
+        if(!list.tickets.length) conversations.appendChild(accountElement(documentRef,"p","","No support conversations yet."));
+        list.tickets.forEach(function(ticket){
+          var open=button(ticket.subject+" · "+ticket.state.replaceAll("_"," "),function(){return actions.supportRead(ticket.id);});
+          open.setAttribute("data-customer-support-ticket",ticket.id);conversations.appendChild(open);
+        });
+        if(list.nextBeforeId) conversations.appendChild(button("Earlier conversations",function(){return actions.supportList(list.nextBeforeId);}));
+      }
+      if(!thread)return;
+      var section=accountElement(documentRef,"section","customer-support-thread");
+      section.setAttribute("data-customer-support-thread",thread.ticket.id);
+      section.appendChild(accountElement(documentRef,"h3","",thread.ticket.subject));
+      section.appendChild(button("Refresh replies",function(){return actions.supportRead(thread.ticket.id);}));
+      if(thread.nextBeforeId) section.appendChild(button("Earlier messages",function(){return actions.supportRead(thread.ticket.id,thread.nextBeforeId);}));
+      thread.messages.forEach(function(message){
+        var entry=accountElement(documentRef,"article","");
+        entry.appendChild(accountElement(documentRef,"strong","",message.authorKind==="support"?"Site Sourcery":message.authorKind==="customer"?"You":"System"));
+        var messageBody=accountElement(documentRef,"p","",message.body);
+        messageBody.style.whiteSpace="pre-wrap";messageBody.style.overflowWrap="anywhere";
+        entry.appendChild(messageBody);
+        entry.appendChild(accountElement(documentRef,"small","",new Date(message.createdAt).toLocaleString()));
+        section.appendChild(entry);
+      });
+      var reply=accountElement(documentRef,"textarea","");reply.name="customerSupportReply";
+      reply.setAttribute("aria-label","Reply to support");reply.maxLength=4000;reply.rows=4;
+      reply.value=supportReplyDraft;reply.disabled=!enabled || thread.ticket.state==="closed";
+      reply.addEventListener("input",function(){supportReplyDraft=reply.value;});
+      var send=button("Send reply",function(){
+        if(!reply.value.trim())return;
+        return Promise.resolve(actions.supportReply(reply.value)).then(function(result){if(result){supportReplyDraft="";render(current);}});
+      },"data-customer-support-send-reply");
+      send.disabled=reply.disabled;
+      section.append(reply,send);
+      conversations.appendChild(section);
+    }
+
     var projectExport = accountElement(
       documentRef,
       "fieldset",
@@ -2079,6 +2137,7 @@
       button.type = "button";
       button.setAttribute(marker, "");
       button.addEventListener("click", function () {
+        render(current); // Recheck the brief availability snapshot at click time.
         if (
           !button.disabled
           && typeof actions[action] === "function"
@@ -2246,6 +2305,9 @@
         ? "Sending project support request…"
         : "Send project support request";
 
+      var conversationPending = ["listSupportTickets","getSupportTicket","replySupportTicket"].some(pending);
+      renderConversations(Boolean(project && online && !conversationPending && !supportPending));
+
       var job = current.exportJob;
       var exportState = text(job && job.status).toLowerCase();
       var exportPending = [
@@ -2255,12 +2317,17 @@
         "downloadExport"
       ].some(pending);
       var exportEnabled = Boolean(project && online && !exportPending);
+      var exportAvailability = [project && project.exportAvailability, job && job.availability]
+        .filter(function (value) { return value && Number.isFinite(Date.parse(value.checkedAt)); })
+        .sort(function (left, right) { return Date.parse(right.checkedAt) - Date.parse(left.checkedAt); })[0];
+      var exportWorkerReady = Boolean(exportAvailability && exportAvailability.ready === true
+        && Date.parse(exportAvailability.checkedAt) <= Date.now()
+        && Date.parse(exportAvailability.refreshAfter) > Date.now()
+        && Date.parse(exportAvailability.refreshAfter) - Date.parse(exportAvailability.checkedAt) <= 30000);
+      var exportDelayed = Boolean(job && (job.delayed === true
+        || Date.now() - Date.parse(job.createdAt) > 300000));
       prepareExport.hidden = Boolean(job);
-      refreshExport.hidden = ![
-        "queued",
-        "working",
-        "ready"
-      ].includes(exportState);
+      refreshExport.hidden = !project;
       downloadExport.hidden = exportState !== "ready";
       retryExport.hidden = ![
         "failed",
@@ -2274,18 +2341,28 @@
       ].forEach(function (button) {
         button.disabled = !exportEnabled;
       });
+      prepareExport.disabled = !exportEnabled || !exportWorkerReady;
+      retryExport.disabled = !exportEnabled || !exportWorkerReady;
       if (!project) {
         exportStatus.textContent =
           "Choose a project before preparing an export.";
       } else if (!job) {
         exportStatus.textContent =
-          "No project export has been prepared in this account view.";
+          exportWorkerReady
+            ? "No project export has been prepared in this account view."
+            : "New exports are temporarily unavailable. Refresh export status to check again, or contact project support for a copy.";
       } else if (exportState === "queued") {
         exportStatus.textContent =
-          "Export queued. Refresh to read current worker status.";
+          exportDelayed
+            ? "This export has waited more than five minutes. Refresh its status or contact project support; no data was deleted."
+            : exportWorkerReady
+              ? "Export queued. Refresh to read current status."
+              : "Export is queued, but preparation is paused or unavailable. Refresh its status or contact project support.";
       } else if (exportState === "working") {
         exportStatus.textContent =
-          "Export is being prepared. Refresh to read current worker status.";
+          exportDelayed || !exportWorkerReady
+            ? "Export preparation is delayed or unavailable. Refresh its status or contact project support; no data was deleted."
+            : "Export is being prepared. Refresh to read current status.";
       } else if (exportState === "ready") {
         exportStatus.textContent =
           "Export ready"
@@ -2293,10 +2370,14 @@
           + ". The one-time download authorization is bounded by its verified expiry.";
       } else if (exportState === "failed") {
         exportStatus.textContent =
-          "Export preparation failed. No project data was deleted. Prepare one safe retry.";
+          exportWorkerReady
+            ? "Export preparation failed. No project data was deleted. Prepare one safe retry."
+            : "Export preparation failed. New exports are temporarily unavailable; refresh its status or contact project support.";
       } else if (exportState === "expired") {
         exportStatus.textContent =
-          "The one-time export download expired. Prepare a new export authorization.";
+          exportWorkerReady
+            ? "The one-time export download expired. Prepare a new export authorization."
+            : "The one-time export download expired. New exports are temporarily unavailable; refresh its status or contact project support.";
       } else {
         exportStatus.textContent =
           "The export status could not be verified. Refresh before taking another action.";
@@ -16466,11 +16547,23 @@
           refresh: function () {
             return refreshCustomerSession("manual");
           },
+          supportList: function(beforeId) { return run(null,function(){return control.listSupportTickets(beforeId);},"Conversations refreshed."); },
+          supportRead: function(ticketId,beforeId) { return run(null,function(){return control.getSupportTicket(ticketId,beforeId);},"Conversation refreshed."); },
+          supportReply: function(message) { return run(null,function(){return control.replySupportTicket(message);},"Reply saved."); },
           support: function (input) {
             return run(
               null,
               function () {
-                return control.createSupportTicket(input);
+                return control.createSupportTicket(input).then(async function(result) {
+                  if (!result || result.supportTicket?.projectId !== idOf(lastState && lastState.project)) return result;
+                  // The write is confirmed. A failed refresh must not turn it
+                  // into a failed send or encourage a second ticket.
+                  try {
+                    await control.listSupportTickets();
+                    if(result && result.supportTicket) await control.getSupportTicket(result.supportTicket.id);
+                  } catch (_) {}
+                  return result;
+                });
               },
               "Project support request sent."
             );
@@ -16488,7 +16581,9 @@
             return run(
               null,
               function () {
-                return control.getExport();
+                return control.getState().exportJob
+                  ? control.getExport()
+                  : control.refreshSelectedProject();
               },
               "Project export status refreshed."
             );
@@ -16741,6 +16836,8 @@
         account: state.account,
         project: state.project,
         exportJob: state.exportJob,
+        supportTickets: state.supportTickets,
+        supportConversation: state.supportConversation,
         operations: operations,
         online: customerOnline,
         syncing: customerSyncing,

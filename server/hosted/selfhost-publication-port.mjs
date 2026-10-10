@@ -384,6 +384,7 @@ export function createSelfHostPublicationPort({
       typeof runtime.activate === "function" &&
       typeof runtime.rollback === "function" &&
       typeof runtime.setHostnameGate === "function" &&
+      typeof runtime.purgeProject === "function" &&
       typeof runtime.readiness === "function" &&
       runtime.control &&
       runtime.releases,
@@ -689,6 +690,26 @@ export function createSelfHostPublicationPort({
     });
   }
 
+  async function purgeProject(input) {
+    const identity = {
+      organizationId: exactId(input?.organizationId, "Organization ID"),
+      projectId: exactId(input?.projectId, "Project ID"),
+      deletionRequestId: exactId(input?.deletionRequestId, "Deletion request ID")
+    };
+    invariant(typeof runtime.purgeProject === "function",
+      "PUBLICATION_ERASURE_UNAVAILABLE", "Publication erasure is unavailable.",
+      { status: 503 });
+    return callEngine("purgeProject", async () => {
+      const result = await runtime.purgeProject(identity);
+      invariant(result?.erased === true &&
+        Object.entries(identity).every(([key, value]) => result[key] === value),
+      "PUBLICATION_ERASURE_UNCONFIRMED", "Publication erasure was not confirmed.",
+      { status: 503 });
+      return { schema: "sitesourcery.publication-erasure/v1", ...identity,
+        erased: true, published: false, terminal: true };
+    });
+  }
+
   return Object.freeze({
     kind: "private-in-process-selfhost",
     async readiness() {
@@ -705,6 +726,7 @@ export function createSelfHostPublicationPort({
     },
     request: publish,
     rollback,
-    unpublish
+    unpublish,
+    purgeProject
   });
 }

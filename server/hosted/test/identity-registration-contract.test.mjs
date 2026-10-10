@@ -383,7 +383,8 @@ function createIdentityAuthorityModel() {
         credential = {
           user_id: values[0],
           password_phc: values[1],
-          pepper_version: values[2]
+          pepper_version: values[2],
+          revision: "1"
         };
         return { rowCount: 1, rows: [] };
       }
@@ -474,11 +475,18 @@ function createIdentityAuthorityModel() {
                     profile.display_name,
                   state: profile.state,
                   password_phc:
-                    credential.password_phc
+                    credential.password_phc,
+                  revision: credential.revision
                 }
               ]
             : []
         );
+      }
+      if (sql === "select id from auth.users where id = $1 for key share") {
+        return rows(user?.id === values[0] ? [{ id: user.id }] : []);
+      }
+      if (sql === "select password_phc, revision from ss.hosted_password_credentials where user_id = $1 for update") {
+        return rows(credential?.user_id === values[0] ? [{ ...credential }] : []);
       }
       if (
         sql.includes(

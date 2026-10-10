@@ -692,3 +692,24 @@ and [machine proof](../ci-provenance/6fbd5ec86d7d6efc178a6dd8f476d595f5cd9e24/pr
 bind the clean source, actual logs, scoped reuse, review and fixture cleanup.
 No new runtime deployment, production migration, provider/public-routing/spend
 or crypto effect. GitHub exact release and HQ application acceptance remain next.
+
+## R2 / SS-05 — credential race correction, 2026-10-05 (local; unreleased)
+
+Implementation `be58bc0c9be85ab2d373fbe8bdf1769694004874` / tree `0b67874d317a2fa5d8c427a5e2a5b7c620aecdbc` closes realPG stale sign-in/rotation/reauthentication races using the existing credential revision; recovery wait time and expiry are rechecked.18 concurrency cases and41 affected focused tests covered; final mail acceptance rerun passes after unique fixture IDs. No migration. [Focused provenance](R2-SS05-20261005-PROVENANCE.md) distinguishes real reproduction, failed interim tests, scoped rerun, cleanup and unreleased status. Exact disposable DB removed; no deployment/provider/spend/crypto effects. Full candidate proof is deferred to the R2/R3 consolidation.
+
+## Landing-page copy — 2026-10-05 (local; unreleased)
+
+Owner-requested direct homepage wording completed at `80e8344fb2f8e27bd6f35fc715e310b71fc38a9c` / tree `80994908c75df6e66740b7066eaad398a1113124`. Prices, routes and assessment/domain terms preserved. Site checks,11 focused tests, final hosted build and real mobile/desktop rendering pass. [Provenance](LANDING-COPY-20261005-PROVENANCE.md). Temporary browser/server/profile cleaned; no deployment/provider/spend effects. Live homepage separately returnedHTTP200 with older copy; backend acceptance remains open.
+
+## R2 / SS-07 — terminal publication erasure, 2026-10-09 (local; unreleased)
+
+Implementation `d99bd59dc5f7484aceb7735f67fc0786356719cd` / tree `f56dc543f56adde0da764efd3006178bcd9867cb` joins the existing private publication writer to canonical deletion finalization. Durable tombstone, project-scoped release/stage removal, bound receipt, current SQL lease/fence guard and per-job storage provenance prevent false deletion completion.65 unique focused counted checks covered; real filesystem/Unix RPC/PostgreSQL16 proof and affected runtime regressions pass across retained runs. [Provenance](R2-SS07-20261005-PROVENANCE.md) records intermediate fixture/inventory failures, final migration readback and scope limits. Exact disposable DB and owned scratch removed; preexisting PG and original dirty3 preserved. No deployment/GitHub/provider/spend/crypto effects. Unsupported replica jobs remain explicit adapter blockers; remaining R2/R3 and R4–R8 stay open.
+
+## R2 / SS-04 — customer/HQ support conversations, 2026-10-09 (local; unreleased)
+
+Main implementation `4d7f6e78ee1cc12fb6e1508438388bc2cdbb82f9` / tree `5c21b433a9b61ec20e665f474017588fda08bb94`; local HQ `a270766d0a137e2156eefc773a7ca7930fc0ee4b`. Existing ticket/message content now appears in the private HQ work queue with scoped customer/owner reads, replies, resolution and history; regulatory case audits remain unchanged.101 unique focused counted checks covered across retained runs, including real PG/API persistence/authorization, HQ proxy and browser controls;105 migrations pass fresh. [Provenance](R2-SS04-20261009-PROVENANCE.md) identifies synthetic identity/browser limits, intermediate failures, review corrections and exact cleanup. No deployment/provider/message/spend/crypto effects. SS-09 advisories, R3 reliability and R4–R8 release/acceptance remain open.
+
+
+## R4 combined R2/R3 release qualification — 2026-10-10
+
+Implementation `757cae571abd28083197021ba09dbfc38a5b9a5e`, tree `252469b355a2a6a6b29662f3d1193c1c33ef16e1`, base `fe42ef27ad80ef4960e5077b17d4a114d5f74ef2`. Complete npm test:2502passed/26skipped plus24routes×6width browser audit; prior focused realPG evidence reused with exact source comparisons, fresh combinedPG remains GitHub held proof. Local fixtures removed; no deployment. [Canonical provenance](../ci-provenance/757cae571abd28083197021ba09dbfc38a5b9a5e/provenance.md) and [machine proof](../ci-provenance/757cae571abd28083197021ba09dbfc38a5b9a5e/proof.json).

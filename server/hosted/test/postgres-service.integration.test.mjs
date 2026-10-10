@@ -1473,6 +1473,7 @@ test(
       clock
     };
     const service = createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
       ...serviceOptions,
       recoveryMailPort: recoverySink
     });
@@ -1811,6 +1812,7 @@ test(
       });
     const productionRegistrationService =
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         identity: productionRegistrationIdentity,
         recoveryMailPort: recoverySink
@@ -1932,6 +1934,7 @@ test(
     const productionSends = [];
     const verifiedRecoveryService =
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         recoveryMailPort: productionRecoveryPort({
             async readiness() {
@@ -2051,6 +2054,7 @@ test(
     const restartedProductionSends = [];
     const restartedRecoveryService =
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         recoveryMailPort: productionRecoveryPort({
             async readiness() {
@@ -2081,6 +2085,7 @@ test(
     let unavailableReadinessCalls = 0;
     const unavailableReplayService =
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         recoveryMailPort: {
           async readiness() {
@@ -2110,6 +2115,7 @@ test(
     const ambiguousSends = [];
     const ambiguousRecoveryService =
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         recoveryMailPort: productionRecoveryPort({
             async readiness() {
@@ -2159,6 +2165,7 @@ test(
     const forbiddenRetrySends = [];
     const restartedAmbiguousService =
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         recoveryMailPort: productionRecoveryPort({
             async readiness() {
@@ -3561,6 +3568,7 @@ test(
       selectedClock = clock
     } = {}) =>
       createCanonicalPostgresService({
+        exportWorkerHealth: { readiness: async () => ({ ready: true }) },
         ...serviceOptions,
         exportStore: store,
         clock: selectedClock,

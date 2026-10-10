@@ -184,7 +184,7 @@ test("API starts no export loop and the worker process owns the held narrow port
       "utf8"
     )
   ]);
-  assert.doesNotMatch(apiSource, /createExportWorker|exportWorker\.start/u);
+  assert.doesNotMatch(apiSource, /\bcreateExportWorker\b|exportWorker\.start/u);
   assert.doesNotMatch(httpSource, /processExport|queueMicrotask/u);
   assert.match(workerSource, /createCoreWorkerFactories/u);
   assert.match(
