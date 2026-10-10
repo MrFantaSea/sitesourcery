@@ -5,6 +5,11 @@ const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 
 export const SUPPORT_CASE_HTTP_ROUTES = deepFreeze([
+  { method: "GET", pattern: "/api/v1/support-tickets", audience: "customer", operation: "listCustomerTickets" },
+  { method: "GET", pattern: "/api/v1/support-tickets/:caseId", audience: "customer", operation: "readCustomerTicket" },
+  { method: "POST", pattern: "/api/v1/support-tickets/:caseId/messages", audience: "customer", operation: "replyCustomerTicket" },
+  { method: "GET", pattern: "/api/v1/operator/support-tickets/:caseId", audience: "operator", operation: "readOperatorTicket" },
+  { method: "POST", pattern: "/api/v1/operator/support-tickets/:caseId/messages", audience: "operator", operation: "replyOperatorTicket" },
   { method: "GET", pattern: "/api/v1/support-cases", audience: "customer", operation: "listCustomerCases" },
   { method: "POST", pattern: "/api/v1/support-cases", audience: "customer", operation: "openAuthenticated" },
   { method: "GET", pattern: "/api/v1/support-cases/:caseId", audience: "customer", operation: "readCustomerCase" },
@@ -121,6 +126,22 @@ export function createSupportCaseHttpBoundary({ supportCases } = {}) {
       const route = matchSupportCaseHttpRoute(method, pathname);
       if (!route) return null;
       const userId = actorId(actor);
+      if (route.operation.endsWith("Ticket") || route.operation === "listCustomerTickets") {
+        const operator = route.audience === "operator";
+        const scopeKeys = operator ? ["operatorOrganizationId"] : ["organizationId", "projectId"];
+        const writing = method === "POST";
+        let selected;
+        if (writing) selected = exactBody(body, [...scopeKeys, "message", ...(operator ? ["resolve"] : [])]);
+        else {
+          const keys = [...scopeKeys, ...(query.has("beforeId") ? ["beforeId"] : [])];
+          selected = { ...exactQuery(query, keys), beforeId: query.get("beforeId") ?? null };
+        }
+        return Object.freeze({ status: 200, result: await supportCases[route.operation]({
+          ...selected, actorId: userId,
+          ...(route.params.caseId ? { ticketId: route.params.caseId } : {}),
+          ...(writing ? { commandId } : {})
+        }) });
+      }
       if (route.operation === "listCustomerCases") {
         const selected = exactQuery(query, ["organizationId"]);
         return Object.freeze({

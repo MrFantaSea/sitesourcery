@@ -18,7 +18,7 @@ test("repository readiness requires its feature marker, five forced-RLS tables, 
           async query(sql, values) {
             assert.match(sql, /hosted_support_case_contract_v1/u);
             assert.equal(values[0].length, 5);
-            return { rows: [{ contract_ready: true, tables_ready: true, rls_ready: true }] };
+            return { rows: [{ contract_ready: true, tables_ready: true, rls_ready: true, conversations_ready: true }] };
           }
         });
       }

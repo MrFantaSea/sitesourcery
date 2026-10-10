@@ -439,6 +439,31 @@ export function createPostgresIdentityBridge({
     );
   }
 
+  async function lockVerifiedCredential(client, userId, verified) {
+    // Session insertion takes a parent FK lock. Acquire it before the credential
+    // lock, matching recovery issuance's user-first order and avoiding inversion.
+    const user = await client.query(
+      `select id from auth.users where id = $1 for key share`,
+      [userId]
+    );
+    const current = await client.query(
+      `select password_phc, revision
+         from ss.hosted_password_credentials
+        where user_id = $1
+        for update`,
+      [userId]
+    );
+    const row = current.rows[0];
+    // Verification is expensive and stays outside the transaction. Recheck its
+    // exact snapshot under the same lock password rotation/recovery must take,
+    // then retain that lock until session issuance/stamping or rotation commits.
+    if (user.rowCount !== 1 || !row ||
+        row.revision !== verified.revision ||
+        row.password_phc !== verified.password_phc) {
+      throw genericAuthFailure();
+    }
+  }
+
   async function issueSession(
     client,
     userId,
@@ -1172,7 +1197,8 @@ export function createPostgresIdentityBridge({
            users.disabled_at,
            profile.display_name,
            profile.state,
-           credential.password_phc
+           credential.password_phc,
+           credential.revision
          from auth.users users
          join ss.hosted_account_profiles profile on profile.user_id = users.id
          join ss.hosted_password_credentials credential
@@ -1194,9 +1220,10 @@ export function createPostgresIdentityBridge({
       if (!valid) {
         throw genericAuthFailure();
       }
-      const session = await transact((client) =>
-        issueSession(client, row.id, gate.now)
-      );
+      const session = await transact(async (client) => {
+        await lockVerifiedCredential(client, row.id, row);
+        return issueSession(client, row.id, iso(clock()));
+      });
       await clearRate("sign_in", gate.subjectDigest);
       return { user: publicUser(row), ...session };
     },
@@ -1263,7 +1290,7 @@ export function createPostgresIdentityBridge({
         actor.userId
       );
       const found = await query(
-        `select password_phc
+        `select password_phc, revision
            from ss.hosted_password_credentials
           where user_id = $1`,
         [actor.userId]
@@ -1278,21 +1305,26 @@ export function createPostgresIdentityBridge({
       if (!valid) {
         throw genericAuthFailure();
       }
-      const updated = await query(
-        `update ss.hosted_sessions
-            set reauthenticated_at = $3
-          where user_id = $1
-            and token_digest = $2
-            and revoked_at is null
-            and expires_at > $3
-        returning id`,
-        [actor.userId, actor.sessionDigest, gate.now]
-      );
-      invariant(updated.rowCount === 1, "AUTHENTICATION_REQUIRED", "Sign in to continue.", {
-        status: 401
+      const reauthenticatedAt = await transact(async (client) => {
+        await lockVerifiedCredential(client, actor.userId, found.rows[0]);
+        const now = iso(clock());
+        const updated = await client.query(
+          `update ss.hosted_sessions
+              set reauthenticated_at = $3
+            where user_id = $1
+              and token_digest = $2
+              and revoked_at is null
+              and expires_at > $3
+          returning id`,
+          [actor.userId, actor.sessionDigest, now]
+        );
+        invariant(updated.rowCount === 1, "AUTHENTICATION_REQUIRED", "Sign in to continue.", {
+          status: 401
+        });
+        return now;
       });
       await clearRate("reauthentication", gate.subjectDigest);
-      return { reauthenticatedAt: gate.now };
+      return { reauthenticatedAt };
     },
 
     async requireRecentReauthentication(actor, maximumAgeMs = 10 * 60 * 1000) {
@@ -1429,12 +1461,12 @@ export function createPostgresIdentityBridge({
         pepperVersion,
         randomBytes
       });
-      const now = iso(clock());
       return transact(async (client) => {
         const token = await client.query(
           `select
              token.id,
              token.user_id,
+             token.expires_at,
              delivery.id as delivery_request_id,
              delivery.mail_delivery_id,
              delivery.state as delivery_state
@@ -1446,7 +1478,7 @@ export function createPostgresIdentityBridge({
             and token.expires_at > $2
             and delivery.state in ('provider_accepted', 'delivered')
           for update of token, delivery`,
-          [tokenDigest, now]
+          [tokenDigest, iso(clock())]
         );
         invariant(
           token.rowCount === 1,
@@ -1455,6 +1487,20 @@ export function createPostgresIdentityBridge({
           { status: 409 }
         );
         const userId = token.rows[0].user_id;
+        const credential = await client.query(
+          `select user_id from ss.hosted_password_credentials
+            where user_id = $1 for update`,
+          [userId]
+        );
+        // A concurrent sign-in may issue its session while recovery waits.
+        // Capture time after that wait, and reject a token that expired in it.
+        const now = iso(clock());
+        invariant(
+          credential.rowCount === 1 && Date.parse(token.rows[0].expires_at) > Date.parse(now),
+          "RECOVERY_TOKEN_INVALID",
+          "That recovery link is invalid or expired.",
+          { status: 409 }
+        );
         const possessionEvidenceDigest = sha256(
           JSON.stringify({
             schema:
@@ -1522,7 +1568,7 @@ export function createPostgresIdentityBridge({
         status: 401
       });
       const found = await query(
-        `select password_phc
+        `select password_phc, revision
            from ss.hosted_password_credentials
           where user_id = $1`,
         [actor.userId]
@@ -1540,8 +1586,9 @@ export function createPostgresIdentityBridge({
         pepperVersion,
         randomBytes
       });
-      const now = iso(clock());
       await transact(async (client) => {
+        await lockVerifiedCredential(client, actor.userId, found.rows[0]);
+        const now = iso(clock());
         await client.query(
           `update ss.hosted_password_credentials
               set password_phc = $2,

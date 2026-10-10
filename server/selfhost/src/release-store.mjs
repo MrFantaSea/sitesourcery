@@ -1,5 +1,6 @@
 import path from "node:path";
-import { mkdir, rename } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, rename, rmdir, unlink } from "node:fs/promises";
+import { constants } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { canonicalJson, jsonEnvelope, sha256, verifyEnvelope } from "./canonical.mjs";
 import { fail, invariant } from "./errors.mjs";
@@ -180,6 +181,56 @@ export class ReleaseStore {
     );
     const payload = validateManifest(envelope.payload, projectId, releaseId);
     return { ...payload, manifestDigest: envelope.checksum };
+  }
+
+  // The private runtime is the sole writer and serializes this with installs.
+  // Never chmod files (which may have hard links), follow links, or leave the
+  // exact project directory. A partial failure remains replayable.
+  async eraseProject(projectId) {
+    invariant(!this.readOnly, "READ_ONLY_RUNTIME", "serving runtime cannot erase releases");
+    const target = path.join(this.root, safeId(projectId, "projectId"));
+    const rootInfo = await lstat(this.root);
+    invariant(rootInfo.isDirectory() && !rootInfo.isSymbolicLink(),
+      "UNSAFE_ROOT", "release root is unsafe");
+    let removedFiles = 0;
+    async function remove(directory) {
+      await assertNoSymlinkPath(this.root, directory, { finalType: "directory" });
+      const handle = await open(directory, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const info = await handle.stat();
+        invariant(info.isDirectory() && info.dev === rootInfo.dev && info.uid === rootInfo.uid,
+          "UNSAFE_ROOT", "release directory ownership or device is invalid");
+        await handle.chmod(info.mode | 0o700);
+        for (const entry of await readdir(directory, { withFileTypes: true })) {
+          const file = path.join(directory, entry.name);
+          const child = await lstat(file);
+          invariant(!child.isSymbolicLink(), "SYMLINK_FORBIDDEN", "release contains a symlink");
+          if (child.isDirectory()) await remove.call(this, file);
+          else {
+            invariant(child.isFile(), "PATH_TYPE_INVALID", "release contains a non-file");
+            await assertNoSymlinkPath(this.root, file);
+            await unlink(file);
+            removedFiles += 1;
+          }
+        }
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      await rmdir(directory);
+    }
+    try {
+      await lstat(target);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        await syncDirectory(this.root);
+        return { erased: true, removedFiles: 0 };
+      }
+      throw error;
+    }
+    await remove.call(this, target);
+    await syncDirectory(this.root);
+    return { erased: true, removedFiles };
   }
 
   async read(projectId, releaseId, filePath) {

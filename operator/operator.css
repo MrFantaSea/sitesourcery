@@ -158,6 +158,20 @@
   text-align: center;
 }
 
+.operator-panel-status {
+  color: var(--operator-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.operator-panel-status[data-state="stale"],
+.operator-panel-status[data-state="error"] {
+  color: var(--operator-error);
+  border-left: 3px solid currentColor;
+  padding-left: 0.75rem;
+}
+
 .operator-card {
   width: 100%;
   min-height: 4.75rem;

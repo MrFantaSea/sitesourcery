@@ -107,7 +107,8 @@ export function createLifecycleWorkerFactories({
               invariant(
                 publicationPort &&
                   typeof publicationPort.readiness === "function" &&
-                  typeof publicationPort.unpublish === "function",
+                  typeof publicationPort.unpublish === "function" &&
+                  typeof publicationPort.purgeProject === "function",
                 "WORKER_DEPENDENCY_NOT_READY",
                 "The private publication command client is required.",
                 { status: 503 }
@@ -166,15 +167,14 @@ export function createLifecycleWorkerFactories({
                   ? publicationPort.readiness()
                   : Promise.resolve(null)
               ]);
-              const externalReplicaReady =
-                purpose !== "project-lifecycle" ||
-                Number(storage?.externalReplicas ?? 0) === 0;
+              // Unsupported replica jobs fail individually. An unrelated
+              // project's replica must not stop all approved deletion work.
               const publicationTransportReady =
                 purpose !== "project-lifecycle" ||
                 options.enabled !== true || publication?.ready === true;
               const ready = options.enabled && storage?.ready === true &&
                 storage?.verified === true && dependency?.ready === true &&
-                dependency?.verified === true && externalReplicaReady &&
+                dependency?.verified === true &&
                 publicationTransportReady;
               return Object.freeze({
                 schema: "sitesourcery.lifecycle-worker-composition-readiness/v1",
@@ -184,7 +184,7 @@ export function createLifecycleWorkerFactories({
                 mode: options.mode,
                 storageReady: storage?.ready === true,
                 dependencyReady: dependency?.ready === true,
-                externalReplicaReady,
+                externalReplicas: Number(storage?.externalReplicas ?? 0),
                 publicationTransportReady,
                 providerEffects: false,
                 code: ready ? null : `${purpose.toUpperCase().replaceAll("-", "_")}_HELD`

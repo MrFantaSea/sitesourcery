@@ -20,6 +20,7 @@ const SHA = (value) => value.repeat(64);
 function repository() {
   const calls = [];
   const methods = [
+    "listCustomerTickets", "readCustomerTicket", "replyCustomerTicket", "readOperatorTicket", "replyOperatorTicket",
     "openAuthenticated", "recordManual", "assign", "updateIdentity",
     "setDeadline", "startReview", "respond", "deny", "close",
     "addEvidence", "readCustomerCase", "listCustomerCases",

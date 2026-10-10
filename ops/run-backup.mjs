@@ -15,9 +15,12 @@ import {
 } from "./backup-runtime.mjs";
 import {
   PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT,
+  HQ_BACKUP_RUNTIME_UNIT,
+  createHqBackupPorts,
   createProductionBackupPorts,
   createProductionRehearsalBackupPorts
 } from "./backup-ports.mjs";
+import { assertHqBackupEnvironment, createHqBackupLifecycle } from "./hq-backup-cycle.mjs";
 import {
   parseJsonObject
 } from "./immutable-evidence.mjs";
@@ -269,6 +272,16 @@ export function backupProductionRehearsalFromEnvironment(
         PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT
     }
   );
+}
+
+export function backupHqFromEnvironment(environment = process.env, {
+  uid = process.getuid?.(), lifecycle = createHqBackupLifecycle({ uid })
+} = {}) {
+  assertHqBackupEnvironment(environment, uid);
+  return backupFromEnvironmentWithBoundary(environment, {
+    createPorts: options => createHqBackupPorts({ ...options, uid, lifecycle }),
+    quiesceRuntimeUnit: HQ_BACKUP_RUNTIME_UNIT
+  });
 }
 
 async function main() {

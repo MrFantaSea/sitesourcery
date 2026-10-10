@@ -9,7 +9,7 @@ RequiresMountsFor=/srv/sitesourcery-storage
 Requires=sitesourcery-hq-api.service
 ConditionPathExists=/etc/sitesourcery/WORKERS_APPROVED
 ConditionPathExists=!/etc/sitesourcery/WORKERS_HOLD
-ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE
+ConditionPathExists=!/srv/sitesourcery-storage/production/backup-control/BACKUP_QUIESCE
 
 StartLimitIntervalSec=300
 StartLimitBurst=3

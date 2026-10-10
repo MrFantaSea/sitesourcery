@@ -224,14 +224,7 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
     source,
     /capabilitiesPolicy: PRODUCTION_CAPABILITIES_POLICY/u
   );
-  assert.match(
-    source,
-    /readiness[.]registration\?\.mode !== "production"[\s\S]{0,240}readiness[.]registration\?\.ready === true[\s\S]{0,160}readiness[.]registration\?\.verified === true/u
-  );
-  assert.match(
-    source,
-    /readiness[.]recovery\?\.mode !== "production"[\s\S]{0,240}readiness[.]recovery\?\.ready === true[\s\S]{0,160}readiness[.]recovery\?\.verified === true/u
-  );
+  assert.match(source, /accounts_recovery: heldRow\(mailLifecycleReadiness.ready === true\)/u);
   assert.match(
     source,
     /await capabilityProcessMatrix\.assertStartup\(\s*await capabilityProcessMatrix\.snapshot\(\)\s*\);/u
@@ -245,4 +238,27 @@ test("production entrypoint constructs, mounts, and asserts the strict matrix be
   assert.match(source, /server\.listen\(port, host\)/u);
   assert.match(tenantSource, /port !== 8080/u);
   assert.match(tenantSource, /SelfHostRuntime\.openServing/u);
+});
+
+
+test("strict core readiness does not fan out to unavailable feature providers", async () => {
+  let providerCalls = 0;
+  const selectedService = service();
+  selectedService.coreReadiness = async () => ({ ready: true });
+  selectedService.readiness = async () => {
+    providerCalls += 1;
+    return new Promise(() => {});
+  };
+  const matrix = createCapabilityProcessMatrix({
+    loadRows: async () => rowStates(), processes: processStates()
+  });
+  const selected = createHostedApi(selectedService, {
+    capabilityProcessMatrix: matrix, strictCapabilityProcessMatrix: true,
+    readinessPolicy: { ttlMs: 1, timeoutMs: 20, staleAfterMs: 100 },
+    capabilitiesPolicy: { ttlMs: 1, timeoutMs: 20 }
+  });
+  const result = await selected.fetch(new Request(`${ORIGIN}/api/v1/ready`));
+  assert.equal(result.status, 200);
+  assert.equal((await result.json()).capabilityProcessMatrix.startupReady, true);
+  assert.equal(providerCalls, 0);
 });

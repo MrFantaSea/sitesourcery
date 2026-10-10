@@ -25,7 +25,7 @@
   var SAFE_SOURCE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u;
   var QUEUE_KINDS = new Set([
     "payment_reconciliation", "reversal_reconciliation", "assessment_job",
-    "custom_job", "support_case", "privacy_case", "publication_hold",
+    "custom_job", "support_ticket", "support_case", "privacy_case", "publication_hold",
     "domain_failure", "care_hold", "mail_exception",
     "invoice_finalization_failure", "provider_reconciliation_case",
     "responder_delivery_manual_review", "responder_followup_manual_review",
@@ -362,6 +362,24 @@
       digest: digest(value.digest),
       recordedAt: instant(value.recordedAt)
     });
+  }
+
+  function validateSupportConversation(value, expectedId) {
+    exact(value,["schema","ticket","messages","nextBeforeId"]);
+    check(value.schema === "sitesourcery.support-conversation/v1");
+    exact(value.ticket,["id","organizationId","projectId","subject","state","createdAt","updatedAt"]);
+    check(UUID.test(value.ticket.id) && (!expectedId || value.ticket.id===expectedId) &&
+      UUID.test(value.ticket.organizationId) && UUID.test(value.ticket.projectId) &&
+      ["open","waiting_customer","waiting_support","resolved","closed"].includes(value.ticket.state));
+    text(value.ticket.subject,120);
+    check(value.nextBeforeId === null || UUID.test(value.nextBeforeId));
+    check(Array.isArray(value.messages) && value.messages.length<=50);
+    value.messages.forEach(function(message){
+      exact(message,["id","authorKind","body","createdAt"]);
+      check(UUID.test(message.id) && ["customer","support","system"].includes(message.authorKind));
+      text(message.body,4000);check(Number.isFinite(Date.parse(message.createdAt)));
+    });
+    return value;
   }
 
   function validateOperatorCase(value) {
@@ -899,6 +917,7 @@
     var sessionStatus = documentRef.getElementById("operator-session-status");
     var organizationSelect = documentRef.getElementById("operator-organization");
     var refreshButton = documentRef.getElementById("operator-refresh");
+    var reconnectButton = documentRef.getElementById("operator-reconnect");
     var queueRoot = documentRef.getElementById("operator-queue");
     var casesRoot = documentRef.getElementById("operator-cases");
     var queueCount = documentRef.getElementById("queue-count");
@@ -983,6 +1002,15 @@
     var reconciliationResolution = documentRef.getElementById(
       "reconciliation-resolution-kind"
     );
+    var ticketRoot = documentRef.getElementById("operator-ticket-detail");
+    var ticketMessages = documentRef.getElementById("operator-ticket-messages");
+    var ticketForm = documentRef.getElementById("operator-ticket-reply");
+    var ticketEarlier = documentRef.getElementById("operator-ticket-earlier");
+    var ticketRequestEpoch = 0;
+    var ticketReplyCommand = null;
+    var contextEpoch = 0;
+    var refreshEpoch = 0;
+    var refreshController = null;
     var state = {
       client: null,
       actorId: null,
@@ -991,6 +1019,7 @@
       queue: [],
       cases: [],
       selectedCase: null,
+      selectedTicket: null,
       selectedReconciliation: null,
       careSnapshot: null,
       responderSnapshot: null,
@@ -1001,6 +1030,130 @@
       serviceCommand: null,
       busy: false
     };
+    var panels = [
+      { key: "queue", root: queueRoot, path: function (org) {
+        return "/operator/work-queue?operatorOrganizationId=" + org;
+      }, accept: function (value) {
+        state.queue = validateQueue(value).items;
+        if (state.selectedReconciliation && !state.queue.some(function (item) {
+          return item.kind === "provider_reconciliation_case" &&
+            item.source.id === state.selectedReconciliation.id;
+        })) state.selectedReconciliation = null;
+        renderQueue();
+        renderReconciliationDetail();
+      } },
+      { key: "cases", root: casesRoot, path: function (org) {
+        return "/operator/support-cases?operatorOrganizationId=" + org;
+      }, accept: function (value) {
+        state.cases = validateCaseList(value).cases;
+        if (state.selectedCase) state.selectedCase = state.cases.find(function (entry) {
+          return entry.id === state.selectedCase.id;
+        }) || null;
+        renderCases();
+        renderDetail();
+      } },
+      { key: "care", root: careRoot, path: function (org) {
+        return "/operator/care/organizations/" + org;
+      }, accept: function (value) {
+        renderServiceSurface("care", careModule, careRoot, value);
+        state.careSnapshot = value;
+      } },
+      { key: "responder", root: responderRoot, path: function (org) {
+        return "/operator/responder/organizations/" + org;
+      }, accept: function (value) {
+        renderServiceSurface("responder", responderModule, responderRoot, value);
+        state.responderSnapshot = value;
+      } },
+      { key: "number-bindings", root: numberBindingsRoot, path: function (org) {
+        return "/operator/responder/organizations/" + org + "/number-bindings";
+      }, accept: function (value) {
+        state.numberBindings = validateNumberBindingList(value).bindings;
+        renderNumberBindings();
+      } },
+      { key: "adjacent-contracts", root: adjacentContractsRoot, path: function (org) {
+        return "/operator/adjacent-integrations/contracts?operatorOrganizationId=" + org;
+      }, accept: function (value) {
+        state.adjacentContracts = validateAdjacentContracts(value).systems;
+        renderAdjacentContracts();
+      } },
+      { key: "adjacent-trace", root: adjacentTraceRoot, path: function (org) {
+        return "/operator/adjacent-integrations/trace?operatorOrganizationId=" + org;
+      }, accept: function (value) {
+        state.adjacentTrace = validateAdjacentTrace(value);
+        renderAdjacentTrace();
+      } }
+    ];
+    panels.forEach(function (panel) {
+      panel.statusRoot = documentRef.getElementById("operator-" + panel.key + "-status");
+      panel.lastSuccess = null;
+      panel.status = "unavailable";
+    });
+
+    function requestContext() {
+      return { epoch: contextEpoch, client: state.client, organizationId: state.organizationId };
+    }
+
+    function currentContext(context) {
+      return context.epoch === contextEpoch && context.client === state.client &&
+        context.organizationId === state.organizationId;
+    }
+
+    function panelStatus(panel, status, error) {
+      panel.status = status;
+      panel.statusRoot.dataset.state = status;
+      panel.statusRoot.replaceChildren(documentRef.createTextNode(
+        status === "fresh" ? "Up to date. " :
+          status === "loading" ? (panel.lastSuccess ? "Refreshing. Showing last result. " : "Loading. ") :
+            panel.lastSuccess ? "Stale — refresh failed. Showing last result. " : "Unavailable. "
+      ));
+      if (error) panel.statusRoot.appendChild(documentRef.createTextNode(
+        (error.message || "This panel could not refresh.") + " "
+      ));
+      if (panel.lastSuccess) {
+        panel.statusRoot.appendChild(documentRef.createTextNode("Last successful refresh: "));
+        var time = createElement(documentRef, "time", "", formatDate(panel.lastSuccess));
+        time.dateTime = panel.lastSuccess;
+        panel.statusRoot.appendChild(time);
+      } else {
+        panel.statusRoot.appendChild(documentRef.createTextNode("No successful refresh in this session."));
+      }
+      panel.root.dataset.stale = status === "fresh" ? "false" : "true";
+    }
+
+    function clearScope() {
+      contextEpoch++;
+      refreshEpoch++;
+      if (refreshController) refreshController.abort();
+      refreshController = null;
+      ticketRequestEpoch++;
+      state.queue = []; state.cases = []; state.numberBindings = [];
+      state.adjacentContracts = []; state.adjacentTrace = null;
+      state.careSnapshot = null; state.responderSnapshot = null;
+      state.selectedCase = null; state.selectedTicket = null;
+      state.selectedReconciliation = null; state.selectedAdjacent = null;
+      ticketReplyCommand = null; ticketForm.reset(); renderTicket();
+      renderDetail(); renderReconciliationDetail(); renderAdjacentDetail();
+      [factsRoot, auditRoot, reconciliationFactsRoot, adjacentFactsRoot]
+        .forEach(function (root) { root.replaceChildren(); });
+      closeAdjacentCrosswalkEntry(); closeServiceCommand();
+      [queueCount, caseCount, numberBindingCount, adjacentContractCount, adjacentTraceCount]
+        .forEach(function (counter) { counter.textContent = "—"; });
+      panels.forEach(function (panel) {
+        panel.lastSuccess = null;
+        empty(panel.root, "No records loaded for this session and organization.");
+        panelStatus(panel, "unavailable");
+      });
+    }
+
+    function sessionExpired() {
+      clearScope();
+      clearMessages();
+      state.client = null; state.actorId = null;
+      state.organizationId = null; state.organizations = [];
+      organizationSelect.replaceChildren();
+      sessionStatus.textContent = "Session expired. Sign in through the Assessment and Custom tools, then reconnect.";
+      setBusy(false);
+    }
 
     function showError(error) {
       var message = error && error.message
@@ -1025,8 +1178,10 @@
 
     function setBusy(value) {
       state.busy = value;
+      Array.from(ticketRoot.querySelectorAll("button,input,textarea")).forEach(function(control){ control.disabled=value; });
       board.setAttribute("aria-busy", value ? "true" : "false");
       refreshButton.disabled = value || !state.organizationId;
+      reconnectButton.disabled = value;
       organizationSelect.disabled = value || state.organizations.length === 0;
       numberBindingProvision.disabled = value || !state.organizationId;
       adjacentCrosswalkOpen.disabled = value || !state.organizationId ||
@@ -1075,7 +1230,12 @@
     }
 
     function renderQueueAction(item, card) {
-      if (item.kind === "provider_reconciliation_case") {
+      if (item.kind === "support_ticket") {
+        check(item.source.table === "ss.support_tickets" && UUID.test(item.source.id));
+        var conversationButton=createElement(documentRef,"button","operator-button operator-queue-action","Open conversation");
+        conversationButton.type="button";conversationButton.dataset.supportTicketId=item.source.id;
+        card.appendChild(conversationButton);
+      } else if (item.kind === "provider_reconciliation_case") {
         var button = createElement(
           documentRef,
           "button",
@@ -2094,123 +2254,150 @@
       });
     }
 
-    function renderServiceSurfaces() {
-      check(
-        careModule && typeof careModule.mount === "function" &&
-        responderModule && typeof responderModule.mount === "function"
-      );
-      careRoot.replaceChildren();
-      responderRoot.replaceChildren();
-      careModule.mount({
+    function renderServiceSurface(product, module, root, snapshot) {
+      check(module && typeof module.mount === "function");
+      // Validate and render off-document so a malformed response cannot erase
+      // the last successfully rendered panel.
+      var container = documentRef.createElement("div");
+      module.mount({
         audience: "operator",
-        container: careRoot,
+        container: container,
         documentRef: documentRef,
-        snapshot: state.careSnapshot,
+        snapshot: snapshot,
         onCommand: function (action) {
-          openServiceCommand(Object.freeze({ product: "care", ...action }));
+          if (state.busy) return;
+          openServiceCommand(Object.freeze({ product: product, ...action }));
         }
       });
-      responderModule.mount({
-        audience: "operator",
-        container: responderRoot,
-        documentRef: documentRef,
-        snapshot: state.responderSnapshot,
-        onCommand: function (action) {
-          openServiceCommand(Object.freeze({ product: "responder", ...action }));
-        }
-      });
+      root.replaceChildren.apply(root, Array.from(container.childNodes));
     }
 
     async function refreshAll(options) {
-      if (!state.organizationId) return;
+      if (!state.organizationId || !state.client) return;
+      var context = requestContext();
+      var epoch = ++refreshEpoch;
+      if (refreshController) refreshController.abort();
+      var controller = new AbortController();
+      refreshController = controller;
+      function current() { return currentContext(context) && epoch === refreshEpoch; }
       clearMessages();
       setBusy(true);
-      try {
-        var organization = encodeURIComponent(state.organizationId);
-        var values = await Promise.all([
-          state.client.request(
-            "GET",
-            "/operator/work-queue?operatorOrganizationId=" + organization
-          ),
-          state.client.request(
-            "GET",
-            "/operator/support-cases?operatorOrganizationId=" + organization
-          ),
-          state.client.request(
-            "GET",
-            "/operator/care/organizations/" + organization
-          ),
-          state.client.request(
-            "GET",
-            "/operator/responder/organizations/" + organization
-          ),
-          state.client.request(
-            "GET",
-            "/operator/responder/organizations/" + organization +
-              "/number-bindings"
-          ),
-          state.client.request(
-            "GET",
-            "/operator/adjacent-integrations/contracts?operatorOrganizationId=" +
-              organization
-          ),
-          state.client.request(
-            "GET",
-            "/operator/adjacent-integrations/trace?operatorOrganizationId=" +
-              organization
-          )
-        ]);
-        state.queue = validateQueue(values[0]).items;
-        state.cases = validateCaseList(values[1]).cases;
-        state.careSnapshot = values[2];
-        state.responderSnapshot = values[3];
-        state.numberBindings = validateNumberBindingList(values[4]).bindings;
-        state.adjacentContracts = validateAdjacentContracts(values[5]).systems;
-        state.adjacentTrace = validateAdjacentTrace(values[6]);
-        if (state.selectedCase) {
-          state.selectedCase = state.cases.find(function (entry) {
-            return entry.id === state.selectedCase.id;
-          }) || null;
+      panels.forEach(function (panel) { panelStatus(panel, "loading"); });
+      // Each response commits only its own validated panel immediately. The
+      // final wait controls the shared refresh button, not successful rendering.
+      await Promise.allSettled(panels.map(async function (panel) {
+        try {
+          var value = await context.client.request(
+            "GET", panel.path(encodeURIComponent(context.organizationId)),
+            { signal: controller.signal }
+          );
+          if (!current()) return;
+          panel.accept(value);
+          panel.lastSuccess = new Date().toISOString();
+          panelStatus(panel, "fresh");
+        } catch (error) {
+          if (!current()) return;
+          if (error && error.status === 401) {
+            sessionExpired();
+            return;
+          }
+          panelStatus(panel, panel.lastSuccess ? "stale" : "error", error);
+          if (!panel.lastSuccess) empty(panel.root, "This panel has not loaded. Refresh to try again.");
         }
-        if (state.selectedReconciliation && !state.queue.some(function (item) {
-          return item.kind === "provider_reconciliation_case" &&
-            item.source.id === state.selectedReconciliation.id;
-        })) state.selectedReconciliation = null;
-        renderQueue();
-        renderCases();
-        renderDetail();
-        renderReconciliationDetail();
-        renderServiceSurfaces();
-        renderNumberBindings();
-        renderAdjacentContracts();
-        renderAdjacentTrace();
-        if (options && options.notice) showNotice(options.notice);
-      } catch (error) {
-        showError(error);
-      } finally {
-        setBusy(false);
+      }));
+      if (!current()) return;
+      refreshController = null;
+      setBusy(false);
+      if (options && options.sourceError) {
+        showError(options.sourceError);
+      } else if (panels.some(function (panel) { return panel.status !== "fresh"; })) {
+        showNotice("Some panels could not refresh. See each panel for its status and last successful refresh.");
+      } else if (options && options.notice) {
+        showNotice(options.notice);
       }
     }
 
     async function refreshSources() {
-      if (!state.organizationId) return;
+      if (!state.organizationId || !state.client) return;
+      var context = requestContext();
+      var epoch = ++refreshEpoch;
+      if (refreshController) refreshController.abort();
+      var controller = new AbortController();
+      refreshController = controller;
+      function current() { return currentContext(context) && epoch === refreshEpoch; }
       clearMessages();
       setBusy(true);
+      var sourceError = null;
       try {
-        var refreshed = await state.client.request(
-          "POST",
-          "/operator/work-queue/refresh",
-          { body: { operatorOrganizationId: state.organizationId } }
+        await context.client.request(
+          "POST", "/operator/work-queue/refresh",
+          { body: { operatorOrganizationId: context.organizationId }, signal: controller.signal }
         );
-        state.queue = validateQueue(refreshed).items;
-        renderQueue();
-        await refreshAll({ notice: "Canonical sources and case state refreshed." });
       } catch (error) {
-        showError(error);
-      } finally {
-        setBusy(false);
+        if (!current()) return;
+        if (error && error.status === 401) { sessionExpired(); return; }
+        sourceError = new Error("Source refresh failed. Panels show the available saved records. " +
+          (error.message || "Try again."));
       }
+      if (!current()) return;
+      await refreshAll({
+        notice: "Canonical sources and case state refreshed.",
+        sourceError: sourceError
+      });
     }
+
+    function renderTicket() {
+      var value=state.selectedTicket;
+      ticketRoot.hidden=!value;
+      if(!value){ticketMessages.replaceChildren();return;}
+      documentRef.getElementById("operator-ticket-title").textContent=value.ticket.subject+" · "+human(value.ticket.state);
+      ticketEarlier.hidden=!value.nextBeforeId;
+      ticketForm.hidden=value.ticket.state==="closed";
+      ticketMessages.replaceChildren();
+      value.messages.forEach(function(message){
+        var article=createElement(documentRef,"article","operator-item");
+        article.appendChild(createElement(documentRef,"strong","",message.authorKind==="support"?"Site Sourcery":message.authorKind==="customer"?"Customer":"System"));
+        var body=createElement(documentRef,"p","",message.body);body.style.whiteSpace="pre-wrap";body.style.overflowWrap="anywhere";
+        article.appendChild(body);article.appendChild(createElement(documentRef,"small","",new Date(message.createdAt).toLocaleString()));
+        ticketMessages.appendChild(article);
+      });
+    }
+    async function openTicket(ticketId,beforeId) {
+      var epoch=++ticketRequestEpoch,organizationId=state.organizationId;
+      clearMessages();setBusy(true);
+      if(!state.selectedTicket || state.selectedTicket.ticket.id!==ticketId){
+        state.selectedTicket=null;ticketForm.reset();ticketReplyCommand=null;renderTicket();
+      }
+      try {
+        var query=new URLSearchParams({operatorOrganizationId:organizationId});
+        if(beforeId)query.set("beforeId",beforeId);
+        var value=validateSupportConversation(await state.client.request("GET","/operator/support-tickets/"+encodeURIComponent(ticketId)+"?"+query.toString()),ticketId);
+        if(epoch!==ticketRequestEpoch || organizationId!==state.organizationId)return;
+        if(beforeId && state.selectedTicket)value.messages=value.messages.concat(state.selectedTicket.messages);
+        state.selectedTicket=value;renderTicket();
+      }catch(error){if(epoch===ticketRequestEpoch)showError(error);}
+      finally{if(epoch===ticketRequestEpoch)setBusy(false);}
+    }
+    documentRef.getElementById("operator-ticket-close").addEventListener("click",function(){
+      ticketRequestEpoch++;state.selectedTicket=null;ticketForm.reset();ticketReplyCommand=null;renderTicket();
+    });
+    documentRef.getElementById("operator-ticket-refresh").addEventListener("click",function(){if(state.selectedTicket)openTicket(state.selectedTicket.ticket.id);});
+    ticketEarlier.addEventListener("click",function(){if(state.selectedTicket)openTicket(state.selectedTicket.ticket.id,state.selectedTicket.nextBeforeId);});
+    ticketForm.addEventListener("submit",async function(event){
+      event.preventDefault();if(state.busy || !state.selectedTicket || !ticketForm.reportValidity())return;
+      var ticketId=state.selectedTicket.ticket.id,epoch=ticketRequestEpoch;
+      var body={operatorOrganizationId:state.organizationId,message:formValue(ticketForm,"message"),resolve:ticketForm.elements.namedItem("resolve").checked};
+      var signature=JSON.stringify([ticketId,body]);
+      if(!ticketReplyCommand || ticketReplyCommand.signature!==signature)ticketReplyCommand={signature:signature,key:"support-reply-"+globalThis.crypto.randomUUID()};
+      clearMessages();setBusy(true);
+      try{
+        var value=validateSupportConversation(await state.client.request("POST","/operator/support-tickets/"+encodeURIComponent(ticketId)+"/messages",{body:body,idempotencyKey:ticketReplyCommand.key}),ticketId);
+        if(epoch!==ticketRequestEpoch)return;
+        state.selectedTicket=value;ticketReplyCommand=null;ticketForm.reset();renderTicket();showNotice("Reply saved. The customer can read it in their project support conversation.");
+        if(body.resolve){state.queue=state.queue.filter(function(item){return !(item.kind==="support_ticket" && item.source.id===ticketId);});renderQueue();}
+      }catch(error){if(epoch===ticketRequestEpoch)showError(error);}
+      finally{if(epoch===ticketRequestEpoch)setBusy(false);}
+    });
 
     async function mutateCase(suffix, body, notice) {
       var selected = state.selectedCase;
@@ -2254,6 +2441,8 @@
     });
 
     queueRoot.addEventListener("click", function (event) {
+      var ticketButton=event.target.closest("[data-support-ticket-id]");
+      if(ticketButton && !state.busy){openTicket(ticketButton.dataset.supportTicketId);return;}
       var adjacent = event.target.closest("[data-adjacent-crosswalk-id]");
       if (adjacent && !state.busy) {
         openAdjacentCrosswalk(adjacent.dataset.adjacentCrosswalkId);
@@ -2630,62 +2819,66 @@
     });
     refreshButton.addEventListener("click", refreshSources);
     organizationSelect.addEventListener("change", function () {
+      clearScope();
       state.organizationId = organizationSelect.value;
-      state.selectedCase = null;
-      state.selectedReconciliation = null;
-      state.selectedAdjacent = null;
-      renderAdjacentDetail();
-      closeAdjacentCrosswalkEntry();
-      closeServiceCommand();
       refreshAll();
+    });
+    reconnectButton.addEventListener("click", function () {
+      if (!state.busy) boot();
     });
 
     async function boot() {
+      clearScope();
+      clearMessages();
+      state.client = null; state.actorId = null;
+      state.organizationId = null; state.organizations = [];
+      organizationSelect.replaceChildren();
       if (!publicApi || typeof publicApi.createClient !== "function") {
         showError(new Error("The secure Site Sourcery client is unavailable."));
+        setBusy(false);
         return;
       }
-      state.client = publicApi.createClient();
+      var client = publicApi.createClient();
+      state.client = client;
+      var epoch = contextEpoch;
+      var refreshing = false;
+      function current() { return contextEpoch === epoch && state.client === client; }
+      sessionStatus.textContent = "Checking your secure session…";
       setBusy(true);
       try {
-        var account = await state.client.me();
+        var account = await client.me();
+        if (!current()) return;
         if (!account || !account.user) {
-          sessionStatus.textContent = "Sign in through the Assessment and Custom tools to continue.";
-          board.setAttribute("aria-busy", "false");
+          sessionStatus.textContent = "Sign in through the Assessment and Custom tools, then reconnect.";
           return;
         }
         state.actorId = uuid(account.user.id);
-        state.organizations = validateOrganizationPayload(
-          await state.client.listOrganizations()
-        );
-        if (state.organizations.length === 0) {
+        var organizations = validateOrganizationPayload(await client.listOrganizations());
+        if (!current()) return;
+        state.organizations = organizations;
+        if (organizations.length === 0) {
           throw new Error("This account does not have an active operator organization.");
         }
         organizationSelect.replaceChildren.apply(
           organizationSelect,
-          state.organizations.map(function (organization) {
-            var option = createElement(
-              documentRef,
-              "option",
-              "",
-              organization.name + " · " + human(organization.role)
-            );
+          organizations.map(function (organization) {
+            var option = createElement(documentRef, "option", "",
+              organization.name + " · " + human(organization.role));
             option.value = organization.id;
             return option;
           })
         );
-        state.organizationId = state.organizations[0].id;
+        state.organizationId = organizations[0].id;
         organizationSelect.value = state.organizationId;
         sessionStatus.textContent = "Authenticated. Database capability checks remain authoritative for every request.";
+        refreshing = true;
         await refreshAll();
       } catch (error) {
-        if (error && error.status === 401) {
-          sessionStatus.textContent = "Sign in through the Assessment and Custom tools to continue.";
-        } else {
-          showError(error);
-        }
+        if (!current()) return;
+        if (error && error.status === 401) sessionExpired();
+        else showError(error);
       } finally {
-        setBusy(false);
+        if (current() && !refreshing) setBusy(false);
       }
     }
 
@@ -2695,6 +2888,7 @@
 
   return Object.freeze({
     mount: mount,
+    validateSupportConversation: validateSupportConversation,
     validateCaseList: validateCaseList,
     validateOperatorCase: validateOperatorCase,
     validateOrganizationPayload: validateOrganizationPayload,

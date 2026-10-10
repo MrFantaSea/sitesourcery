@@ -46,7 +46,7 @@ function fixture({
       calls.escalations.push(input);
       return escalateResult;
     },
-    async listReadbackCandidates() {
+    async claimReadbackCandidates() {
       calls.candidateLists += 1;
       return { candidates: readbackCandidates };
     },
@@ -170,7 +170,7 @@ test("detection failure surfaces an allowlisted code and never leaks detail", as
       async runDetection() { throw error; },
       async listOpenCases() { return { cases: [] }; },
       async escalateAbandonedClaim() { return { status: "escalated" }; },
-      async listReadbackCandidates() { return { candidates: [] }; },
+      async claimReadbackCandidates() { return { candidates: [] }; },
       async recordReadback() { throw new Error("unused"); }
     };
     return {
@@ -218,7 +218,7 @@ test("environment options are bounded and default sensibly", () => {
       repository: {
         kind: "wrong", providerEffects: false, runDetection() {},
         escalateAbandonedClaim() {}, recordReadback() {},
-        listReadbackCandidates() {}, listOpenCases() {}
+        claimReadbackCandidates() {}, listOpenCases() {}
       },
       clock: { now: () => NOW }
     }),

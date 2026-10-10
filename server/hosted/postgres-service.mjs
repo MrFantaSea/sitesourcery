@@ -605,6 +605,7 @@ function createCanonicalPostgresRuntime({
   catalogPort,
   publicationPort,
   exportStore,
+  exportWorkerHealth = null,
   recoveryMailPort,
   paymentProvider: suppliedPaymentProvider = null,
   contactVault = null,
@@ -733,6 +734,37 @@ function createCanonicalPostgresRuntime({
   const legalAuthority = projectLegalAuthority
     ? Object.freeze(projectLegalAuthority)
     : null;
+  async function exportAvailability() {
+    let ready = false;
+    try {
+      ready = (await exportWorkerHealth?.readiness())?.ready === true;
+    } catch { /* A failed health read closes new admission only. */ }
+    const checkedAt = now(clock);
+    return {
+      ready,
+      code: ready ? "EXPORT_WORKER_READY" : "EXPORT_WORKER_UNAVAILABLE",
+      checkedAt,
+      refreshAfter: addMs(checkedAt, 30_000),
+      maximumQueueAgeMs: 300_000
+    };
+  }
+  async function requireExportWorker() {
+    const availability = await exportAvailability();
+    invariant(availability.ready, "EXPORT_WORKER_UNAVAILABLE",
+      "Project exports are temporarily unavailable. Existing exports can still be refreshed or downloaded; contact project support if you need a copy.",
+      { status: 503 });
+    return availability;
+  }
+  async function exportPresentation(row) {
+    const availability = await exportAvailability();
+    return {
+      ...publicExport(row),
+      availability,
+      delayed: ["queued", "building"].includes(row.state) &&
+        Date.parse(now(clock)) - Date.parse(iso(row.requested_at)) > availability.maximumQueueAgeMs
+    };
+  }
+
   async function projectLegalReadiness() {
     if (
       !legalAuthority ||
@@ -1330,7 +1362,8 @@ function createCanonicalPostgresRuntime({
         previousReleaseId: row.previous_release_id,
         updatedAt: iso(row.updated_at)
       },
-      legal
+      legal,
+      exportAvailability: await exportAvailability()
     };
   }
 
@@ -8340,6 +8373,7 @@ function createCanonicalPostgresRuntime({
             "The project export retention period has ended.",
             { status: 410 }
           );
+          await requireExportWorker();
           const exportId = randomUUID();
           await client.query(
             `insert into ss.export_requests (
@@ -8367,7 +8401,7 @@ function createCanonicalPostgresRuntime({
             "select * from ss.export_requests where id = $1",
             [exportId]
           );
-          return { export: publicExport(row.rows[0]) };
+          return { export: await exportPresentation(row.rows[0]) };
         }
       });
     },
@@ -8485,7 +8519,7 @@ function createCanonicalPostgresRuntime({
             );
             row.state = "expired";
           }
-          const presented = publicExport(row);
+          const presented = await exportPresentation(row);
           if (row.state === "ready") {
             const authorizationId = randomUUID();
             const issuedAt = now(clock);
@@ -8559,6 +8593,7 @@ function createCanonicalPostgresRuntime({
             "Only failed or expired exports can be regenerated.",
             { status: 409 }
           );
+          await requireExportWorker();
           const updated = await client.query(
             `update ss.export_requests
                 set state = 'queued',
@@ -8581,7 +8616,7 @@ function createCanonicalPostgresRuntime({
             returning *`,
             [selectedExportId]
           );
-          return { export: publicExport(updated.rows[0]) };
+          return { export: await exportPresentation(updated.rows[0]) };
         }
       });
     },
@@ -9033,7 +9068,7 @@ function createCanonicalPostgresRuntime({
       );
     },
 
-    async readiness() {
+    async coreReadiness() {
       const persistence = await authority.readiness();
       let catalog;
       try {
@@ -9082,9 +9117,33 @@ function createCanonicalPostgresRuntime({
               kind: publicationPort.kind,
               held: null
             };
-      const recovery = await recoveryMailPort.readiness();
-      const registration =
-        await identity.registrationReadiness();
+      // Core availability does not depend on external mail control planes.
+      return {
+        ready: persistence.ready === true &&
+          (catalog.ready === true || catalog.mode === "held") &&
+          publication.ready !== false,
+        service: "sitesourcery-hosted-runtime",
+        runtime: process.version,
+        persistence,
+        compiler: { ready: true, schema: compiler.schema, revision: compiler.revision },
+        catalog,
+        publication
+      };
+    },
+
+    async readiness() {
+      const core = await service.coreReadiness();
+      const mailStatus = async (check, code) => {
+        try {
+          return await check();
+        } catch {
+          return { ready: false, verified: false, mode: "held", code };
+        }
+      };
+      const [recovery, registration] = await Promise.all([
+        mailStatus(() => recoveryMailPort.readiness(), "RECOVERY_TRANSPORT_UNAVAILABLE"),
+        mailStatus(() => identity.registrationReadiness(), "REGISTRATION_TRANSPORT_UNAVAILABLE")
+      ]);
       let payments;
       try {
         payments = await paymentProvider.readiness();
@@ -9139,38 +9198,8 @@ function createCanonicalPostgresRuntime({
         }
       }
       return {
-        ready:
-          persistence.ready &&
-          (
-            catalog.ready === true ||
-            catalog.mode === "held"
-          ) &&
-          publication.ready !== false &&
-          (
-            recovery.mode !== "production" ||
-            (
-              recovery.ready === true &&
-              recovery.verified === true
-            )
-          ) &&
-          (
-            registration.mode !== "production" ||
-            (
-              registration.ready === true &&
-              registration.verified === true
-            )
-          ),
-        service: "sitesourcery-hosted-runtime",
-        runtime: process.version,
-        persistence,
+        ...core,
         projectCreationLegal,
-        compiler: {
-          ready: true,
-          schema: compiler.schema,
-          revision: compiler.revision
-        },
-        catalog,
-        publication,
         registration,
         recovery,
         exports: {
@@ -9197,13 +9226,13 @@ function createCanonicalPostgresRuntime({
             registration.ready === true &&
             registration.verified === true
               ? "ready"
-              : registration.mode,
+              : registration.mode === "production" ? "held" : registration.mode ?? "held",
           email:
             recovery.mode === "production" &&
             recovery.ready === true &&
             recovery.verified === true
               ? "ready"
-              : recovery.mode
+              : recovery.mode === "production" ? "held" : recovery.mode ?? "held"
         }
       };
     }

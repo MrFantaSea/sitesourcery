@@ -61,6 +61,11 @@ async function fixture(portOverrides = {}) {
       calls.push(["unpublish", input]);
       return { status: "unpublished", published: false };
     },
+    async purgeProject(input) {
+      calls.push(["purgeProject", input]);
+      return { schema: "sitesourcery.publication-erasure/v1", ...input,
+        erased: true, published: false, terminal: true };
+    },
     ...portOverrides
   };
   const server = createPublicationCommandServer({
@@ -80,6 +85,14 @@ async function fixture(portOverrides = {}) {
     }
   };
 }
+
+test("publication server rejects a port without terminal erasure before starting", () => {
+  const method = async () => {};
+  assert.throws(() => createPublicationCommandServer({
+    publicationPort: { readiness: method, request: method, rollback: method, unpublish: method },
+    configuration: {}
+  }), { code: "PUBLICATION_COMMAND_CONFIGURATION_INVALID" });
+});
 
 test("publication command codec preserves exact bytes and rejects altered framing", () => {
   const original = proof();
@@ -146,8 +159,12 @@ test("private Unix server is mode 0600 and dispatches each exact operation once"
       status: "unpublished",
       published: false
     });
+    const deletion = { organizationId: "organization-one", projectId: "project-one", deletionRequestId: "deletion-one" };
+    assert.equal((await selected.client.purgeProject(deletion)).terminal, true);
+    assert.throws(() => encodePublicationCommand("purgeProject", { ...deletion, root: "/" }),
+      { code: "PUBLICATION_COMMAND_INVALID" });
     assert.deepEqual(selected.calls.map(([operation]) => operation), [
-      "request", "rollback", "unpublish"
+      "request", "rollback", "unpublish", "purgeProject"
     ]);
     assert.equal(Buffer.isBuffer(selected.calls[0][1].artifact.htmlBytes), true);
     assert.deepEqual(selected.server.snapshot(), {

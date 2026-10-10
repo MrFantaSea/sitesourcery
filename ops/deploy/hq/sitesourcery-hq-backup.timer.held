@@ -1,0 +1,12 @@
+# HELD CANDIDATE: enable only after exact backup and interrupted-recovery proof.
+[Unit]
+Description=Daily Site Sourcery HQ encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+AccuracySec=1m
+Persistent=true
+Unit=sitesourcery-hq-backup.service
+
+[Install]
+WantedBy=timers.target

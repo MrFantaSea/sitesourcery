@@ -22,6 +22,17 @@ const SECURITY_HEADERS = Object.freeze({
 });
 
 export class SelfHostRuntime {
+  #projectWrites = new Map();
+
+  async #serializeProject(projectId, operation) {
+    const previous = this.#projectWrites.get(projectId) ?? Promise.resolve();
+    const current = previous.catch(() => {}).then(operation);
+    this.#projectWrites.set(projectId, current);
+    try { return await current; }
+    finally {
+      if (this.#projectWrites.get(projectId) === current) this.#projectWrites.delete(projectId);
+    }
+  }
   constructor({
     root,
     control,
@@ -130,15 +141,30 @@ export class SelfHostRuntime {
 
   async installRelease(input) {
     this.#requireWriter();
-    const manifest = await this.releases.install(input);
-    await this.control.registerRelease({
-      projectId: manifest.projectId,
-      releaseId: manifest.releaseId,
-      manifestDigest: manifest.manifestDigest,
-      totalBytes: manifest.totalBytes,
-      fileCount: manifest.files.length
+    return this.#serializeProject(input.projectId, async () => {
+      this.control.assertProjectLive(input.projectId);
+      const manifest = await this.releases.install(input);
+      await this.control.registerRelease({
+        projectId: manifest.projectId,
+        releaseId: manifest.releaseId,
+        manifestDigest: manifest.manifestDigest,
+        totalBytes: manifest.totalBytes,
+        fileCount: manifest.files.length
+      });
+      return manifest;
     });
-    return manifest;
+  }
+
+  async purgeProject(input) {
+    this.#requireWriter();
+    return this.#serializeProject(input.projectId, async () => {
+      // Persist the terminal fence before touching files, including on replay
+      // after a crash. Publication is blocked even if erasure fails partway.
+      await this.control.sealProjectDeletion(input);
+      const result = await this.releases.eraseProject(input.projectId);
+      return { ...result, organizationId: input.organizationId,
+        projectId: input.projectId, deletionRequestId: input.deletionRequestId };
+    });
   }
 
   async reserveHostname(input) {

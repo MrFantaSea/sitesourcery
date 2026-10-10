@@ -1,8 +1,8 @@
 name: Controlled Pages deployment
 
+# Commercial production runs on the origin. Pages stays a deliberate, held
+# manual operation; main pushes are already checked by Site quality.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

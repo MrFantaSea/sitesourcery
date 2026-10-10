@@ -1,0 +1,35 @@
+# HELD CANDIDATE: install only through the reviewed HQ deployment packet.
+[Unit]
+Description=Site Sourcery HQ encrypted quiesced backup
+After=local-fs.target network-online.target user@1000.service
+Wants=network-online.target user@1000.service
+RequiresMountsFor=/srv/sitesourcery-storage /home/mrfantasea/.local/share/sitesourcery-production/off-machine
+ConditionPathIsMountPoint=/srv/sitesourcery-storage
+ConditionPathIsMountPoint=/home/mrfantasea/.local/share/sitesourcery-production/off-machine
+ConditionPathExists=/home/mrfantasea/.local/share/sitesourcery-production/off-machine/.sitesourcery-off-machine.json
+
+[Service]
+Type=oneshot
+User=mrfantasea
+Group=mrfantasea
+WorkingDirectory=/home/mrfantasea/.local/share/sitesourcery-production/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/hosted.env
+EnvironmentFile=/etc/sitesourcery/backup.env
+ExecStart=/usr/bin/flock --exclusive --wait 120 --conflict-exit-code 75 --no-fork /srv/sitesourcery-storage/production/backup-control/operations.lock /home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/ops/run-hq-backup-cycle.mjs run
+ExecStopPost=/usr/bin/flock --exclusive --wait 120 --conflict-exit-code 75 --no-fork /srv/sitesourcery-storage/production/backup-control/operations.lock /home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/ops/run-hq-backup-cycle.mjs recover
+TimeoutStartSec=30m
+TimeoutStopSec=3m
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/srv/sitesourcery-storage/production/backup-control /srv/sitesourcery-storage/production/backup-staging /home/mrfantasea/.local/share/sitesourcery-production/off-machine

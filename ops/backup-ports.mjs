@@ -27,6 +27,14 @@ import {
 const MAX_COMMAND_OUTPUT = 64 * 1024;
 export const PRODUCTION_REHEARSAL_BACKUP_RUNTIME_UNIT =
   "sitesourcery-production.service";
+export const HQ_BACKUP_RUNTIME_UNIT = "sitesourcery-hq-api.service";
+export const HQ_BACKUP_CONTROL_ROOT = "/srv/sitesourcery-storage/production/backup-control";
+export const HQ_BACKUP_QUIESCE_PATH = `${HQ_BACKUP_CONTROL_ROOT}/BACKUP_QUIESCE`;
+export const HQ_BACKUP_MANAGED_UNITS = Object.freeze([
+  Object.freeze({ scope: "system", unit: HQ_BACKUP_RUNTIME_UNIT }),
+  Object.freeze({ scope: "system", unit: "sitesourcery-hq-workers.service" }),
+  Object.freeze({ scope: "user", unit: "client-profile-hub.service" })
+]);
 
 function commandFailure(label, code) {
   return new BackupFailure(
@@ -422,7 +430,7 @@ function systemctlEnvironment(
   return selected;
 }
 
-function createBackupPorts({
+export function createBackupPorts({
   sourceRoots,
   quiescePath,
   sourceFailureDomainId,
@@ -434,7 +442,10 @@ function createBackupPorts({
   runtimeUnit,
   systemctlPrefix,
   systemctlRuntimeDirectory,
-  requiredMarkerUid
+  requiredMarkerUid,
+  managedUnits = null,
+  lifecycle = null,
+  requireNoClientConnections = false
 }) {
   const selectedRuntimeUnit = safeIdentifier(
     runtimeUnit,
@@ -598,29 +609,37 @@ function createBackupPorts({
   async function assertQuiesced() {
     const { marker, digest } =
       await readQuiesceMarker();
-    const runtime = await commandRunner.run(
-      "systemctl",
-      [
-        ...systemctlPrefix,
-        "is-active",
-        selectedRuntimeUnit
-      ],
-      {
-        env: systemctlEnvironment(
-          environment,
-          systemctlRuntimeDirectory
-        ),
-        allowedExitCodes: [3],
-        captureStdout: true,
-        secretValues: secrets,
-        label: "Runtime quiesce probe"
+    if (managedUnits) {
+      for (const unit of managedUnits) {
+        if ((await lifecycle.unitState(unit)) !== "inactive") {
+          throw new BackupFailure("BACKUP_NOT_QUIESCED", "A reviewed HQ writer is not inactive.");
+        }
       }
-    );
-    if (runtime.stdout.trim() !== "inactive") {
-      throw new BackupFailure(
-        "BACKUP_NOT_QUIESCED",
-        "The hosted writer is not inactive."
+    } else {
+      const runtime = await commandRunner.run(
+        "systemctl",
+        [
+          ...systemctlPrefix,
+          "is-active",
+          selectedRuntimeUnit
+        ],
+        {
+          env: systemctlEnvironment(
+            environment,
+            systemctlRuntimeDirectory
+          ),
+          allowedExitCodes: [3],
+          captureStdout: true,
+          secretValues: secrets,
+          label: "Runtime quiesce probe"
+        }
       );
+      if (runtime.stdout.trim() !== "inactive") {
+        throw new BackupFailure(
+          "BACKUP_NOT_QUIESCED",
+          "The hosted writer is not inactive."
+        );
+      }
     }
     const writers = await commandRunner.run(
       "psql",
@@ -636,7 +655,9 @@ function createBackupPorts({
           "from pg_stat_activity",
           "where datname = current_database()",
           "and pid <> pg_backend_pid()",
-          "and application_name = 'sitesourcery-hosted';"
+          requireNoClientConnections
+            ? "and backend_type = 'client backend';"
+            : "and application_name = 'sitesourcery-hosted';"
         ].join(" ")
       ],
       {
@@ -913,5 +934,23 @@ export function createProductionRehearsalBackupPorts(
     systemctlPrefix: ["--user"],
     systemctlRuntimeDirectory: runtimeDirectory,
     requiredMarkerUid: uid
+  });
+}
+
+export function createHqBackupPorts(options) {
+  const uid = options?.uid ?? process.getuid?.();
+  if (options?.quiescePath !== HQ_BACKUP_QUIESCE_PATH ||
+      !Number.isSafeInteger(uid) || uid <= 0 ||
+      typeof options?.lifecycle?.unitState !== "function") {
+    throw new BackupFailure("BACKUP_CONFIGURATION_INVALID", "HQ backup requires its exact writer fence and unprivileged lifecycle.");
+  }
+  return createBackupPorts({
+    ...options,
+    runtimeUnit: HQ_BACKUP_RUNTIME_UNIT,
+    systemctlPrefix: [],
+    systemctlRuntimeDirectory: null,
+    requiredMarkerUid: uid,
+    managedUnits: HQ_BACKUP_MANAGED_UNITS,
+    requireNoClientConnections: true
   });
 }

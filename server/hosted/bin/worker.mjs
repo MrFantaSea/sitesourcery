@@ -2,6 +2,7 @@
 import "../assert-runtime.mjs";
 
 import { existsSync } from "node:fs";
+import { createExportWorkerHealthRecorder } from "../export-worker-health.mjs";
 
 import {
   postgresBudgetConfigurationFromEnvironment
@@ -40,7 +41,9 @@ import {
   publicationCommandConfigurationFromEnvironment
 } from "../publication-command-transport.mjs";
 
+let exportHealth = null;
 function write(entry) {
+  exportHealth?.record(entry);
   process.stdout.write(`${JSON.stringify(entry)}\n`);
 }
 
@@ -58,6 +61,17 @@ function waitForShutdown(signal) {
 }
 
 const selected = workerConfigurationFromEnvironment(process.env);
+if (selected.configuration.purposes.includes("export")) {
+  exportHealth = createExportWorkerHealthRecorder({
+    filePath: process.env.SITESOURCERY_EXPORT_WORKER_HEALTH_PATH
+  });
+  exportHealth.record({event: "sitesourcery.worker.export",
+    workerId: `hosted-export-process-${process.pid}`, state: "held"});
+  await exportHealth.flush().catch(() => write({
+    event: "sitesourcery.worker.export.health-unavailable"
+  }));
+}
+
 if (selected.configuration.activation === "held") {
   write({
     event: "sitesourcery.worker.held",
@@ -183,5 +197,10 @@ if (selected.configuration.activation === "held") {
     process.removeListener("SIGINT", requestShutdown);
     if (supervisor) await supervisor.stop().catch(() => {});
     if (authority) await authority.close().catch(() => {});
+    exportHealth?.record({event: "sitesourcery.worker.export",
+      workerId: `hosted-export-process-${process.pid}`, state: "stopped"});
+    await exportHealth?.flush().catch(() => write({
+      event: "sitesourcery.worker.export.health-unavailable"
+    }));
   }
 }

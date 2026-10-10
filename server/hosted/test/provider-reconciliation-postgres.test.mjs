@@ -350,11 +350,11 @@ test("detection and listing run under system authority without tenant context", 
   assert.equal(listRepo.fake.calls[0].context.readOnly, true);
 });
 
-test("readback candidates expose only digest targets and bounded attempt windows", async () => {
+test("readback reservations expose only digest targets and bounded attempt windows", async () => {
   const routeDigest = "1".repeat(64);
   const contentDigest = "2".repeat(64);
   const { fake, repo } = repository((text) => {
-    if (text.includes("from ss.provider_reconciliation_cases reconciliation")) {
+    if (text.includes("from reserved reconciliation")) {
       return {
         rowCount: 1,
         rows: [{
@@ -371,7 +371,7 @@ test("readback candidates expose only digest targets and bounded attempt windows
     }
     throw new Error(`unhandled: ${text.slice(0, 50)}`);
   });
-  const result = await repo.listReadbackCandidates({ limit: 4 });
+  const result = await repo.claimReadbackCandidates({ limit: 4, observedAt: NOW });
   assert.equal(result.candidates.length, 1);
   assert.deepEqual(result.candidates[0].target, {
     kind: "responder_message_shape",
@@ -382,9 +382,12 @@ test("readback candidates expose only digest targets and bounded attempt windows
   assert.equal(result.candidates[0].organizationId, ORG);
   assert.match(
     fake.calls[0].queries[0].text,
-    /reconciliation\.organization_id is not null/u
+    /organization_id is not null/u
   );
-  assert.equal(fake.calls[0].context.readOnly, true);
+  assert.equal(fake.calls[0].context.isolation, "serializable");
+  assert.match(fake.calls[0].queries[0].text, /for update skip locked/u);
+  assert.match(fake.calls[0].queries[0].text, /order by updated_at, opened_at, id/u);
+  assert.deepEqual(fake.calls[0].queries[0].values, [4, NOW]);
 });
 
 test("configuration bounds are enforced", () => {

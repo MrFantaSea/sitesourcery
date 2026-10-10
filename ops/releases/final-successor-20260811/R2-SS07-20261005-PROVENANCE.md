@@ -1,0 +1,15 @@
+# SS07 terminal publication erasure — locally complete
+
+Completed 2026-10-09T11:27:22.257707+00:00. Source `d99bd59dc5f7484aceb7735f67fc0786356719cd`, tree `f56dc543f56adde0da764efd3006178bcd9867cb`; not deployed.
+
+The existing single publication writer now records a permanent project deletion fence, removes every local release and unfinished stage for that project, and returns an exact organization/project/deletion-request receipt through the existing private Unix command. Install and purge serialize; retries are durable; neighboring projects and outside hard-linked files remain intact. Persistence failures stop further writes until recovery.
+
+The real lifecycle worker requires that receipt. PostgreSQL requires the matching running lease, current fence and unexpired deadline, with completed object/unpublish jobs, before the terminal project update. Receipt and finalization commit together. Object jobs retain all source-provider names and tenant-scoped dedupe keys; unsupported or legacy unknown storage fails that job without blocking unrelated projects. Private export deletion confirms both removal and already-absent retries.
+
+65 unique focused counted tests are covered, including four real PostgreSQL/Unix RPC subcases plus their parent test: actual erasure and finalization, six invalid receipt/lease/request cases, interrupted erasure and stale-lease retry, and cross-project equal object keys with multiple provider origins. Existing runtime/publication regressions and new startup capability guards pass. This is focused proof across saved runs, not a claim of one all-green invocation or whole-system acceptance.
+
+Intermediate failures are preserved: migration inventory104vs103 rejected before application; incomplete synthetic export fixture; stale exact port-method inventory. Each was corrected and the affected checks passed. Canonical initialization passed104 migrations; the final classifier revision was applied only to the owned test DB, then its exact function bodies and enabled triggers were verified. No prior migration replay or paid-purge proof repetition.
+
+Independent read-only review identified missing constructor capability guards; those were fixed and regression-tested. Machine proof at `/Users/fantaseamac/SITESOURCERY-SS07-2026-10-05/proof.json` binds logs, migration bytes, review scope and cleanup. The exact test database and51 owned scratch entries were removed, no test process remains, and the existing PostgreSQL service was preserved. Original three dirty selfhost files in the older worktree remain unchanged.
+
+No production/HQ/provider/GitHub/spending/crypto effects. Unknown replica adapters remain explicit blockers for those jobs; there is no claim that unsupported external objects were erased. The existing HQ clone remains103 migrations. R2 support/advisory corrections, R3 reliability, R4 release and R5–R8 acceptance remain open. Next single task: existing customer-to-HQ support reply path, starting from SS-04 evidence; reuse working pieces and bind an exact source lease before editing.

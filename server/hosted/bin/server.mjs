@@ -271,6 +271,7 @@ import {
 } from "../capability-process-matrix.mjs";
 import { ingressPolicyFromEnvironment } from "../ingress-policy.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
+import { createExportWorkerHealthReader } from "../export-worker-health.mjs";
 import {
   identityPepperConfigurationFromEnvironment
 } from "../identity-pepper-config.mjs";
@@ -1292,6 +1293,9 @@ async function start() {
     ),
     publicationPort,
     exportStore,
+    exportWorkerHealth: createExportWorkerHealthReader({
+      filePath: process.env.SITESOURCERY_EXPORT_WORKER_HEALTH_PATH
+    }),
     recoveryMailPort,
     contactVault,
     paymentProvider: stripeComposition.adapter,
@@ -1490,23 +1494,9 @@ async function start() {
       return {
         public_successor: installedRow("static"),
         hosted_browser: installedRow("static"),
-        accounts_recovery: heldRow(
-          (
-            readiness.registration?.mode !== "production" ||
-            (
-              readiness.registration?.ready === true &&
-              readiness.registration?.verified === true
-            )
-          ) &&
-          (
-            readiness.recovery?.mode !== "production" ||
-            (
-              readiness.recovery?.ready === true &&
-              readiness.recovery?.verified === true
-            )
-          ) &&
-          mailLifecycleReadiness.ready === true
-        ),
+        // This matrix records installed local contracts. Current mail delivery
+        // is reported separately by /capabilities and checked on each send.
+        accounts_recovery: heldRow(mailLifecycleReadiness.ready === true),
         organizations_tenancy: heldRow(readiness.ready === true),
         projects_downloads: heldRow(
           readiness.ready === true && publicationLocalReady

@@ -13,10 +13,10 @@ const ORG = "20000000-0000-4000-8000-000000000001";
 const CASE = "30000000-0000-4000-8000-000000000001";
 
 test("HTTP manifest separates customer/operator routes and has no external execution", () => {
-  assert.equal(SUPPORT_CASE_HTTP_ROUTES.length, 14);
+  assert.equal(SUPPORT_CASE_HTTP_ROUTES.length, 19);
   assert.equal(new Set(SUPPORT_CASE_HTTP_ROUTES.map(
     (route) => `${route.method} ${route.pattern}`
-  )).size, 14);
+  )).size, 19);
   assert.equal(
     SUPPORT_CASE_HTTP_ROUTES.some((route) =>
       /execute|erase|download|provider|send/u.test(route.operation)),

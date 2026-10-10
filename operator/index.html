@@ -53,6 +53,7 @@
           <option value="">Loading…</option>
         </select>
       </label>
+      <button class="operator-button" id="operator-reconnect" type="button" disabled>Reconnect session</button>
       <button class="operator-button operator-button-primary" id="operator-refresh" type="button" disabled>Refresh source records</button>
     </section>
 
@@ -69,6 +70,7 @@
           <span class="operator-count" id="queue-count">0</span>
         </div>
         <p class="operator-panel-copy">Open work is rebuilt from canonical billing, service, and lifecycle records.</p>
+        <p id="operator-queue-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-queue" class="operator-list"></div>
       </section>
 
@@ -81,6 +83,7 @@
           <span class="operator-count" id="case-count">0</span>
         </div>
         <p class="operator-panel-copy">Select a case to review its current state, digests, deadlines, and immutable event trail.</p>
+        <p id="operator-cases-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-cases" class="operator-list"></div>
       </section>
 
@@ -91,6 +94,7 @@
             <h2 id="operator-care-title">Care operations</h2>
           </div>
         </div>
+        <p id="operator-care-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-care-surface" class="operator-service-surface"></div>
       </section>
 
@@ -101,6 +105,7 @@
             <h2 id="operator-responder-title">Responder operations</h2>
           </div>
         </div>
+        <p id="operator-responder-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-responder-surface" class="operator-service-surface"></div>
       </section>
 
@@ -114,6 +119,7 @@
         </div>
         <p class="operator-panel-copy">Bindings are created only from an operator-attested Twilio readback. Raw number and SID values are sent once for server-side digesting and are never returned or retained by this page.</p>
         <button class="operator-button" id="operator-number-binding-provision" type="button">Provision attested binding</button>
+        <p id="operator-number-bindings-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-number-bindings" class="operator-list"></div>
       </section>
 
@@ -126,6 +132,7 @@
           <span class="operator-count" id="operator-adjacent-contract-count">0</span>
         </div>
         <p class="operator-panel-copy">Exact ownership, authentication, reconciliation, and held-effect rules for the six connected Site Sourcery systems.</p>
+        <p id="operator-adjacent-contracts-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-adjacent-contracts" class="operator-list"></div>
       </section>
 
@@ -139,6 +146,7 @@
         </div>
         <p class="operator-panel-copy">Global source snapshots, tenant crosswalks, and observations are read from canonical PostgreSQL. Only reviewed Hub SSC/SS codes may appear; all other remote identities remain digests.</p>
         <button class="operator-button" id="operator-adjacent-crosswalk-open" type="button">Record reviewed crosswalk</button>
+        <p id="operator-adjacent-trace-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-adjacent-trace" class="operator-list"></div>
       </section>
     </div>
@@ -153,6 +161,19 @@
       </div>
       <p class="operator-panel-copy">The selected command records canonical evidence only. Provider delivery, billing, and commercial release remain held.</p>
       <div id="operator-service-command-form"></div>
+    </section>
+
+    <section class="operator-panel operator-detail" id="operator-ticket-detail" aria-labelledby="operator-ticket-title" hidden>
+      <div class="operator-panel-heading"><h2 id="operator-ticket-title">Support conversation</h2>
+        <button class="operator-button" id="operator-ticket-close" type="button">Close conversation</button></div>
+      <button class="operator-button" id="operator-ticket-refresh" type="button">Refresh replies</button>
+      <button class="operator-button" id="operator-ticket-earlier" type="button" hidden>Earlier messages</button>
+      <div id="operator-ticket-messages" aria-live="polite"></div>
+      <form id="operator-ticket-reply">
+        <label class="operator-field"><span>Your reply</span><textarea name="message" rows="5" maxlength="4000" required></textarea></label>
+        <label><input type="checkbox" name="resolve"> Mark resolved with this reply</label>
+        <button class="operator-button" type="submit">Send reply</button>
+      </form>
     </section>
 
     <section class="operator-panel operator-detail" id="operator-case-detail" aria-labelledby="case-detail-title" hidden>

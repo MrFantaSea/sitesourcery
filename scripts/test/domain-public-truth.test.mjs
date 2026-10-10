@@ -250,7 +250,7 @@ test("customer-facing pages show the current offers without internal state label
 
   assert.match(landing, /Build a one-page site for your business in the browser for free\./u);
   assert.match(landing, /Choose Alakazam for \$25, \$35, or \$50 a month\./u);
-  assert.match(home, /Look good online\. Make it easy to call you\./u);
+  assert.match(home, /Website builds and repairs\./u);
   assert.match(home, /\$300 setup · \$250 a month/u);
   assert.match(flyer, /The Responder: \$300 setup \+ \$250 a month/u);
   assert.match(flyer, /full \$350 goes toward it/u);

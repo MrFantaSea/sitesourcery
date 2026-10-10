@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { createHeldCatalogPort } from "../../commerce/adapters/held.mjs";
 import { createCanonicalPostgresService } from "../postgres-service.mjs";
+import { createHostedApi } from "../http.mjs";
 
 const ACTOR = Object.freeze({
   userId: "00000000-0000-4000-8000-000000000001"
@@ -10,14 +11,16 @@ const ACTOR = Object.freeze({
 
 function createService(catalogPort, {
   authorityService = null,
-  compiler = null
+  compiler = null,
+  mailReadiness = async () => ({ ready: true, verified: true, mode: "production" }),
+  persistenceReady = true
 } = {}) {
   let authorityServiceCalls = 0;
   const service = createCanonicalPostgresService({
     authority: {
       kind: "canonical-postgres",
       async readiness() {
-        return { ready: true, database: "test" };
+        return { ready: persistenceReady, database: "test" };
       },
       async service(...args) {
         authorityServiceCalls += 1;
@@ -30,11 +33,7 @@ function createService(catalogPort, {
       register() {},
       completeRegistration() {},
       async registrationReadiness() {
-        return {
-          ready: true,
-          verified: true,
-          mode: "production"
-        };
+        return mailReadiness();
       },
       signIn() {},
       signOut() {},
@@ -66,11 +65,7 @@ function createService(catalogPort, {
     },
     recoveryMailPort: {
       async readiness() {
-        return {
-          ready: true,
-          verified: true,
-          mode: "production"
-        };
+        return mailReadiness();
       },
       deliver() {}
     }
@@ -236,4 +231,50 @@ test("an invalid configured catalog still fails runtime readiness closed", async
     code: "invalid_catalog"
   });
   assert.equal(context.authorityServiceCalls(), 0);
+});
+
+
+test("unavailable production mail leaves core runtime ready and mail capabilities held", async () => {
+  const { service } = createService(createHeldCatalogPort(), {
+    mailReadiness: async () => ({ ready: false, verified: false, mode: "production" })
+  });
+  const readiness = await service.readiness();
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.registration.ready, false);
+  assert.equal(readiness.recovery.ready, false);
+  assert.equal(readiness.providers.registrationEmail, "held");
+  assert.equal(readiness.providers.email, "held");
+});
+
+test("mail readiness exceptions are feature failures, not startup failures", async () => {
+  const { service } = createService(createHeldCatalogPort(), {
+    mailReadiness: async () => { throw new Error("private-provider-failure"); }
+  });
+  const readiness = await service.readiness();
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.registration.ready, false);
+  assert.equal(readiness.recovery.ready, false);
+  assert.equal(JSON.stringify(readiness).includes("private-provider-failure"), false);
+});
+
+test("public core readiness does not consult a hung mail provider", async () => {
+  let mailCalls = 0;
+  const { service } = createService(createHeldCatalogPort(), {
+    mailReadiness: () => { mailCalls += 1; return new Promise(() => {}); }
+  });
+  const api = createHostedApi(service, {
+    readinessPolicy: { ttlMs: 1, timeoutMs: 20, staleAfterMs: 100 }
+  });
+  const response = await api.fetch(new Request("https://sitesourcery.test/api/v1/ready"));
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).ready, true);
+  assert.equal(mailCalls, 0);
+});
+
+test("core database failure still rejects public readiness even when mail is healthy", async () => {
+  const { service } = createService(createHeldCatalogPort(), { persistenceReady: false });
+  const api = createHostedApi(service);
+  const response = await api.fetch(new Request("https://sitesourcery.test/api/v1/ready"));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).ready, false);
 });

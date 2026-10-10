@@ -16,7 +16,8 @@ import {
   createProductionMonitoringProbes
 } from "./monitor-ports.mjs";
 import {
-  runOperationsMonitor
+  runOperationsMonitor,
+  validateDiskVolumes
 } from "./monitor-runtime.mjs";
 import {
   createResendOperationsAlertTransport
@@ -62,6 +63,18 @@ function integer(
     throw new Error(`${field} must be an integer.`);
   }
   return value;
+}
+
+export function diskVolumesFromEnvironment(environment) {
+  const raw = environment.SITESOURCERY_MONITOR_DISK_VOLUMES_JSON;
+  if (raw === undefined) return undefined;
+  if (typeof raw !== "string" || Buffer.byteLength(raw, "utf8") > 8192) {
+    throw new Error("SITESOURCERY_MONITOR_DISK_VOLUMES_JSON is invalid.");
+  }
+  let volumes;
+  try { volumes = JSON.parse(raw); }
+  catch { throw new Error("SITESOURCERY_MONITOR_DISK_VOLUMES_JSON is invalid."); }
+  return validateDiskVolumes(volumes);
 }
 
 export async function alertAdapterFromEnvironment(
@@ -114,6 +127,7 @@ export async function alertAdapterFromEnvironment(
 export async function monitorFromEnvironment(
   environment = process.env
 ) {
+  const diskVolumes = diskVolumesFromEnvironment(environment);
   const sourceFailureDomainId = required(
     environment,
     "SITESOURCERY_SOURCE_FAILURE_DOMAIN"
@@ -200,6 +214,7 @@ export async function monitorFromEnvironment(
         environment,
         "SITESOURCERY_DATA_ROOT"
       ),
+      diskVolumes,
       backupDestinationRoot,
       backupArtifactSha256,
       sourceFailureDomainId,
@@ -239,6 +254,7 @@ export async function monitorFromEnvironment(
       operationsStateEvidence,
       providerEgress,
       thresholds: {
+        diskVolumes,
         backupMaxAgeMs: integer(
           environment,
           "SITESOURCERY_MONITOR_BACKUP_MAX_AGE_MS",

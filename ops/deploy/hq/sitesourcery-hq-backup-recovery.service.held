@@ -1,0 +1,35 @@
+# HELD CANDIDATE: install only through the reviewed HQ deployment packet.
+[Unit]
+Description=Recover the exact previous Site Sourcery HQ writer states after interrupted backup
+After=local-fs.target network-online.target user@1000.service
+Wants=network-online.target user@1000.service
+RequiresMountsFor=/srv/sitesourcery-storage
+ConditionPathIsMountPoint=/srv/sitesourcery-storage
+
+[Service]
+Type=oneshot
+User=mrfantasea
+Group=mrfantasea
+WorkingDirectory=/home/mrfantasea/.local/share/sitesourcery-production/current
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/sitesourcery/hosted.env
+EnvironmentFile=/etc/sitesourcery/backup.env
+ExecStart=/usr/bin/flock --exclusive --wait 120 --conflict-exit-code 75 --no-fork /srv/sitesourcery-storage/production/backup-control/operations.lock /home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/ops/run-hq-backup-cycle.mjs recover
+TimeoutStartSec=3m
+TimeoutStopSec=3m
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+ReadWritePaths=/srv/sitesourcery-storage/production/backup-control /srv/sitesourcery-storage/production/backup-staging
+
+[Install]
+WantedBy=multi-user.target

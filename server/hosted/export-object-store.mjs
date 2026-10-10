@@ -347,6 +347,23 @@ export async function createPrivateExportObjectStore({
         await unlink(target);
       } catch (error) {
         if (error?.code === "ENOENT") {
+          // Retry after an unlink/fsync failure must make absence durable too.
+          // Walk only verified parents, syncing the nearest existing ancestor
+          // if this object (or an entire project directory) is already absent.
+          let directory = canonicalRoot;
+          for (const part of selected.split("/").slice(0, -1)) {
+            const next = path.join(directory, part);
+            let info;
+            try { info = await lstat(next); }
+            catch (missing) {
+              if (missing.code === "ENOENT") break;
+              throw missing;
+            }
+            invariant(info.isDirectory() && !info.isSymbolicLink(),
+              "OBJECT_PATH_UNSAFE", "Export deletion parent is unsafe.", { status: 500 });
+            directory = next;
+          }
+          await syncDirectory(directory);
           return { deleted: false, key: selected };
         }
         throw error;

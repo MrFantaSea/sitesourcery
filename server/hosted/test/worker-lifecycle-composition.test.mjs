@@ -51,7 +51,8 @@ function dependencies(overrides = {}) {
       },
       async unpublish() {
         return { published: false, status: "unpublished" };
-      }
+      },
+      async purgeProject() {}
     },
     projectRepositoryFactory: () => repository("project-lifecycle"),
     domainRepositoryFactory: () => repository("domain-lifecycle"),
@@ -107,7 +108,7 @@ test("approved read-only Domain lifecycle requires exact storage and adapter rea
   assert.equal(composed.worker.snapshot().enabled, true);
 });
 
-test("project lifecycle refuses activation while external replicas lack a deleter", async () => {
+test("unsupported replica jobs do not block unrelated project lifecycle work", async () => {
   const factories = createLifecycleWorkerFactories({
     ...dependencies({
       projectRepositoryFactory: () => repository("project-lifecycle", {
@@ -116,7 +117,8 @@ test("project lifecycle refuses activation while external replicas lack a delete
       exportStoreFactory: async () => ({ delete() {} }),
       publicationPort: {
         async readiness() { return { ready: true, held: true }; },
-        async unpublish() { return { published: false }; }
+        async unpublish() { return { published: false }; },
+        async purgeProject() {}
       }
     }),
     purposes: ["project-lifecycle"],
@@ -128,6 +130,6 @@ test("project lifecycle refuses activation while external replicas lack a delete
   });
   const composed = await factories["project-lifecycle"]({ loop: LOOP });
   const readiness = await composed.readiness();
-  assert.equal(readiness.ready, false);
-  assert.equal(readiness.externalReplicaReady, false);
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.externalReplicas, 1);
 });

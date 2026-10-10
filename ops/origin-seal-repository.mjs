@@ -529,7 +529,7 @@ export async function collectOriginWorkerRuntime(projectRoot, deploymentProfile)
       tenantUnit,
       [
         "Description=Site Sourcery read-only tenant serving runtime",
-        `Requires=${profile.apiUnitName}`,
+        ...(!deploymentProfile ? [`Requires=${profile.apiUnitName}`] : []),
         "EnvironmentFile=/etc/sitesourcery/tenant.env",
         "server/selfhost/bin/server.mjs",
         `ReadOnlyPaths=${profile.currentRoot} /etc/sitesourcery ${profile.dataRoot}/tenant-runtime`
@@ -621,6 +621,15 @@ export async function collectOriginWorkerRuntime(projectRoot, deploymentProfile)
     fail("Origin private command or tenant environment authority drifted.");
   }
   if (deploymentProfile) {
+    if (/^(?:After|Requires|BindsTo)=.*sitesourcery-hq-api[.]service/mu.test(tenantUnit) ||
+        tenantUnit.includes("BACKUP_QUIESCE")) {
+      fail("Origin HQ read-only tenant must remain independent of API backup quiescence.");
+    }
+    for (const unit of [hostedUnit, workerUnit]) {
+      if (!unit.includes("ConditionPathExists=!/srv/sitesourcery-storage/production/backup-control/BACKUP_QUIESCE")) {
+        fail("Origin HQ writer lost its durable backup fence.");
+      }
+    }
     for (const unit of [hostedUnit, tenantUnit, workerUnit]) {
       for (const line of [`User=mrfantasea`, `Group=mrfantasea`, `WorkingDirectory=${profile.currentRoot}`, `ProtectHome=read-only`, `RequiresMountsFor=/srv/sitesourcery-storage`]) {
         if (!unit.split(/\r?\n/u).includes(line)) fail("Origin HQ unit placement drifted.");
@@ -721,9 +730,15 @@ async function verifyIngressAndHolds(projectRoot, deploymentProfile) {
     }
   }
   if (
-    !originUnit.includes(`http://${profile.listeners.hostedApi}/api/v1/ready`) ||
+    (deploymentProfile
+      ? /^(?:After|Requires|BindsTo)=.*sitesourcery-hq-api[.]service/mu.test(originUnit) ||
+        /api\/v1\/ready/u.test(originUnit) ||
+        !originUnit.includes("caddy validate --config /etc/sitesourcery/Caddyfile.hq")
+      : !originUnit.includes(`http://${profile.listeners.hostedApi}/api/v1/ready`)) ||
     !originUnit.includes(deploymentProfile ? "RUNTIME_APPROVED" : "CLOUDFLARE_TUNNEL_APPROVED") ||
-    !tunnelUnit.includes("http://127.0.0.1:8081/api/v1/ready") ||
+    !tunnelUnit.includes(deploymentProfile
+      ? "-H Host:sitesourcery.com http://127.0.0.1:8081/\n"
+      : "http://127.0.0.1:8081/api/v1/ready") ||
     !tunnelUnit.includes("--metrics 127.0.0.1:20241") ||
     !tunnelUnit.includes("CLOUDFLARE_TUNNEL_APPROVED")
   ) {

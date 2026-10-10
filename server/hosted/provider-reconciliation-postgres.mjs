@@ -241,6 +241,8 @@ export function createPostgresProviderReconciliationRepository({
               ) is not null
               and ss.hosted_provider_reconciliation_contract_v1() = $1
                 as contract_ready,
+              ss.hosted_provider_reconciliation_fairness_contract_v1() =
+                'canonical-provider-reconciliation-fairness-v1' as fairness_ready,
               (select count(*) = 2
                  and bool_and(relation.relrowsecurity)
                  and bool_and(relation.relforcerowsecurity)
@@ -256,7 +258,8 @@ export function createPostgresProviderReconciliationRepository({
           ]])
         );
         const row = result.rows[0] ?? {};
-        const ready = row.contract_ready === true && row.tables_ready === true;
+        const ready = row.contract_ready === true && row.fairness_ready === true &&
+          row.tables_ready === true;
         return deepFreeze({
           ready,
           verified: ready,
@@ -718,7 +721,8 @@ export function createPostgresProviderReconciliationRepository({
       ));
     },
 
-    listReadbackCandidates({ limit = 8 } = {}) {
+    claimReadbackCandidates({ limit = 8, observedAt } = {}) {
+      const at = iso(observedAt, "Readback reservation time");
       invariant(
         Number.isSafeInteger(limit) && limit >= 1 && limit <= 64,
         "PROVIDER_RECONCILIATION_INVALID",
@@ -726,10 +730,29 @@ export function createPostgresProviderReconciliationRepository({
         { status: 400 }
       );
       return translated(() => authority.service(
-        { actorKind: "system", readOnly: true },
+        { actorKind: "system", isolation: "serializable" },
         async (client) => {
           const rows = await client.query(
-            `select reconciliation.id, reconciliation.case_kind,
+            `with selected as (
+               select id
+                 from ss.provider_reconciliation_cases
+                where state = 'open' and readback_state = 'none'
+                  and organization_id is not null
+                  and (subject_provider_message_id_digest is not null
+                    or case_kind in ('abandoned_claim', 'ambiguous_message_create'))
+                  and updated_at <= $2
+                  and (revision = 1 or updated_at <= $2::timestamptz - interval '1 minute')
+                order by updated_at, opened_at, id
+                for update skip locked
+                limit $1
+             ), reserved as (
+               update ss.provider_reconciliation_cases reconciliation
+                  set updated_at = $2, revision = revision + 1
+                 from selected
+                where reconciliation.id = selected.id
+               returning reconciliation.*
+             )
+             select reconciliation.id, reconciliation.case_kind,
                     reconciliation.organization_id,
                     reconciliation.subject_provider_message_id_digest,
                     reconciliation.opened_at,
@@ -737,7 +760,7 @@ export function createPostgresProviderReconciliationRepository({
                     coalesce(operation.provider_accepted_at,
                              attempt.occurred_at, operation.created_at,
                              reconciliation.opened_at) as attempt_at
-               from ss.provider_reconciliation_cases reconciliation
+               from reserved reconciliation
                left join ss.responder_delivery_operations operation
                  on operation.id = reconciliation.subject_operation_id
                left join lateral (
@@ -751,19 +774,8 @@ export function createPostgresProviderReconciliationRepository({
                   order by event.occurred_at desc, event.id desc
                   limit 1
               ) attempt on true
-              where reconciliation.state = 'open'
-                and reconciliation.readback_state = 'none'
-                and reconciliation.organization_id is not null
-                and (
-                  reconciliation.subject_provider_message_id_digest
-                    is not null
-                  or reconciliation.case_kind in (
-                    'abandoned_claim', 'ambiguous_message_create'
-                  )
-                )
-              order by reconciliation.opened_at, reconciliation.id
-              limit $1`,
-            [limit]
+              order by reconciliation.opened_at, reconciliation.id`,
+            [limit, at]
           );
           return deepFreeze({
             schema:

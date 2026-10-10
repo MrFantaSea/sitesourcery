@@ -1,3 +1,4 @@
+import { createSupportTicketRepository } from "./support-tickets-postgres.mjs";
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -510,6 +511,7 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
   }
 
   return Object.freeze({
+    ...createSupportTicketRepository({ authority: database }),
     async readiness() {
       try {
         const result = await database.service(
@@ -520,6 +522,8 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
                 and ss.hosted_support_case_contract_v1() =
                   'canonical-support-case-v1-auditable-held-lifecycle'
                 as contract_ready,
+              exists (select 1 from pg_attribute where attrelid='ss.support_messages'::regclass
+                and attname='command_id' and not attisdropped) as conversations_ready,
               count(*) = 5 as tables_ready,
               bool_and(c.relrowsecurity and c.relforcerowsecurity) as rls_ready
             from pg_class c
@@ -534,7 +538,7 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
         );
         const row = result.rows[0] ?? {};
         const ready = row.contract_ready === true && row.tables_ready === true &&
-          row.rls_ready === true;
+          row.rls_ready === true && row.conversations_ready === true;
         return deepFreeze({
           ready,
           verified: ready,

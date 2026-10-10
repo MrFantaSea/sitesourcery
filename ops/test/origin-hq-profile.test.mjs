@@ -150,6 +150,26 @@ test("HQ worker collection rejects wrong data paths and missing protected mount 
   });
 });
 
+test("HQ backup preserves read-only tenant independence and requires persistent writer fences", async () => {
+  await withFixture(Object.values(profile.workerPaths), async root => {
+    await collectOriginWorkerRuntime(root, deploymentProfile);
+    const tenantPath = path.join(root, profile.workerPaths.tenantUnit);
+    const tenant = await readFile(tenantPath, "utf8");
+    for (const added of ["Requires=sitesourcery-hq-api.service", "ConditionPathExists=!/run/sitesourcery/BACKUP_QUIESCE"]) {
+      await writeFile(tenantPath, tenant.replace("[Unit]", `[Unit]\n${added}`));
+      await assert.rejects(collectOriginWorkerRuntime(root, deploymentProfile), /tenant must remain independent/u);
+    }
+    await writeFile(tenantPath, tenant);
+    for (const field of ["hostedUnit", "unit"]) {
+      const unitPath = path.join(root, profile.workerPaths[field]);
+      const original = await readFile(unitPath, "utf8");
+      await writeFile(unitPath, original.replace("/srv/sitesourcery-storage/production/backup-control/BACKUP_QUIESCE", "/run/sitesourcery/BACKUP_QUIESCE"));
+      await assert.rejects(collectOriginWorkerRuntime(root, deploymentProfile), /durable backup fence/u);
+      await writeFile(unitPath, original);
+    }
+  });
+});
+
 test("JSON schema accepts the optional HQ version only at epoch scope", async () => {
   const schema = JSON.parse(await readFile(path.join(projectRoot, "ops/origin-release-input.schema.json"), "utf8"));
   assert.deepEqual(schema.$defs.epoch.properties.deploymentProfile, { const: deploymentProfile });
@@ -203,4 +223,20 @@ test("CLI accepts deployment profile only on generation and retains strict requi
   await assert.rejects(runCiReleaseProofCli({ arguments_: [...args, "--deployment-profile", deploymentProfile], environment: {} }), error => error.code === "ENOENT");
   await assert.rejects(runCiReleaseProofCli({ arguments_: args.slice(0, -2).concat(["--deployment-profile", deploymentProfile]), environment: {} }), /missing or unexpected flags/u);
   await assert.rejects(runCiReleaseProofCli({ arguments_: ["provenance", "--root", projectRoot, "--deployment-profile", deploymentProfile], environment: {} }), /missing or unexpected flags/u);
+});
+
+
+test("HQ static gateway and tunnel do not require API readiness", async () => {
+  const files = [profile.caddyPath, profile.tunnelPath, profile.gatewayUnit, profile.tunnelUnit,
+    profile.workerPaths.hostedEnvironmentSchema, profile.workerPaths.tenantEnvironmentSchema,
+    "data/release-control.json", "data/abracadabra-commercial-control.json"];
+  const gateway = await readFile(path.join(projectRoot, profile.gatewayUnit), "utf8");
+  const tunnel = await readFile(path.join(projectRoot, profile.tunnelUnit), "utf8");
+  assert.doesNotMatch(gateway, /sitesourcery-hq-api.service|api\/v1\/ready/u);
+  assert.match(gateway, /caddy validate --config/u);
+  assert.match(tunnel, /-H Host:sitesourcery[.]com http:\/\/127[.]0[.]0[.]1:8081\/\n/u);
+  await withFixture(files, async root => {
+    await writeFile(path.join(root, profile.gatewayUnit), gateway.replace("[Unit]", "[Unit]\nRequires=sitesourcery-hq-api.service"));
+    await assert.rejects(collectOriginRepositorySnapshot({ projectRoot: root, layout, deploymentProfile }), /ingress|hold drifted/u);
+  });
 });

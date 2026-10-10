@@ -6541,6 +6541,25 @@
       );
     }
 
+    function supportTicketQuery(input) {
+      var query = new URLSearchParams({ organizationId: input.organizationId, projectId: input.projectId });
+      if (input.beforeId) query.set("beforeId", input.beforeId);
+      return "?" + query.toString();
+    }
+    function listSupportTickets(input) {
+      return request("GET", "/support-tickets" + supportTicketQuery(input));
+    }
+    function getSupportTicket(ticketId, input) {
+      return request("GET", "/support-tickets/" + segment(ticketId, "Ticket ID") + supportTicketQuery(input));
+    }
+    function replySupportTicket(ticketId, input, requestOptions) {
+      return request("POST", "/support-tickets/" + segment(ticketId, "Ticket ID") + "/messages", {
+        body: { organizationId: input.organizationId, projectId: input.projectId,
+          message: requiredText(input.message, "Message", 4000) },
+        idempotencyKey: requestOptions && requestOptions.idempotencyKey
+      });
+    }
+
     function requestExport(projectId, requestOptions) {
       return request("POST", "/projects/" + segment(projectId, "Project ID") + "/exports", {
         idempotencyKey: requestOptions && requestOptions.idempotencyKey
@@ -6974,6 +6993,9 @@
       unpublish: unpublish,
       setVisibility: setVisibility,
       createSupportTicket: createSupportTicket,
+      listSupportTickets: listSupportTickets,
+      getSupportTicket: getSupportTicket,
+      replySupportTicket: replySupportTicket,
       requestExport: requestExport,
       getExport: getExport,
       retryExport: retryExport,

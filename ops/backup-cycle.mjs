@@ -23,11 +23,14 @@ import {
 import {
   canonicalJson,
   parseJsonObject,
-  safeIdentifier
+  safeIdentifier,
+  sha256Bytes
 } from "./immutable-evidence.mjs";
 
 export const BACKUP_CYCLE_SCHEMA =
   "sitesourcery.production-backup-cycle/v1";
+export const BACKUP_CYCLE_GROUP_SCHEMA =
+  "sitesourcery.production-backup-cycle/v2";
 export const PRODUCTION_REHEARSAL_FAILURE_DOMAIN =
   "dell-sitesourcery-production-01";
 export const PRODUCTION_REHEARSAL_STAGING_ROOT =
@@ -199,6 +202,7 @@ async function writePrivateJson(
       );
     }
     await link(temporaryPath, selectedPath);
+    await syncDirectory(path.dirname(selectedPath));
   } finally {
     await handle?.close().catch(() => {});
     await unlink(temporaryPath).catch(
@@ -206,6 +210,67 @@ async function writePrivateJson(
         if (error?.code !== "ENOENT") throw error;
       }
     );
+  }
+}
+
+async function syncDirectory(directory) {
+  const handle = await open(directory, "r");
+  try { await handle.sync(); } finally { await handle.close(); }
+}
+
+async function unlinkDurably(filename) {
+  await unlink(filename);
+  await syncDirectory(path.dirname(filename));
+}
+
+function validateManagedUnits(managedUnits, runtimeUnit, lifecycle) {
+  if (managedUnits === null) return;
+  if (!Array.isArray(managedUnits) || managedUnits.length < 1 || managedUnits.length > 16 ||
+      managedUnits[0]?.unit !== runtimeUnit ||
+      managedUnits.some(unit => !exactFields(unit, ["scope", "unit"]) ||
+        !["system", "user"].includes(unit.scope) ||
+        !/^[a-z][a-z0-9-]{0,127}\.service$/u.test(unit.unit)) ||
+      new Set(managedUnits.map(unit => `${unit.scope}:${unit.unit}`)).size !== managedUnits.length ||
+      ["unitState", "stopUnit", "startUnit"].some(name => typeof lifecycle?.[name] !== "function")) {
+    fail("BACKUP_CYCLE_CONFIGURATION_INVALID", "The reviewed writer unit group is invalid.");
+  }
+}
+
+async function captureUnitStates(managedUnits, lifecycle) {
+  const states = [];
+  for (const unit of managedUnits) {
+    const observed = await lifecycle.unitState(unit);
+    if (!["active", "inactive"].includes(observed)) {
+      fail("BACKUP_CYCLE_RUNTIME_STATE_INVALID", "A writer is absent, failed or transitioning; no backup was started.");
+    }
+    states.push({ ...unit, wasActive: observed === "active" });
+  }
+  return states;
+}
+
+async function assertAllInactive(managedUnits, lifecycle) {
+  for (const unit of managedUnits) {
+    if ((await lifecycle.unitState(unit)) !== "inactive") {
+      fail("BACKUP_CYCLE_RUNTIME_NOT_QUIESCED", "A reviewed writer did not become inactive.");
+    }
+  }
+}
+
+async function restoreUnitStates(state, lifecycle) {
+  const failures = [];
+  // Attempt every recorded active unit even if an earlier start fails.
+  for (const unit of state.runtimeStates) {
+    try {
+      if (unit.wasActive) await lifecycle.startUnit({ scope: unit.scope, unit: unit.unit });
+      const observed = await lifecycle.unitState({ scope: unit.scope, unit: unit.unit });
+      if (observed !== (unit.wasActive ? "active" : "inactive")) {
+        throw new Error("A writer did not return to its recorded state.");
+      }
+    } catch (error) { failures.push(error); }
+  }
+  if (failures.length) {
+    fail("BACKUP_CYCLE_RECOVERY_FAILED", "Writer recovery remains incomplete; durable state was retained.",
+      { cause: new AggregateError(failures) });
   }
 }
 
@@ -247,12 +312,13 @@ function validateState(
   state,
   {
     runtimeUnit,
-    sourceFailureDomainId
+    sourceFailureDomainId,
+    managedUnits = null
   }
 ) {
   if (
-    !exactFields(state, EXACT_STATE_FIELDS) ||
-    state.schema !== BACKUP_CYCLE_SCHEMA ||
+    !exactFields(state, managedUnits ? [...EXACT_STATE_FIELDS, "runtimeStates"].sort() : EXACT_STATE_FIELDS) ||
+    state.schema !== (managedUnits ? BACKUP_CYCLE_GROUP_SCHEMA : BACKUP_CYCLE_SCHEMA) ||
     state.runtimeUnit !== runtimeUnit ||
     state.runtimeWasActive !== true ||
     state.sourceFailureDomainId !==
@@ -262,6 +328,13 @@ function validateState(
       "BACKUP_CYCLE_STATE_INVALID",
       "Backup-cycle recovery state does not match the reviewed runtime."
     );
+  }
+  if (managedUnits && (!Array.isArray(state.runtimeStates) ||
+      state.runtimeStates.length !== managedUnits.length ||
+      state.runtimeStates.some((unit, index) => !exactFields(unit, ["scope", "unit", "wasActive"]) ||
+        unit.scope !== managedUnits[index].scope || unit.unit !== managedUnits[index].unit ||
+        typeof unit.wasActive !== "boolean") || state.runtimeStates[0].wasActive !== true)) {
+    fail("BACKUP_CYCLE_STATE_INVALID", "The recovery writer vector differs from the reviewed unit group.");
   }
   const createdAt = exactIso(
     state.createdAt,
@@ -289,15 +362,17 @@ function validateState(
 }
 
 function validateFence(fence, state) {
+  const grouped = state.schema === BACKUP_CYCLE_GROUP_SCHEMA;
   if (
-    !exactFields(fence, EXACT_FENCE_FIELDS) ||
+    !exactFields(fence, grouped ? [...EXACT_FENCE_FIELDS, "runtimeStatesSha256"].sort() : EXACT_FENCE_FIELDS) ||
     fence.schema !== QUIESCE_SCHEMA ||
     fence.runtimeUnit !== state.runtimeUnit ||
     fence.sourceFailureDomainId !==
       state.sourceFailureDomainId ||
     fence.writerFence !== "engaged" ||
     fence.snapshotId !== state.snapshotId ||
-    fence.expiresAt !== state.expiresAt
+    fence.expiresAt !== state.expiresAt ||
+    (grouped && fence.runtimeStatesSha256 !== sha256Bytes(Buffer.from(canonicalJson(state.runtimeStates))))
   ) {
     fail(
       "BACKUP_CYCLE_FENCE_INVALID",
@@ -313,7 +388,8 @@ function assertConfiguration({
   statePath,
   stagingRoot,
   maxFenceMs,
-  lifecycle
+  lifecycle,
+  managedUnits = null
 }) {
   safeIdentifier(
     runtimeUnit,
@@ -352,18 +428,19 @@ function assertConfiguration({
     !Number.isSafeInteger(maxFenceMs) ||
     maxFenceMs <= 0 ||
     maxFenceMs > MAX_REVIEWED_FENCE_MS ||
-    typeof lifecycle?.runtimeState !==
+    (!managedUnits && (typeof lifecycle?.runtimeState !==
       "function" ||
     typeof lifecycle?.stopRuntime !==
       "function" ||
     typeof lifecycle?.startRuntime !==
-      "function"
+      "function"))
   ) {
     fail(
       "BACKUP_CYCLE_CONFIGURATION_INVALID",
       "Backup-cycle configuration is invalid."
     );
   }
+  validateManagedUnits(managedUnits, runtimeUnit, lifecycle);
 }
 
 async function cleanupPlaintextStaging(
@@ -428,6 +505,7 @@ export async function recoverBackupCycle({
   statePath,
   stagingRoot,
   lifecycle,
+  managedUnits = null,
   uid = process.getuid?.()
 }) {
   const selectedUid = validUid(uid);
@@ -438,7 +516,8 @@ export async function recoverBackupCycle({
     statePath,
     stagingRoot,
     maxFenceMs: BACKUP_CYCLE_MAX_FENCE_MS,
-    lifecycle
+    lifecycle,
+    managedUnits
   });
   const [stateExists, fenceExists] =
     await Promise.all([
@@ -470,7 +549,8 @@ export async function recoverBackupCycle({
     ),
     {
       runtimeUnit,
-      sourceFailureDomainId
+      sourceFailureDomainId,
+      managedUnits
     }
   );
   if (fenceExists) {
@@ -483,17 +563,20 @@ export async function recoverBackupCycle({
       state
     );
   }
-  const plaintextStagingRemoved =
-    await cleanupPlaintextStaging(
-      stagingRoot,
-      selectedUid
-    );
-  if (fenceExists) {
-    await unlink(fencePath);
+  let plaintextStagingRemoved = 0;
+  let cleanupError;
+  try { plaintextStagingRemoved = await cleanupPlaintextStaging(stagingRoot, selectedUid); }
+  catch (error) {
+    if (!managedUnits) throw error;
+    cleanupError = error;
   }
-  await lifecycle.startRuntime();
+  if (fenceExists) {
+    await unlinkDurably(fencePath);
+  }
+  if (managedUnits) await restoreUnitStates(state, lifecycle);
+  else await lifecycle.startRuntime();
   if (
-    (await lifecycle.runtimeState()) !==
+    !managedUnits && (await lifecycle.runtimeState()) !==
     "active"
   ) {
     fail(
@@ -501,7 +584,8 @@ export async function recoverBackupCycle({
       "The production runtime did not recover after backup."
     );
   }
-  await unlink(statePath);
+  if (cleanupError) throw cleanupError;
+  await unlinkDurably(statePath);
   return Object.freeze({
     recovered: true,
     snapshotId: state.snapshotId,
@@ -516,6 +600,7 @@ export async function beginBackupCycle({
   statePath,
   stagingRoot,
   lifecycle,
+  managedUnits = null,
   uid = process.getuid?.(),
   now = () => new Date(),
   snapshotIdFactory = randomUUID,
@@ -529,7 +614,8 @@ export async function beginBackupCycle({
     statePath,
     stagingRoot,
     maxFenceMs,
-    lifecycle
+    lifecycle,
+    managedUnits
   });
   await Promise.all([
     assertPrivateDirectory(
@@ -553,10 +639,8 @@ export async function beginBackupCycle({
       "A backup cycle or writer fence already exists."
     );
   }
-  if (
-    (await lifecycle.runtimeState()) !==
-    "active"
-  ) {
+  const runtimeStates = managedUnits ? await captureUnitStates(managedUnits, lifecycle) : null;
+  if (managedUnits ? !runtimeStates[0].wasActive : (await lifecycle.runtimeState()) !== "active") {
     fail(
       "BACKUP_CYCLE_RUNTIME_NOT_ACTIVE",
       "The production runtime must be active before a backup cycle begins."
@@ -571,13 +655,14 @@ export async function beginBackupCycle({
     "Backup-cycle snapshot ID"
   );
   const state = Object.freeze({
-    schema: BACKUP_CYCLE_SCHEMA,
+    schema: managedUnits ? BACKUP_CYCLE_GROUP_SCHEMA : BACKUP_CYCLE_SCHEMA,
     runtimeUnit,
     sourceFailureDomainId,
     runtimeWasActive: true,
     snapshotId,
     createdAt: createdAt.toISOString(),
-    expiresAt: expiresAt.toISOString()
+    expiresAt: expiresAt.toISOString(),
+    ...(managedUnits ? { runtimeStates } : {})
   });
   let stateCreated = false;
   try {
@@ -595,13 +680,19 @@ export async function beginBackupCycle({
         sourceFailureDomainId,
         writerFence: "engaged",
         snapshotId,
-        expiresAt: state.expiresAt
+        expiresAt: state.expiresAt,
+        ...(managedUnits ? { runtimeStatesSha256: sha256Bytes(Buffer.from(canonicalJson(runtimeStates))) } : {})
       },
       selectedUid
     );
-    await lifecycle.stopRuntime();
+    if (managedUnits) {
+      for (const unit of [...runtimeStates].reverse()) {
+        if (unit.wasActive) await lifecycle.stopUnit({ scope: unit.scope, unit: unit.unit });
+      }
+      await assertAllInactive(managedUnits, lifecycle);
+    } else await lifecycle.stopRuntime();
     if (
-      (await lifecycle.runtimeState()) !==
+      !managedUnits && (await lifecycle.runtimeState()) !==
       "inactive"
     ) {
       fail(
@@ -620,6 +711,7 @@ export async function beginBackupCycle({
           statePath,
           stagingRoot,
           lifecycle,
+          managedUnits,
           uid: selectedUid
         });
       } catch (recoveryError) {
