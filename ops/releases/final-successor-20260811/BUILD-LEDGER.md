@@ -713,3 +713,9 @@ Main implementation `4d7f6e78ee1cc12fb6e1508438388bc2cdbb82f9` / tree `5c21b433a
 ## R4 combined R2/R3 release qualification — 2026-10-10
 
 Implementation `757cae571abd28083197021ba09dbfc38a5b9a5e`, tree `252469b355a2a6a6b29662f3d1193c1c33ef16e1`, base `fe42ef27ad80ef4960e5077b17d4a114d5f74ef2`. Complete npm test:2502passed/26skipped plus24routes×6width browser audit; prior focused realPG evidence reused with exact source comparisons, fresh combinedPG remains GitHub held proof. Local fixtures removed; no deployment. [Canonical provenance](../ci-provenance/757cae571abd28083197021ba09dbfc38a5b9a5e/provenance.md) and [machine proof](../ci-provenance/757cae571abd28083197021ba09dbfc38a5b9a5e/proof.json).
+
+## 2026-10-13 — release abort and native HQ startup correction
+
+Implementation `a8c6d503af6349c946132f3346f4255505015160` / tree `144103daeff0b9cdaa41727b4a46711b787e9cb8`, direct protected base `493ce176f4cfa15c38720356756e381403e6d3e1`. Seven paths fix the observed held-CI abort rejection race, preserve shared-account IPC, and require the existing pinned read-only storage guard before HQ API/tenant/worker startup. Exact complete npm test: 2,504 passed, 26 skipped; browser 24 routes × 6 widths passed. Two real bounded HQ guard probes passed, no production changes. Canonical evidence: `ops/releases/ci-provenance/a8c6d503af6349c946132f3346f4255505015160/`. Previous failed run38054725323 retained. Corrected protected release, actual held CI, native install/cutover and R5–R8 remain open.
+
+Evidence: [Provenance](../ci-provenance/a8c6d503af6349c946132f3346f4255505015160/provenance.md) and [Proof](../ci-provenance/a8c6d503af6349c946132f3346f4255505015160/proof.json).
