@@ -630,11 +630,20 @@ export async function collectOriginWorkerRuntime(projectRoot, deploymentProfile)
         fail("Origin HQ writer lost its durable backup fence.");
       }
     }
+    const storageGuard = "ExecStartPre=/usr/bin/python3 -I -B /var/lib/sitesourcery-storage/guard.py /var/lib/sitesourcery-storage/manifest.json all --manifest-sha256 f772aa6da30b3910148639aad370395c4f935b08efd180103bdec62eeea7690c";
     for (const unit of [hostedUnit, tenantUnit, workerUnit]) {
+      const prestarts = unit.split(/\r?\n/u).filter(line => line.startsWith("ExecStartPre="));
+      if (prestarts[0] !== storageGuard || prestarts.filter(line => line === storageGuard).length !== 1) {
+        fail("Origin HQ units require the pinned protected-storage guard before runtime checks.");
+      }
+      const ipcSettings = [...unit.matchAll(/^RemoveIPC=(.*)$/gmu)].map(match => match[1].trim());
+      if (ipcSettings.length !== 1 || ipcSettings[0] !== "false") {
+        fail("Origin HQ units must preserve shared account IPC objects.");
+      }
       for (const line of [`User=mrfantasea`, `Group=mrfantasea`, `WorkingDirectory=${profile.currentRoot}`, `ProtectHome=read-only`, `RequiresMountsFor=/srv/sitesourcery-storage`]) {
         if (!unit.split(/\r?\n/u).includes(line)) fail("Origin HQ unit placement drifted.");
       }
-      if (!unit.includes(`ExecStart=${profile.nodePath} ${profile.currentRoot}/`) || /(?:^|[\s=])\/opt\/sitesourcery|\/var\/lib\/sitesourcery|User=sitesourcery/u.test(unit)) fail("Origin HQ executable or data placement drifted.");
+      if (!unit.includes(`ExecStart=${profile.nodePath} ${profile.currentRoot}/`) || /(?:^|[\s=])\/opt\/sitesourcery|\/var\/lib\/sitesourcery|User=sitesourcery/u.test(unit.replace(storageGuard, ""))) fail("Origin HQ executable or data placement drifted.");
     }
     for (const env of [hostedEnvironment, workerEnvironment]) {
       for (const line of [`SITESOURCERY_DATA_ROOT=${profile.dataRoot}`, `SITESOURCERY_EXPORT_ROOT=${profile.dataRoot}/private-exports`, `SITESOURCERY_DATABASE_SSL=${profile.databaseSsl}`]) {

@@ -21,6 +21,7 @@ Group=mrfantasea
 WorkingDirectory=/home/mrfantasea/.local/share/sitesourcery-production/current
 Environment=NODE_ENV=production
 EnvironmentFile=/etc/sitesourcery/workers.env
+ExecStartPre=/usr/bin/python3 -I -B /var/lib/sitesourcery-storage/guard.py /var/lib/sitesourcery-storage/manifest.json all --manifest-sha256 f772aa6da30b3910148639aad370395c4f935b08efd180103bdec62eeea7690c
 ExecStartPre=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/assert-runtime.mjs
 ExecStart=/home/mrfantasea/.local/opt/sitesourcery/node-v24.18.0/bin/node /home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/bin/worker.mjs
 Restart=on-failure
@@ -45,7 +46,8 @@ RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 RestrictNamespaces=true
 RestrictRealtime=true
 LockPersonality=true
-RemoveIPC=true
+# This account also owns PostgreSQL and private HQ outside this unit.
+RemoveIPC=false
 RestrictSUIDSGID=true
 CapabilityBoundingSet=
 AmbientCapabilities=

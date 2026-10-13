@@ -177,6 +177,47 @@ test("JSON schema accepts the optional HQ version only at epoch scope", async ()
   assert.equal(schema.$defs.manifestReference.properties.deploymentProfile, undefined);
 });
 
+test("HQ service shutdown cannot authorize cleanup of the shared account IPC", async () => {
+  await withFixture(Object.values(profile.workerPaths), async root => {
+    await collectOriginWorkerRuntime(root, deploymentProfile);
+    for (const field of ["hostedUnit", "tenantUnit", "unit"]) {
+      const unitPath = path.join(root, profile.workerPaths[field]);
+      const original = await readFile(unitPath, "utf8");
+      for (const replacement of ["RemoveIPC=true", "", "RemoveIPC=false\nRemoveIPC=true"]) {
+        await writeFile(unitPath, original.replace("RemoveIPC=false", replacement));
+        await assert.rejects(collectOriginWorkerRuntime(root, deploymentProfile), /preserve shared account IPC/u);
+      }
+      await writeFile(unitPath, original);
+    }
+    await collectOriginWorkerRuntime(root, deploymentProfile);
+  });
+});
+
+
+test("HQ storage guard is pinned and runs before application code in every process", async () => {
+  await withFixture(Object.values(profile.workerPaths), async root => {
+    await collectOriginWorkerRuntime(root, deploymentProfile);
+    for (const field of ["hostedUnit", "tenantUnit", "unit"]) {
+      const unitPath = path.join(root, profile.workerPaths[field]);
+      const original = await readFile(unitPath, "utf8");
+      const guard = original.split("\n").find(line => line.startsWith("ExecStartPre=/usr/bin/python3"));
+      assert.ok(guard);
+      const withoutGuard = original.replace(`${guard}\n`, "");
+      for (const changed of [
+        withoutGuard,
+        original.replace(guard, guard.replace("f772aa6d", "00000000")),
+        original.replace(guard, guard.replace(".json all ", ".json pg ")),
+        original.replace(guard, `${guard}\n${guard}`),
+        withoutGuard.replace("Restart=on-failure", `${guard}\nRestart=on-failure`)
+      ]) {
+        await writeFile(unitPath, changed);
+        await assert.rejects(collectOriginWorkerRuntime(root, deploymentProfile), /pinned protected-storage guard/u);
+      }
+      await writeFile(unitPath, original);
+    }
+    await collectOriginWorkerRuntime(root, deploymentProfile);
+  });
+});
 
 test("CI generation and origin reverification both use the bound HQ profile", async () => {
   const legalPath = CI_RELEASE_GENERATION_LAYOUT.legalConstantsPath;
