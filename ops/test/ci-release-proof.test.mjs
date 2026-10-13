@@ -14,6 +14,7 @@ import {
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { setImmediate } from "node:timers/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
@@ -805,6 +806,8 @@ test("anchored writer removes output when the post-write identity check fails", 
     path.join(canonicalTemporaryRoot, "ss-ci-anchored-postcheck-")
   );
   const relativePath = "ops/releases/ci-successor-inputs/candidate.json";
+  const postWriteError = new Error("synthetic HEAD drift");
+  let observedAbortExit = false;
   try {
     await mkdir(
       path.join(fixture, "ops/releases/ci-successor-inputs"),
@@ -816,11 +819,21 @@ test("anchored writer removes output when the post-write identity check fails", 
         relativePath,
         successorInput: { authority: "held" },
         postWriteCheck: async () => {
-          throw new Error("synthetic HEAD drift");
+          throw postWriteError;
+        },
+        testControl: {
+          afterAbort: async (exited) => {
+            assert.equal(await exited, 1);
+            // Force completion to reject a full turn before the abort path
+            // awaits it. Observing only the exit does not handle completion.
+            await setImmediate();
+            observedAbortExit = true;
+          }
         }
       }),
-      /synthetic HEAD drift/u
+      (error) => error === postWriteError
     );
+    assert.equal(observedAbortExit, true);
     await assert.rejects(access(path.join(fixture, relativePath)), /ENOENT/u);
   } finally {
     await rm(fixture, { recursive: true, force: true });

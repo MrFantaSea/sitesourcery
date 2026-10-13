@@ -218,10 +218,11 @@ function startAnchoredWriter({
   child.stdout.on("data", (chunk) => stdout.push(chunk));
   child.stderr.on("data", (chunk) => stderr.push(chunk));
   child.stdin.end(bytes);
-  const completion = new Promise((resolve, reject) => {
+  const exited = new Promise((resolve, reject) => {
     child.once("error", reject);
     child.once("close", resolve);
-  }).then((exitCode) => {
+  });
+  const completion = exited.then((exitCode) => {
     if (exitCode !== 0) {
       fail(
         `CI anchored successor write failed cleanly (${exitCode}): ${Buffer.concat(stderr).toString("utf8").trim()}`
@@ -231,7 +232,11 @@ function startAnchoredWriter({
       fail("CI anchored successor writer emitted unexpected output.");
     }
   });
-  return { completion };
+  // The helper may fail while the caller awaits readiness or writes an abort
+  // marker. Observe rejection immediately, but keep the original promise so
+  // the later await still propagates ordinary writer failures.
+  void completion.catch(() => {});
+  return { completion, exited };
 }
 
 export async function writeCiReleaseSuccessorInputAnchored({
@@ -305,6 +310,7 @@ export async function writeCiReleaseSuccessorInputAnchored({
         await writeFile(continuePath, "continue\n", { flag: "wx", mode: 0o600 });
       } catch (error) {
         await writeFile(abortPath, "abort\n", { flag: "wx", mode: 0o600 });
+        await testControl?.afterAbort?.(writer.exited);
         await writer.completion.catch(() => {});
         throw error;
       }

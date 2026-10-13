@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "a8c6d503af6349c946132f3346f4255505015160",
+    "treeSha": "144103daeff0b9cdaa41727b4a46711b787e9cb8",
+    "baseCommitSha": "493ce176f4cfa15c38720356756e381403e6d3e1"
+  },
+  "provenanceSha256": "5b1b9bfe527e576b90105821d01988e64d3743b5c6c04976d9fd0e4fdba5671a",
+  "ledger": {
+    "previousByteCount": 48678,
+    "previousSha256": "7639ba303efb1c752c48d1d9861ca01876be95f303ef35025a216c107f367562",
+    "appendSha256": "9e0db7a21ee07f22ff69c6b78dab1de9e05e3bfd27ce2fa180e79aa372858f4a"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/origin-hq-profile.test.mjs",
+      "exitCode": 0,
+      "logSha256": "b09d069376b63dce25679a27ec1da83ba28adf13e0db23c701e7937bd3578aca"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "54ad25d54365479277e85b5d33f6499bba0695244e41ffe1e060db09ba48a2b7"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed exact seven-path correction: early rejection observation preserves awaited errors; three units preserve shared IPC and run pinned guard first; verifier permits only the exact validated guard path. Actual bounded native guard probes passed. No database/dependency/artifact source changed."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "This seven-path correction changes CI tooling, three HQ system units, and source validation/tests; no database schema or application database code changes. Earlier scoped PG proofs retained; combined actual held CI PG journeys remain required before deployment."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "All task processes exited;52 owned top-level scratch fixtures removed and scratch empty. No correction database created; existing PostgreSQL and all source/toolchains/evidence preserved."
+  }
+}
