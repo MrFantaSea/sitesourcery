@@ -104,6 +104,7 @@ export function createAlakazam35PublicationPort({
   for (const method of [
     "activate",
     "publicationHeld",
+    "purgeProject",
     "reserveHostname",
     "rollback",
     "setHostnameGate"
@@ -156,6 +157,7 @@ export function createAlakazam35PublicationPort({
     readiness: () => base.readiness(),
     request: (proof) => withAsset(proof, () => base.request(proof)),
     rollback: (proof) => withAsset(proof, () => base.rollback(proof)),
-    unpublish: (proof) => base.unpublish(proof)
+    unpublish: (proof) => base.unpublish(proof),
+    purgeProject: (proof) => base.purgeProject(proof)
   });
 }

@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "95ba59cc6e700a91adf535515bea502e94fea7ed",
+    "treeSha": "5b4e05dd930cd783c9a1a8b805e1e277dde5133e",
+    "baseCommitSha": "3090d72e4fda0324f5797e47f43916b9c2f3208a"
+  },
+  "provenanceSha256": "a7a315412163659531f3756906fae0da294e01c3fe16c13e8257e995d7fa5600",
+  "ledger": {
+    "previousByteCount": 49660,
+    "previousSha256": "2b5c46b108faab8d41dd887662f70e75a7b9de00d65d4ac2b270a1a16e4256a9",
+    "appendSha256": "bd3b86e442f9ed39582218687da451093ca7f894731e2e8a227ec99e699f8ad3"
+  },
+  "proofs": {
+    "focused": {
+      "command": "TMPDIR=/private/tmp node --test --test-concurrency=1 server/hosted/test/alakazam-35-publication-composition.test.mjs server/hosted/test/alakazam-35-fulfillment.test.mjs server/hosted/test/selfhost-publication-port.test.mjs server/selfhost/test/project-erasure.test.mjs",
+      "exitCode": 0,
+      "logSha256": "3df6496375bf20c0fa405a2086f3e883c9b19a715d8b12d5a42e527249851884"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "0c363f4b0ed06331f5d3a10ffcfd542f812ff013a52ef1c1bf2add7617dd6007"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed exact two-path repair: bound runtime purgeProject forwarding satisfies the real constructor; returned port delegates existing proof/error handling. Real-runtime regression covers readiness, terminal erasure, reopen/replay/conflict and no later publication. Actual isolated full server startup passed with stated historical-anchor limits."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "This two-path correction changes only in-process publication method forwarding and its filesystem composition regression. No SQL, migration or database implementation changed. Actual isolated full API startup used existing schema106 clone89882; normal final held CI database journeys remain required before deployment."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "All owned local qualification processes exited and both private test scratch directories are empty. No local database created. Stopped native smoke fixture/clone89882 explicitly retained for final candidate startup, not claimed removed; production, toolchains and evidence preserved."
+  }
+}
