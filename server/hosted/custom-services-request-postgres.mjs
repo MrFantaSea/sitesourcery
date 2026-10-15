@@ -6,7 +6,13 @@ import { HostedError, invariant } from "./errors.mjs";
 export const CUSTOM_SERVICES_ASSESSMENT_REQUEST_SCHEMA =
   "sitesourcery.custom-services-assessment-request/v1";
 
-const POLICY_ID = "00000000-0000-4000-8000-000000000341";
+const POLICY_ID = "00000000-0000-4000-8000-000000001411";
+// Existing submitted requests retain their original policy; reading or
+// withdrawing them must not silently upgrade their commercial terms.
+const READABLE_POLICY_IDS = Object.freeze([
+  POLICY_ID,
+  "00000000-0000-4000-8000-000000000341"
+]);
 const COMMAND_RECEIPT_SCHEMA =
   "sitesourcery.custom-services-assessment-request-command/v1";
 const ROUTES = Object.freeze({
@@ -606,14 +612,14 @@ async function readState(client, input) {
             and project_id = $2
             and customer_user_id = $3
             and case_id = $4
-            and policy_id = $5
+            and policy_id = any($5::uuid[])
           limit 2`,
         [
           input.organizationId,
           input.projectId,
           input.customerId,
           serviceCase.id,
-          POLICY_ID
+          READABLE_POLICY_IDS
         ]
       ),
       "assessmentRequestOffering",
@@ -1079,9 +1085,9 @@ export function createPostgresCustomServicesRequestRepository({
               `update ss.service_case_offerings
                   set state = 'removed'
                 where case_id = $1
-                  and policy_id = $2
+                  and policy_id = any($2::uuid[])
                   and state = 'requested'`,
-              [selectedCase.id, POLICY_ID]
+              [selectedCase.id, READABLE_POLICY_IDS]
             );
             invariant(
               removed.rowCount === 1,

@@ -11,6 +11,12 @@ export const CUSTOM_SERVICES_OWNER_QUOTE_RECEIPT_SCHEMA =
 
 const ASSESSMENT_POLICY_ID =
   "00000000-0000-4000-8000-000000001411";
+const LEGACY_ASSESSMENT_POLICY_ID =
+  "00000000-0000-4000-8000-000000000341";
+const VISIBLE_ASSESSMENT_POLICY_IDS = Object.freeze([
+  ASSESSMENT_POLICY_ID,
+  LEGACY_ASSESSMENT_POLICY_ID
+]);
 const QUOTE_ROUTE =
   "custom_services.owner.assessment_quote.issue";
 const UUID =
@@ -242,6 +248,13 @@ function queueEntry(row) {
     projectId: row.project_id,
     projectName: row.project_name,
     submittedAt: iso(row.submitted_at),
+    assessmentPolicyId: row.assessment_policy_id,
+    quoteAvailability: Object.freeze({
+      available: row.assessment_policy_id === ASSESSMENT_POLICY_ID,
+      reason: row.assessment_policy_id === ASSESSMENT_POLICY_ID
+        ? null
+        : "legacy_assessment_request_requires_resubmission"
+    }),
     customer: Object.freeze({
       customerId: row.customer_user_id,
       name: row.customer_name,
@@ -422,6 +435,7 @@ export function createPostgresCustomServicesOwner({
                  account_profile.display_name as customer_name,
                  account_user.email as customer_email,
                  intake.submitted_at,
+                 offering.policy_id as assessment_policy_id,
                  intake.revision as intake_revision,
                  intake.site_display_name,
                  intake.public_scheme,
@@ -462,7 +476,7 @@ export function createPostgresCustomServicesOwner({
                  on offering.organization_id = service_case.organization_id
                 and offering.case_id = service_case.id
                 and offering.customer_user_id = service_case.customer_user_id
-                and offering.policy_id = $1
+                and offering.policy_id = any($1::uuid[])
                 and offering.state = 'requested'
                join lateral (
                  select candidate.*
@@ -489,7 +503,14 @@ export function createPostgresCustomServicesOwner({
                 and acceptance.id is null
               order by intake.submitted_at asc, service_case.id asc
               limit 100`,
-              [ASSESSMENT_POLICY_ID]
+              [VISIBLE_ASSESSMENT_POLICY_IDS]
+            );
+            invariant(
+              new Set(selected.rows.map(row => row.case_id)).size ===
+                selected.rows.length,
+              "owner_quote_repository_conflict",
+              "An assessment request has ambiguous policy authority.",
+              { status: 500 }
             );
             return deepFreeze({
               schema: CUSTOM_SERVICES_OWNER_QUEUE_SCHEMA,
@@ -554,6 +575,32 @@ export function createPostgresCustomServicesOwner({
               );
               return storedReceipt(prior.response_body);
             }
+
+            const offering = one(
+              await client.query(
+                `select offering.policy_id
+                   from ss.service_cases service_case
+                   join ss.service_case_offerings offering
+                     on offering.organization_id = service_case.organization_id
+                    and offering.case_id = service_case.id
+                    and offering.customer_user_id = service_case.customer_user_id
+                  where service_case.organization_id = $1
+                    and service_case.id = $2
+                    and service_case.state = 'submitted'
+                    and offering.state = 'requested'
+                    and offering.policy_id = any($3::uuid[])
+                  limit 2`,
+                [input.organizationId, caseId, VISIBLE_ASSESSMENT_POLICY_IDS]
+              ),
+              "assessmentRequestPolicy",
+              { optional: true }
+            );
+            invariant(
+              offering?.policy_id !== LEGACY_ASSESSMENT_POLICY_ID,
+              "legacy_assessment_request_requires_resubmission",
+              "This request uses an earlier Assessment policy. The customer must withdraw it and submit a new request before it can be quoted.",
+              { status: 409 }
+            );
 
             const request = one(
               await client.query(

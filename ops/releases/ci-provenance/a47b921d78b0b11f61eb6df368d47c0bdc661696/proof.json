@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "a47b921d78b0b11f61eb6df368d47c0bdc661696",
+    "treeSha": "f94b3aede39b1e1d043565dde386f06163429bc2",
+    "baseCommitSha": "1a3a5926aa36f4f33065285a3ac733500889cbe6"
+  },
+  "provenanceSha256": "5956821770ad013755d6ff3e300d7574d4cb00f4160f55808b63b5fb5d382c4e",
+  "ledger": {
+    "previousByteCount": 51409,
+    "previousSha256": "3bd7f2d298c1b568ce837e70361aae3c85e03a35f181b47c1f16f8e93f83ff08",
+    "appendSha256": "3a9add1a7620b669e3689bde2a084702b1c36494d920e678d8bac9a141abcf28"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/assessment-intake-owner-visibility.integration.test.mjs",
+      "exitCode": 0,
+      "logSha256": "e9203c61b8dd1d22d92c2c41fce6448cafe0e4d406a32d22f1cbf1a90c140821"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "a24433a3d1b1bee7846e9c42d6f63d8229b503c7cbc616318ab758278f715f81"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed exact current/legacy policy compatibility, unchanged quote authority and replay ordering, genuine database/browser/device proof, asset bindings and disposable CI cleanup."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "650bc0ab6f10f4af3b1d6f48ad126e2343004e35ccddc55503e058897eb1b528"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned ss_assessment_intake_test database removed with independent absence proof; exact qualification scratch removed and no owned Node/Chromium process remains. Existing PostgreSQL/toolchains/builds and original logs preserved."
+  }
+}
