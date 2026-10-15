@@ -37,6 +37,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate,
         model.onVoiceDisable = { [weak voice] session, token in
             await voice?.disable(session: session, deviceToken: token) ?? true
         }
+        model.onVoiceRoutingChanged = { [weak voice] available in
+            voice?.setRoutingAvailable(available)
+        }
+        voice.authorizeIncomingCall = { [weak model] binding, recipient in
+            await model?.authorizeIncomingVoice(binding: binding, recipient: recipient) ?? false
+        }
+        model.voiceCleanupDebtCount = voice.cleanupDebtCount
+        voice.onCleanupDebt = { [weak model] count in
+            model?.voiceCleanupDebtCount = count
+        }
         voice.onState = { [weak model] state in
             model?.setVoiceTransportState(state)
         }

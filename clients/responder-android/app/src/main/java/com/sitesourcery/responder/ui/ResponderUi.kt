@@ -426,9 +426,11 @@ private fun DeviceTab(
     launch: (suspend () -> Unit) -> Unit,
 ) {
     HeldCard(
-        if (BuildConfig.PROVIDER_CONFIGURED) "Managed Voice configured" else "Provider activation held",
-        if (BuildConfig.PROVIDER_CONFIGURED) {
-            "Incoming-only Voice can register after permissions and server authorization are verified."
+        if (BuildConfig.PROVIDER_CONFIGURED && state.incomingCallsAvailable) "Incoming calls available" else "Incoming calls unavailable",
+        if (BuildConfig.PROVIDER_CONFIGURED && state.incomingCallsAvailable) {
+            "Allow notifications and microphone access to receive calls on this device."
+        } else if (BuildConfig.PROVIDER_CONFIGURED) {
+            "The server has not enabled incoming calls. Refresh the workspace to check again."
         } else {
             "This proof build performs no Firebase, Twilio, call, or push registration."
         },
@@ -442,7 +444,11 @@ private fun DeviceTab(
     }
     StatusRow("Notifications: ${state.notificationPermission}", state.notificationPermission == "authorized")
     StatusRow("Microphone: ${state.microphonePermission}", state.microphonePermission == "authorized")
-    StatusRow("Voice: ${state.voiceState.name}", state.voiceState.name == "registered")
+    StatusRow("Incoming routing", state.incomingCallsAvailable)
+    StatusRow("Voice: ${state.voiceState.name}", state.incomingCallsAvailable && state.voiceState.name == "registered")
+    if (state.pendingVoiceCleanupCount > 0) {
+        Text("${state.pendingVoiceCleanupCount} older Voice registrations await provider cleanup. Their retired identities are no longer used for new calls.")
+    }
     Button(onClick = requestPermissions, modifier = Modifier.fillMaxWidth()) {
         Text("Review device permissions")
     }
@@ -450,6 +456,7 @@ private fun DeviceTab(
         OutlinedButton(
             onClick = { launch { actions.enableVoiceAndRefresh() } },
             modifier = Modifier.fillMaxWidth(),
+            enabled = state.incomingCallsAvailable,
         ) { Text("Refresh incoming Voice registration") }
     }
     OutlinedButton(

@@ -23,6 +23,7 @@ import {
 import {
   createHeldTwilioResponderVoiceDialPlan,
   createTwilioResponderVoiceDialPlan,
+  createTwilioResponderNativeVoiceDialPlan,
   voiceDialModeFromEnvironment
 } from "./twilio-responder-voice-dial-plan.mjs";
 import {
@@ -35,6 +36,7 @@ import {
 import {
   createPostgresResponderTwilioProviderTopologyRepository
 } from "./responder-twilio-provider-topology-postgres.mjs";
+import { nativeVoiceRoutingModeFromEnvironment } from "./responder-native-voice-routing.mjs";
 
 export const TWILIO_RESPONDER_INBOUND_MODE_ENVIRONMENT =
   "SITESOURCERY_TWILIO_INBOUND_EVENT_MODE";
@@ -71,6 +73,7 @@ export function composedResponderLookupDigests(environment = process.env) {
 export function createConfiguredTwilioResponderInboundHttp({
   environment = process.env,
   authority = null,
+  nativeVoiceRouting = null,
   providerRegistryFactory = twilioIsvProviderRegistryFromEnvironment,
   providerTopologyRepositoryFactory =
     createPostgresResponderTwilioProviderTopologyRepository,
@@ -87,6 +90,7 @@ export function createConfiguredTwilioResponderInboundHttp({
     { status: 500 }
   );
   const voiceDialMode = voiceDialModeFromEnvironment(environment);
+  const nativeVoiceMode = nativeVoiceRoutingModeFromEnvironment(environment);
   if (mode === "held") {
     invariant(
       voiceDialMode === "held",
@@ -136,7 +140,9 @@ export function createConfiguredTwilioResponderInboundHttp({
     environment,
     TWILIO_RESPONDER_INBOUND_DIAL_RESULT_URL_ENVIRONMENT
   );
-  const voiceDialPlan = voiceDialMode === "held"
+  const voiceDialPlan = nativeVoiceMode === "verified"
+    ? createTwilioResponderNativeVoiceDialPlan({ routing: nativeVoiceRouting, dialResultUrl })
+    : voiceDialMode === "held"
     ? createHeldTwilioResponderVoiceDialPlan()
     : createTwilioResponderVoiceDialPlan({
         targets: createPostgresResponderVoiceDialTargets({

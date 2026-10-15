@@ -168,6 +168,17 @@ class ClientAuthorityTest {
         assertThrows(VoiceSessionExpiredException::class.java) {
             ReceiptValidator.voice(session, COMMAND, selected, issued.plusSeconds(300))
         }
+        // Routing availability does not turn token issuance into delivery.
+        for (invalid in listOf(
+            session.copy(providerEffects = true),
+            session.copy(pushDeliveryEffects = true),
+            session.copy(voiceCallEffects = true),
+            session.copy(outgoingAllowed = true),
+        )) {
+            assertThrows(IllegalArgumentException::class.java) {
+                ReceiptValidator.voice(invalid, COMMAND, selected, issued.plusSeconds(1))
+            }
+        }
     }
 
     @Test

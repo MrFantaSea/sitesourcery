@@ -158,7 +158,7 @@ pass("platform-neutral-app-typecheck");
 const coreProof = run("/usr/bin/swift", [
   "run", "--disable-sandbox", "ResponderCoreProof"
 ]);
-assert.match(coreProof, /responder-ios-core-proof 9\/9 effects=held/u);
+assert.match(coreProof, /responder-ios-core-proof 12\/12 effects=held/u);
 pass("compiled-core-proof");
 
 const api = text("Sources/ResponderCore/APIClient.swift");
@@ -291,6 +291,17 @@ assert.match(
 assert.match(xcodeProject, /@executable_path\/Frameworks/iu);
 assert.match(xcodeProject, /ENABLE_DEBUG_DYLIB = NO/iu);
 assert.doesNotMatch(twilioVoice, /CXStartCallAction|outgoingAllowed:\s*true/iu);
+// CallKit reporting/PushKit completion must precede network authorization.
+assert.match(twilioVoice, /reportIncoming\(callId:[\s\S]*finishPush\(id: pushId\)[\s\S]*authorizeIncomingCall/iu);
+assert.match(twilioVoice, /selectedBinding\.matchesRecipient\(callInvite\.to\)/u);
+assert.match(twilioVoice, /private func answer[\s\S]*await authorizeIncomingCall[\s\S]*selectedBinding == binding[\s\S]*generation == routingGeneration[\s\S]*invitation\.accept/u);
+assert.match(twilioVoice, /func setRoutingAvailable[\s\S]*routingGeneration \+= 1[\s\S]*rejectAndDisconnectAll\(\)/u);
+assert.match(twilioVoice, /fresh\.binding\.authorizesCleanup\(of: binding\)/u);
+assert.match(twilioVoice, /canSupersede\(binding\)[\s\S]*retainSupersededCleanup\(binding\)/u);
+assert.match(model, /async let me = api\.me\(\)[\s\S]*api\.nativeInstallations[\s\S]*account\.user\?\.id == userId/u);
+assert.match(model, /binding\.matchesInstallation\(installation\)/u);
+assert.match(model, /incomingCallsReady[\s\S]*requestVoiceSession[\s\S]*generation == voiceAuthorizationGeneration/u);
+assert.match(callKit, /seconds\(3\)[\s\S]*onEnd\?\(action\.callUUID\)[\s\S]*action\.fail/u);
 pass("official-twilio-voice-lifecycle");
 
 const applicationSource = expectedSwift

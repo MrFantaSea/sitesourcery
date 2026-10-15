@@ -42,6 +42,10 @@ function render(target, actionUrl) {
 
 export function isExactTwilioResponderVoiceTwiML(value) {
   if (value === TWILIO_RESPONDER_HELD_VOICE_TWIML) return true;
+  const clients = /^<\?xml version="1\.0" encoding="UTF-8"\?><Response><Dial action="([^"]+)" method="POST" answerOnBridge="true" timeout="20">((?:<Client>ssr_[0-9a-f]{48}<\/Client>){1,10})<\/Dial><\/Response>$/u.exec(value);
+  if (clients) {
+    try { return dialResultUrl(clients[1]) === clients[1]; } catch { return false; }
+  }
   const match = /^<\?xml version="1\.0" encoding="UTF-8"\?><Response><Dial action="([^"]+)" method="POST" answerOnBridge="true" timeout="20"><Number>(\+[1-9][0-9]{1,14})<\/Number><\/Dial><\/Response>$/u.exec(value);
   if (!match) return false;
   try {
@@ -49,6 +53,37 @@ export function isExactTwilioResponderVoiceTwiML(value) {
   } catch {
     return false;
   }
+}
+
+export function createTwilioResponderNativeVoiceDialPlan({ routing, dialResultUrl: selectedDialResultUrl } = {}) {
+  invariant(routing?.kind === "responder-native-voice-routing" && routing.mode === "verified" &&
+    typeof routing.readiness === "function" && typeof routing.resolveIdentities === "function",
+  "RESPONDER_VOICE_DIAL_PLAN_CONFIGURATION_REQUIRED", "Native Voice dialing requires routing authority.", { status: 500 });
+  const actionUrl = dialResultUrl(selectedDialResultUrl);
+  return Object.freeze({
+    kind: "twilio-responder-voice-dial-plan", mode: "verified-native-client", providerEffects: true,
+    async readiness() {
+      const status = await routing.readiness();
+      const ready = status.routingReady === true && status.operationalCalls === true;
+      return { ready, verified: ready, providerEffects: ready, voiceOperational: ready,
+        voiceDialPlan: ready ? "verified-native-client" : "not-ready", mode: "verified-native-client" };
+    },
+    async twiml(receipt = {}) {
+      // Inbound persistence and follow-up remain valid even when no current
+      // device is eligible. Do not turn that legitimate no-answer into a retry.
+      if (receipt.channel !== "voice" || receipt.eventKind !== "call_received" ||
+        receipt.eventState !== "recorded" || !UUID.test(receipt.numberBindingId ?? "")) return TWILIO_RESPONDER_HELD_VOICE_TWIML;
+      let identities;
+      try { identities = await routing.resolveIdentities({ numberBindingId: receipt.numberBindingId }); }
+      catch { return TWILIO_RESPONDER_HELD_VOICE_TWIML; }
+      if (!Array.isArray(identities) || identities.length === 0 || identities.length > 10 ||
+        identities.some(identity => typeof identity !== "string" || !/^ssr_[0-9a-f]{48}$/u.test(identity)) ||
+        new Set(identities).size !== identities.length) return TWILIO_RESPONDER_HELD_VOICE_TWIML;
+      return '<?xml version="1.0" encoding="UTF-8"?>' +
+        `<Response><Dial action="${actionUrl}" method="POST" answerOnBridge="true" timeout="20">` +
+        identities.map(identity => `<Client>${identity}</Client>`).join("") + "</Dial></Response>";
+    }
+  });
 }
 
 export function createHeldTwilioResponderVoiceDialPlan() {

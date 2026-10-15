@@ -7,16 +7,22 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.sitesourcery.responder.app.ResponderAppState
 import com.sitesourcery.responder.core.CommandLedger
 import com.sitesourcery.responder.core.NativeAppEnvironment
+import com.sitesourcery.responder.core.NativePushPurpose
+import com.sitesourcery.responder.core.ResponderCapabilities
+import com.sitesourcery.responder.core.ReceiptValidator
 import com.sitesourcery.responder.nativeclient.NativeClientBuild
 import com.sitesourcery.responder.nativeclient.NativeRegistrationCoordinator
 import com.sitesourcery.responder.network.ResponderApi
 import com.sitesourcery.responder.network.ApiException
+import com.sitesourcery.responder.network.HttpsUrlTransport
 import com.sitesourcery.responder.security.DeviceAuthorityStore
 import com.sitesourcery.responder.security.KeystoreValueStore
 import com.sitesourcery.responder.voice.IncomingCallController
 import com.sitesourcery.responder.voice.VoiceRegistrationCoordinator
+import com.sitesourcery.responder.voice.VoiceIncomingPermit
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
@@ -64,6 +70,13 @@ class ResponderContainer(application: Application) {
     private val authorityStore = DeviceAuthorityStore(secureStore)
     private val commandLedger = CommandLedger(secureStore)
     val api = ResponderApi(BuildConfig.API_ORIGIN, authorityStore)
+    private val routingApi = ResponderApi(
+        BuildConfig.API_ORIGIN,
+        authorityStore,
+        HttpsUrlTransport(connectTimeoutMs = 3_000, readTimeoutMs = 3_000),
+    )
+    private val routingLane = Mutex()
+    @Volatile private var nativeRoutingReady = false
     val nativeRegistration = NativeRegistrationCoordinator(
         api = api,
         build = NativeClientBuild(
@@ -81,10 +94,12 @@ class ResponderContainer(application: Application) {
     val voiceRegistration = VoiceRegistrationCoordinator(
         providerConfigured = BuildConfig.PROVIDER_CONFIGURED,
         authorityStore = authorityStore,
+        routingReady = { nativeRoutingReady },
     )
     val incomingCalls = IncomingCallController(
         application,
         voiceRegistration::isIncomingPermitCurrent,
+        refreshRouting = { prepareIncomingVoice() != null },
     )
     @Volatile private var notificationGranted = false
     @Volatile private var microphoneGranted = false
@@ -94,11 +109,13 @@ class ResponderContainer(application: Application) {
         api = api,
         commandLedger = commandLedger,
         nativeRegistration = nativeRegistration,
-        prepareVoice = ::prepareVoice,
+        prepareVoice = { prepareVoice(refreshRouting = false) },
+        readCapabilities = ::refreshNativeRouting,
         disableVoice = ::disableVoice,
         enableVoice = ::enableVoice,
         voiceState = { voiceRegistration.state },
         voiceRecoveryScope = voiceRegistration::recoveryScope,
+        pendingVoiceCleanup = voiceRegistration::pendingProviderCleanupCount,
     )
 
     fun launch() {
@@ -112,6 +129,10 @@ class ResponderContainer(application: Application) {
                 try {
                     voiceRegistration.closeIncomingGate()
                     incomingCalls.quiesce()
+                    if (authorityStore.fcmToken() != token && voiceRegistration.hasRegistration()) {
+                        // Try the old exact identity before its native revision changes.
+                        attemptCleanupBeforeRevisionChange()
+                    }
                     nativeRegistration.receiveFcmToken(token)?.let(appState::acceptNativeUpdate)
                     prepareVoice()
                 } catch (error: Throwable) {
@@ -148,6 +169,14 @@ class ResponderContainer(application: Application) {
                         )
                     }
                     if (generation != permissionGeneration.get()) return@withLock
+                    val currentInstallation = nativeRegistration.currentInstallation()
+                    val notificationWasEnabled = currentInstallation?.pushRegistrations?.any {
+                        it.active && it.purpose == NativePushPurpose.notification
+                    } == true
+                    if (voiceAllowed && notificationWasEnabled != currentNotification &&
+                        voiceRegistration.hasRegistration()) {
+                        attemptCleanupBeforeRevisionChange()
+                    }
                     val installation = nativeRegistration.updatePurposeAuthority(
                         currentNotification,
                         voiceAllowed,
@@ -161,12 +190,54 @@ class ResponderContainer(application: Application) {
         }
     }
 
-    suspend fun prepareVoice(): Boolean {
+    private suspend fun refreshNativeRouting(): ResponderCapabilities = routingLane.withLock {
+        try {
+            routingApi.capabilities().also { capabilities ->
+                nativeRoutingReady = capabilities.responderNativeClient.incomingCallsAvailable
+                appState.acceptCapabilities(capabilities)
+                if (!nativeRoutingReady) {
+                    voiceRegistration.closeIncomingGate()
+                    incomingCalls.quiesce()
+                }
+            }
+        } catch (error: Throwable) {
+            nativeRoutingReady = false
+            voiceRegistration.closeIncomingGate()
+            incomingCalls.quiesce()
+            appState.acceptCapabilities(null)
+            throw error
+        }
+    }
+
+    suspend fun prepareIncomingVoice(): VoiceIncomingPermit? {
+        if (!BuildConfig.PROVIDER_CONFIGURED) return null
+        refreshNativeRouting()
+        return try {
+            routingLane.withLock {
+                voiceRegistration.confirmIncomingAuthority { scope ->
+                    routingApi.selectOrganization(scope.organizationId)
+                    ReceiptValidator.nativeList(
+                        routingApi.nativeInstallations(scope.projectId),
+                        scope.organizationId, scope.projectId, scope.customerUserId,
+                    ).installations.singleOrNull { it.id == scope.installationId }
+                }
+            }
+        } finally {
+            appState.refreshVoiceState()
+        }
+    }
+
+    suspend fun prepareVoice(refreshRouting: Boolean = true): Boolean {
         val generation = permissionGeneration.get()
         val notification = notificationGranted
         val microphone = microphoneGranted
         if (!BuildConfig.PROVIDER_CONFIGURED || !notification || !microphone ||
             !voiceRegistration.isExplicitlyEnabled()) {
+            appState.refreshVoiceState()
+            return false
+        }
+        if (refreshRouting) refreshNativeRouting()
+        if (!nativeRoutingReady) {
             appState.refreshVoiceState()
             return false
         }
@@ -205,12 +276,31 @@ class ResponderContainer(application: Application) {
         return result
     }
 
+    private suspend fun attemptCleanupBeforeRevisionChange() {
+        try {
+            disableVoice(persistExplicitDisable = false, retireNativeVoip = false)
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            // Keep the old durable registration/attempt for truthful cleanup
+            // evidence; do not discard a newly delivered FCM token on failure.
+            appState.acceptBackgroundFailure(error)
+        }
+    }
+
     private suspend fun enableVoice() {
         permissionLane.withLock {
             if (!notificationGranted || !microphoneGranted) {
                 throw ApiException(
                     "RESPONDER_DEVICE_PERMISSIONS_REQUIRED",
                     "Allow notifications and microphone access before enabling incoming Voice.",
+                    409,
+                )
+            }
+            refreshNativeRouting()
+            if (!nativeRoutingReady) {
+                throw ApiException(
+                    "RESPONDER_NATIVE_ROUTING_HELD",
+                    "Incoming calls are unavailable. You can still release this device safely.",
                     409,
                 )
             }

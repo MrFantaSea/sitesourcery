@@ -149,6 +149,34 @@ private func nativeReceiptJSON(revision: Int) -> String {
     """
 }
 
+private func decoded<T: Decodable>(_ value: [String: Any], as: T.Type) throws -> T {
+    try JSONDecoder().decode(T.self, from: JSONSerialization.data(withJSONObject: value))
+}
+
+private func voiceCapabilityFixture() -> [String: Any] {
+    ["ready": false, "backendReady": true, "clientsReady": false,
+     "mounted": true, "mode": "native", "acceptedRegistrationPlatforms": ["ios"],
+     "initialClient": "ios", "clientArtifacts": ["ios": false, "android": false],
+     "tokenStorage": "sealed", "voipSessionState": "verified",
+     "providerAuthorizationEffects": true, "providerEffects": false,
+     "pushDeliveryEffects": false, "voiceCallEffects": false,
+     "carrierCommandEffects": false, "messageSendEffects": false,
+     "routingReady": true, "operationalCalls": true, "voiceRoutingMode": "verified-native-client"]
+}
+
+private func voiceSessionFixture(revision: Int = 3, digest: String = "a") -> [String: Any] {
+    ["schema": "sitesourcery.responder-native-voice-session/v1",
+     "sessionId": "session", "commandId": "command", "requestDigest": "digest",
+     "replayed": false, "semanticReplay": false,
+     "installationId": installationId, "installationRevision": revision,
+     "provider": "twilio", "transport": "twilio_voice_ios",
+     "accessToken": "test-not-a-credential", "identityDigest": String(repeating: digest, count: 64),
+     "issuedAt": "2026-08-16T12:00:00.000Z", "expiresAt": "2026-08-16T12:05:00.000Z",
+     "incomingAllowed": true, "outgoingAllowed": false, "providerAuthorizationEffects": true,
+     "providerEffects": false, "pushDeliveryEffects": false, "voiceCallEffects": false,
+     "carrierCommandEffects": false, "messageSendEffects": false]
+}
+
 private final class MemorySecureStore: SecureValueStore, @unchecked Sendable {
     private let values = Locked<[String: Data]>([:])
 
@@ -175,6 +203,12 @@ private struct ProofSuite {
         passed.append("held-voip-fail-closed")
         try await voiceSessionProjection()
         passed.append("typed-voice-session-projection")
+        try routingCapabilities()
+        passed.append("native-routing-fail-closed")
+        try scopedIncomingAuthority()
+        passed.append("incoming-installation-scope-and-revocation")
+        try recipientAndCleanupAuthority()
+        passed.append("recipient-revision-and-cleanup-authority")
         try await commandLedger()
         passed.append("durable-command-identity")
         try digests()
@@ -430,6 +464,117 @@ private struct ProofSuite {
         )
     }
 
+    private func routingCapabilities() throws {
+        let live = try decoded(voiceCapabilityFixture(), as: ResponderNativeCapability.self)
+        try require(live.incomingCallsReady, "verified route blocked by held distribution flags")
+        for key in ["mounted", "backendReady", "providerAuthorizationEffects", "routingReady", "operationalCalls"] {
+            var fixture = voiceCapabilityFixture()
+            fixture[key] = false
+            let capability = try decoded(fixture, as: ResponderNativeCapability.self)
+            try require(!capability.incomingCallsReady, "false \(key) opened calls")
+        }
+        for (key, value) in [("voipSessionState", "held"), ("voiceRoutingMode", "held"), ("voiceRoutingMode", "unknown")] {
+            var fixture = voiceCapabilityFixture()
+            fixture[key] = value
+            let capability = try decoded(fixture, as: ResponderNativeCapability.self)
+            try require(!capability.incomingCallsReady, "invalid \(key) opened calls")
+        }
+        for key in ["routingReady", "operationalCalls", "voiceRoutingMode"] {
+            var fixture = voiceCapabilityFixture()
+            fixture.removeValue(forKey: key)
+            let legacy = try decoded(fixture, as: ResponderNativeCapability.self)
+            try require(!legacy.incomingCallsReady, "missing \(key) opened legacy calls")
+            try require(legacy.voiceAuthorizationReady, "routing loss blocked cleanup token authority")
+        }
+    }
+
+    private func scopedIncomingAuthority() throws {
+        let capability = try decoded(voiceCapabilityFixture(), as: ResponderNativeCapability.self)
+        let receipt = try JSONSerialization.jsonObject(with: Data(nativeReceiptJSON(revision: 3).utf8)) as! [String: Any]
+        var fixture = receipt["installation"] as! [String: Any]
+        fixture["pushRegistrations"] = [[
+            "purpose": "voip", "tokenReferenceDigest": "digest", "keyVersion": "v1",
+            "registeredAt": "2026-08-15T12:00:00.000Z", "revision": 3, "active": true
+        ]]
+        func allowed(_ candidate: [String: Any]) throws -> Bool {
+            let installation = try decoded(candidate, as: NativeInstallation.self)
+            return installation.permitsIncomingVoice(
+                capability: capability, organizationId: organizationId,
+                projectId: projectId, userId: "20000000-0000-4000-8000-000000000001"
+            )
+        }
+        let activeAllowed = try allowed(fixture)
+        try require(activeAllowed, "active scoped VoIP installation rejected")
+        for (key, value) in [
+            ("state", "revoked"), ("state", "suspended"), ("platform", "android"),
+            ("organizationId", "foreign"), ("projectId", "foreign"),
+            ("customerUserId", "foreign"), ("bundleId", "foreign")
+        ] {
+            var changed = fixture
+            changed[key] = value
+            let result = try allowed(changed)
+            try require(!result, "unauthorized \(key) accepted")
+        }
+        for registration: [String: Any] in [
+            ["purpose": "notification", "active": true], ["purpose": "voip", "active": false]
+        ] {
+            var changed = fixture
+            var token = (fixture["pushRegistrations"] as! [[String: Any]])[0]
+            token.merge(registration) { _, new in new }
+            changed["pushRegistrations"] = [token]
+            let result = try allowed(changed)
+            try require(!result, "inactive or ordinary push opened calls")
+        }
+        let session = try decoded(voiceSessionFixture(), as: NativeVoiceSession.self)
+        let binding = NativeVoiceBinding(session: session, deviceToken: Data([1]))!
+        let current = try decoded(fixture, as: NativeInstallation.self)
+        try require(binding.matchesInstallation(current), "current revision rejected")
+        fixture["revision"] = 4
+        let rotated = try decoded(fixture, as: NativeInstallation.self)
+        try require(!binding.matchesInstallation(rotated), "old in-flight invite survived rotation")
+    }
+
+    private func recipientAndCleanupAuthority() throws {
+        let session = try decoded(voiceSessionFixture(), as: NativeVoiceSession.self)
+        let current = NativeVoiceBinding(session: session, deviceToken: Data([1]))!
+        let recipient = "ssr_" + String(repeating: "a", count: 48)
+        try require(current.matchesRecipient(recipient), "exact recipient rejected")
+        try require(current.matchesRecipient("client:" + recipient), "documented prefix rejected")
+        for invalid in ["client:client:" + recipient, recipient + " ", recipient.uppercased(), "client:%73" + recipient.dropFirst(), "ssr_" + String(repeating: "b", count: 48)] {
+            try require(!current.matchesRecipient(invalid), "foreign/encoded recipient accepted")
+        }
+        // Expired issuance remains durable metadata; registration separately
+        // requires an unexpired token. There is no five-minute incoming lease.
+        let restored = try JSONDecoder().decode(NativeVoiceBinding.self, from: JSONEncoder().encode(current))
+        try require(restored == current && restored.matchesRecipient(recipient), "cold-start metadata lost")
+        let encoded = String(data: try JSONEncoder().encode(current), encoding: .utf8)!
+        try require(!encoded.contains(session.accessToken) && !encoded.contains("expiresAt"), "JWT persisted as call authority")
+        let nextSession = try decoded(voiceSessionFixture(revision: 4, digest: "b"), as: NativeVoiceSession.self)
+        let next = NativeVoiceBinding(session: nextSession, deviceToken: Data([1]))!
+        try require(next.canSupersede(current), "fresh higher revision blocked by expired cleanup")
+        try require(!next.authorizesCleanup(of: current), "new identity falsely cleaned old binding")
+        try require(!current.canSupersede(next) && !current.canSupersede(current), "stale revision bypassed cleanup")
+        try require(!next.matchesRecipient(recipient), "old invite accepted by new revision")
+        try require(current.authorizesCleanup(of: restored), "same identity cleanup rejected")
+        let rotatedToken = NativeVoiceBinding(session: session, deviceToken: Data([2]))!
+        try require(!rotatedToken.authorizesCleanup(of: current), "different push token cleaned old binding")
+        var foreign = voiceSessionFixture(revision: 5, digest: "c")
+        foreign["installationId"] = "foreign"
+        let foreignSession = try decoded(foreign, as: NativeVoiceSession.self)
+        let foreignBinding = NativeVoiceBinding(session: foreignSession, deviceToken: Data([1]))!
+        try require(!foreignBinding.canSupersede(current), "foreign installation bypassed cleanup")
+        for invalid in ["", String(repeating: "A", count: 64), String(repeating: "x", count: 64), String(repeating: "a", count: 63)] {
+            var fixture = voiceSessionFixture()
+            fixture["identityDigest"] = invalid
+            let invalidSession = try decoded(fixture, as: NativeVoiceSession.self)
+            try require(NativeVoiceBinding(session: invalidSession, deviceToken: Data([1])) == nil, "invalid identity accepted")
+        }
+        var legacy = voiceSessionFixture()
+        legacy.removeValue(forKey: "identityDigest")
+        let legacySession = try decoded(legacy, as: NativeVoiceSession.self)
+        try require(NativeVoiceBinding(session: legacySession, deviceToken: Data([1])) == nil, "missing identity opened calls")
+    }
+
     private func commandLedger() async throws {
         let ledger = CommandLedger(store: MemorySecureStore())
         let semantic = "native.token.10000000-0000-4000-8000-000000000003.voip.r2"
@@ -487,6 +632,9 @@ private struct ResponderCoreProof {
             "token-request-projection",
             "held-voip-fail-closed",
             "typed-voice-session-projection",
+            "native-routing-fail-closed",
+            "incoming-installation-scope-and-revocation",
+            "recipient-revision-and-cleanup-authority",
             "durable-command-identity",
             "purpose-bound-evidence-digests"
         ]

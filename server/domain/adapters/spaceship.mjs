@@ -809,6 +809,45 @@ export function createHeldSpaceshipPricePreview() {
   });
 }
 
+/** A credential-scoped reader; no registration, contact, billing or DNS methods. */
+export function createSpaceshipDomainReadAdapter(options = {}) {
+  const mode = options.mode ?? "held";
+  if (mode === "held") return Object.freeze({ mode, async getDomain() {
+    throw external("spaceship_readback_held", "Spaceship domain readback is held", "not_submitted");
+  } });
+  invariant(mode === "contract_test" || mode === "approved_live", "spaceship_mode_invalid", "Readback mode is invalid");
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (mode === "contract_test") {
+    invariant(options.testOnly === true && typeof options.fetchImpl === "function" && options.fetchImpl !== globalThis.fetch,
+      "spaceship_test_mode_network_forbidden", "Readback tests require an injected non-network fetch");
+  } else {
+    validateLiveApproval(options.liveApproval);
+    invariant(options.liveApproval.capabilities.length === 1 && options.liveApproval.capabilities[0] === "domains:read",
+      "spaceship_readback_scope_invalid", "Readback approval must grant only domains:read");
+  }
+  invariant(typeof options.vault?.readProviderCredentials === "function", "spaceship_vault_invalid", "Readback credentials require a private vault");
+  const clock = validateClock(options.clock);
+  const config = validateConfig({ ...DEFAULTS, ...options.config });
+  return Object.freeze({ mode, providerCode: "spaceship", readOnly: true, providerEffects: false,
+    async getDomain({ domain, signal } = {}) {
+      const name = normalizeDomain(domain);
+      const deadline = AbortSignal.timeout(config.timeoutMs);
+      const transport = createTransport({ clock, vault: options.vault, config, eventSink: () => {},
+        // Keep the deadline through response-body consumption as well as headers.
+        fetchImpl: (url, init) => {
+          invariant(init.method === "GET" && url.origin === SPACESHIP_API_ORIGIN &&
+            url.pathname === `${SPACESHIP_API_PREFIX}/domains/${name}` && !url.search,
+          "spaceship_readback_scope_invalid", "Readback refuses an unreviewed request");
+          return fetchImpl(url, { ...init, signal: AbortSignal.any([init.signal, deadline, ...(signal ? [signal] : [])]) });
+        }
+      });
+      const raw = await transport.request({ method: "GET", path: `${SPACESHIP_API_PREFIX}/domains/${name}`,
+        effect: "read", successStatuses: [200], responseKind: "json" });
+      return normalizeDomainReadback(raw, name);
+    }
+  });
+}
+
 function createTransport({ fetchImpl, clock, vault, config, eventSink }) {
   async function credentials() {
     let value;
@@ -1233,6 +1272,7 @@ function normalizeDomainReadback(value, expectedDomain) {
   );
   invariant(
     DOMAIN_LIFECYCLE_STATUSES.has(value.lifecycleStatus) &&
+      typeof value.autoRenew === "boolean" &&
       Array.isArray(value.eppStatuses) &&
       Array.isArray(value.suspensions),
     "spaceship_domain_readback_invalid",

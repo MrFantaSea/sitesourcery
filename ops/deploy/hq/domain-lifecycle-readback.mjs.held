@@ -1,0 +1,5 @@
+// HELD installation source. Root copies these exact reviewed bytes to
+// /etc/sitesourcery/domain/lifecycle-readback.mjs and pins its SHA-256.
+// The imported implementation is bound to the separately qualified R5 release.
+export { createSiteSourceryDomainLifecycleExecutor } from
+  "/home/mrfantasea/.local/share/sitesourcery-production/current/server/hosted/spaceship-domain-lifecycle-executor.mjs";

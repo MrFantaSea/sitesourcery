@@ -26,12 +26,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var nativeInstallation: NativeInstallation?
     @Published private(set) var notificationAuthorization = "not_requested"
     @Published private(set) var microphoneAuthorization = "not_requested"
+    @Published var voiceCleanupDebtCount = 0
     @Published private(set) var voiceTransportState = "held"
     @Published private(set) var isBusy = false
     @Published var presentedError: String?
 
     var onVoiceSession: ((NativeVoiceSession, Data) -> Void)?
     var onVoiceDisable: ((NativeVoiceSession?, Data?) async -> Bool)?
+    var onVoiceRoutingChanged: ((Bool) -> Void)?
 
     private let configuration: AppConfiguration?
     private let api: ResponderAPIClient?
@@ -76,6 +78,10 @@ final class AppModel: ObservableObject {
     var nativeBackendReady: Bool {
         capabilities?.responderNativeClient.backendReady == true &&
             capabilities?.responderNativeClient.mounted == true
+    }
+
+    var incomingCallsReady: Bool {
+        capabilities?.responderNativeClient.incomingCallsReady == true
     }
 
     var allExternalEffectsHeld: Bool {
@@ -512,10 +518,21 @@ final class AppModel: ObservableObject {
         async let capabilities = api.capabilities()
         async let dashboard = api.responderDashboard()
         async let forwarding = api.forwarding(projectId: projectId)
-        let selectedCapabilities = try await capabilities
-        let selectedDashboard = try await dashboard
-        let selectedForwarding = try await forwarding
+        let selectedCapabilities: ResponderCapabilities
+        let selectedDashboard: ResponderDashboard
+        let selectedForwarding: ForwardingList
+        do {
+            selectedCapabilities = try await capabilities
+            selectedDashboard = try await dashboard
+            selectedForwarding = try await forwarding
+        } catch {
+            self.capabilities = nil
+            onVoiceRoutingChanged?(false)
+            await disableVoiceTransport(requestFreshAuthorization: false)
+            throw error
+        }
         self.capabilities = selectedCapabilities
+        onVoiceRoutingChanged?(selectedCapabilities.responderNativeClient.incomingCallsReady)
         self.dashboard = selectedDashboard
         self.forwarding = selectedForwarding
         if selectedCapabilities.responderNativeClient.backendReady &&
@@ -545,8 +562,23 @@ final class AppModel: ObservableObject {
     }
 
     private func prepareVoiceTransportIfAuthorized() async throws {
+        guard let api else { return }
+        let refreshGeneration = voiceAuthorizationGeneration
+        let refreshProject = selectedProject?.id
+        do {
+            let current = try await api.capabilities()
+            guard refreshGeneration == voiceAuthorizationGeneration,
+                  refreshProject == selectedProject?.id else { return }
+            capabilities = current
+            onVoiceRoutingChanged?(current.responderNativeClient.incomingCallsReady)
+        } catch {
+            guard refreshGeneration == voiceAuthorizationGeneration else { return }
+            capabilities = nil
+            onVoiceRoutingChanged?(false)
+            await disableVoiceTransport(requestFreshAuthorization: false)
+            throw error
+        }
         guard
-            let api,
             let commandLedger,
             let token = currentVoIPToken,
             let installation = nativeInstallation,
@@ -560,10 +592,7 @@ final class AppModel: ObservableObject {
             return
         }
         guard
-            capabilities?.responderNativeClient.mounted == true,
-            capabilities?.responderNativeClient.backendReady == true,
-            capabilities?.responderNativeClient.voipSessionState == "verified",
-            capabilities?.responderNativeClient.providerAuthorizationEffects == true,
+            incomingCallsReady,
             microphoneAuthorization == "authorized"
         else {
             if microphoneAuthorization == "denied" {
@@ -578,22 +607,85 @@ final class AppModel: ObservableObject {
         }
         let generation = voiceAuthorizationGeneration
         voiceTransportState = "registering"
-        let session = try await requestVoiceSession(
-            api: api,
-            commandLedger: commandLedger,
-            projectId: projectId,
-            installation: installation,
-            token: token,
-            intent: "register"
-        )
+        let session: NativeVoiceSession
+        do {
+            session = try await requestVoiceSession(
+                api: api, commandLedger: commandLedger, projectId: projectId,
+                installation: installation, token: token, intent: "register"
+            )
+        } catch {
+            if generation == voiceAuthorizationGeneration {
+                capabilities = nil
+                await disableVoiceTransport(requestFreshAuthorization: false)
+            }
+            throw error
+        }
         guard
             generation == voiceAuthorizationGeneration,
             selectedProject?.id == projectId,
             nativeInstallation?.id == installation.id,
             nativeInstallation?.revision == installation.revision,
-            currentVoIPToken == token
+            currentVoIPToken == token,
+            incomingCallsReady
         else { return }
         onVoiceSession?(session, token)
+    }
+
+    func authorizeIncomingVoice(
+        binding: NativeVoiceBinding,
+        recipient: String
+    ) async -> Bool {
+        // A cold PushKit launch can report CallKit before workspace restoration.
+        // The coordinator independently ends an unresolved invitation at 3s.
+        for _ in 0..<30 where launchState == .starting {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        guard let api, let installation = nativeInstallation,
+              let organizationId = selectedOrganization?.id,
+              let projectId = selectedProject?.id, let userId = user?.id,
+              microphoneAuthorization == "authorized",
+              binding.matchesRecipient(recipient),
+              binding.matchesInstallation(installation),
+              let currentVoIPToken,
+              binding.deviceTokenDigest == ResponderDigest.sha256(currentVoIPToken)
+        else { return false }
+        let generation = voiceAuthorizationGeneration
+        do {
+            async let freshCapabilities = api.capabilities()
+            async let me = api.me()
+            async let installations = api.nativeInstallations(projectId: projectId)
+            let current = try await freshCapabilities
+            let account = try await me
+            let devices = try await installations
+            guard generation == voiceAuthorizationGeneration,
+                  selectedOrganization?.id == organizationId,
+                  selectedProject?.id == projectId, user?.id == userId,
+                  nativeInstallation?.id == installation.id,
+                  nativeInstallation?.revision == installation.revision
+            else { return false }
+            let allowed = account.user?.id == userId &&
+                devices.organizationId == organizationId && devices.projectId == projectId &&
+                devices.installations.contains {
+                    $0.id == installation.id && $0.revision == installation.revision &&
+                        $0.installationKeyDigest == installation.installationKeyDigest &&
+                        $0.permitsIncomingVoice(
+                            capability: current.responderNativeClient,
+                            organizationId: organizationId,
+                            projectId: projectId,
+                            userId: userId
+                        )
+                }
+            capabilities = allowed ? current : nil
+            if !allowed { voiceAuthorizationGeneration += 1 }
+            onVoiceRoutingChanged?(allowed)
+            return allowed
+        } catch {
+            guard generation == voiceAuthorizationGeneration else { return false }
+            capabilities = nil
+            voiceAuthorizationGeneration += 1
+            onVoiceRoutingChanged?(false)
+            return false
+        }
     }
 
     private func requestVoiceSession(
@@ -627,7 +719,8 @@ final class AppModel: ObservableObject {
             !session.voiceCallEffects,
             !session.carrierCommandEffects,
             !session.messageSendEffects,
-            !session.accessToken.isEmpty
+            !session.accessToken.isEmpty,
+            NativeVoiceBinding(session: session, deviceToken: token) != nil
         else {
             throw APIError(
                 code: "INVALID_VOICE_SESSION",
@@ -649,6 +742,7 @@ final class AppModel: ObservableObject {
         requestFreshAuthorization: Bool
     ) async -> Bool {
         voiceAuthorizationGeneration += 1
+        onVoiceRoutingChanged?(false)
         var freshSession: NativeVoiceSession?
         if requestFreshAuthorization,
            let api,
@@ -704,6 +798,8 @@ final class AppModel: ObservableObject {
     }
 
     private func clearWorkspace() {
+        voiceAuthorizationGeneration += 1
+        onVoiceRoutingChanged?(false)
         user = nil
         organizations = []
         projects = []

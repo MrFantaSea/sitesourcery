@@ -101,7 +101,17 @@ data class ResponderNativeCapability(
     val voiceCallEffects: Boolean,
     val carrierCommandEffects: Boolean,
     val messageSendEffects: Boolean,
-)
+    val voiceRoutingMode: String = "held",
+    val routingReady: Boolean = false,
+    val operationalCalls: Boolean = false,
+) {
+    // Distribution readiness is separate from the incoming routing contract.
+    val incomingCallsAvailable: Boolean
+        get() = mounted && backendReady && voipSessionState == "verified" &&
+            providerAuthorizationEffects && voiceRoutingMode == "verified-native-client" &&
+            routingReady && operationalCalls &&
+            "android" in acceptedRegistrationPlatforms && "twilio_voice_android" in voipTransports
+}
 
 @Serializable
 data class NativeClientArtifacts(val ios: Boolean, val android: Boolean)

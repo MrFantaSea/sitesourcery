@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 final class CallKitCoordinator: NSObject, @preconcurrency CXProviderDelegate {
-    var onAnswer: ((UUID) -> Bool)?
+    var onAnswer: ((UUID) async -> Bool)?
     var onEnd: ((UUID) -> Bool)?
     var onReset: (() -> Void)?
     var onAudioSessionActivated: ((AVAudioSession) -> Void)?
@@ -12,6 +12,7 @@ final class CallKitCoordinator: NSObject, @preconcurrency CXProviderDelegate {
 
     private let provider: CXProvider
     private let controller = CXCallController()
+    private var pendingAnswers: [UUID: (attempt: UUID, action: CXAnswerCallAction)] = [:]
 
     override init() {
         let configuration = CXProviderConfiguration()
@@ -41,19 +42,37 @@ final class CallKitCoordinator: NSObject, @preconcurrency CXProviderDelegate {
     }
 
     func end(callId: UUID, reason: CXCallEndedReason = .failed) {
+        pendingAnswers.removeValue(forKey: callId)?.action.fail()
         provider.reportCall(with: callId, endedAt: Date(), reason: reason)
     }
 
     func providerDidReset(_ provider: CXProvider) {
+        for pending in pendingAnswers.values { pending.action.fail() }
+        pendingAnswers.removeAll()
         onReset?()
     }
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
-        if onAnswer?(action.callUUID) == true { action.fulfill() }
-        else { action.fail() }
+        let attempt = UUID()
+        pendingAnswers[action.callUUID] = (attempt, action)
+        Task { @MainActor in
+            let allowed = await onAnswer?(action.callUUID) == true
+            guard pendingAnswers[action.callUUID]?.attempt == attempt else { return }
+            pendingAnswers.removeValue(forKey: action.callUUID)
+            if allowed { action.fulfill() }
+            else { action.fail() }
+        }
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard pendingAnswers[action.callUUID]?.attempt == attempt else { return }
+            pendingAnswers.removeValue(forKey: action.callUUID)
+            _ = onEnd?(action.callUUID)
+            action.fail()
+        }
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        pendingAnswers.removeValue(forKey: action.callUUID)?.action.fail()
         if onEnd?(action.callUUID) == true { action.fulfill() }
         else { action.fail() }
     }

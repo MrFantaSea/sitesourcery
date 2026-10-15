@@ -48,14 +48,17 @@ fun interface HttpTransport {
     suspend fun execute(request: HttpRequest): HttpResponse
 }
 
-class HttpsUrlTransport : HttpTransport {
+class HttpsUrlTransport(
+    private val connectTimeoutMs: Int = 15_000,
+    private val readTimeoutMs: Int = 30_000,
+) : HttpTransport {
     override suspend fun execute(request: HttpRequest): HttpResponse = withContext(Dispatchers.IO) {
         require(request.url.protocol == "https")
         val connection = request.url.openConnection() as HttpsURLConnection
         try {
             connection.instanceFollowRedirects = false
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 30_000
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
             connection.useCaches = false
             connection.requestMethod = request.method
             request.headers.forEach(connection::setRequestProperty)

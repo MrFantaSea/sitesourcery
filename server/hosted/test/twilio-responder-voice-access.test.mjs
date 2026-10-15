@@ -77,6 +77,23 @@ function authority(environment = {}, dependencies = null, overrides = {}) {
   });
 }
 
+test("Voice routing authenticates installation revision, provider topology and writer key independently of JWT lifetime", async () => {
+  const selected = authority(VERIFIED);
+  const issued = await selected.issueSession(AUTHORITY);
+  const metadata = Object.fromEntries(["issuedAt", "expiresAt", "identityDigest", "endpointDigest", "credentialDigest", "jtiDigest", "tokenDigest"].map(key => [key, issued[key]]));
+  assert.equal(await selected.resolveRoutingIdentity(AUTHORITY, metadata, issued.envelope, PROVIDER.topology.accountSidDigest), `ssr_${issued.identityDigest.slice(0,48)}`);
+  const next = await selected.issueSession({ ...AUTHORITY, installationRevision: 4 });
+  const another = await selected.issueSession({ ...AUTHORITY, installationId: "10000000-0000-4000-8000-000000000006" });
+  assert.notEqual(next.identityDigest, issued.identityDigest);
+  assert.notEqual(another.identityDigest, issued.identityDigest);
+  await assert.rejects(() => selected.resolveRoutingIdentity({ ...AUTHORITY, installationRevision: 4 }, metadata, issued.envelope, PROVIDER.topology.accountSidDigest));
+  await assert.rejects(() => selected.resolveRoutingIdentity(AUTHORITY, metadata, issued.envelope, "b".repeat(64)));
+  const rotated = authority(VERIFIED, null, { pepper: Buffer.alloc(32, 8), pepperVersion: "v3", previousPeppers: { v2: Buffer.alloc(32,7) } });
+  await assert.rejects(() => rotated.resolveRoutingIdentity(AUTHORITY, metadata, issued.envelope, PROVIDER.topology.accountSidDigest));
+  const changedProvider = authority(VERIFIED, providerDependencies({ ...PROVIDER, voiceSandboxPushCredentialSid: `CR${"8".repeat(32)}` }));
+  await assert.rejects(() => changedProvider.resolveRoutingIdentity(AUTHORITY, metadata, issued.envelope, PROVIDER.topology.accountSidDigest));
+});
+
 test("Twilio Voice access is held by default without staged credentials", async () => {
   const selected = authority();
   assert.deepEqual(await selected.readiness(), {

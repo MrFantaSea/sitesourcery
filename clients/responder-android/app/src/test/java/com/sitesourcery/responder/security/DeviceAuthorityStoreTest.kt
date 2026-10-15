@@ -10,6 +10,28 @@ import org.junit.Test
 
 class DeviceAuthorityStoreTest {
     @Test
+    fun retiredIdentityEvidenceSurvivesRestartAndFencesLateProviderCompletion() {
+        val memory = MemorySecureValueStore()
+        val store = DeviceAuthorityStore(memory)
+        val target = voiceAuthority()
+        store.saveVoiceRegistration(target)
+        val attempt = VoiceProviderAttempt(ATTEMPT_ONE, VoiceProviderAttemptKind.register,
+            target, "2030-01-01T00:00:00Z")
+        assertTrue(store.recordVoiceAttempt(attempt))
+        assertFalse(store.retireSupersededVoiceAuthority(target, ATTEMPT_TWO))
+        assertTrue(store.retireSupersededVoiceAuthority(target, ATTEMPT_ONE))
+        assertFalse(store.resolveVoiceAttempt(ATTEMPT_ONE, true))
+        assertNull(store.voiceRegistration())
+        assertNull(store.voiceAttempt())
+        assertNull(store.voiceIncomingGate())
+        assertEquals(1, DeviceAuthorityStore(memory).pendingVoiceCleanup().size)
+        // A crash after the durable receipt but before removal is idempotent.
+        store.saveVoiceRegistration(target)
+        assertTrue(store.retireSupersededVoiceAuthority(target, null))
+        assertEquals(1, store.pendingVoiceCleanup().size)
+    }
+
+    @Test
     fun voiceAuthorityAndNativeScopeRoundTripExactly() {
         val memory = MemorySecureValueStore()
         val store = DeviceAuthorityStore(memory)

@@ -7,9 +7,13 @@ final class TwilioVoiceCoordinator: NSObject,
     @preconcurrency NotificationDelegate,
     @preconcurrency CallDelegate {
     var onState: ((String) -> Void)?
+    var authorizeIncomingCall: ((NativeVoiceBinding, String) async -> Bool)?
+    var onCleanupDebt: ((Int) -> Void)?
+    var cleanupDebtCount: Int { defaults.integer(forKey: Self.cleanupDebtKey) }
 
     private struct Credential {
-        let authorityId: String
+        let binding: NativeVoiceBinding
+        var authorityId: String { "\(binding.installationId):r\(binding.installationRevision)" }
         let accessToken: String
         let deviceToken: Data
         let expiresAt: Date
@@ -33,6 +37,11 @@ final class TwilioVoiceCoordinator: NSObject,
     private static let pendingUnregisterKey =
         "sitesourcery.responder.voice-unregister-pending.v1"
 
+    private static let bindingKey = "sitesourcery.responder.voice-binding.v1"
+    private static let cleanupDebtKey = "sitesourcery.responder.voice-superseded-cleanup-count.v1"
+    private static let lastCleanupDebtKey = "sitesourcery.responder.voice-last-superseded-binding.v1"
+    private var binding: NativeVoiceBinding?
+
     private var invitations: [UUID: CallInvite] = [:]
     private var invitationPushIds: [UUID: UUID] = [:]
     private var calls: [UUID: Call] = [:]
@@ -46,6 +55,9 @@ final class TwilioVoiceCoordinator: NSObject,
     private var unregisterAuthorization: Credential?
     private var explicitlyDisabled: Bool
     private var pendingUnregister: Bool
+    private var routingAvailable = false
+    private var routingGeneration = 0
+    private var authorizedInvitations = Set<UUID>()
     private var disabledState = "disabled"
     private var disableWaiters: [UUID: CheckedContinuation<Bool, Never>] = [:]
     private var retryTask: Task<Void, Never>?
@@ -66,10 +78,13 @@ final class TwilioVoiceCoordinator: NSObject,
         self.pendingUnregister = defaults.bool(
             forKey: Self.pendingUnregisterKey
         )
+        self.binding = defaults.data(forKey: Self.bindingKey).flatMap {
+            try? JSONDecoder().decode(NativeVoiceBinding.self, from: $0)
+        }
         super.init()
         TwilioVoiceSDK.audioDevice = audioDevice
         callKit.onAnswer = { [weak self] callId in
-            self?.answer(callId: callId) ?? false
+            await self?.answer(callId: callId) ?? false
         }
         callKit.onEnd = { [weak self] callId in
             self?.end(callId: callId) ?? false
@@ -84,6 +99,10 @@ final class TwilioVoiceCoordinator: NSObject,
     }
 
     func register(session: NativeVoiceSession, deviceToken: Data) {
+        guard routingAvailable else {
+            onState?("held")
+            return
+        }
         guard let credential = credential(
             session: session,
             deviceToken: deviceToken
@@ -96,26 +115,54 @@ final class TwilioVoiceCoordinator: NSObject,
         defaults.set(false, forKey: Self.explicitlyDisabledKey)
         disabledState = "disabled"
         desiredCredential = credential
-        if let currentCredential {
+        guard operation == nil else { return }
+        if let binding, binding != credential.binding {
+            if let currentCredential, credentialIsUsable(currentCredential) {
+                // A new identity cannot authorize removal of the old identity.
+                unregisterAuthorization = currentCredential
+                setPendingUnregister(true)
+            } else if credential.binding.canSupersede(binding) {
+                // Fresh scoped session authority proves the old canonical route
+                // retired. SDK removal is unconfirmed, not falsely successful.
+                retainSupersededCleanup(binding)
+                currentCredential = nil
+                unregisterAuthorization = nil
+                setBinding(nil)
+                setPendingUnregister(false)
+            } else {
+                setPendingUnregister(true)
+                onState?("unregister_pending")
+                return
+            }
+        } else if let currentCredential {
             let replacingAuthority =
                 currentCredential.authorityId != credential.authorityId
-            let replacingToken =
-                currentCredential.deviceToken != credential.deviceToken
+            let replacingToken = currentCredential.deviceToken != credential.deviceToken
             if replacingAuthority || replacingToken {
-                unregisterAuthorization = replacingAuthority
-                    ? currentCredential
-                    : credential
+                unregisterAuthorization = currentCredential
                 setPendingUnregister(true)
             } else {
                 self.currentCredential = credential
                 unregisterAuthorization = credential
-                desiredCredential = nil
-                onState?("registered")
-                return
+                if !pendingUnregister {
+                    desiredCredential = nil
+                    publishLifecycleState()
+                    return
+                }
             }
-        } else {
+        } else if binding != nil && pendingUnregister {
             unregisterAuthorization = credential
         }
+        reconcile()
+    }
+
+    func setRoutingAvailable(_ available: Bool) {
+        routingAvailable = available
+        guard !available else { return }
+        routingGeneration += 1
+        desiredCredential = nil
+        if binding != nil { setPendingUnregister(true) }
+        rejectAndDisconnectAll()
         reconcile()
     }
 
@@ -147,9 +194,14 @@ final class TwilioVoiceCoordinator: NSObject,
         desiredCredential = nil
         if let session, let deviceToken,
            let fresh = credential(session: session, deviceToken: deviceToken) {
-            unregisterAuthorization = fresh
-            setPendingUnregister(true)
-        } else if currentCredential != nil {
+            if let binding, fresh.binding.authorizesCleanup(of: binding) {
+                unregisterAuthorization = fresh
+                setPendingUnregister(true)
+            } else if binding != nil {
+                // Keep the old exact identity; a new revision JWT cannot clean it.
+                setPendingUnregister(true)
+            }
+        } else if binding != nil {
             setPendingUnregister(true)
         }
         rejectAndDisconnectAll()
@@ -202,12 +254,35 @@ final class TwilioVoiceCoordinator: NSObject,
                     !self.explicitlyDisabled,
                     self.microphoneReady
                 else {
-                    self.invitations.removeValue(forKey: callId)?.reject()
-                    self.invitationPushIds.removeValue(forKey: callId)
-                    self.callKit.end(callId: callId, reason: .failed)
+                    self.rejectInvitation(callId)
                     self.publishLifecycleState()
                     return
                 }
+                let generation = self.routingGeneration
+                // Report CallKit promptly for PushKit, then authenticate the
+                // current route before showing it as usable or accepting it.
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(3))
+                    guard let self, !self.authorizedInvitations.contains(callId)
+                    else { return }
+                    self.rejectInvitation(callId)
+                }
+                let selectedBinding = self.binding
+                let allowed: Bool
+                if let selectedBinding,
+                   selectedBinding.matchesRecipient(callInvite.to) {
+                    allowed = await self.authorizeIncomingCall?(
+                        selectedBinding, callInvite.to
+                    ) == true
+                } else { allowed = false }
+                guard self.invitations[callId] != nil else { return }
+                guard allowed, selectedBinding == self.binding,
+                      generation == self.routingGeneration, self.routingAvailable, !self.explicitlyDisabled,
+                      self.microphoneReady else {
+                    self.rejectInvitation(callId)
+                    return
+                }
+                self.authorizedInvitations.insert(callId)
                 self.onState?("incoming_call")
             }
         }
@@ -224,6 +299,7 @@ final class TwilioVoiceCoordinator: NSObject,
         if let (callId, invitation) = matched {
             invitation.reject()
             invitations.removeValue(forKey: callId)
+            authorizedInvitations.remove(callId)
             if let invitationPushId = invitationPushIds.removeValue(
                 forKey: callId
             ) {
@@ -235,7 +311,7 @@ final class TwilioVoiceCoordinator: NSObject,
     }
 
     func callDidConnect(call: Call) {
-        guard let callId = call.uuid else {
+        guard let callId = call.uuid, routingAvailable, !explicitlyDisabled else {
             call.disconnect()
             onState?("call_failed")
             return
@@ -293,10 +369,11 @@ final class TwilioVoiceCoordinator: NSObject,
             ),
             expiresAt > Date(),
             !deviceToken.isEmpty,
-            deviceToken.count <= 512
+            deviceToken.count <= 512,
+            let binding = NativeVoiceBinding(session: session, deviceToken: deviceToken)
         else { return nil }
         return Credential(
-            authorityId: session.installationId,
+            binding: binding,
             accessToken: session.accessToken,
             deviceToken: deviceToken,
             expiresAt: expiresAt
@@ -305,7 +382,7 @@ final class TwilioVoiceCoordinator: NSObject,
 
     private func reconcile() {
         guard operation == nil else { return }
-        if explicitlyDisabled {
+        if explicitlyDisabled || !routingAvailable {
             guard pendingUnregister || currentCredential != nil else {
                 publishLifecycleState()
                 finishDisableWaiters(result: true)
@@ -318,7 +395,9 @@ final class TwilioVoiceCoordinator: NSObject,
                 finishDisableWaiters(result: false)
                 return
             }
-            guard credentialIsUsable(authorization) else {
+            guard let binding,
+                  authorization.binding.authorizesCleanup(of: binding),
+                  credentialIsUsable(authorization) else {
                 setPendingUnregister(true)
                 onState?("unregister_pending")
                 finishDisableWaiters(result: false)
@@ -329,6 +408,19 @@ final class TwilioVoiceCoordinator: NSObject,
                 deviceToken: currentCredential?.deviceToken ?? authorization.deviceToken
             )
             return
+        }
+
+        if let desiredCredential, let binding,
+           currentCredential == nil, binding != desiredCredential.binding {
+            guard desiredCredential.binding.canSupersede(binding) else {
+                setPendingUnregister(true)
+                onState?("unregister_pending")
+                return
+            }
+            retainSupersededCleanup(binding)
+            setBinding(nil)
+            unregisterAuthorization = nil
+            setPendingUnregister(false)
         }
 
         if pendingUnregister || (
@@ -342,7 +434,9 @@ final class TwilioVoiceCoordinator: NSObject,
                 onState?("unregister_pending")
                 return
             }
-            guard credentialIsUsable(authorization) else {
+            guard let binding,
+                  authorization.binding.authorizesCleanup(of: binding),
+                  credentialIsUsable(authorization) else {
                 onState?("unregister_pending")
                 finishDisableWaiters(result: false)
                 return
@@ -369,6 +463,7 @@ final class TwilioVoiceCoordinator: NSObject,
     private func beginRegister(_ credential: Credential) {
         let operationId = UUID()
         operation = .registering(operationId, credential)
+        setBinding(credential.binding)
         onState?("registering")
         TwilioVoiceSDK.register(
             accessToken: credential.accessToken,
@@ -389,7 +484,7 @@ final class TwilioVoiceCoordinator: NSObject,
                         self.unregisterAuthorization = credential
                         self.setPendingUnregister(true)
                     }
-                    if !self.explicitlyDisabled && self.desiredCredential == nil {
+                    if !self.explicitlyDisabled && self.routingAvailable && self.desiredCredential == nil {
                         self.onState?("registered")
                     }
                     self.reconcile()
@@ -422,6 +517,7 @@ final class TwilioVoiceCoordinator: NSObject,
                 if error == nil {
                     self.unregistrationRetryAttempt = 0
                     self.currentCredential = nil
+                    self.setBinding(nil)
                     self.unregisterAuthorization = nil
                     self.setPendingUnregister(false)
                     if self.explicitlyDisabled {
@@ -439,12 +535,31 @@ final class TwilioVoiceCoordinator: NSObject,
         }
     }
 
-    private func answer(callId: UUID) -> Bool {
+    private func answer(callId: UUID) async -> Bool {
+        let generation = routingGeneration
+        guard !explicitlyDisabled, microphoneReady,
+              let selectedBinding = binding,
+              let selectedInvite = invitations[callId],
+              selectedBinding.matchesRecipient(selectedInvite.to) else {
+            rejectInvitation(callId)
+            return false
+        }
+        let allowed = await authorizeIncomingCall?(
+            selectedBinding, selectedInvite.to
+        ) == true
         guard
+            allowed,
+            selectedBinding == binding,
+            generation == routingGeneration,
+            routingAvailable,
             !explicitlyDisabled,
             microphoneReady,
             let invitation = invitations.removeValue(forKey: callId)
-        else { return false }
+        else {
+            rejectInvitation(callId)
+            return false
+        }
+        authorizedInvitations.remove(callId)
         invitationPushIds.removeValue(forKey: callId)
         let options = AcceptOptions(callInvite: invitation) {
             $0.uuid = callId
@@ -455,6 +570,7 @@ final class TwilioVoiceCoordinator: NSObject,
     }
 
     private func end(callId: UUID) -> Bool {
+        authorizedInvitations.remove(callId)
         invitationPushIds.removeValue(forKey: callId)
         if let invitation = invitations.removeValue(forKey: callId) {
             invitation.reject()
@@ -468,6 +584,7 @@ final class TwilioVoiceCoordinator: NSObject,
     }
 
     private func rejectAndDisconnectAll() {
+        authorizedInvitations.removeAll()
         for (callId, invitation) in invitations {
             invitation.reject()
             if let pushId = invitationPushIds.removeValue(forKey: callId) {
@@ -481,9 +598,36 @@ final class TwilioVoiceCoordinator: NSObject,
         audioDevice.isEnabled = false
     }
 
+    private func rejectInvitation(_ callId: UUID) {
+        guard let invitation = invitations.removeValue(forKey: callId) else { return }
+        authorizedInvitations.remove(callId)
+        invitation.reject()
+        if let pushId = invitationPushIds.removeValue(forKey: callId) {
+            finishPush(id: pushId)
+        }
+        callKit.end(callId: callId, reason: .failed)
+    }
+
     private func resetCalls() {
         rejectAndDisconnectAll()
         publishLifecycleState()
+    }
+
+    private func setBinding(_ value: NativeVoiceBinding?) {
+        binding = value
+        if let value, let data = try? JSONEncoder().encode(value) {
+            defaults.set(data, forKey: Self.bindingKey)
+        } else {
+            defaults.removeObject(forKey: Self.bindingKey)
+        }
+    }
+
+    private func retainSupersededCleanup(_ value: NativeVoiceBinding) {
+        // Bounded nonsecret receipt: older routes are retired by the server,
+        // but this does not assert provider-side removal of an expired identity.
+        defaults.set(min(cleanupDebtCount + 1, 1_000_000), forKey: Self.cleanupDebtKey)
+        defaults.set(try? JSONEncoder().encode(value), forKey: Self.lastCleanupDebtKey)
+        onCleanupDebt?(cleanupDebtCount)
     }
 
     private func setPendingUnregister(_ value: Bool) {
@@ -508,7 +652,8 @@ final class TwilioVoiceCoordinator: NSObject,
         _ expected: Credential
     ) -> Bool {
         candidate?.authorityId == expected.authorityId &&
-            candidate?.deviceToken == expected.deviceToken
+            candidate?.deviceToken == expected.deviceToken &&
+            candidate?.binding == expected.binding
     }
 
     private func scheduleRetry(_ kind: RetryKind) {
@@ -550,6 +695,8 @@ final class TwilioVoiceCoordinator: NSObject,
             onState?("unregister_pending")
         } else if explicitlyDisabled {
             onState?(disabledState)
+        } else if !routingAvailable {
+            onState?("held")
         } else if operation != nil {
             onState?("registering")
         } else if currentCredential != nil {

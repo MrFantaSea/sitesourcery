@@ -2,6 +2,12 @@ package com.sitesourcery.responder.voice
 
 import java.util.UUID
 
+internal fun matchesIncomingRecipient(permit: VoiceIncomingPermit, recipient: String): Boolean {
+    val identity = recipient.removePrefix("client:")
+    val digest = permit.authority.identityDigest
+    return digest.matches(Regex("^[a-f0-9]{64}$")) && identity == "ssr_${digest.take(48)}"
+}
+
 internal data class IncomingCallLease(
     val generation: String,
     val permit: VoiceIncomingPermit,
