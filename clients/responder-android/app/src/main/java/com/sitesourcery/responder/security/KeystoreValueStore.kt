@@ -333,6 +333,41 @@ class DeviceAuthorityStore(private val store: SecureValueStore) {
         store.write(VOICE_REGISTRATION_KEY, encodeVoiceAuthority(value).encodeToByteArray())
     }
 
+    fun pendingVoiceCleanup(): List<String> = synchronized(voiceLock) {
+        val value = store.read(VOICE_RETIRED_CLEANUP_KEY)?.decodeToString()
+            ?: return@synchronized emptyList()
+        value.split('\n').also { entries ->
+            require(entries.size <= 100 && entries.distinct().size == entries.size &&
+                entries.all { it.matches(Regex("^[a-f0-9]{64}:[a-f0-9]{64}$")) }) {
+                "Retired Voice cleanup evidence is corrupt."
+            }
+        }
+    }
+
+    // This records an unconfirmed provider cleanup, never an unregister receipt.
+    // Callers must prove the same installation has a newer canonical identity.
+    fun retireSupersededVoiceAuthority(
+        expected: VoiceProviderAuthority,
+        expectedAttemptId: String?,
+    ): Boolean = synchronized(voiceLock) {
+        val attempt = voiceAttempt()
+        val registration = voiceRegistration()
+        if (attempt?.id != expectedAttemptId ||
+            (attempt != null && !sameVoiceBinding(attempt.target, expected)) ||
+            (registration != null && !sameVoiceBinding(registration, expected)) ||
+            (attempt == null && registration == null)) return@synchronized false
+        val evidence = expected.identityDigest + ":" + ResponderDigest.sha256(expected.fcmToken)
+        val pending = pendingVoiceCleanup()
+        if (evidence !in pending) {
+            require(pending.size < 100) { "Retired Voice cleanup history needs attention." }
+            store.write(VOICE_RETIRED_CLEANUP_KEY, (pending + evidence).joinToString("\n").encodeToByteArray())
+        }
+        store.remove(VOICE_INCOMING_GATE_KEY)
+        store.remove(VOICE_REGISTRATION_KEY)
+        store.remove(VOICE_ATTEMPT_KEY)
+        true
+    }
+
     fun clearVoiceRegistration(value: VoiceProviderAuthority): Boolean =
         synchronized(voiceLock) {
             val current = voiceRegistration() ?: return@synchronized true
@@ -542,6 +577,8 @@ class DeviceAuthorityStore(private val store: SecureValueStore) {
             "sitesourcery.responder.voice-explicitly-disabled.v1.current"
         private const val VOICE_REGISTRATION_KEY =
             "sitesourcery.responder.voice-registration.v2.current"
+        private const val VOICE_RETIRED_CLEANUP_KEY =
+            "sitesourcery.responder.voice-retired-cleanup.v1.pending"
         private const val VOICE_INCOMING_GATE_KEY =
             "sitesourcery.responder.voice-incoming-gate.v1.current"
         private const val VOICE_ATTEMPT_KEY =

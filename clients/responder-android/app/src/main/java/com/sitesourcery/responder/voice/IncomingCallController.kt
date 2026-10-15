@@ -26,6 +26,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 class IncomingCallController(
     context: Context,
     private val isPermitCurrent: (VoiceIncomingPermit) -> Boolean,
+    private val refreshRouting: suspend () -> Boolean,
 ) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -95,6 +96,7 @@ class IncomingCallController(
         val selected = try {
             synchronized(lock) {
                 if (session != null) return@synchronized null
+                if (!matchesIncomingRecipient(permit, callInvite.to)) return@synchronized null
                 val lease = authority.admit(permit) ?: return@synchronized null
                 CallSession(
                     generation = lease.generation,
@@ -241,7 +243,7 @@ class IncomingCallController(
         }
     }
 
-    private fun acceptFromRemoteSurface(expectedGeneration: String) {
+    private suspend fun acceptFromRemoteSurface(expectedGeneration: String) {
         val authorized = isAuthorized(expectedGeneration)
         if (!authorized || !hasMicrophonePermission()) {
             finish(expectedGeneration)
@@ -270,7 +272,11 @@ class IncomingCallController(
         finish(expectedGeneration)
     }
 
-    private fun acceptTwilio(expectedGeneration: String): Boolean {
+    private suspend fun acceptTwilio(expectedGeneration: String): Boolean {
+        if (!runCatching { refreshRouting() }.getOrDefault(false)) {
+            rejectPending(expectedGeneration)
+            return false
+        }
         val selected: CallInvite
         val marker = CompletableDeferred<Unit>()
         val ticket: IncomingAcceptTicket

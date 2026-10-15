@@ -3767,6 +3767,11 @@ async function customBuildChangePaymentJourney(
         checkoutNavigations.length === navigationCount
         && Date.now() < deadline
       ) await delay(25);
+      // Request-start is not fulfillment: teardown must not cancel the paused
+      // Checkout request while its synthetic response is still being supplied.
+      await waitFor(cdp, `location.href === ${JSON.stringify(PAID_CHANGE_CHECKOUT_URL)}
+        && document.readyState === "complete"
+        && document.title === "Checkout handoff"`);
     } else {
       await waitFor(
         cdp,

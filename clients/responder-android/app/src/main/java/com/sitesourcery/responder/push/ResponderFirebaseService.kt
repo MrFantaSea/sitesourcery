@@ -17,6 +17,7 @@ import com.sitesourcery.responder.MainActivity
 import com.sitesourcery.responder.R
 import com.sitesourcery.responder.ResponderApplication
 import com.twilio.voice.Voice
+import kotlinx.coroutines.runBlocking
 
 class ResponderFirebaseService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
@@ -29,7 +30,16 @@ class ResponderFirebaseService : FirebaseMessagingService() {
             this,
             Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
-        val permit = container.voiceRegistration.currentIncomingPermit()
+        // Firebase invokes this callback off the UI thread. Refresh the bounded
+        // routing readback before admitting a cold-process persisted registration.
+        val permit = if (BuildConfig.PROVIDER_CONFIGURED && notificationAllowed &&
+            microphoneAllowed && message.data.isNotEmpty()) {
+            runCatching { runBlocking { container.prepareIncomingVoice() } }
+                .onFailure(container.appState::acceptBackgroundFailure)
+                .getOrNull()
+        } else {
+            null
+        }
         if (BuildConfig.PROVIDER_CONFIGURED &&
             notificationAllowed &&
             microphoneAllowed &&

@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "f52595331746f5ab9d5edfc587f3f48560392491",
+    "treeSha": "76df73dee12d59f2549b810d39febd377d2e3f01",
+    "baseCommitSha": "c3664b0ee4d7099a0c8377bf888ba4943daaa986"
+  },
+  "provenanceSha256": "7526a3768a8e5c11d27f723242eff448620a8d609d108b983abc9eb22417f5a0",
+  "ledger": {
+    "previousByteCount": 50562,
+    "previousSha256": "27706fce8ec5c7c3c1762b900f8c3fdb6188e59a0ce6e06c6c51798ff9eeaa06",
+    "appendSha256": "db8c6ef63718d89cf953b9b7c6034463064fcf584550be12be7a946ae1417c0c"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/responder-native-voice-capabilities.test.mjs",
+      "exitCode": 0,
+      "logSha256": "ebd69c7bd69aa8b816fc7cb6389067f0b61d1e7c52212a9850e846e48f4d7bf4"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "b6f6f14c18da2928c056ffb8b766e0b591fab1637ec60f6edfc67d987db30bed"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed accepted source integration: fresh canonical route fencing, exact installation/recipient authorization, held defaults, separate distribution/delivery claims, bounded honest cleanup and isolated CI clone cleanup. Combined contract and actual PostgreSQL concurrency regression passed; retained source proofs reused."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "f3b79fa109e37de2a27cad4aae75815643bddfbcd9459592d9fad80d3c4057c0"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Named native-routing and earlier domain-readback test databases removed; local qualification processes exited and owned temporary scratch fixtures removed. Existing PostgreSQL, toolchains, source and original evidence preserved."
+  }
+}

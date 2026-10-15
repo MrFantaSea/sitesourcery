@@ -316,6 +316,8 @@ export function createTwilioResponderVoiceAccess({
       organizationId: selected.organizationId,
       projectId: selected.projectId,
       userId: selected.userId,
+      installationId: selected.installationId,
+      installationRevision: selected.installationRevision,
       clientPlatform: selected.clientPlatform,
       transport: selected.transport,
       appEnvironment: selected.appEnvironment
@@ -467,6 +469,63 @@ export function createTwilioResponderVoiceAccess({
     }
   }
 
+  async function currentProvider(selected) {
+    const providerAuthority = providerRegistry.resolveOrganization(
+      selected.organizationId
+    );
+    await providerTopologyRepository.requireActiveTopology(
+      providerAuthority.topology
+    );
+    const provider = Object.freeze({
+      accountSid: providerSid(
+        { value: providerAuthority.accountSid }, "value", ACCOUNT_SID
+      ),
+      apiKeySid: providerSid(
+        { value: providerAuthority.voiceApiKeySid }, "value", API_KEY_SID
+      ),
+      apiKeySecret: providerSecret(
+        { value: providerAuthority.voiceApiKeySecret }, "value"
+      ),
+      pushCredentials: Object.freeze({
+        ios: Object.freeze({
+          sandbox: providerSid(
+            { value: providerAuthority.voiceSandboxPushCredentialSid },
+            "value", PUSH_CREDENTIAL_SID
+          ),
+          production: providerSid(
+            { value: providerAuthority.voiceProductionPushCredentialSid },
+            "value", PUSH_CREDENTIAL_SID
+          )
+        }),
+        android: Object.freeze({
+          sandbox: providerSid(
+            {
+              value:
+                providerAuthority.voiceAndroidSandboxPushCredentialSid
+            },
+            "value", PUSH_CREDENTIAL_SID
+          ),
+          production: providerSid(
+            {
+              value:
+                providerAuthority.voiceAndroidProductionPushCredentialSid
+            },
+            "value", PUSH_CREDENTIAL_SID
+          )
+        })
+      })
+    });
+    invariant(
+      new Set(Object.values(provider.pushCredentials).flatMap(
+        (platform) => Object.values(platform)
+      )).size === 4,
+      "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
+      "Twilio Voice platform Push Credentials must be distinct.",
+      { status: 500 }
+    );
+    return { provider, topology: providerAuthority.topology };
+  }
+
   return Object.freeze({
     kind: "twilio-responder-voice-access",
     mode,
@@ -521,59 +580,7 @@ export function createTwilioResponderVoiceAccess({
           { status: 409 }
         );
       }
-      const providerAuthority = providerRegistry.resolveOrganization(
-        selected.organizationId
-      );
-      await providerTopologyRepository.requireActiveTopology(
-        providerAuthority.topology
-      );
-      const provider = Object.freeze({
-        accountSid: providerSid(
-          { value: providerAuthority.accountSid }, "value", ACCOUNT_SID
-        ),
-        apiKeySid: providerSid(
-          { value: providerAuthority.voiceApiKeySid }, "value", API_KEY_SID
-        ),
-        apiKeySecret: providerSecret(
-          { value: providerAuthority.voiceApiKeySecret }, "value"
-        ),
-        pushCredentials: Object.freeze({
-          ios: Object.freeze({
-            sandbox: providerSid(
-              { value: providerAuthority.voiceSandboxPushCredentialSid },
-              "value", PUSH_CREDENTIAL_SID
-            ),
-            production: providerSid(
-              { value: providerAuthority.voiceProductionPushCredentialSid },
-              "value", PUSH_CREDENTIAL_SID
-            )
-          }),
-          android: Object.freeze({
-            sandbox: providerSid(
-              {
-                value:
-                  providerAuthority.voiceAndroidSandboxPushCredentialSid
-              },
-              "value", PUSH_CREDENTIAL_SID
-            ),
-            production: providerSid(
-              {
-                value:
-                  providerAuthority.voiceAndroidProductionPushCredentialSid
-              },
-              "value", PUSH_CREDENTIAL_SID
-            )
-          })
-        })
-      });
-      invariant(
-        new Set(Object.values(provider.pushCredentials).flatMap(
-          (platform) => Object.values(platform)
-        )).size === 4,
-        "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
-        "Twilio Voice platform Push Credentials must be distinct.",
-        { status: 500 }
-      );
+      const { provider } = await currentProvider(selected);
       const keys = keyring.get(currentVersion);
       const opaque = opaqueAuthority(selected, keys);
       const pushCredentialSid =
@@ -610,6 +617,23 @@ export function createTwilioResponderVoiceAccess({
         voiceCallEffects: false,
         providerAuthorizationEffects: true
       });
+    },
+    // SDK device registration outlives the short JWT. Authenticate its sealed
+    // provenance and current provider/installation authority, not exp as a route TTL.
+    async resolveRoutingIdentity(authorityValue, metadataValue, envelopeValue, accountSidDigest) {
+      const selected = sessionAuthority(authorityValue);
+      invariant(mode === "verified" && envelopeValue.keyVersion === currentVersion,
+        "RESPONDER_NATIVE_VOICE_ROUTE_UNAVAILABLE", "Native Voice route is unavailable.", { status: 503 });
+      const { provider, topology } = await currentProvider(selected);
+      invariant(topology.accountSidDigest === accountSidDigest,
+        "RESPONDER_NATIVE_VOICE_ROUTE_UNAVAILABLE", "Native Voice route is unavailable.", { status: 503 });
+      const accessToken = open(selected, metadataValue, envelopeValue);
+      const opaque = opaqueAuthority(selected, keyring.get(currentVersion));
+      const metadata = metadataFor(selected, decodeJwt(accessToken), opaque,
+        provider.pushCredentials[selected.clientPlatform][selected.appEnvironment], provider);
+      invariant(Object.entries(metadata).every(([key, value]) => metadataValue[key] === value),
+        "RESPONDER_NATIVE_VOICE_ROUTE_UNAVAILABLE", "Native Voice route is unavailable.", { status: 503 });
+      return opaque.identity;
     },
     openSession(authorityValue, metadataValue, envelopeValue) {
       const selected = sessionAuthority(authorityValue);

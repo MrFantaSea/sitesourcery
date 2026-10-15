@@ -38,6 +38,7 @@ data class ResponderUiState(
     val notificationPermission: String = "not_requested",
     val microphonePermission: String = "not_requested",
     val voiceState: VoiceRegistrationState = VoiceRegistrationState.held,
+    val pendingVoiceCleanupCount: Int = 0,
     val busy: Boolean = false,
     val error: String? = null,
     val notice: String? = null,
@@ -47,6 +48,9 @@ data class ResponderUiState(
 
     val nativeBackendReady: Boolean
         get() = capabilities?.responderNativeClient?.let { it.backendReady && it.mounted } == true
+
+    val incomingCallsAvailable: Boolean
+        get() = capabilities?.responderNativeClient?.incomingCallsAvailable == true
 
     val allExternalEffectsHeld: Boolean
         get() = capabilities?.let {
@@ -74,10 +78,12 @@ class ResponderAppState(
     private val commandLedger: CommandLedger,
     private val nativeRegistration: NativeRegistrationCoordinator,
     private val prepareVoice: suspend () -> Boolean,
+    private val readCapabilities: suspend () -> ResponderCapabilities,
     private val disableVoice: suspend () -> Boolean,
     private val enableVoice: suspend () -> Unit,
     private val voiceState: () -> VoiceRegistrationState,
     private val voiceRecoveryScope: suspend () -> VoiceRecoveryScope?,
+    private val pendingVoiceCleanup: () -> Int,
 ) {
     private val operationLane = Mutex()
     private val mutable = MutableStateFlow(ResponderUiState())
@@ -344,7 +350,11 @@ class ResponderAppState(
     }
 
     fun refreshVoiceState() {
-        mutable.value = mutable.value.copy(voiceState = voiceState())
+        mutable.value = mutable.value.copy(voiceState = voiceState(), pendingVoiceCleanupCount = pendingVoiceCleanup())
+    }
+
+    fun acceptCapabilities(capabilities: ResponderCapabilities?) {
+        mutable.value = mutable.value.copy(capabilities = capabilities, voiceState = voiceState(), pendingVoiceCleanupCount = pendingVoiceCleanup())
     }
 
     private suspend fun chooseInitialWorkspace() {
@@ -438,7 +448,7 @@ class ResponderAppState(
         val project = requireProject()
         val organization = requireOrganization()
         val user = requireUser()
-        val capabilities = api.capabilities()
+        val capabilities = readCapabilities()
         val dashboard = ReceiptValidator.dashboard(
             api.responderDashboard(),
             organization.id,

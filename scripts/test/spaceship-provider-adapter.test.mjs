@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createSpaceshipRegistrarAdapter,
+  createSpaceshipDomainReadAdapter,
   SPACESHIP_API_ORIGIN,
   SPACESHIP_ASYNC_OPERATION_HEADER,
   SPACESHIP_MCP_PREVIEW_SOURCE
@@ -1152,3 +1153,54 @@ function sequence(responses) {
     return responses.shift();
   };
 }
+
+test("read-only domain adapter exposes only GET domain info with bounded secret-free output", async () => {
+  const requests = [];
+  const reader = createSpaceshipDomainReadAdapter({ mode: "contract_test", testOnly: true,
+    clock: { now: () => NOW }, vault: { async readProviderCredentials() { return { apiKey: "private-key", apiSecret: "private-secret" }; } },
+    async fetchImpl(url, init) { requests.push({ url, init }); return json(domainReadback("cedar.example")); }
+  });
+  assert.equal(reader.readOnly, true); assert.equal(reader.providerEffects, false);
+  for (const name of ["confirmRegistration", "ensureContacts", "configureDns", "getTransferAuthCode"]) assert.equal(reader[name], undefined);
+  const result = await reader.getDomain({ domain: "cedar.example" });
+  assert.equal(requests.length, 1); assert.equal(requests[0].init.method, "GET");
+  assert.equal(requests[0].url.href, "https://spaceship.dev/api/v1/domains/cedar.example");
+  assert.equal(requests[0].init.redirect, "error"); assert.equal(requests[0].init.body, undefined);
+  assert.doesNotMatch(JSON.stringify(result), /private-key|private-secret/u);
+});
+
+test("read-only approval cannot quietly grant a mutation scope", () => {
+  const liveApproval = { provider: "spaceship", approved: true, environment: "production", approvalId: "approval-readback",
+    providerWrittenResaleConsentRef: "private-consent-ref", approvedAt: NOW, capabilities: ["domains:read", "domains:billing"] };
+  assert.throws(() => createSpaceshipDomainReadAdapter({ mode: "approved_live", liveApproval, clock: { now: () => NOW },
+    vault: { readProviderCredentials() {} } }), error => error.code === "spaceship_readback_scope_invalid");
+  assert.throws(() => createSpaceshipDomainReadAdapter({ mode: "contract_test", testOnly: true, fetchImpl: globalThis.fetch }),
+    error => error.code === "spaceship_test_mode_network_forbidden");
+});
+
+test("domain readback never treats a missing or string autoRenew value as disabled", async () => {
+  for (const autoRenew of [undefined, "false", "true", null]) {
+    const reader = createSpaceshipDomainReadAdapter({ mode: "contract_test", testOnly: true, clock: { now: () => NOW },
+      vault: { async readProviderCredentials() { return { apiKey: "fixture", apiSecret: "fixture" }; } },
+      async fetchImpl() { return json(domainReadback("cedar.example", { autoRenew })); }
+    });
+    await assert.rejects(reader.getDomain({ domain: "cedar.example" }), error => error.code === "spaceship_domain_readback_invalid");
+  }
+});
+
+test("read-only body consumption remains cancellable after HTTP headers", async () => {
+  const controller = new AbortController();
+  const reader = createSpaceshipDomainReadAdapter({ mode: "contract_test", testOnly: true, clock: { now: () => NOW },
+    vault: { async readProviderCredentials() { return { apiKey: "fixture", apiSecret: "fixture" }; } },
+    async fetchImpl(_url, init) {
+      const response = new Response(new ReadableStream({ start(stream) {
+        init.signal.addEventListener("abort", () => stream.error(new Error("private provider body")), { once: true });
+      } }), { headers: { "content-type": "application/json" } });
+      setImmediate(() => controller.abort());
+      return response;
+    }
+  });
+  await assert.rejects(reader.getDomain({ domain: "cedar.example", signal: controller.signal }), error => {
+    assert.doesNotMatch(error.message, /private provider body/u); return error.code === "spaceship_response_too_large";
+  });
+});

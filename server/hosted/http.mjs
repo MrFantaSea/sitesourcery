@@ -1305,7 +1305,11 @@ export function createHostedApi(
         ) &&
         typeof responderNativeClient.voiceAccess.issueSession === "function" &&
         typeof responderNativeClient.voiceAccess.openSession === "function" &&
-        typeof responderNativeClient.voiceAccess.readiness === "function"
+        typeof responderNativeClient.voiceAccess.readiness === "function" &&
+        (responderNativeClient.voiceRouting == null ||
+          (responderNativeClient.voiceRouting.kind ===
+            "responder-native-voice-routing" &&
+            typeof responderNativeClient.voiceRouting.readiness === "function"))
       ),
     "RUNTIME_CONFIGURATION_ERROR",
     "Hosted Responder native clients must use sealed held authority.",
@@ -1720,6 +1724,7 @@ export function createHostedApi(
           responderNativeClientReadiness,
           responderNativeTokenReadiness,
           responderNativeVoiceReadiness,
+          responderNativeVoiceRoutingReadiness,
           adjacentIntegrationReadiness,
           capabilityProcessMatrixSnapshot
         ] = await Promise.all([
@@ -1837,6 +1842,11 @@ export function createHostedApi(
                 operationalCalls: false
               }
             : responderNativeClient.voiceAccess.readiness(),
+          responderNativeClient?.voiceRouting == null
+            ? null
+            : Promise.resolve()
+                .then(() => responderNativeClient.voiceRouting.readiness())
+                .catch(() => null),
           adjacentIntegration === null
             ? {
                 ready: false,
@@ -1889,6 +1899,21 @@ export function createHostedApi(
           responderNativeVoiceReadiness?.routingReady === false &&
           responderNativeVoiceReadiness?.operationalCalls === false;
         const responderNativeClientsReady = false;
+        const responderNativeVoiceRoutingReady =
+          responderNativeBackendReady &&
+          responderNativeVoiceReadiness?.mode === "verified" &&
+          responderNativeVoiceReadiness?.providerAuthorizationEffects === true &&
+          twilioResponderInboundReadiness?.ready === true &&
+          twilioResponderInboundReadiness?.verified === true &&
+          twilioResponderInboundReadiness?.voiceOperational === true &&
+          twilioResponderInboundReadiness?.voiceDialPlan ===
+            "verified-native-client" &&
+          responderNativeVoiceRoutingReadiness?.ready === true &&
+          responderNativeVoiceRoutingReadiness?.verified === true &&
+          responderNativeVoiceRoutingReadiness?.voiceRoutingMode ===
+            "verified-native-client" &&
+          responderNativeVoiceRoutingReadiness?.routingReady === true &&
+          responderNativeVoiceRoutingReadiness?.operationalCalls === true;
         return Object.freeze({
           accountRegistration:
             registration.ready === true &&
@@ -2040,6 +2065,13 @@ export function createHostedApi(
             voipTransports: Object.freeze(
               responderNativeVoiceReadiness?.transports ?? []
             ),
+            voiceRoutingMode:
+              responderNativeVoiceRoutingReadiness?.voiceRoutingMode ===
+                "verified-native-client"
+                ? "verified-native-client"
+                : "held",
+            routingReady: responderNativeVoiceRoutingReady,
+            operationalCalls: responderNativeVoiceRoutingReady,
             providerAuthorizationEffects:
               responderNativeVoiceReadiness?.providerAuthorizationEffects ===
                 true,

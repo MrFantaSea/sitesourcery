@@ -1,5 +1,8 @@
 package com.sitesourcery.responder.voice
 
+import com.sitesourcery.responder.core.NativeInstallation
+import com.sitesourcery.responder.core.NativeInstallationState
+import com.sitesourcery.responder.core.NativePushPurpose
 import com.sitesourcery.responder.nativeclient.VoiceAuthorization
 import com.sitesourcery.responder.security.DeviceAuthorityStore
 import com.sitesourcery.responder.security.VoiceProviderAttempt
@@ -143,6 +146,7 @@ class VoiceIncomingPermit internal constructor(
 class VoiceRegistrationCoordinator(
     private val providerConfigured: Boolean,
     private val authorityStore: DeviceAuthorityStore,
+    private val routingReady: () -> Boolean = { false },
     private val sdk: VoiceSdkPort = TwilioVoiceSdkPort(),
     private val mainDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate,
     private val now: () -> Instant = Instant::now,
@@ -176,18 +180,51 @@ class VoiceRegistrationCoordinator(
         registered != null || inheritedAttemptId != null -> VoiceRegistrationState.retryRequired
         else -> VoiceRegistrationState.disabled
     }
+        get() = if (!providerConfigured || !routingReady()) VoiceRegistrationState.held else field
         private set
 
     fun currentIncomingPermit(): VoiceIncomingPermit? =
-        incomingPermit?.takeIf { providerConfigured && !explicitlyDisabled }
+        incomingPermit?.takeIf { providerConfigured && routingReady() && !explicitlyDisabled }
 
     fun isIncomingPermitCurrent(permit: VoiceIncomingPermit): Boolean =
-        providerConfigured && !explicitlyDisabled && incomingPermit == permit
+        providerConfigured && routingReady() && !explicitlyDisabled && incomingPermit == permit
 
     fun closeIncomingGate() {
         incomingPermit = null
         persistedIncomingGate = null
         authorityStore.closeVoiceIncomingGate()
+    }
+
+    suspend fun confirmIncomingAuthority(
+        readInstallation: suspend (VoiceRecoveryScope) -> NativeInstallation?,
+    ): VoiceIncomingPermit? = lane.withLock {
+        val permit = currentIncomingPermit() ?: return@withLock null
+        val expected = permit.authority
+        val current = try {
+            readInstallation(VoiceRecoveryScope(
+                expected.organizationId, expected.projectId,
+                expected.customerUserId, expected.installationId,
+            ))
+        } catch (error: Throwable) {
+            closeIncomingLocked()
+            state = VoiceRegistrationState.retryRequired
+            throw error
+        }
+        if (current == null || current.state != NativeInstallationState.active ||
+            current.id != expected.installationId ||
+            current.organizationId != expected.organizationId ||
+            current.projectId != expected.projectId ||
+            current.customerUserId != expected.customerUserId ||
+            current.revision != expected.installationRevision ||
+            current.platform.name != expected.clientPlatform ||
+            current.appEnvironment.name != expected.appEnvironment ||
+            current.pushRegistrations.none { it.active && it.purpose == NativePushPurpose.voip } ||
+            !isIncomingPermitCurrent(permit)) {
+            closeIncomingLocked()
+            state = VoiceRegistrationState.retryRequired
+            return@withLock null
+        }
+        permit
     }
 
     suspend fun recoveryScope(): VoiceRecoveryScope? = lane.withLock {
@@ -207,12 +244,27 @@ class VoiceRegistrationCoordinator(
     ): Boolean = lane.withLock {
         reloadLocked()
         closeIncomingLocked()
-        if (!providerConfigured || explicitlyDisabled) {
-            state = if (providerConfigured) VoiceRegistrationState.disabled else VoiceRegistrationState.held
+        if (!providerConfigured || !routingReady() || explicitlyDisabled) {
+            state = if (providerConfigured && routingReady()) VoiceRegistrationState.disabled else VoiceRegistrationState.held
             return@withLock false
         }
         validateAuthorization(authorization)
         val desired = authority(authorization)
+
+        val priorAttempt = authorityStore.voiceAttempt()
+        val prior = priorAttempt?.target ?: registered
+        if (prior != null && supersededBy(prior, desired) &&
+            (priorAttempt == null ||
+                (priorAttempt.id == inheritedAttemptId && priorAttempt.id !in liveAttemptIds))) {
+            if (!routingReady() || !stillCurrent() ||
+                !authorityStore.retireSupersededVoiceAuthority(prior, priorAttempt?.id)) {
+                state = VoiceRegistrationState.retryRequired
+                return@withLock false
+            }
+            inheritedAttemptId = null
+            processConfirmed = null
+            reloadLocked()
+        }
 
         val pending = authorityStore.voiceAttempt()
         if (pending != null) {
@@ -267,7 +319,7 @@ class VoiceRegistrationCoordinator(
                     return@withLock false
                 }
             } else if (processConfirmed?.let { sameBinding(it, desired) } == true) {
-                if (!stillCurrent() || explicitlyDisabled ||
+                if (!routingReady() || !stillCurrent() || explicitlyDisabled ||
                     authorityStore.voiceExplicitlyDisabled()) {
                     state = VoiceRegistrationState.retryRequired
                     return@withLock false
@@ -281,7 +333,7 @@ class VoiceRegistrationCoordinator(
             }
         }
 
-        if (!stillCurrent()) {
+        if (!routingReady() || !stillCurrent()) {
             state = VoiceRegistrationState.disabled
             return@withLock false
         }
@@ -294,7 +346,7 @@ class VoiceRegistrationCoordinator(
             return@withLock false
         }
         processConfirmed = desired
-        if (!stillCurrent() || explicitlyDisabled) {
+        if (!routingReady() || !stillCurrent() || explicitlyDisabled) {
             state = VoiceRegistrationState.unregistering
             val cleanup = retryProvider(
                 VoiceProviderAttemptKind.unregister,
@@ -440,6 +492,15 @@ class VoiceRegistrationCoordinator(
         registered != null || authorityStore.voiceAttempt() != null
     }
 
+    fun pendingProviderCleanupCount(): Int = authorityStore.pendingVoiceCleanup().size
+
+    private fun supersededBy(previous: VoiceProviderAuthority, current: VoiceProviderAuthority): Boolean =
+        previous.organizationId == current.organizationId && previous.projectId == current.projectId &&
+            previous.customerUserId == current.customerUserId && previous.installationId == current.installationId &&
+            previous.appEnvironment == current.appEnvironment && previous.clientPlatform == current.clientPlatform &&
+            previous.transport == current.transport && previous.credentialDigest == current.credentialDigest &&
+            previous.installationRevision < current.installationRevision && previous.identityDigest != current.identityDigest
+
     private suspend fun retryProvider(
         kind: VoiceProviderAttemptKind,
         authorization: VoiceAuthorization,
@@ -448,6 +509,9 @@ class VoiceRegistrationCoordinator(
     ): ProviderResult {
         repeat(BACKOFF_MS.size + 1) { attemptIndex ->
             if (attemptIndex > 0) delay(BACKOFF_MS[attemptIndex - 1])
+            if (kind == VoiceProviderAttemptKind.register && !routingReady()) {
+                return ProviderResult.Failure(retryable = false)
+            }
             val result = callProvider(
                 kind,
                 authorization,

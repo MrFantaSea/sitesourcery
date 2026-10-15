@@ -157,3 +157,18 @@ test("verified mode fails closed on any missing composition input", () => {
       error?.code === "TWILIO_RESPONDER_INBOUND_CONFIGURATION_REQUIRED"
   );
 });
+
+test("native incoming composition requires explicit routing authority and excludes Number mode", () => {
+  const environment = verifiedEnvironment({
+    SITESOURCERY_RESPONDER_NATIVE_VOICE_ROUTING_MODE: "verified",
+    SITESOURCERY_TWILIO_VOICE_ACCESS_MODE: "verified"
+  });
+  const nativeVoiceRouting = { kind: "responder-native-voice-routing", mode: "verified",
+    async readiness() { return { routingReady: true, operationalCalls: true }; },
+    async resolveIdentities() { return []; } };
+  const options = { environment, authority: AUTHORITY, nativeVoiceRouting, ...PROVIDER_FACTORIES };
+  assert.equal(createConfiguredTwilioResponderInboundHttp(options).providerEffects, true);
+  assert.throws(() => createConfiguredTwilioResponderInboundHttp({ ...options, nativeVoiceRouting: null }));
+  assert.throws(() => createConfiguredTwilioResponderInboundHttp({ ...options,
+    environment: { ...environment, SITESOURCERY_TWILIO_VOICE_DIAL_MODE: "verified" } }));
+});

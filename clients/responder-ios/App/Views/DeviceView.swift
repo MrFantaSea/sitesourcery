@@ -42,6 +42,10 @@ struct DeviceView: View {
 
             Section("Voice status") {
                 LabeledContent(
+                    "Server call routing",
+                    value: model.incomingCallsReady ? "Available" : "Held"
+                )
+                LabeledContent(
                     "Microphone",
                     value: model.microphoneAuthorization
                         .replacingOccurrences(of: "_", with: " ")
@@ -62,7 +66,12 @@ struct DeviceView: View {
                         .replacingOccurrences(of: "_", with: " ")
                         .capitalized
                 )
-                Text("Microphone access is requested here in the foreground, never from a background call push. The official Twilio Voice client stays held until the server issues incoming-only authorization; working call routing is not claimed here.")
+                if model.voiceCleanupDebtCount > 0 {
+                    Text("Earlier device registrations: provider cleanup remains unconfirmed (\(model.voiceCleanupDebtCount)). The server excludes those retired identities from incoming routes.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                Text("Microphone access is requested here in the foreground. Incoming calls also require current server routing, an active installation and Voice registration. Missing or held routing keeps calls unavailable; message sending remains held.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }

@@ -138,6 +138,20 @@ public struct ResponderNativeCapability: Sendable, Equatable, Codable {
     public let voiceCallEffects: Bool
     public let carrierCommandEffects: Bool
     public let messageSendEffects: Bool
+    // Older servers omit these fields. Token issuance alone never opens calls.
+    public let routingReady: Bool?
+    public let operationalCalls: Bool?
+    public let voiceRoutingMode: String?
+
+    public var voiceAuthorizationReady: Bool {
+        mounted && backendReady && voipSessionState == "verified" &&
+            providerAuthorizationEffects
+    }
+
+    public var incomingCallsReady: Bool {
+        voiceAuthorizationReady && routingReady == true &&
+            operationalCalls == true && voiceRoutingMode == "verified-native-client"
+    }
 }
 
 public struct NativeVoiceSession: Sendable, Equatable, Codable {
@@ -152,6 +166,7 @@ public struct NativeVoiceSession: Sendable, Equatable, Codable {
     public let provider: String
     public let transport: String
     public let accessToken: String
+    public let identityDigest: String?
     public let issuedAt: String
     public let expiresAt: String
     public let incomingAllowed: Bool
@@ -162,6 +177,55 @@ public struct NativeVoiceSession: Sendable, Equatable, Codable {
     public let voiceCallEffects: Bool
     public let carrierCommandEffects: Bool
     public let messageSendEffects: Bool
+
+    public var registrationAuthority: String {
+        "\(installationId):r\(installationRevision)"
+    }
+}
+
+// Durable provider metadata, never a JWT or raw push token. It is not authority:
+// every invite/answer still requires fresh account, capability and device reads.
+public struct NativeVoiceBinding: Sendable, Equatable, Codable {
+    public let installationId: String
+    public let installationRevision: Int
+    public let providerIdentity: String
+    public let deviceTokenDigest: String
+
+    public init?(session: NativeVoiceSession, deviceToken: Data) {
+        guard let digest = session.identityDigest,
+              digest.count == 64,
+              digest.allSatisfy({ "0123456789abcdef".contains($0) }),
+              !session.installationId.isEmpty, session.installationRevision > 0,
+              !deviceToken.isEmpty, deviceToken.count <= 512 else { return nil }
+        installationId = session.installationId
+        installationRevision = session.installationRevision
+        providerIdentity = "ssr_" + digest.prefix(48)
+        deviceTokenDigest = ResponderDigest.sha256(deviceToken)
+    }
+
+    public func matchesRecipient(_ recipient: String) -> Bool {
+        let identity = recipient.hasPrefix("client:")
+            ? String(recipient.dropFirst(7)) : recipient
+        return identity == providerIdentity
+    }
+
+    public func matchesInstallation(_ installation: NativeInstallation) -> Bool {
+        installation.id == installationId &&
+            installation.revision == installationRevision
+    }
+
+    public func canSupersede(_ older: NativeVoiceBinding) -> Bool {
+        installationId == older.installationId &&
+            installationRevision > older.installationRevision &&
+            providerIdentity != older.providerIdentity
+    }
+
+    public func authorizesCleanup(of target: NativeVoiceBinding) -> Bool {
+        installationId == target.installationId &&
+            installationRevision == target.installationRevision &&
+            providerIdentity == target.providerIdentity &&
+            deviceTokenDigest == target.deviceTokenDigest
+    }
 }
 
 public struct NativeClientArtifacts: Sendable, Equatable, Codable {
@@ -225,6 +289,20 @@ public struct NativeInstallation: Sendable, Equatable, Codable, Identifiable {
     public let voiceCallEffects: Bool
     public let carrierCommandEffects: Bool
     public let messageSendEffects: Bool
+
+    public func permitsIncomingVoice(
+        capability: ResponderNativeCapability,
+        organizationId: String,
+        projectId: String,
+        userId: String
+    ) -> Bool {
+        capability.incomingCallsReady && state == .active && platform == .ios &&
+            bundleId == ResponderAPIClient.bundleId &&
+            self.organizationId == organizationId && self.projectId == projectId &&
+            customerUserId == userId && pushRegistrations.contains {
+                $0.purpose == .voip && $0.active
+            }
+    }
 }
 
 public struct NativeInstallationList: Sendable, Equatable, Codable {

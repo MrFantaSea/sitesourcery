@@ -174,3 +174,41 @@ npm run readiness:spaceship
 By default it reports a not-ready state and exits non-zero. It does not
 read credential values, contact data, the network, DNS, or Spaceship, and it
 cannot register or bill anything.
+
+## SS16 read-only lifecycle connector — 2026-10-09
+
+The official [public API documentation](https://docs.spaceship.dev/) and its
+embedded OpenAPI schema were read again on October 9. `GET
+/api/v1/domains/{domain}` requires `domains:read`; its documented limit is five
+requests per domain per 300 seconds. The schema enumerates `creating`,
+`registered`, `grace1`, `grace2`, and `redemption`. HTTP 404 means the requested
+object was not found; it does not establish transfer completion or deletion.
+
+`createSpaceshipDomainReadAdapter` reuses the existing transport and exposes
+only domain GET. Its approval capability list must be exactly `domains:read`.
+The hosted executor maps registered/grace/redemption into the existing lifecycle
+reducer and PostgreSQL repository. Creating, unknown/restricted states,
+missing domains, and auto-renew enabled require review. It never infers
+transfer eligibility, final registrar cost or a paid operation ID. Pending or
+uncertain paid operations remain unresolved and enter review. A response-body
+deadline, redirect refusal, body bound and cancellation protect each request.
+
+The executor validates the exact claimed organization, project, domain, provider
+pin and lifecycle document before reading. It locks the current job and lifecycle
+row, verifies its fence and expiry using the database clock, then persists through
+the existing repository in that same transaction. It checks the lease again
+before returning from the transaction. An expired or replaced claim cannot save
+lifecycle evidence. The worker's existing completion/retry controls remain intact.
+
+The external digest-pinned module has a tracked HQ wrapper; its implementation
+is part of the separately qualified R5 release. An exact approval-file digest
+and a root-installed `LoadCredentialEncrypted` drop-in bind runtime custody.
+Only the API key and secret live in the service credential JSON. The factory
+checks file custody at startup, reads secret bytes only at request time, and
+never emits them. Readiness verifies local composition/storage; it explicitly
+does not claim provider authentication has been verified.
+
+Commercial-use consent is already recorded. Read-only source completion does
+not activate the worker, provision credentials, create a domain, enable renewal,
+release DNS writes, solve the separate exact-price/final-charge bridge, or prove
+a real provider request. Those remain separate release evidence gates.

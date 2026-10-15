@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import {
   readInstalledFinalReleaseEpochV2
@@ -71,10 +72,14 @@ async function main() {
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
+let isMain = false;
+try {
+  isMain = Boolean(process.argv[1]) &&
+    realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+} catch {
+  // An imported module may have a non-file entry argument (for example --eval).
+}
+if (isMain) {
   main().catch(() => {
     process.stderr.write(
       '{"schema":"sitesourcery.final-release-epoch-failure/v2","ok":false,"code":"FINAL_RELEASE_EPOCH_INVALID"}\n'

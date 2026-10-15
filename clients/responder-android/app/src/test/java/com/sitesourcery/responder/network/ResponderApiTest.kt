@@ -5,6 +5,7 @@ import com.sitesourcery.responder.security.DeviceAuthorityStore
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -12,6 +13,47 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResponderApiTest {
+    @Test
+    fun nativeRoutingAvailabilityDecodesSeparatelyFromDistributionAndTokenEffects() = runTest {
+        val transport = ScriptedTransport(json(200, capabilities(
+            "\"voiceRoutingMode\":\"verified-native-client\",\"routingReady\":true,\"operationalCalls\":true,"
+        )))
+        val api = ResponderApi(API_ORIGIN, DeviceAuthorityStore(MemorySecureValueStore()), transport)
+        val native = api.capabilities().responderNativeClient
+        assertTrue(native.incomingCallsAvailable)
+        assertFalse(native.ready)
+        assertFalse(native.clientsReady)
+        assertFalse(native.providerEffects)
+        assertFalse(native.pushDeliveryEffects)
+        assertFalse(native.voiceCallEffects)
+        assertEquals("GET", transport.requests.single().method)
+        assertEquals("/api/v1/capabilities", transport.requests.single().url.path)
+    }
+
+    @Test
+    fun legacyHeldAndPartialRoutingCapabilitiesFailClosed() = runTest {
+        for (fields in listOf(
+            "",
+            "\"voiceRoutingMode\":\"held\",\"routingReady\":true,\"operationalCalls\":true,",
+            "\"voiceRoutingMode\":\"future-mode\",\"routingReady\":true,\"operationalCalls\":true,",
+            "\"voiceRoutingMode\":\"verified-native-client\",\"routingReady\":false,\"operationalCalls\":true,",
+            "\"voiceRoutingMode\":\"verified-native-client\",\"routingReady\":true,",
+        )) {
+            val api = ResponderApi(API_ORIGIN, DeviceAuthorityStore(MemorySecureValueStore()),
+                ScriptedTransport(json(200, capabilities(fields))))
+            assertFalse(api.capabilities().responderNativeClient.incomingCallsAvailable)
+        }
+        val enabled = ResponderApi(API_ORIGIN, DeviceAuthorityStore(MemorySecureValueStore()),
+            ScriptedTransport(json(200, capabilities(
+                "\"voiceRoutingMode\":\"verified-native-client\",\"routingReady\":true,\"operationalCalls\":true,"
+            )))).capabilities().responderNativeClient
+        assertFalse(enabled.copy(backendReady = false).incomingCallsAvailable)
+        assertFalse(enabled.copy(mounted = false).incomingCallsAvailable)
+        assertFalse(enabled.copy(providerAuthorizationEffects = false).incomingCallsAvailable)
+        assertFalse(enabled.copy(voipSessionState = "held").incomingCallsAvailable)
+        assertFalse(enabled.copy(voipTransports = listOf("twilio_voice_ios")).incomingCallsAvailable)
+    }
+
     @Test
     fun csrfRetryPreservesBodyAndIdempotency() = runTest {
         val transport = ScriptedTransport(
@@ -112,6 +154,23 @@ class ResponderApiTest {
     }
 
     companion object {
+        private fun capabilities(routing: String) = """
+            {"responder":true,"responderForwarding":{
+              "ready":true,"mounted":true,"mode":"held","retainedCarrier":true,
+              "launchMode":"conditional_no_answer_forwarding","initialAdapter":"manual",
+              "automaticCarrierCommands":false,"remoteWriteEffects":false,
+              "providerEffects":false,"messageSendEffects":false},
+             "responderNativeClient":{$routing
+              "ready":false,"backendReady":true,"clientsReady":false,"mounted":true,
+              "mode":"verified","acceptedRegistrationPlatforms":["ios","android"],
+              "initialClient":"native","clientArtifacts":{"ios":false,"android":false},
+              "tokenStorage":"encrypted","voipSessionState":"verified",
+              "voipTransports":["twilio_voice_ios","twilio_voice_android"],
+              "providerAuthorizationEffects":true,"providerEffects":false,
+              "pushDeliveryEffects":false,"voiceCallEffects":false,
+              "carrierCommandEffects":false,"messageSendEffects":false}}
+        """.trimIndent()
+
         private const val API_ORIGIN = "https://sitesourcery.com/api/v1"
         private const val ORGANIZATION = "10000000-0000-4000-8000-000000000001"
         private const val COMMAND = "android.api.11111111111111111111111111111111"

@@ -7,6 +7,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHostedListenerConfiguration } from "../hosted-listener-config.mjs";
 
+import { createResponderNativeVoiceRouting, nativeVoiceRoutingModeFromEnvironment } from "../responder-native-voice-routing.mjs";
+import { createPostgresResponderNativeVoiceRoutes } from "../responder-native-voice-routing-postgres.mjs";
 import {
   readInstalledFinalReleaseEpochV2,
   releaseIdentityFromFinalEpochV2
@@ -1227,10 +1229,20 @@ async function start() {
       "Canonical held Responder native-client authority is not ready."
     );
   }
+  responderNativeClient.voiceRouting = createResponderNativeVoiceRouting({
+    mode: nativeVoiceRoutingModeFromEnvironment(process.env),
+    routes: createPostgresResponderNativeVoiceRoutes({
+      authority, nativeClientRepository: responderNativeClient.repository,
+      voiceAccess: responderNativeVoiceAccess
+    }),
+    voiceAccess: responderNativeVoiceAccess
+  });
+  const responderNativeRoutingReadiness = await responderNativeClient.voiceRouting.readiness();
   const twilioResponderInbound =
     createConfiguredTwilioResponderInboundHttp({
       environment: process.env,
       authority,
+      nativeVoiceRouting: responderNativeClient.voiceRouting,
       clock: commerceV2.clock
     });
   const twilioResponderInboundReadiness =
@@ -1663,6 +1675,9 @@ async function start() {
         },
         tokenStorage: "sealed",
         voipSessionState: responderNativeVoiceReadiness.mode,
+        voiceRoutingMode: responderNativeRoutingReadiness.voiceRoutingMode,
+        routingReady: responderNativeRoutingReadiness.routingReady,
+        operationalCalls: responderNativeRoutingReadiness.operationalCalls,
         providerAuthorizationEffects:
           responderNativeVoiceReadiness.providerAuthorizationEffects,
         providerEffects: false,

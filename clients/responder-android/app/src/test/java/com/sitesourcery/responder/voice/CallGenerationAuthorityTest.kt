@@ -10,6 +10,18 @@ import org.junit.Test
 
 class CallGenerationAuthorityTest {
     @Test
+    fun recipientMustMatchCurrentOpaqueIdentityExactly() {
+        val current = permit("permit-current", "session-current")
+        val identity = "ssr_" + "a".repeat(48)
+        assertTrue(matchesIncomingRecipient(current, identity))
+        assertTrue(matchesIncomingRecipient(current, "client:$identity"))
+        for (value in listOf("ssr_" + "b".repeat(48), "client:client:$identity",
+            "client:$identity ", "client:%73${identity.drop(1)}", "", "+15550000000")) {
+            assertFalse(matchesIncomingRecipient(current, value))
+        }
+    }
+
+    @Test
     fun closeReopenRejectsStalePermitGenerationAndDisplayStop() {
         val firstPermit = permit("permit-one", "session-one")
         val secondPermit = permit("permit-two", "session-two")
