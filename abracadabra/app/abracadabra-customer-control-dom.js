@@ -13303,6 +13303,25 @@
         || !record(entry.request)
         || !text(entry.request.primaryGoal)
       ) return false;
+      if (
+        entry.assessmentPolicyId !== undefined
+        || entry.quoteAvailability !== undefined
+      ) {
+        var currentPolicy = entry.assessmentPolicyId ===
+          "00000000-0000-4000-8000-000000001411";
+        var legacyPolicy = entry.assessmentPolicyId ===
+          "00000000-0000-4000-8000-000000000341";
+        if (
+          (!currentPolicy && !legacyPolicy)
+          || !record(entry.quoteAvailability)
+          || entry.quoteAvailability.available !== currentPolicy
+          || entry.quoteAvailability.reason !== (
+            currentPolicy
+              ? null
+              : "legacy_assessment_request_requires_resubmission"
+          )
+        ) return false;
+      }
       var quote = entry.currentQuote;
       return quote === null || (
         record(quote)
@@ -13633,7 +13652,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "Review submitted requests and issue the fixed $200 assessment quote. Price, scope limits, tax state, payment timing, contract, and quote expiration are set by the server."
+        "Review submitted requests and issue the current $350 assessment quote when eligible. Price, scope limits, tax state, payment timing, contract, and quote expiration are set by the server."
       ),
       status,
       body
@@ -13712,6 +13731,25 @@
         );
       }
       card.appendChild(facts);
+
+      if (!entry.quoteAvailability || !entry.quoteAvailability.available) {
+        card.appendChild(accountElement(
+          documentRef,
+          "p",
+          "customer-assessment-note",
+          entry.assessmentPolicyId === "00000000-0000-4000-8000-000000000341"
+            ? "This request uses an earlier Assessment policy. The customer must withdraw it and submit a new request before it can be quoted. Its original terms remain unchanged."
+            : "Refresh this request to confirm its current quote eligibility."
+        ));
+        var unavailable = accountElement(
+          documentRef, "button", "spark-button", "Quote unavailable"
+        );
+        unavailable.type = "button";
+        unavailable.disabled = true;
+        card.appendChild(unavailable);
+        body.appendChild(card);
+        return;
+      }
 
       var form = accountElement(
         documentRef,
@@ -17063,6 +17101,8 @@
     function runOwnerAssessmentQuote(entry, input) {
       if (
         !entry
+        || !entry.quoteAvailability
+        || entry.quoteAvailability.available !== true
         || !ownerQuoteRead.queue
         || ownerQuoteRead.busyCaseId
         || typeof client.issueOwnerAssessmentQuote !== "function"
@@ -24992,6 +25032,8 @@
     verifiedDownloadQuote:
       verifiedDownloadQuote,
     verifiedOwnerAssessmentQueue:
-      verifiedOwnerAssessmentQueue
+      verifiedOwnerAssessmentQueue,
+    createOwnerAssessmentPanel:
+      createOwnerAssessmentPanel
   });
 }));

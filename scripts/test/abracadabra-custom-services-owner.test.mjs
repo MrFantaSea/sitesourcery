@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { openReviewedBrowser } from "../../server/hosted/test/reviewed-browser-support.mjs";
 
 const require = createRequire(import.meta.url);
 const {
@@ -84,6 +86,8 @@ function queue(overrides = {}) {
         projectId: PROJECT_ID,
         projectName: "Customer Website",
         submittedAt: "2026-08-05T12:00:00.000Z",
+        assessmentPolicyId: "00000000-0000-4000-8000-000000001411",
+        quoteAvailability: { available: true, reason: null },
         customer: {
           customerId: CUSTOMER_ID,
           name: "Customer Owner",
@@ -150,6 +154,53 @@ test("owner quote queue accepts only exact authenticated request-shaped data", (
     }),
     null
   );
+});
+
+test("legacy assessment quote eligibility is explicit and cannot be forged", () => {
+  const legacy = queue({ assessmentPolicyId: "00000000-0000-4000-8000-000000000341",
+    quoteAvailability: { available: false, reason: "legacy_assessment_request_requires_resubmission" } });
+  assert.equal(verifiedOwnerAssessmentQueue(legacy), legacy);
+  assert.equal(verifiedOwnerAssessmentQueue(queue({ ...legacy.requests[0], quoteAvailability: { available: true, reason: null } })), null);
+  assert.equal(verifiedOwnerAssessmentQueue(queue({ assessmentPolicyId: "00000000-0000-4000-8000-000000009999" })), null);
+});
+
+test("actual owner assessment panel disables legacy quoting while current requests retain their form", { timeout: 30_000 }, async () => {
+  const source = await readFile(new URL("../../abracadabra/app/abracadabra-customer-control-dom.js", import.meta.url), "utf8");
+  const current = queue({ currentQuote: null }).requests[0];
+  const legacy = { ...current, caseId: "10000000-0000-4000-8000-000000000002",
+    assessmentPolicyId: "00000000-0000-4000-8000-000000000341",
+    quoteAvailability: { available: false, reason: "legacy_assessment_request_requires_resubmission" } };
+  const fixture = { schema: queue().schema, requests: [current, legacy] };
+  const html = `<!doctype html><html><body><script>window.module={exports:{}};</script><script src="/control.js"></script>
+    <script>window.issued=[];window.panel=module.exports.createOwnerAssessmentPanel(document,{issue:(entry)=>issued.push(entry.caseId)});
+    document.body.append(panel.element);panel.render({queue:${JSON.stringify(fixture)},busyCaseId:""});document.documentElement.dataset.ready="true";</script></body></html>`;
+  const server = createServer((request, response) => {
+    response.writeHead(200, { "Content-Type": request.url === "/control.js" ? "text/javascript" : "text/html" });
+    response.end(request.url === "/control.js" ? source : html);
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    browser = await openReviewedBrowser({ origin, viewport: { width: 900, height: 900, mobile: false } });
+    await browser.navigate(origin + "/"); await browser.waitFor('document.documentElement.dataset.ready === "true"');
+    const result = await browser.evaluate(`(() => {
+      const cards=[...document.querySelectorAll('.customer-owner-quote-card')];
+      const legacy=cards[1],current=cards[0];legacy.querySelector('button').click();
+      const before=[...issued];current.querySelector('form').dispatchEvent(new Event('submit',{cancelable:true}));
+      return {cards:cards.length,legacyForms:legacy.querySelectorAll('form').length,legacyDisabled:legacy.querySelector('button').disabled,
+        legacyText:legacy.innerText,currentDisabled:current.querySelector('button').disabled,currentButton:current.querySelector('button').innerText,
+        allText:document.body.innerText,before,issued:[...issued]};
+    })()`);
+    assert.equal(result.cards, 2); assert.equal(result.legacyForms, 0); assert.equal(result.legacyDisabled, true);
+    assert.match(result.legacyText, /earlier Assessment policy.*withdraw.*submit a new request/su);
+    assert.equal(result.currentDisabled, false); assert.equal(result.currentButton, "Issue $350 quote");
+    assert.match(result.allText, /current \$350 assessment quote/u); assert.doesNotMatch(result.allText, /\$200/u);
+    assert.deepEqual(result.before, []); assert.deepEqual(result.issued, [CASE_ID]);
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
 });
 
 test("owner review target entry is phone-friendly and canonical", () => {
