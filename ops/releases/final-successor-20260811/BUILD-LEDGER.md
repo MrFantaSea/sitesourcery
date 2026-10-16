@@ -737,3 +737,10 @@ Implementation `a47b921d78b0b11f61eb6df368d47c0bdc661696` / tree `f94b3aede39b1e
 ## October 16 — Publication source preparation
 
 Implementation `5d40faedfb435521aa0e241a2d7f1464901bbb41` / tree `45474a54203946e243cf14f65c3f6aa246671542`, base `d203e53769de20445956ae50ffaeb9b9ef1d8cb8`. Two tracked publication sentinels removed through source release; native approval/hold, isolation and integrity guards unchanged. Full npm/build/browser and selfhost29 passed. DNS/native activation and commercial acceptance remain separate. See [provenance](../ci-provenance/5d40faedfb435521aa0e241a2d7f1464901bbb41/provenance.md) and [proof](../ci-provenance/5d40faedfb435521aa0e241a2d7f1464901bbb41/proof.json).
+
+## Care catalog/lifecycle qualification — 2026-10-16
+
+Implementation `577d6aeaea42855127b584c9443f1a7ffc7d06a6` preserves the exact tested tree `6c0a88d4f15f5d415ffe0afe45901c047215b6b2` from `e8f31f239f8e21288b7fcfd6b4140b1d95ad68e2`. Full npm test2565pass/30skip, actual browser24x6 and fresh whole107 PostgreSQL acceptance passed. Source-only proof; native107/activation and real commercial delivery remain. Original failures/logs retained.
+
+- [Provenance](../ci-provenance/577d6aeaea42855127b584c9443f1a7ffc7d06a6/provenance.md)
+- [Machine proof](../ci-provenance/577d6aeaea42855127b584c9443f1a7ffc7d06a6/proof.json)

@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "577d6aeaea42855127b584c9443f1a7ffc7d06a6",
+    "treeSha": "6c0a88d4f15f5d415ffe0afe45901c047215b6b2",
+    "baseCommitSha": "d2e9bae730b44eb300fbc2424a6f6d9e0196580e"
+  },
+  "provenanceSha256": "7a56eafbdbd538d63055fee0bb23ee6f255cc2de8bca9d2dfe18fabd0ed95a6d",
+  "ledger": {
+    "previousByteCount": 52708,
+    "previousSha256": "8cede87bfd73a2bb1342f5db2604078c7b0bd19099dbcb9fc4e420aaa94401cc",
+    "appendSha256": "3647e7e29ba889de24c1aa3fc5e467d709362ebec1527b308303465856923b40"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/care-payment-postgres.test.mjs (fresh PostgreSQL16, whole107 inventory, fake provider)",
+      "exitCode": 0,
+      "logSha256": "f49bd95582fcb0084ad2d39bd6705b9a102ed242aa1b986b0021e79c4cb78a4f"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "016dcc4956978d1982a68fa722c4c61400983f35324a74e1a902c1ca915bf863"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed Care implementation, isolated SQL107 and ninth CI journey, verified payment binding/idempotency/recovery, customer/private-HQ controls and exact same-tree source consolidation. Existing holds and unrelated payment behavior preserved."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "0f1662f620bbb87d2f5647fdc0675fd54b5a633d23e63c35b38ed92b5bd50eab"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned qualification scratch and Node/Chromium processes absent; exact ss_care_catalog_20261016 fresh107 database dropped. Original logs/failures/builds retained. No provider/customer fixtures created."
+  }
+}
