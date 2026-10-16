@@ -18,6 +18,7 @@ import {
 import {
   readJsonObject
 } from "./immutable-evidence.mjs";
+import { probeTlsAuthority } from "./independent-monitor-ports.mjs";
 import {
   probeRuntime
 } from "./probe-runtime.mjs";
@@ -26,6 +27,8 @@ import { validateDiskVolumes } from "./monitor-runtime.mjs";
 const { Pool } = pg;
 const execFileAsync = promisify(execFile);
 const SHA256 = /^[a-f0-9]{64}$/u;
+const PUBLIC_TLS_HOSTNAME =
+  /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 const SAFE_REMOTE_HOST =
   /^[A-Za-z0-9][A-Za-z0-9.-]{0,254}$/u;
 const SAFE_REMOTE_ROOT =
@@ -195,6 +198,7 @@ export function createProductionMonitoringProbes({
   diskVolumes,
   backupDestinationRoot,
   sourceFailureDomainId,
+  certificateMode = "file",
   certificateFile,
   certificateHostname,
   expectedOperationsState,
@@ -203,7 +207,8 @@ export function createProductionMonitoringProbes({
   tenantPort = 8080,
   timeoutMs = 3000,
   fetchImpl = globalThis.fetch,
-  statfsImpl = statfs
+  statfsImpl = statfs,
+  tlsProbeImpl = probeTlsAuthority
 }) {
   const monitoredVolumes = validateDiskVolumes(diskVolumes);
   if (typeof statfsImpl !== "function") throw new Error("Filesystem probe is required.");
@@ -228,11 +233,16 @@ export function createProductionMonitoringProbes({
     expectedOperationsState?.dns === "held";
   if (
     !edgeIsExactlyHeld &&
-    (typeof certificateFile !== "string" ||
-      !path.isAbsolute(certificateFile) ||
-      typeof certificateHostname !== "string" ||
+    (typeof certificateHostname !== "string" ||
       certificateHostname.length < 1 ||
-      /\s/u.test(certificateHostname))
+      /\s/u.test(certificateHostname) ||
+      (certificateMode === "file"
+        ? typeof certificateFile !== "string" || !path.isAbsolute(certificateFile)
+        : certificateMode !== "public_tls" ||
+          certificateHostname.length > 253 ||
+          !PUBLIC_TLS_HOSTNAME.test(certificateHostname) ||
+          !Number.isSafeInteger(timeoutMs) || timeoutMs < 250 || timeoutMs > 30_000 ||
+          typeof tlsProbeImpl !== "function"))
   ) {
     throw new Error(
       "Live-edge certificate monitoring configuration is required."
@@ -396,6 +406,23 @@ export function createProductionMonitoringProbes({
     async certificate() {
       if (edgeIsExactlyHeld) {
         return Object.freeze({ held: true });
+      }
+      if (certificateMode === "public_tls") {
+        // The shared TLS probe authenticates the live edge with SNI and the
+        // normal CA/hostname checks. No HTTP request or local leaf copy is used.
+        const evidence = await tlsProbeImpl({
+          hostname: certificateHostname,
+          port: 443,
+          timeoutMs
+        });
+        const notAfter = new Date(evidence?.notAfter);
+        if (evidence?.authorized !== true ||
+          !["TLSv1.2", "TLSv1.3"].includes(evidence?.protocol) ||
+          typeof evidence?.notAfter !== "string" || Number.isNaN(notAfter.valueOf()) ||
+          !SHA256.test(evidence?.certificateSha256 ?? "")) {
+          throw new Error("Live-edge TLS certificate authority is invalid.");
+        }
+        return Object.freeze({ valid: true, notAfter: notAfter.toISOString() });
       }
       const certificate = new X509Certificate(
         await readFile(certificateFile)
