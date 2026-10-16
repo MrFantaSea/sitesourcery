@@ -15,6 +15,48 @@ export const TWILIO_ISV_PROVIDER_REGISTRY_PATH_ENVIRONMENT =
   "SITESOURCERY_TWILIO_ISV_PROVIDER_REGISTRY_PATH";
 
 const REGISTRY_SCHEMA = "sitesourcery.twilio-isv-provider-registry/v1";
+const SLOT_REGISTRY_SCHEMA = "sitesourcery.twilio-isv-provider-registry/v2";
+export const TWILIO_PUSH_SLOTS = Object.freeze({
+  "ios.sandbox": "voiceSandboxPushCredentialSid",
+  "ios.production": "voiceProductionPushCredentialSid",
+  "android.sandbox": "voiceAndroidSandboxPushCredentialSid",
+  "android.production": "voiceAndroidProductionPushCredentialSid"
+});
+const PUSH_FIELDS = Object.freeze(Object.values(TWILIO_PUSH_SLOTS));
+
+// A disabled slot is explicit absence, never a synthetic credential digest.
+export function twilioPushSlotMap(predicate) {
+  return deepFreeze(Object.fromEntries(["ios", "android"].map((platform) => [
+    platform, Object.fromEntries(["sandbox", "production"].map((environment) => [
+      environment, predicate(`${platform}.${environment}`) === true
+    ]))
+  ])));
+}
+
+export function normalizeTwilioPushSlots(value) {
+  const slots = value.enabledPushSlots;
+  if (!Array.isArray(slots) || slots.length < 1 || slots.length > 4 ||
+      slots.some((slot) => typeof slot !== "string" || !Object.hasOwn(TWILIO_PUSH_SLOTS, slot)) ||
+      new Set(slots).size !== slots.length ||
+      canonicalJson(slots) !== canonicalJson([...slots].sort())) {
+    throw configuration("Enabled Voice push slots must be a sorted, nonempty exact slot list.");
+  }
+  const normalized = {};
+  for (const [slot, field] of Object.entries(TWILIO_PUSH_SLOTS)) {
+    if (slots.includes(slot)) normalized[field] = sid(value[field], SID.pushCredential, `The ${field}`);
+    else {
+      if (value[field] !== null && value[field] !== undefined) {
+        throw configuration("A disabled Voice push slot cannot contain a credential.");
+      }
+      normalized[field] = null;
+    }
+  }
+  const configured = Object.values(normalized).filter((value) => value !== null);
+  if (new Set(configured).size !== configured.length) {
+    throw configuration("Voice Push Credentials must be platform-separated.");
+  }
+  return { ...normalized, enabledPushSlots: [...slots] };
+}
 const MAXIMUM_REGISTRY_BYTES = 256 * 1024;
 const ALLOWED_REGISTRY_MODES = new Set([0o400, 0o440, 0o600, 0o640]);
 const UUID =
@@ -86,7 +128,10 @@ function safeTopology(entry) {
     ? "SOLE_PROPRIETOR"
     : "STANDARD";
   return deepFreeze({
-    schema: "sitesourcery.twilio-isv-provider-topology/v1",
+    schema: entry.enabledPushSlots
+      ? "sitesourcery.twilio-isv-provider-topology/v2"
+      : "sitesourcery.twilio-isv-provider-topology/v1",
+    ...(entry.enabledPushSlots ? { enabledPushSlots: entry.enabledPushSlots } : {}),
     provider: "twilio",
     organizationId: entry.organizationId,
     registrationClass: entry.registrationClass,
@@ -103,13 +148,13 @@ function safeTopology(entry) {
     voiceApiKeySidDigest: digest(entry.voiceApiKeySid),
     voiceApiKeySecretDigest: digest(entry.voiceApiKeySecret),
     voiceSandboxPushCredentialSidDigest:
-      digest(entry.voiceSandboxPushCredentialSid),
+      entry.voiceSandboxPushCredentialSid === null ? null : digest(entry.voiceSandboxPushCredentialSid),
     voiceProductionPushCredentialSidDigest:
-      digest(entry.voiceProductionPushCredentialSid),
+      entry.voiceProductionPushCredentialSid === null ? null : digest(entry.voiceProductionPushCredentialSid),
     voiceAndroidSandboxPushCredentialSidDigest:
-      digest(entry.voiceAndroidSandboxPushCredentialSid),
+      entry.voiceAndroidSandboxPushCredentialSid === null ? null : digest(entry.voiceAndroidSandboxPushCredentialSid),
     voiceAndroidProductionPushCredentialSidDigest:
-      digest(entry.voiceAndroidProductionPushCredentialSid)
+      entry.voiceAndroidProductionPushCredentialSid === null ? null : digest(entry.voiceAndroidProductionPushCredentialSid)
   });
 }
 
@@ -150,10 +195,14 @@ function providerRecord(entry) {
   return Object.freeze(record);
 }
 
-function selectedEntry(value) {
-  if (!exactKeys(value, ENTRY_FIELDS)) {
+function selectedEntry(value, slotAware = false) {
+  const normalized = slotAware && value && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype
+    ? { ...value, ...normalizeTwilioPushSlots(value) }
+    : value;
+  if (!exactKeys(normalized, slotAware ? [...ENTRY_FIELDS, "enabledPushSlots"] : ENTRY_FIELDS)) {
     throw configuration("A Twilio ISV provider entry has an invalid shape.");
   }
+  value = normalized;
   if (!UUID.test(value.organizationId ?? "")) {
     throw configuration("A Twilio ISV organization ID is invalid.");
   }
@@ -186,7 +235,7 @@ function selectedEntry(value) {
     "voiceProductionPushCredentialSid",
     "voiceAndroidSandboxPushCredentialSid",
     "voiceAndroidProductionPushCredentialSid"
-  ]) sid(value[field], SID.pushCredential, `The ${field}`);
+  ]) if (!slotAware || value[field] !== null) sid(value[field], SID.pushCredential, `The ${field}`);
   if (value.messagingApiKeySid === value.voiceApiKeySid) {
     throw configuration("Messaging and Voice API keys must be purpose-separated.");
   }
@@ -198,14 +247,15 @@ function selectedEntry(value) {
     value.voiceProductionPushCredentialSid,
     value.voiceAndroidSandboxPushCredentialSid,
     value.voiceAndroidProductionPushCredentialSid
-  ]).size !== 4) {
+  ].filter((value) => value !== null)).size !== (slotAware ? value.enabledPushSlots.length : 4)) {
     throw configuration("Voice Push Credentials must be platform-separated.");
   }
   return value;
 }
 
 function assertUnique(entries, field, message) {
-  if (new Set(entries.map((entry) => entry[field])).size !== entries.length) {
+  const resources = entries.map((entry) => entry[field]).filter((value) => value !== null);
+  if (new Set(resources).size !== resources.length) {
     throw configuration(message);
   }
 }
@@ -213,7 +263,7 @@ function assertUnique(entries, field, message) {
 function assertResourceFamilyUnique(entries, fields, message) {
   const resources = entries.flatMap((entry) =>
     fields.map((field) => entry[field])
-  );
+  ).filter((value) => value !== null);
   if (new Set(resources).size !== resources.length) {
     throw configuration(message);
   }
@@ -221,12 +271,12 @@ function assertResourceFamilyUnique(entries, fields, message) {
 
 export function createTwilioIsvProviderRegistry(document) {
   if (!exactKeys(document, ["schema", "entries"]) ||
-      document.schema !== REGISTRY_SCHEMA ||
+      ![REGISTRY_SCHEMA, SLOT_REGISTRY_SCHEMA].includes(document.schema) ||
       !Array.isArray(document.entries) || document.entries.length < 1 ||
       document.entries.length > 1_000) {
     throw configuration("The Twilio ISV provider registry is invalid.");
   }
-  const entries = document.entries.map(selectedEntry);
+  const entries = document.entries.map((entry) => selectedEntry(entry, document.schema === SLOT_REGISTRY_SCHEMA));
   if (canonicalJson(entries.map((entry) => entry.organizationId)) !==
       canonicalJson(entries.map((entry) => entry.organizationId).sort())) {
     throw configuration("Twilio ISV provider entries must be organization-sorted.");
@@ -274,13 +324,13 @@ export function createTwilioIsvProviderRegistry(document) {
   ]));
   const byAccount = new Map(records.map((entry) => [entry.accountSid, entry]));
   const registryDigest = digest({
-    schema: REGISTRY_SCHEMA,
+    schema: document.schema,
     entries: records.map((entry) => entry.topology)
   });
 
   return Object.freeze({
     kind: "twilio-isv-provider-registry",
-    schema: REGISTRY_SCHEMA,
+    schema: document.schema,
     providerEffects: false,
     customerCount: records.length,
     registryDigest,
@@ -318,8 +368,13 @@ export function createTwilioIsvProviderRegistry(document) {
         ready: true,
         verified: true,
         kind: "twilio-isv-provider-registry",
-        schema: REGISTRY_SCHEMA,
+        schema: document.schema,
         providerEffects: false,
+        // Global feature support is a union, never tenant authorization.
+        pushSlots: twilioPushSlotMap((slot) => records.some((entry) =>
+          entry[TWILIO_PUSH_SLOTS[slot]] !== null)),
+        hasConfiguredPushSlot: true,
+        legacyRoutingCompatible: records.every((entry) => PUSH_FIELDS.every((field) => entry[field] !== null)),
         customerCount: records.length,
         registryDigest
       });

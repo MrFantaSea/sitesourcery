@@ -1,5 +1,7 @@
 package com.sitesourcery.responder.app
 
+import com.sitesourcery.responder.BuildConfig
+import com.sitesourcery.responder.core.NativeAppEnvironment
 import com.sitesourcery.responder.core.CommandLedger
 import com.sitesourcery.responder.core.ForwardingList
 import com.sitesourcery.responder.core.NativeInstallation
@@ -50,7 +52,9 @@ data class ResponderUiState(
         get() = capabilities?.responderNativeClient?.let { it.backendReady && it.mounted } == true
 
     val incomingCallsAvailable: Boolean
-        get() = capabilities?.responderNativeClient?.incomingCallsAvailable == true
+        get() = capabilities?.responderNativeClient?.incomingCallsAvailable(
+            if (BuildConfig.DEBUG) NativeAppEnvironment.sandbox else NativeAppEnvironment.production,
+        ) == true
 
     val allExternalEffectsHeld: Boolean
         get() = capabilities?.let {

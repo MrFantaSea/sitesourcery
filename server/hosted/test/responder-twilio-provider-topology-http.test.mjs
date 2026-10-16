@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { digest } from "../security.mjs";
 
 import {
   createResponderTwilioProviderTopologyHttpBoundary,
@@ -158,4 +159,33 @@ test("topology writes reject expanded media types before repository access", asy
     (error) => error?.status === 415
   );
   assert.equal(calls.length, 0);
+});
+
+test("explicit v2 attestation preserves null disabled slots and denies contradictory or legacy partial payloads", async () => {
+  const selected = attestationBody({ schema: "sitesourcery.responder-twilio-topology-attestation/v2",
+    enabledPushSlots: ["android.sandbox"], voiceSandboxPushCredentialSid: null,
+    voiceProductionPushCredentialSid: null, voiceAndroidProductionPushCredentialSid: null });
+  const request = body => new Request(`https://sitesourcery.com/api/v1/operator/responder/organizations/${organizationId}/twilio-topologies`, {
+    method: "POST", headers: { "content-type": "application/json", "idempotency-key": "slot-attestation-0001" }, body: JSON.stringify(body)
+  });
+  const calls = [];
+  assert.equal((await boundary(calls).dispatch(request(selected))).status, 200);
+  assert.equal(calls[0].input.schema, "sitesourcery.twilio-isv-provider-topology/v2");
+  assert.deepEqual(calls[0].input.enabledPushSlots, ["android.sandbox"]);
+  assert.equal(calls[0].input.voiceSandboxPushCredentialSidDigest, null);
+  assert.match(calls[0].input.voiceAndroidSandboxPushCredentialSidDigest, /^[a-f0-9]{64}$/u);
+  const { requestDigest, ...command } = calls[0].input;
+  const { commandId, providerReadbackDigest, topologyEvidenceDigest, recordedAt, ...topology } = command;
+  assert.equal(providerReadbackDigest, digest({ ...topology,
+    schema: "sitesourcery.responder-twilio-isv-readback/v2", readbackAttestedAt: selected.readbackAttestedAt }));
+  assert.equal(requestDigest, digest({ ...command, schema: "sitesourcery.responder-twilio-isv-attestation-command/v2" }));
+  assert.notEqual(providerReadbackDigest, digest({ ...topology, readbackAttestedAt: selected.readbackAttestedAt }));
+  assert.notEqual(requestDigest, digest(command));
+  for (const body of [
+    { ...selected, schema: undefined, enabledPushSlots: undefined },
+    { ...selected, voiceProductionPushCredentialSid: sid("CR", "9") },
+    { ...selected, enabledPushSlots: ["ios.production"] },
+    { ...selected, enabledPushSlots: [] },
+    { ...selected, enabledPushSlots: ["android.future"] }
+  ]) await assert.rejects(boundary([]).dispatch(request(body)), /invalid/u);
 });

@@ -45,6 +45,7 @@ function document(entries = [entry()]) {
 
 test("registry resolves isolated customer authority without JSON secret exposure", () => {
   const registry = createTwilioIsvProviderRegistry(document());
+  assert.equal(registry.registryDigest, "30813259ade5dac5de9eaeaa166b474ac406cacfe01fa3dfab3dbbabd9ed63d4");
   const provider = registry.resolveOrganization(ids.organization);
   assert.equal(provider.accountSid, sid("AC", "1"));
   assert.equal(provider.messagingApiKeySecret, "m".repeat(32));
@@ -59,6 +60,9 @@ test("registry resolves isolated customer authority without JSON secret exposure
     kind: "twilio-isv-provider-registry",
     schema: "sitesourcery.twilio-isv-provider-registry/v1",
     providerEffects: false,
+    pushSlots: { ios: { sandbox: true, production: true }, android: { sandbox: true, production: true } },
+    hasConfiguredPushSlot: true,
+    legacyRoutingCompatible: true,
     customerCount: 1,
     registryDigest: registry.registryDigest
   });
@@ -199,4 +203,60 @@ test("environment loader rejects non-root ownership and hard links", () => {
       /unavailable/u
     );
   }
+});
+
+function slotDocument(entries) {
+  return { schema: "sitesourcery.twilio-isv-provider-registry/v2", entries };
+}
+function androidOnly(overrides = {}) {
+  const selected = entry({ enabledPushSlots: ["android.sandbox"], ...overrides });
+  delete selected.voiceSandboxPushCredentialSid;
+  delete selected.voiceProductionPushCredentialSid;
+  delete selected.voiceAndroidProductionPushCredentialSid;
+  return selected;
+}
+
+test("v2 permits only explicitly configured slots and never weakens v1", () => {
+  const selected = androidOnly();
+  const registry = createTwilioIsvProviderRegistry(slotDocument([selected]));
+  const provider = registry.resolveOrganization(ids.organization);
+  assert.equal(provider.voiceSandboxPushCredentialSid, null);
+  assert.equal(provider.topology.voiceSandboxPushCredentialSidDigest, null);
+  assert.equal(provider.topology.voiceAndroidProductionPushCredentialSidDigest, null);
+  assert.deepEqual(provider.topology.enabledPushSlots, ["android.sandbox"]);
+  assert.deepEqual(registry.readiness().pushSlots, {
+    ios: { sandbox: false, production: false }, android: { sandbox: true, production: false }
+  });
+  assert.equal(registry.readiness().legacyRoutingCompatible, false);
+  assert.throws(() => createTwilioIsvProviderRegistry(document([selected])));
+  for (const delta of [
+    { enabledPushSlots: [] }, { enabledPushSlots: ["android.unknown"] },
+    { enabledPushSlots: ["android.sandbox", "android.sandbox"] },
+    { enabledPushSlots: ["ios.sandbox", "android.sandbox"] },
+    { voiceAndroidSandboxPushCredentialSid: null },
+    { voiceAndroidSandboxPushCredentialSid: "not-a-credential" },
+    { voiceSandboxPushCredentialSid: sid("CR", "8") },
+    { enabledPushSlots: ["android.production", "android.sandbox"], voiceAndroidProductionPushCredentialSid: sid("CR", "a") }
+  ]) assert.throws(() => createTwilioIsvProviderRegistry(slotDocument([{ ...selected, ...delta }])));
+});
+
+test("global slot support is the union of disjoint customer configurations, not tenant authority", () => {
+  const first = androidOnly();
+  const second = entry({ organizationId: ids.secondOrganization, accountSid: sid("AC", "c"),
+    messagingApiKeySid: sid("SK", "d"), messagingApiKeySecret: "n".repeat(32), webhookAuthToken: "x".repeat(32),
+    messagingServiceSid: sid("MG", "e"), customerProfileSid: sid("BU", "f"), brandRegistrationSid: sid("BN", "c"),
+    campaignSid: sid("QE", "d"), voiceApiKeySid: sid("SK", "e"), voiceApiKeySecret: "y".repeat(32),
+    enabledPushSlots: ["ios.production"], voiceSandboxPushCredentialSid: null,
+    voiceProductionPushCredentialSid: sid("CR", "c"), voiceAndroidSandboxPushCredentialSid: null,
+    voiceAndroidProductionPushCredentialSid: null });
+  const registry = createTwilioIsvProviderRegistry(slotDocument([first, second]));
+  assert.deepEqual(registry.readiness().pushSlots, {
+    ios: { sandbox: false, production: true }, android: { sandbox: true, production: false }
+  });
+  assert.equal(registry.readiness().legacyRoutingCompatible, false);
+  assert.equal(registry.resolveOrganization(ids.organization).voiceProductionPushCredentialSid, null);
+  assert.equal(registry.resolveOrganization(ids.secondOrganization).voiceAndroidSandboxPushCredentialSid, null);
+  assert.throws(() => createTwilioIsvProviderRegistry(slotDocument([
+    first, { ...second, voiceProductionPushCredentialSid: first.voiceAndroidSandboxPushCredentialSid }
+  ])), /shared across customers or platforms/u);
 });

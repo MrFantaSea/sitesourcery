@@ -1,3 +1,4 @@
+import { TWILIO_PUSH_SLOTS } from "./responder-twilio-provider-registry.mjs";
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -88,8 +89,17 @@ async function translated(work) {
 }
 
 function receipt(row, replayed = false) {
+  const pushColumns = {
+    "ios.sandbox": "voice_sandbox_push_credential_sid_digest",
+    "ios.production": "voice_production_push_credential_sid_digest",
+    "android.sandbox": "voice_android_sandbox_push_credential_sid_digest",
+    "android.production": "voice_android_production_push_credential_sid_digest"
+  };
+  const enabledPushSlots = Object.keys(pushColumns).filter((slot) => row[pushColumns[slot]] !== null).sort();
+  const slotAware = enabledPushSlots.length !== 4;
   return deepFreeze({
-    schema: "sitesourcery.responder-twilio-provider-topology-receipt/v1",
+    schema: slotAware ? "sitesourcery.responder-twilio-provider-topology-receipt/v2" : "sitesourcery.responder-twilio-provider-topology-receipt/v1",
+    ...(slotAware ? { enabledPushSlots } : {}),
     id: row.id,
     organizationId: row.organization_id,
     provider: row.provider,
@@ -156,8 +166,21 @@ function selectedTopology(input) {
     providerBrandType: input.providerBrandType,
     campaignUseCase: input.campaignUseCase
   };
+  const slotAware = input.schema === "sitesourcery.twilio-isv-provider-topology/v2";
+  if (slotAware) {
+    const slots = input.enabledPushSlots;
+    invariant(Array.isArray(slots) && slots.length > 0 && slots.length <= 4 &&
+      slots.every((slot) => typeof slot === "string" && Object.hasOwn(TWILIO_PUSH_SLOTS, slot)) &&
+      new Set(slots).size === slots.length && JSON.stringify(slots) === JSON.stringify([...slots].sort()),
+    "RESPONDER_TWILIO_TOPOLOGY_INVALID", "Enabled push slots are invalid.", { status: 400 });
+  }
   for (const field of DIGEST_FIELDS) {
-    selected[field] = sha256(input[field], field);
+    const slot = Object.keys(TWILIO_PUSH_SLOTS).find((slot) => `${TWILIO_PUSH_SLOTS[slot]}Digest` === field);
+    if (slotAware && slot && !input.enabledPushSlots.includes(slot)) {
+      invariant(input[field] === null, "RESPONDER_TWILIO_TOPOLOGY_INVALID",
+        "A disabled push slot must have a null digest.", { status: 400 });
+      selected[field] = null;
+    } else selected[field] = sha256(input[field], field);
   }
   invariant(
     REGISTRATION_CLASSES.has(selected.registrationClass) &&
@@ -196,10 +219,10 @@ export function createPostgresResponderTwilioProviderTopologyRepository({
           (client) => client.query(`
             select
               to_regprocedure(
-                'ss.hosted_responder_twilio_isv_topology_contract_v1()'
+                'ss.hosted_responder_twilio_isv_topology_contract_v2()'
               ) is not null
-              and ss.hosted_responder_twilio_isv_topology_contract_v1() =
-                'canonical-responder-twilio-isv-topology-v1-customer-subaccount'
+              and ss.hosted_responder_twilio_isv_topology_contract_v2() =
+                'canonical-responder-twilio-isv-topology-v2-explicit-push-slots'
                 as contract_ready,
               (select count(*) = 1
                  and bool_and(relation.relrowsecurity)
@@ -449,10 +472,10 @@ export function createPostgresResponderTwilioProviderTopologyRepository({
                 and webhook_auth_token_digest = $9
                 and voice_api_key_sid_digest = $10
                 and voice_api_key_secret_digest = $11
-                and voice_sandbox_push_credential_sid_digest = $12
-                and voice_production_push_credential_sid_digest = $13
-                and voice_android_sandbox_push_credential_sid_digest = $14
-                and voice_android_production_push_credential_sid_digest = $15
+                and voice_sandbox_push_credential_sid_digest is not distinct from $12
+                and voice_production_push_credential_sid_digest is not distinct from $13
+                and voice_android_sandbox_push_credential_sid_digest is not distinct from $14
+                and voice_android_production_push_credential_sid_digest is not distinct from $15
                 and registration_class = $16
                 and provider_brand_type = $17
                 and campaign_use_case = $18

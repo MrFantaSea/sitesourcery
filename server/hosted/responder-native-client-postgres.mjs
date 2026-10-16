@@ -1761,7 +1761,7 @@ export function createPostgresResponderNativeClientRepository({
               "The prior native VoIP session expired; use a new idempotency key.",
               { status: 409 }
             );
-            const accessToken = voiceAccess.openSession(
+            const accessToken = await voiceAccess.openSession(
               voiceSessionAuthority(row),
               voiceSessionMetadata(row),
               voiceSessionEnvelope(row)
@@ -1781,7 +1781,7 @@ export function createPostgresResponderNativeClientRepository({
           );
           if (semantic.rowCount === 1) {
             const row = semantic.rows[0];
-            const accessToken = voiceAccess.openSession(
+            const accessToken = await voiceAccess.openSession(
               voiceSessionAuthority(row),
               voiceSessionMetadata(row),
               voiceSessionEnvelope(row)

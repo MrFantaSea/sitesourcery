@@ -465,6 +465,27 @@ private struct ProofSuite {
     }
 
     private func routingCapabilities() throws {
+        var partial = voiceCapabilityFixture()
+        partial["routingReady"] = false
+        partial["operationalCalls"] = false
+        partial["routingSlots"] = ["android": ["sandbox": true, "production": false], "ios": ["sandbox": false, "production": false]]
+        let androidOnly = try decoded(partial, as: ResponderNativeCapability.self)
+        try require(!androidOnly.incomingCallsReady, "partial support opened legacy clients")
+        try require(!androidOnly.incomingCallsReady(in: .sandbox), "Android credential opened iOS sandbox")
+        try require(!androidOnly.incomingCallsReady(in: .production), "Android credential opened iOS production")
+        try require(androidOnly.voiceAuthorizationReady, "slot support blocked existing cleanup authority")
+        partial["routingSlots"] = ["ios": ["production": true]]
+        let iosProduction = try decoded(partial, as: ResponderNativeCapability.self)
+        try require(iosProduction.incomingCallsReady(in: .production), "exact iOS production slot remained held")
+        try require(!iosProduction.incomingCallsReady(in: .sandbox), "production slot opened sandbox")
+        partial["routingReady"] = true
+        partial["operationalCalls"] = true
+        let unavailableSlots: [[String: Any]] = [[:], ["ios": [:]], ["ios": ["future": true]], ["android": ["sandbox": true]]]
+        for slots in unavailableSlots {
+            partial["routingSlots"] = slots
+            let unavailable = try decoded(partial, as: ResponderNativeCapability.self)
+            try require(!unavailable.incomingCallsReady(in: .sandbox), "absent explicit slot fell back to legacy readiness")
+        }
         let live = try decoded(voiceCapabilityFixture(), as: ResponderNativeCapability.self)
         try require(live.incomingCallsReady, "verified route blocked by held distribution flags")
         for key in ["mounted", "backendReady", "providerAuthorizationEffects", "routingReady", "operationalCalls"] {

@@ -142,6 +142,7 @@ public struct ResponderNativeCapability: Sendable, Equatable, Codable {
     public let routingReady: Bool?
     public let operationalCalls: Bool?
     public let voiceRoutingMode: String?
+    public let routingSlots: NativeVoiceRoutingSlots?
 
     public var voiceAuthorizationReady: Bool {
         mounted && backendReady && voipSessionState == "verified" &&
@@ -151,6 +152,29 @@ public struct ResponderNativeCapability: Sendable, Equatable, Codable {
     public var incomingCallsReady: Bool {
         voiceAuthorizationReady && routingReady == true &&
             operationalCalls == true && voiceRoutingMode == "verified-native-client"
+    }
+
+    public func incomingCallsReady(in environment: NativeAppEnvironment) -> Bool {
+        guard voiceAuthorizationReady, voiceRoutingMode == "verified-native-client" else { return false }
+        guard let routingSlots else { return incomingCallsReady }
+        // A present global support map never substitutes another platform/environment.
+        return routingSlots.ios?.available(in: environment) == true
+    }
+}
+
+public struct NativeVoiceRoutingSlots: Sendable, Equatable, Codable {
+    public let ios: NativeVoiceRoutingEnvironments?
+    public let android: NativeVoiceRoutingEnvironments?
+}
+
+public struct NativeVoiceRoutingEnvironments: Sendable, Equatable, Codable {
+    public let sandbox: Bool?
+    public let production: Bool?
+    public func available(in environment: NativeAppEnvironment) -> Bool {
+        switch environment {
+        case .sandbox: return sandbox == true
+        case .production: return production == true
+        }
     }
 }
 
@@ -296,7 +320,7 @@ public struct NativeInstallation: Sendable, Equatable, Codable, Identifiable {
         projectId: String,
         userId: String
     ) -> Bool {
-        capability.incomingCallsReady && state == .active && platform == .ios &&
+        capability.incomingCallsReady(in: appEnvironment) && state == .active && platform == .ios &&
             bundleId == ResponderAPIClient.bundleId &&
             self.organizationId == organizationId && self.projectId == projectId &&
             customerUserId == userId && pushRegistrations.contains {

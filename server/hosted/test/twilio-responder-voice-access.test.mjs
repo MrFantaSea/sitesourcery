@@ -1,3 +1,4 @@
+import { createTwilioIsvProviderRegistry } from "../responder-twilio-provider-registry.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -105,6 +106,9 @@ test("Twilio Voice access is held by default without staged credentials", async 
     transports: ["twilio_voice_ios", "twilio_voice_android"],
     signerReady: false,
     issuanceEnabled: false,
+    pushSlots: { ios: { sandbox: false, production: false }, android: { sandbox: false, production: false } },
+    hasConfiguredPushSlot: false,
+    legacyRoutingCompatible: false,
     ttlSeconds: 300,
     writerVersion: "v2",
     verifierVersions: ["v2", "v1"],
@@ -185,10 +189,10 @@ test("verified Twilio Voice access issues only an incoming opaque grant", async 
     tokenDigest: issued.tokenDigest
   };
   assert.equal(
-    selected.openSession(AUTHORITY, metadata, issued.envelope),
+    await selected.openSession(AUTHORITY, metadata, issued.envelope),
     issued.accessToken
   );
-  assert.throws(
+  await assert.rejects(
     () => selected.openSession(
       { ...AUTHORITY, projectId: "20000000-0000-4000-8000-000000000003" },
       metadata,
@@ -237,4 +241,60 @@ test("Twilio Voice access rejects ambiguous credential staging", async () => {
     selected.issueSession(AUTHORITY),
     { code: "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED" }
   );
+});
+
+test("Android sandbox-only issuer rejects every absent slot and rechecks sealed replay authority", async () => {
+  const provider = { ...PROVIDER, voiceSandboxPushCredentialSid: null, voiceProductionPushCredentialSid: null,
+    voiceAndroidProductionPushCredentialSid: null, topology: { ...PROVIDER.topology,
+      schema: "sitesourcery.twilio-isv-provider-topology/v2", enabledPushSlots: ["android.sandbox"] } };
+  const selected = authority(VERIFIED, providerDependencies(provider));
+  const android = { ...AUTHORITY, clientPlatform: "android", transport: "twilio_voice_android" };
+  const issued = await selected.issueSession(android);
+  const payload = JSON.parse(Buffer.from(issued.accessToken.split(".")[1], "base64url"));
+  assert.equal(payload.grants.voice.push_credential_sid, PROVIDER.voiceAndroidSandboxPushCredentialSid);
+  const metadata = Object.fromEntries(["issuedAt", "expiresAt", "identityDigest", "endpointDigest", "credentialDigest", "jtiDigest", "tokenDigest"].map(key => [key, issued[key]]));
+  assert.equal(await selected.openSession(android, metadata, issued.envelope), issued.accessToken);
+  assert.equal(await selected.resolveRoutingIdentity(android, metadata, issued.envelope, provider.topology.accountSidDigest), `ssr_${issued.identityDigest.slice(0,48)}`);
+  for (const [platform, environment] of [["ios", "sandbox"], ["ios", "production"], ["android", "production"]]) {
+    let calls = 0;
+    const denied = authority(VERIFIED, providerDependencies(provider), { tokenFactory() { calls++; throw new Error("must not mint"); } });
+    await assert.rejects(denied.issueSession({ ...AUTHORITY, clientPlatform: platform, transport: `twilio_voice_${platform}`, appEnvironment: environment }),
+      { code: "RESPONDER_NATIVE_VOIP_HELD" });
+    assert.equal(calls, 0);
+  }
+  provider.voiceAndroidSandboxPushCredentialSid = null;
+  provider.voiceProductionPushCredentialSid = PROVIDER.voiceProductionPushCredentialSid;
+  provider.topology.enabledPushSlots = ["ios.production"];
+  await assert.rejects(selected.openSession(android, metadata, issued.envelope), { code: "RESPONDER_NATIVE_VOIP_HELD" });
+  await assert.rejects(selected.resolveRoutingIdentity(android, metadata, issued.envelope, provider.topology.accountSidDigest), { code: "RESPONDER_NATIVE_VOIP_HELD" });
+});
+
+test("disjoint customer slots issue independently and never borrow another customer's credential", async () => {
+  const orgs = [AUTHORITY.organizationId, "10000000-0000-4000-8000-000000000009"];
+  const entry = (organizationId, character, slot) => ({ organizationId,
+    accountSid: `AC${character.repeat(32)}`, messagingApiKeySid: `SK${character.repeat(32)}`,
+    messagingApiKeySecret: `messaging-${character}`.padEnd(40, character), webhookAuthToken: `webhook-${character}`.padEnd(40, character),
+    messagingServiceSid: `MG${character.repeat(32)}`, customerProfileSid: `BU${character.repeat(32)}`,
+    brandRegistrationSid: `BN${character.repeat(32)}`, campaignSid: `QE${character.repeat(32)}`,
+    registrationClass: "LOW_VOLUME_STANDARD", campaignUseCase: "CUSTOMER_CARE", voiceApiKeySid: `SK${(character === "a" ? "c" : "d").repeat(32)}`,
+    voiceApiKeySecret: `voice-${character}`.padEnd(40, character), enabledPushSlots: [slot],
+    ...(slot === "android.sandbox" ? { voiceAndroidSandboxPushCredentialSid: `CR${character.repeat(32)}` } : { voiceProductionPushCredentialSid: `CR${character.repeat(32)}` }) });
+  const registry = createTwilioIsvProviderRegistry({ schema: "sitesourcery.twilio-isv-provider-registry/v2",
+    entries: [entry(orgs[0], "a", "android.sandbox"), entry(orgs[1], "b", "ios.production")] });
+  const selected = authority(VERIFIED, { providerRegistry: registry, providerTopologyRepository: {
+    kind: "responder-twilio-provider-topology-postgres", providerEffects: false,
+    async readiness() { return { ready: true, verified: true }; },
+    async requireActiveTopology(topology) { assert.equal(topology, registry.resolveOrganization(topology.organizationId).topology); }
+  } });
+  for (const [organizationId, clientPlatform, appEnvironment, credential] of [
+    [orgs[0], "android", "sandbox", `CR${"a".repeat(32)}`],
+    [orgs[1], "ios", "production", `CR${"b".repeat(32)}`]
+  ]) {
+    const issued = await selected.issueSession({ ...AUTHORITY, organizationId, clientPlatform,
+      transport: `twilio_voice_${clientPlatform}`, appEnvironment });
+    assert.equal(JSON.parse(Buffer.from(issued.accessToken.split(".")[1], "base64url")).grants.voice.push_credential_sid, credential);
+    await assert.rejects(selected.issueSession({ ...AUTHORITY, organizationId, clientPlatform: clientPlatform === "ios" ? "android" : "ios",
+      transport: clientPlatform === "ios" ? "twilio_voice_android" : "twilio_voice_ios", appEnvironment: appEnvironment === "sandbox" ? "production" : "sandbox" }),
+    { code: "RESPONDER_NATIVE_VOIP_HELD" });
+  }
 });

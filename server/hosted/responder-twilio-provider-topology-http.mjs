@@ -1,3 +1,4 @@
+import { TWILIO_PUSH_SLOTS, normalizeTwilioPushSlots } from "./responder-twilio-provider-registry.mjs";
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 import { canonicalJson, digest } from "./security.mjs";
@@ -144,6 +145,11 @@ function currentTime(clock) {
 }
 
 function attestation(route, commandId, parsed, clock) {
+  const slotAware = parsed?.schema === "sitesourcery.responder-twilio-topology-attestation/v2";
+  if (slotAware) {
+    try { parsed = { ...parsed, ...normalizeTwilioPushSlots(parsed) }; }
+    catch { throw invalid("The Twilio topology push slots are invalid."); }
+  }
   const fields = [
     "accountSid", "messagingServiceSid", "customerProfileSid",
     "brandRegistrationSid", "campaignSid", "messagingApiKeySid",
@@ -155,7 +161,7 @@ function attestation(route, commandId, parsed, clock) {
     "webhookAuthTokenDigest", "voiceApiKeySecretDigest",
     "readbackAttestedAt", "evidenceDigest"
   ];
-  exactKeys(parsed, fields, "The Twilio topology attestation body is invalid.");
+  exactKeys(parsed, slotAware ? [...fields, "schema", "enabledPushSlots"] : fields, "The Twilio topology attestation body is invalid.");
   const validators = [
     ["accountSid", SID.account],
     ["messagingServiceSid", SID.messagingService],
@@ -170,7 +176,8 @@ function attestation(route, commandId, parsed, clock) {
     ["voiceAndroidProductionPushCredentialSid", SID.pushCredential]
   ];
   if (validators.some(([field, pattern]) =>
-    typeof parsed[field] !== "string" || !pattern.test(parsed[field])) ||
+    !(slotAware && Object.values(TWILIO_PUSH_SLOTS).includes(field) && parsed[field] === null) &&
+      (typeof parsed[field] !== "string" || !pattern.test(parsed[field]))) ||
       parsed.messagingApiKeySid === parsed.voiceApiKeySid ||
       new Set([
         parsed.messagingApiKeySecretDigest,
@@ -182,7 +189,7 @@ function attestation(route, commandId, parsed, clock) {
         parsed.voiceProductionPushCredentialSid,
         parsed.voiceAndroidSandboxPushCredentialSid,
         parsed.voiceAndroidProductionPushCredentialSid
-      ]).size !== 4 ||
+      ].filter((value) => value !== null)).size !== (slotAware ? parsed.enabledPushSlots.length : 4) ||
       !REGISTRATION_CLASSES.has(parsed.registrationClass) ||
       parsed.campaignUseCase !== "CUSTOMER_CARE" ||
       ![
@@ -199,6 +206,10 @@ function attestation(route, commandId, parsed, clock) {
     throw invalid("The Twilio topology attestation body is invalid.");
   }
   const topology = {
+    ...(slotAware ? {
+      schema: "sitesourcery.twilio-isv-provider-topology/v2",
+      enabledPushSlots: parsed.enabledPushSlots
+    } : {}),
     organizationId: route.params.organizationId,
     registrationClass: parsed.registrationClass,
     providerBrandType: parsed.registrationClass === "SOLE_PROPRIETOR"
@@ -216,17 +227,17 @@ function attestation(route, commandId, parsed, clock) {
     voiceApiKeySidDigest: digest(parsed.voiceApiKeySid),
     voiceApiKeySecretDigest: parsed.voiceApiKeySecretDigest,
     voiceSandboxPushCredentialSidDigest:
-      digest(parsed.voiceSandboxPushCredentialSid),
+      parsed.voiceSandboxPushCredentialSid === null ? null : digest(parsed.voiceSandboxPushCredentialSid),
     voiceProductionPushCredentialSidDigest:
-      digest(parsed.voiceProductionPushCredentialSid),
+      parsed.voiceProductionPushCredentialSid === null ? null : digest(parsed.voiceProductionPushCredentialSid),
     voiceAndroidSandboxPushCredentialSidDigest:
-      digest(parsed.voiceAndroidSandboxPushCredentialSid),
+      parsed.voiceAndroidSandboxPushCredentialSid === null ? null : digest(parsed.voiceAndroidSandboxPushCredentialSid),
     voiceAndroidProductionPushCredentialSidDigest:
-      digest(parsed.voiceAndroidProductionPushCredentialSid)
+      parsed.voiceAndroidProductionPushCredentialSid === null ? null : digest(parsed.voiceAndroidProductionPushCredentialSid)
   };
   const providerReadbackDigest = digest({
-    schema: "sitesourcery.responder-twilio-isv-readback/v1",
     ...topology,
+    schema: slotAware ? "sitesourcery.responder-twilio-isv-readback/v2" : "sitesourcery.responder-twilio-isv-readback/v1",
     readbackAttestedAt: parsed.readbackAttestedAt
   });
   const command = {
@@ -239,8 +250,8 @@ function attestation(route, commandId, parsed, clock) {
   return {
     ...command,
     requestDigest: digest({
-      schema: "sitesourcery.responder-twilio-isv-attestation-command/v1",
-      ...command
+      ...command,
+      schema: slotAware ? "sitesourcery.responder-twilio-isv-attestation-command/v2" : "sitesourcery.responder-twilio-isv-attestation-command/v1"
     })
   };
 }

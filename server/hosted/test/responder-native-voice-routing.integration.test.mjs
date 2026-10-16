@@ -1,3 +1,6 @@
+import { createTwilioIsvProviderRegistry } from "../responder-twilio-provider-registry.mjs";
+import { createResponderNativeVoiceRouting } from "../responder-native-voice-routing.mjs";
+import { createTwilioResponderNativeVoiceDialPlan, TWILIO_RESPONDER_HELD_VOICE_TWIML } from "../twilio-responder-voice-dial-plan.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
@@ -272,5 +275,94 @@ test("native incoming routes use durable current authority, independently of fiv
         reason:"operator_correction",retireEvidenceDigest:digest("topology-retire"),recordedAt:new Date().toISOString()});
       assert.deepEqual(await lookup(),[]);
     });
+  } finally { await pool.end(); }
+});
+
+test("Android-only topology routes through native Dial and cached sessions cannot outlive slot authority", { skip: !DATABASE_URL }, async () => {
+  const pool = new pg.Pool({ connectionString: DATABASE_URL, max: 5 });
+  try {
+    assert.match((await pool.query("select current_database() as name")).rows[0].name,
+      /^ss_native_voice_routing_(?:[0-9]+|ci_[0-9]+_[0-9]+)$/u);
+    const ids = await seed(pool), authority = createCanonicalPostgresAuthority({ pool });
+    const sid = prefix => `${prefix}${randomUUID().replaceAll("-", "")}`;
+    const configuration = {
+      organizationId: ids.organization, accountSid: sid("AC"), messagingApiKeySid: sid("SK"),
+      messagingApiKeySecret: randomUUID(), webhookAuthToken: randomUUID(), messagingServiceSid: sid("MG"),
+      customerProfileSid: sid("BU"), brandRegistrationSid: sid("BN"), campaignSid: sid("QE"),
+      registrationClass: "LOW_VOLUME_STANDARD", campaignUseCase: "CUSTOMER_CARE",
+      voiceApiKeySid: sid("SK"), voiceApiKeySecret: randomUUID(), enabledPushSlots: ["android.sandbox"],
+      voiceAndroidSandboxPushCredentialSid: sid("CR")
+    };
+    let registry = createTwilioIsvProviderRegistry({ schema: "sitesourcery.twilio-isv-provider-registry/v2", entries: [configuration] });
+    const providerRegistry = { kind: "twilio-isv-provider-registry", providerEffects: false,
+      readiness: () => registry.readiness(), resolveOrganization: id => registry.resolveOrganization(id) };
+    const operator = { kind: "operator", organizationId: ids.organization, userId: ids.operator };
+    const customer = { kind: "customer", organizationId: ids.organization, userId: ids.customer };
+    const topologyRepository = createPostgresResponderTwilioProviderTopologyRepository({ authority });
+    const attest = () => topologyRepository.attestTopology(operator, {
+      ...registry.resolveOrganization(ids.organization).topology, commandId: `slot-topology-${randomUUID()}`,
+      requestDigest: digest(randomUUID()), providerReadbackDigest: digest("synthetic-slot-readback"),
+      topologyEvidenceDigest: digest("synthetic-slot-evidence"), recordedAt: new Date().toISOString()
+    });
+    const topology = await attest();
+    const tokenAuthority = createResponderNativeTokenAuthority({ pepper: Buffer.alloc(32, 27), pepperVersion: "slot-v1", previousPeppers: { "native-route-v1": Buffer.alloc(32, 29) } });
+    const voiceAccess = createTwilioResponderVoiceAccess({ pepper: Buffer.alloc(32, 27), pepperVersion: "slot-v1", previousPeppers: { "native-route-v1": Buffer.alloc(32, 29) },
+      environment: { SITESOURCERY_TWILIO_VOICE_ACCESS_MODE: "verified" }, providerRegistry, providerTopologyRepository: topologyRepository });
+    const native = createPostgresResponderNativeClientRepository({ authority, verifierKeyVersions: tokenAuthority.verifierVersions, voiceAccess });
+    const created = await native.createInstallation(customer, { commandId: `slot-create-${randomUUID()}`, installationId: randomUUID(),
+      organizationId: ids.organization, projectId: ids.project, platform: "android", bundleId: "com.sitesourcery.responder.debug",
+      appEnvironment: "sandbox", appVersion: "1.0.0", buildNumber: "1", installationKeyDigest: digest(randomUUID()), recordedAt: new Date().toISOString() });
+    const scope = { id: created.installation.id, organizationId: ids.organization, projectId: ids.project, userId: ids.customer,
+      platform: "android", bundleId: "com.sitesourcery.responder.debug", environment: "sandbox" };
+    const token = `fcm:synthetic_${randomUUID()}_1234567890`, candidates = tokenAuthority.tokenLookupCandidates(scope, "voip", token);
+    const registered = await native.registerToken(customer, { commandId: `slot-token-${randomUUID()}`, registrationId: randomUUID(),
+      organizationId: ids.organization, projectId: ids.project, installationId: scope.id, expectedRevision: created.installation.revision,
+      pushPurpose: "voip", tokenLookupCandidateDigests: candidates.map(value => value.digest),
+      tokenOwnershipCandidateDigests: candidates.map(value => value.ownershipDigest),
+      envelope: await tokenAuthority.sealToken(scope, "voip", token), recordedAt: new Date().toISOString() });
+    const issueInput = { commandId: `slot-session-${randomUUID()}`, sessionId: randomUUID(), organizationId: ids.organization,
+      projectId: ids.project, installationId: scope.id, expectedRevision: registered.installation.revision };
+    const issued = await native.issueVoipSession(customer, issueInput);
+    assert.equal((await native.issueVoipSession(customer, issueInput)).replayed, true);
+    const semanticInput = { ...issueInput, commandId: `slot-semantic-${randomUUID()}`, sessionId: randomUUID() };
+    assert.equal((await native.issueVoipSession(customer, semanticInput)).semanticReplay, true);
+    const bindings = createPostgresResponderNumberBindingsRepository({ authority, verifierKeyVersions: ["slot-v1"] });
+    const number = digest(randomUUID());
+    const binding = await bindings.provisionBinding(operator, { commandId: `slot-number-${randomUUID()}`, requestDigest: digest(randomUUID()),
+      organizationId: ids.organization, projectId: ids.project, numberLookupDigest: number, numberLookupCandidateDigests: [number],
+      lookupKeyVersion: "slot-v1", phoneNumberSidDigest: digest(randomUUID()), accountSidDigest: topology.accountSidDigest,
+      messagingServiceSidDigest: null, providerReadbackDigest: digest("synthetic"), provisionEvidenceDigest: digest("synthetic"), recordedAt: new Date().toISOString() });
+    await authority.service({ actorKind: "system", organizationId: ids.organization }, client => client.query(
+      "insert into ss.responder_runtime_controls(organization_id,created_at,updated_at) values($1,clock_timestamp(),clock_timestamp())", [ids.organization]));
+    await authority.service({ actorKind: "operator", userId: ids.operator, organizationId: ids.organization }, client => client.query(
+      `update ss.responder_runtime_controls set state='approved_live',global_kill_engaged=false,revision=revision+1,
+        release_evidence_digest=$2,released_at=clock_timestamp(),released_by_operator_user_id=$3,updated_at=clock_timestamp() where organization_id=$1`,
+      [ids.organization,digest("synthetic-release"),ids.operator]));
+    const routes = createPostgresResponderNativeVoiceRoutes({ authority, nativeClientRepository: native, voiceAccess });
+    const routing = createResponderNativeVoiceRouting({ mode: "verified", routes, voiceAccess });
+    assert.equal((await routing.readiness()).legacyRoutingReady, false);
+    assert.equal((await routing.readiness()).anyRoutingReady, true);
+    const plan = createTwilioResponderNativeVoiceDialPlan({ routing, dialResultUrl: "https://sitesourcery.com/api/v1/provider-events/twilio/voice/dial-result" });
+    const inbound = { channel: "voice", eventKind: "call_received", eventState: "recorded", numberBindingId: binding.id };
+    assert.ok((await plan.twiml(inbound)).includes(`<Client>ssr_${issued.identityDigest.slice(0,48)}</Client>`));
+    await bindings.retireBinding(operator, { commandId: `slot-retire-number-${randomUUID()}`, requestDigest: digest(randomUUID()),
+      organizationId: ids.organization, bindingId: binding.id, retiredReason: "operator_correction",
+      retireEvidenceDigest: digest("synthetic-retire"), recordedAt: new Date().toISOString() });
+    await topologyRepository.retireTopology(operator, { organizationId: ids.organization, topologyId: topology.id,
+      reason: "operator_correction", retireEvidenceDigest: digest("synthetic-retire"), recordedAt: new Date().toISOString() });
+    await assert.rejects(native.issueVoipSession(customer, issueInput), { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
+    await assert.rejects(native.issueVoipSession(customer, semanticInput), { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
+    registry = createTwilioIsvProviderRegistry({ schema: "sitesourcery.twilio-isv-provider-registry/v2", entries: [{
+      ...configuration, enabledPushSlots: ["ios.production"], voiceAndroidSandboxPushCredentialSid: null, voiceProductionPushCredentialSid: sid("CR")
+    }] });
+    await attest();
+    await assert.rejects(native.issueVoipSession(customer, issueInput), { code: "RESPONDER_NATIVE_VOIP_HELD" });
+    await assert.rejects(native.issueVoipSession(customer, semanticInput), { code: "RESPONDER_NATIVE_VOIP_HELD" });
+    assert.equal(await plan.twiml(inbound), TWILIO_RESPONDER_HELD_VOICE_TWIML);
+    // Customer cleanup is independent of the now-disabled routing slot.
+    const retired = await native.revokeInstallation(customer, { commandId: `slot-device-retire-${randomUUID()}`, transitionId: randomUUID(),
+      organizationId: ids.organization, projectId: ids.project, installationId: scope.id, expectedRevision: registered.installation.revision,
+      reason: "device_lost", evidenceDigest: digest("synthetic"), recordedAt: new Date().toISOString() });
+    assert.equal(retired.installation.state, "revoked");
   } finally { await pool.end(); }
 });

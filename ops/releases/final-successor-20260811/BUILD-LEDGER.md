@@ -758,3 +758,10 @@ Implementation `21e51a9918d94b795d1efad786e009cd80b12530` / tree `05b9bcd24b2ae8
 
 - [Provenance](../ci-provenance/21e51a9918d94b795d1efad786e009cd80b12530/provenance.md)
 - [Machine proof](../ci-provenance/21e51a9918d94b795d1efad786e009cd80b12530/proof.json)
+
+## Responder platform/environment push slots — 2026-10-16
+
+Implementation `83a4544833a5b244ec48076e6bef08d5d8c61c6e` / tree `ff42a5b53ef68e85610e182b38939d28c5142069`, protected base `7c510fc6eca2c9feae3becf5177b16994f42acbf`. Explicit configured slots retain v1 compatibility and exact tenant/revision authorization while permitting independent platform/environment availability. Migration108, focused server/HTTP proof, isolated PostgreSQL acceptance across retained original/affected-case runs, Android6 and Swift12 are accepted. One exact complete npm/build/browser qualification passed; owned disposable database/cluster and qualification scratch/processes are absent. Original failures and earlier live proof remain preserved. Source-only acceptance: native migration, provider activation and real delivery remain separate.
+
+- [Provenance](../ci-provenance/83a4544833a5b244ec48076e6bef08d5d8c61c6e/provenance.md)
+- [Machine proof](../ci-provenance/83a4544833a5b244ec48076e6bef08d5d8c61c6e/proof.json)

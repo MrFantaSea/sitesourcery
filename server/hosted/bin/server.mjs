@@ -1690,8 +1690,9 @@ async function start() {
         tokenStorage: "sealed",
         voipSessionState: responderNativeVoiceReadiness.mode,
         voiceRoutingMode: responderNativeRoutingReadiness.voiceRoutingMode,
-        routingReady: responderNativeRoutingReadiness.routingReady,
-        operationalCalls: responderNativeRoutingReadiness.operationalCalls,
+        routingSlots: responderNativeRoutingReadiness.routingSlots,
+        routingReady: responderNativeRoutingReadiness.legacyRoutingReady,
+        operationalCalls: responderNativeRoutingReadiness.legacyRoutingReady,
         providerAuthorizationEffects:
           responderNativeVoiceReadiness.providerAuthorizationEffects,
         providerEffects: false,

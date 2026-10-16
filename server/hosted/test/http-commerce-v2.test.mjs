@@ -78,6 +78,7 @@ const HELD_RESPONDER_NATIVE_CLIENT_CAPABILITY = Object.freeze({
   voipSessionState: "held",
   voipTransports: Object.freeze([]),
   voiceRoutingMode: "held",
+  routingSlots: { ios: { sandbox: false, production: false }, android: { sandbox: false, production: false } },
   routingReady: false,
   operationalCalls: false,
   providerAuthorizationEffects: false,
