@@ -78,6 +78,23 @@ export function diskVolumesFromEnvironment(environment) {
   return validateDiskVolumes(volumes);
 }
 
+export function certificateConfigurationFromEnvironment(environment, operationsState) {
+  if (operationsState.publication === "held" && operationsState.dns === "held") {
+    return Object.freeze({ certificateMode: "file", certificateFile: null, certificateHostname: null });
+  }
+  const certificateMode = environment.SITESOURCERY_MONITOR_CERTIFICATE_MODE ?? "file";
+  if (certificateMode !== "file" && certificateMode !== "public_tls") {
+    throw new Error("SITESOURCERY_MONITOR_CERTIFICATE_MODE is invalid.");
+  }
+  return Object.freeze({
+    certificateMode,
+    certificateFile: certificateMode === "file"
+      ? absolute(environment, "SITESOURCERY_MONITOR_CERTIFICATE_FILE")
+      : null,
+    certificateHostname: required(environment, "SITESOURCERY_MONITOR_CERTIFICATE_HOSTNAME")
+  });
+}
+
 export async function alertAdapterFromEnvironment(
   environment
 ) {
@@ -155,9 +172,7 @@ export async function monitorFromEnvironment(
       environment
         .SITESOURCERY_OPERATIONS_PROVIDER_EGRESS
     );
-  const edgeIsExactlyHeld =
-    operationsState.publication === "held" &&
-    operationsState.dns === "held";
+  const certificateConfiguration = certificateConfigurationFromEnvironment(environment, operationsState);
   const alertAdapter =
     await alertAdapterFromEnvironment(
       environment
@@ -219,18 +234,7 @@ export async function monitorFromEnvironment(
       backupDestinationRoot,
       backupArtifactSha256,
       sourceFailureDomainId,
-      certificateFile: edgeIsExactlyHeld
-        ? null
-        : absolute(
-            environment,
-            "SITESOURCERY_MONITOR_CERTIFICATE_FILE"
-          ),
-      certificateHostname: edgeIsExactlyHeld
-        ? null
-        : required(
-            environment,
-            "SITESOURCERY_MONITOR_CERTIFICATE_HOSTNAME"
-          ),
+      ...certificateConfiguration,
       expectedOperationsState:
         operationsState,
       apiPort: integer(

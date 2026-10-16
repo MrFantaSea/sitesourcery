@@ -751,3 +751,10 @@ Implementation `2da36648bb18082844cd1996063b16f281a9b26c` / tree `508b3475e00088
 
 - [Provenance](../ci-provenance/2da36648bb18082844cd1996063b16f281a9b26c/provenance.md)
 - [Machine proof](../ci-provenance/2da36648bb18082844cd1996063b16f281a9b26c/proof.json)
+
+## Public TLS monitor correction — 2026-10-16
+
+Implementation `21e51a9918d94b795d1efad786e009cd80b12530` / tree `05b9bcd24b2ae8457126c3a16f56677dcc2751e8`, protected base `372b2ed0d1a1e5824e2372b3421fffc2b8255eff`. Explicit public-TLS mode reuses the existing authenticated verifier for Cloudflare-terminated ingress while retaining file/held modes.59 focused checks, one genuine bounded TLS handshake and the original complete npm/build/browser qualification passed. Owned qualification scratch/processes removed; Care/application/migration bytes and earlier proof preserved. Source-only acceptance; native installation/configuration and real monitor acceptance remain separate.
+
+- [Provenance](../ci-provenance/21e51a9918d94b795d1efad786e009cd80b12530/provenance.md)
+- [Machine proof](../ci-provenance/21e51a9918d94b795d1efad786e009cd80b12530/proof.json)
