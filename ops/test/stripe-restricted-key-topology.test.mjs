@@ -121,6 +121,7 @@ test("authoritative credential topology derives exact current adapter operations
     Object.keys(STRIPE_RUNTIME_API_OPERATIONS_BY_PURPOSE),
     [
       "alakazam",
+      "care",
       "customBuildChange",
       "customBuildFinal",
       "customBuildStart",
@@ -571,4 +572,20 @@ test("bounded provisioner inventory cannot lose scope or borrow runtime scope", 
       () => normalizeCredentialTopology(input)
     );
   }
+});
+
+
+test("Care restricted purpose needs only its exact runtime operations, not Alakazam catalog management", () => {
+  assert.deepEqual(STRIPE_RUNTIME_API_OPERATIONS_BY_PURPOSE.care, [
+    "charges.retrieve", "checkout.sessions.create", "checkout.sessions.retrieve", "disputes.list", "invoices.retrieve",
+    "prices.retrieve", "refunds.list", "subscriptions.retrieve", "subscriptions.update", "webhookEndpoints.retrieve"
+  ]);
+  const input = topology();
+  const runtime = item(input, "stripe.runtime.production.restricted");
+  runtime.providerBinding.enabledPurposes = ["care"];
+  runtime.scopes = [...STRIPE_RUNTIME_API_SCOPES_BY_PURPOSE.care];
+  assert.equal(readiness(input, { purpose: "care" }).ready, true);
+  assert.throws(() => readiness(input, { purpose: "alakazam" }));
+  runtime.scopes = runtime.scopes.filter(scope => scope !== "invoices:read");
+  assert.throws(() => readiness(input, { purpose: "care" }));
 });

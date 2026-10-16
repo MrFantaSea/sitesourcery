@@ -1,3 +1,4 @@
+import { CARE_STRIPE_CAPABILITIES, normalizeCareStripeConfiguration } from "./care-payment-config.mjs";
 import {
   STRIPE_ALAKAZAM_CAPABILITIES,
   STRIPE_API_VERSION,
@@ -64,7 +65,8 @@ const DOMAIN_CAPABILITIES = Object.freeze([
 const APPROVED_CAPABILITIES = new Set([
   ...HOSTED_CAPABILITIES,
   ...DOMAIN_CAPABILITIES,
-  ...ALAKAZAM_CAPABILITIES
+  ...ALAKAZAM_CAPABILITIES,
+  ...CARE_STRIPE_CAPABILITIES
 ]);
 const ALAKAZAM_EXCLUSIVE_CAPABILITIES = Object.freeze(
   ALAKAZAM_CAPABILITIES.filter(
@@ -309,9 +311,13 @@ function exactApproval(environment, deployment, livemode) {
     ALAKAZAM_CAPABILITIES.filter(
       (capability) => capabilities.has(capability)
     );
+  const careConfigured = optionalText(environment, "SITESOURCERY_STRIPE_CARE_CONFIGURATION_JSON") !== null;
+  if (careConfigured && CARE_STRIPE_CAPABILITIES.some(capability => !capabilities.has(capability))) {
+    fail("STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE", "Stripe Care approval requires its exact provider capability set.");
+  }
   const approvedExclusiveAlakazamCapabilities =
     ALAKAZAM_EXCLUSIVE_CAPABILITIES.filter(
-      (capability) => capabilities.has(capability)
+      (capability) => capabilities.has(capability) && !(careConfigured && CARE_STRIPE_CAPABILITIES.includes(capability))
     );
   if (
     approvedExclusiveAlakazamCapabilities.length !== 0 &&
@@ -659,6 +665,9 @@ export function createConfiguredStripeProvider({
     priceExpectations,
     livemode
   );
+  const care = normalizeCareStripeConfiguration(
+    optionalJson(environment, "SITESOURCERY_STRIPE_CARE_CONFIGURATION_JSON"), priceExpectations, livemode
+  );
   const suppliedCredentialTopology = optionalJson(
     environment,
     "SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON"
@@ -764,6 +773,7 @@ export function createConfiguredStripeProvider({
       domainApproved
     ),
     ...(alakazam === null ? {} : { alakazam }),
+    ...(care === null ? {} : { care }),
     ...(checkoutTtlSeconds === undefined
       ? {}
       : { checkoutTtlSeconds })
@@ -845,6 +855,7 @@ function redactCredentialTopology(value) {
     ? value.enabledPurposes.filter((purpose) =>
         [
           "alakazam",
+          "care",
           "customBuildChange",
           "customBuildFinal",
           "customBuildStart",
@@ -973,6 +984,7 @@ export function redactStripeReadiness(
       Object.fromEntries(
         [
           "alakazam",
+          "care",
           "customBuildChange",
           "customBuildFinal",
           "customBuildStart",
@@ -1033,5 +1045,6 @@ export const STRIPE_PRODUCTION_CONTRACT =
     hostedCapabilities: HOSTED_CAPABILITIES,
     domainCapabilities: DOMAIN_CAPABILITIES,
     alakazamCapabilities: ALAKAZAM_CAPABILITIES,
+    careCapabilities: CARE_STRIPE_CAPABILITIES,
     readinessPurposes: STRIPE_READINESS_PURPOSES
   });

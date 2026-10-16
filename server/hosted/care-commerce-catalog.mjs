@@ -176,6 +176,27 @@ export function getHeldCareCommerceCatalog() {
   return deepFreeze({ ...clone(CATALOG), catalogDigest: CATALOG_DIGEST });
 }
 
+// These are prices and capacity, not payment or service-release authority.
+// A catalog agreement additionally requires an immutable written plan,
+// customer acceptance and a verified paid provider period.
+export function getCareCatalogPlans() {
+  return deepFreeze(CATALOG.offers.filter(offer => offer.contractKind === "catalog_care")
+    .map(offer => ({
+      planId: offer.serviceKey,
+      catalogIdentityId: offer.catalogIdentityId,
+      catalogVersion: CARE_COMMERCE_CATALOG_VERSION,
+      priceVersion: CARE_COMMERCE_PRICE_VERSION,
+      monthlyAmountMinor: offer.price.monthlyAmountMinor,
+      includedMinutes: offer.price.includedMinutes,
+      editCap: offer.price.editCap,
+      currency: "USD",
+      billingCadence: "month",
+      // Additional work always needs its own accepted scope and payment
+      // authority. The catalog path cannot silently meter an extra charge.
+      automaticOverage: false
+    })));
+}
+
 export function resolveHeldCareOffer(serviceKey) {
   invariant(
     typeof serviceKey === "string" &&

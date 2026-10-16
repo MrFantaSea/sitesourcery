@@ -1,7 +1,10 @@
+import { createCarePaymentsService } from './care-payments.mjs';
+import { createPostgresCarePaymentRepository } from './care-payment-postgres.mjs';
+import { createConfiguredStripeProvider } from './stripe-production-config.mjs';
 import path from "node:path";
 
 import {
-  createCareLifecycleExecutor,
+  createCareLifecycleExecutor, createCareCatalogLifecycleBridge,
   createPostgresCareLifecycleWorkerRepository
 } from "./care-lifecycle-worker-postgres.mjs";
 import { createPostgresCareCoreRepository } from "./care-core-postgres.mjs";
@@ -76,6 +79,9 @@ export function createLifecycleWorkerFactories({
   careRepositoryFactory = createPostgresCareLifecycleWorkerRepository,
   careCoreRepositoryFactory = createPostgresCareCoreRepository,
   domainExecutorFactory = createConfiguredDomainLifecycleExecutor,
+  stripeFactory = createConfiguredStripeProvider,
+  carePaymentRepositoryFactory = createPostgresCarePaymentRepository,
+  carePaymentsFactory = createCarePaymentsService,
   exportStoreFactory = createPrivateExportObjectStore
 } = {}) {
   const selected = selectedPurposes(purposes);
@@ -143,6 +149,15 @@ export function createLifecycleWorkerFactories({
                   careRepository: careCoreRepositoryFactory({ authority })
                 })
               : heldExecutor(purpose);
+            const careMode=environment.SITESOURCERY_CARE_MODE??'held';
+            invariant(['held','approved_live'].includes(careMode),'WORKER_CONFIGURATION_INVALID','Care mode must be held or approved_live.',{status:500});
+            if(options.enabled&&careMode==='approved_live'){
+              const paymentRepository=carePaymentRepositoryFactory({authority});
+              const payments=carePaymentsFactory({repository:paymentRepository,provider:stripeFactory({environment}).adapter,
+                release:{approved:false},reconciliationOnly:true,clock});
+              const bridge=createCareCatalogLifecycleBridge({repository,executor,payments,paymentRepository});
+              repository=bridge.repository;executor=bridge.executor;
+            }
           }
           const worker = createLeasedLifecycleWorker({
             purpose,
@@ -186,7 +201,7 @@ export function createLifecycleWorkerFactories({
                 dependencyReady: dependency?.ready === true,
                 externalReplicas: Number(storage?.externalReplicas ?? 0),
                 publicationTransportReady,
-                providerEffects: false,
+                providerEffects: executor.providerEffects===true,
                 code: ready ? null : `${purpose.toUpperCase().replaceAll("-", "_")}_HELD`
               });
             }

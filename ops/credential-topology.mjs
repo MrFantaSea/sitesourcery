@@ -23,6 +23,7 @@ const STRIPE_REVOCATION_CONFIRMATION_MAXIMUM_MS =
   15 * 60 * 1000;
 const STRIPE_PURPOSES = Object.freeze([
   "alakazam",
+  "care",
   "customBuildChange",
   "customBuildFinal",
   "customBuildStart",
@@ -59,6 +60,10 @@ const STRIPE_OPERATIONS_BY_PURPOSE = deepFreeze({
     "subscriptionSchedules.update",
     "subscriptions.retrieve",
     "subscriptions.update"
+  ]),
+  care: sortedUnique([
+    ...STRIPE_COMMON_OPERATIONS, ...STRIPE_CHECKOUT_OPERATIONS,
+    "charges.retrieve", "disputes.list", "refunds.list", "invoices.retrieve", "subscriptions.retrieve", "subscriptions.update"
   ]),
   customBuildChange: sortedUnique([
     ...STRIPE_COMMON_OPERATIONS,

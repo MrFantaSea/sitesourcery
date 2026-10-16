@@ -196,6 +196,7 @@ const EXPECTED = Object.freeze({
   responderProviderEvents: true,
   responderInboundEvents: true,
   care: true,
+  careCatalog: { mounted: false, commercialReady: false },
   careCommerce: FULL_CARE_COMMERCE_CAPABILITY,
   responder: false,
   responderForwarding: FULL_RESPONDER_FORWARDING_CAPABILITY,

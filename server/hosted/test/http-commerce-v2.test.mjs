@@ -366,6 +366,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     responderProviderEvents: false,
     responderInboundEvents: false,
     care: false,
+    careCatalog: { mounted: false, commercialReady: false },
     careCommerce: {
       ready: false,
       mounted: false,
@@ -416,6 +417,7 @@ test("public capabilities enable only actions whose server boundary can succeed"
     responderProviderEvents: false,
     responderInboundEvents: false,
     care: false,
+    careCatalog: { mounted: false, commercialReady: false },
     careCommerce: {
       ready: false,
       mounted: false,

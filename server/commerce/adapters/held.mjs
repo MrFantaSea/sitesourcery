@@ -36,6 +36,10 @@ export function createHeldStripeAdapter() {
       return { ready: false, reason: "stripe_not_configured" };
     },
     createCheckout: reject,
+    createCareCheckout: reject,
+    readCareCheckout: reject,
+    readCareSubscription: reject,
+    cancelCareSubscriptionAtPeriodEnd: reject,
     retrieveAlakazamRenewalInvoice: reject,
     retrieveAlakazamIncidentInvoice: reject,
     retrieveAlakazamCancellation: reject,
