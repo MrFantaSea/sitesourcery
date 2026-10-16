@@ -244,3 +244,52 @@ test("customer topology attests, resolves, replays, and retires on real PostgreS
     await pool.end();
   }
 });
+
+test("explicit push slots persist nulls, preserve replay and fence concurrent cross-column reuse", { skip: !DATABASE_URL }, async () => {
+  const pool = new Pool({ connectionString: DATABASE_URL, max: 4 });
+  try {
+    assert.match((await pool.query("select current_database() as name")).rows[0].name,
+      /^ss_(?:native_voice_routing|twilio_isv_topology)_(?:[0-9]+|ci_[0-9]+_[0-9]+)$/u);
+    const ids = await seed(pool), authority = createCanonicalPostgresAuthority({ pool });
+    const repository = createPostgresResponderTwilioProviderTopologyRepository({ authority });
+    const actor = { kind: "operator", userId: ids.operator, organizationId: ids.organization };
+    const selected = { ...topology(ids.organization, randomUUID()), schema: "sitesourcery.twilio-isv-provider-topology/v2",
+      enabledPushSlots: ["android.sandbox"], voiceSandboxPushCredentialSidDigest: null,
+      voiceProductionPushCredentialSidDigest: null, voiceAndroidProductionPushCredentialSidDigest: null };
+    const input = { ...selected, commandId: `slots-${randomUUID()}`, requestDigest: sha256(randomUUID()),
+      providerReadbackDigest: sha256("synthetic"), topologyEvidenceDigest: sha256("synthetic"), recordedAt: new Date().toISOString() };
+    const receipt = await repository.attestTopology(actor, input);
+    assert.equal(receipt.voiceSandboxPushCredentialSidDigest, null);
+    assert.deepEqual(receipt.enabledPushSlots, ["android.sandbox"]);
+    assert.equal((await repository.attestTopology(actor, input)).replayed, true);
+    assert.equal((await repository.requireActiveTopology(selected)).id, receipt.id);
+    await assert.rejects(repository.requireActiveTopology({ ...selected,
+      enabledPushSlots: ["android.production"], voiceAndroidSandboxPushCredentialSidDigest: null,
+      voiceAndroidProductionPushCredentialSidDigest: selected.voiceAndroidSandboxPushCredentialSidDigest }),
+    { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
+    assert.throws(() => repository.attestTopology(actor, { ...input, schema: undefined }), { code: "RESPONDER_TWILIO_TOPOLOGY_INVALID" });
+    await assert.rejects(authority.service({ actorKind: "operator", userId: ids.operator, organizationId: ids.organization }, client =>
+      client.query("update ss.responder_twilio_provider_topologies set voice_android_sandbox_push_credential_sid_digest=null where id=$1", [receipt.id])),
+    error => error.code === "55000");
+    const other = await seed(pool), shared = sha256(randomUUID());
+    const contender = (organizationId, slot, namespace) => {
+      const candidate = { ...topology(organizationId, namespace), schema: selected.schema, enabledPushSlots: [slot],
+        voiceSandboxPushCredentialSidDigest: null, voiceProductionPushCredentialSidDigest: null,
+        voiceAndroidSandboxPushCredentialSidDigest: null, voiceAndroidProductionPushCredentialSidDigest: null };
+      candidate[slot === "ios.production" ? "voiceProductionPushCredentialSidDigest" : "voiceAndroidSandboxPushCredentialSidDigest"] = shared;
+      return { ...candidate, commandId: `slots-race-${randomUUID()}`, requestDigest: sha256(randomUUID()),
+        providerReadbackDigest: sha256("synthetic"), topologyEvidenceDigest: sha256("synthetic"), recordedAt: new Date().toISOString() };
+    };
+    const raced = await Promise.allSettled([
+      repository.attestTopology({ ...actor, organizationId: ids.secondOrganization }, contender(ids.secondOrganization, "android.sandbox", randomUUID())),
+      repository.attestTopology({ kind: "operator", userId: other.operator, organizationId: other.organization }, contender(other.organization, "ios.production", randomUUID()))
+    ]);
+    assert.equal(raced.filter(result => result.status === "fulfilled").length, 1);
+    assert.equal(raced.filter(result => result.status === "rejected" &&
+      ["RESPONDER_TWILIO_TOPOLOGY_CONFLICT", "RESPONDER_TWILIO_TOPOLOGY_RETRY_REQUIRED"].includes(result.reason.code)).length, 1);
+    const retired = await repository.retireTopology(actor, { organizationId: ids.organization, topologyId: receipt.id,
+      reason: "operator_correction", retireEvidenceDigest: sha256("retire"), recordedAt: new Date().toISOString() });
+    assert.equal(retired.state, "retired");
+    await assert.rejects(repository.requireActiveTopology(selected), { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
+  } finally { await pool.end(); }
+});

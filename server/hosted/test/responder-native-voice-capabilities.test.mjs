@@ -17,6 +17,9 @@ const enabled = Object.freeze({
   ready: true,
   verified: true,
   voiceRoutingMode: "verified-native-client",
+  anyRoutingReady: true,
+  legacyRoutingReady: true,
+  routingSlots: { ios: { sandbox: true, production: true }, android: { sandbox: true, production: true } },
   routingReady: true,
   operationalCalls: true
 });
@@ -189,7 +192,8 @@ test("combined native route, dial plan and inbound adapter agree with public ava
     voiceAccess: {
       mode: "verified",
       async readiness() {
-        return { ready: signerReady, verified: signerReady, issuanceEnabled: signerReady };
+        return { ready: signerReady, verified: signerReady, issuanceEnabled: signerReady, hasConfiguredPushSlot: true, legacyRoutingCompatible: true,
+          pushSlots: { ios: { sandbox: true, production: true }, android: { sandbox: true, production: true } } };
       }
     },
     routes: {
@@ -228,4 +232,14 @@ test("combined native route, dial plan and inbound adapter agree with public ava
   assert.equal(unavailable.routingReady, false);
   assert.equal(unavailable.operationalCalls, false);
   assert.equal((await inboundAdapter.handle(request)).body, TWILIO_RESPONDER_HELD_VOICE_TWIML);
+});
+
+test("partial global support advertises only configured slots and keeps legacy clients held", async () => {
+  const slots = { ios: { sandbox: false, production: false }, android: { sandbox: true, production: false } };
+  const data = await fixture({ routing: { kind: "responder-native-voice-routing",
+    readiness: async () => ({ ...enabled, legacyRoutingReady: false, routingSlots: slots }) } }).read();
+  assert.deepEqual(data.responderNativeClient.routingSlots, slots);
+  assert.equal(data.responderNativeClient.routingReady, false);
+  assert.equal(data.responderNativeClient.operationalCalls, false);
+  assert.equal(data.responderNativeClient.clientArtifacts.ios, false);
 });

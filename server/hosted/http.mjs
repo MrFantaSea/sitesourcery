@@ -1,3 +1,4 @@
+import { twilioPushSlotMap } from "./responder-twilio-provider-registry.mjs";
 import { createHash } from "node:crypto";
 
 import { WRITE_METHODS } from "./constants.mjs";
@@ -1905,7 +1906,7 @@ export function createHostedApi(
           responderNativeVoiceReadiness?.routingReady === false &&
           responderNativeVoiceReadiness?.operationalCalls === false;
         const responderNativeClientsReady = false;
-        const responderNativeVoiceRoutingReady =
+        const responderNativeVoiceRoutingAvailable =
           responderNativeBackendReady &&
           responderNativeVoiceReadiness?.mode === "verified" &&
           responderNativeVoiceReadiness?.providerAuthorizationEffects === true &&
@@ -1918,6 +1919,16 @@ export function createHostedApi(
           responderNativeVoiceRoutingReadiness?.verified === true &&
           responderNativeVoiceRoutingReadiness?.voiceRoutingMode ===
             "verified-native-client" &&
+          responderNativeVoiceRoutingReadiness?.anyRoutingReady === true;
+        // This public cached map advertises global support, not any customer's authority.
+        // Token issuance and incoming route resolution recheck exact organization + slot.
+        const responderNativeRoutingSlots = twilioPushSlotMap((slot) => {
+          const [platform, environment] = slot.split(".");
+          return responderNativeVoiceRoutingAvailable &&
+            responderNativeVoiceRoutingReadiness?.routingSlots?.[platform]?.[environment] === true;
+        });
+        const responderNativeVoiceRoutingReady = responderNativeVoiceRoutingAvailable &&
+          responderNativeVoiceRoutingReadiness?.legacyRoutingReady === true &&
           responderNativeVoiceRoutingReadiness?.routingReady === true &&
           responderNativeVoiceRoutingReadiness?.operationalCalls === true;
         return Object.freeze({
@@ -2077,6 +2088,7 @@ export function createHostedApi(
                 "verified-native-client"
                 ? "verified-native-client"
                 : "held",
+            routingSlots: responderNativeRoutingSlots,
             routingReady: responderNativeVoiceRoutingReady,
             operationalCalls: responderNativeVoiceRoutingReady,
             providerAuthorizationEffects:

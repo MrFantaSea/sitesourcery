@@ -81,7 +81,8 @@ final class AppModel: ObservableObject {
     }
 
     var incomingCallsReady: Bool {
-        capabilities?.responderNativeClient.incomingCallsReady == true
+        guard let configuration else { return false }
+        return capabilities?.responderNativeClient.incomingCallsReady(in: configuration.environment) == true
     }
 
     var allExternalEffectsHeld: Bool {
@@ -532,7 +533,7 @@ final class AppModel: ObservableObject {
             throw error
         }
         self.capabilities = selectedCapabilities
-        onVoiceRoutingChanged?(selectedCapabilities.responderNativeClient.incomingCallsReady)
+        onVoiceRoutingChanged?(incomingCallsReady)
         self.dashboard = selectedDashboard
         self.forwarding = selectedForwarding
         if selectedCapabilities.responderNativeClient.backendReady &&
@@ -570,7 +571,7 @@ final class AppModel: ObservableObject {
             guard refreshGeneration == voiceAuthorizationGeneration,
                   refreshProject == selectedProject?.id else { return }
             capabilities = current
-            onVoiceRoutingChanged?(current.responderNativeClient.incomingCallsReady)
+            onVoiceRoutingChanged?(incomingCallsReady)
         } catch {
             guard refreshGeneration == voiceAuthorizationGeneration else { return }
             capabilities = nil

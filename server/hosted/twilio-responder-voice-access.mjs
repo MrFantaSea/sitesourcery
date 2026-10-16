@@ -1,3 +1,4 @@
+import { TWILIO_PUSH_SLOTS, normalizeTwilioPushSlots, twilioPushSlotMap } from "./responder-twilio-provider-registry.mjs";
 import {
   createCipheriv,
   createDecipheriv,
@@ -476,6 +477,15 @@ export function createTwilioResponderVoiceAccess({
     await providerTopologyRepository.requireActiveTopology(
       providerAuthority.topology
     );
+    const slotAware = providerAuthority.topology.schema === "sitesourcery.twilio-isv-provider-topology/v2";
+    if (slotAware) {
+      try {
+        normalizeTwilioPushSlots({
+          enabledPushSlots: providerAuthority.topology.enabledPushSlots,
+          ...Object.fromEntries(Object.values(TWILIO_PUSH_SLOTS).map((field) => [field, providerAuthority[field]]))
+        });
+      } catch { throw configurationError("Twilio Voice push slots are invalid."); }
+    }
     const provider = Object.freeze({
       accountSid: providerSid(
         { value: providerAuthority.accountSid }, "value", ACCOUNT_SID
@@ -486,43 +496,21 @@ export function createTwilioResponderVoiceAccess({
       apiKeySecret: providerSecret(
         { value: providerAuthority.voiceApiKeySecret }, "value"
       ),
-      pushCredentials: Object.freeze({
-        ios: Object.freeze({
-          sandbox: providerSid(
-            { value: providerAuthority.voiceSandboxPushCredentialSid },
-            "value", PUSH_CREDENTIAL_SID
-          ),
-          production: providerSid(
-            { value: providerAuthority.voiceProductionPushCredentialSid },
-            "value", PUSH_CREDENTIAL_SID
-          )
-        }),
-        android: Object.freeze({
-          sandbox: providerSid(
-            {
-              value:
-                providerAuthority.voiceAndroidSandboxPushCredentialSid
-            },
-            "value", PUSH_CREDENTIAL_SID
-          ),
-          production: providerSid(
-            {
-              value:
-                providerAuthority.voiceAndroidProductionPushCredentialSid
-            },
-            "value", PUSH_CREDENTIAL_SID
-          )
-        })
-      })
+      pushCredentials: Object.freeze(Object.fromEntries(["ios", "android"].map((platform) => [
+        platform, Object.freeze(Object.fromEntries(["sandbox", "production"].map((environment) => {
+          const value = providerAuthority[TWILIO_PUSH_SLOTS[`${platform}.${environment}`]];
+          return [environment, slotAware && value === null ? null : providerSid({ value }, "value", PUSH_CREDENTIAL_SID)];
+        })))
+      ])))
     });
-    invariant(
-      new Set(Object.values(provider.pushCredentials).flatMap(
-        (platform) => Object.values(platform)
-      )).size === 4,
+    const configured = Object.values(provider.pushCredentials).flatMap((platform) => Object.values(platform))
+      .filter((value) => value !== null);
+    invariant(configured.length > 0 && new Set(configured).size === configured.length,
       "TWILIO_RESPONDER_VOICE_ACCESS_CONFIGURATION_REQUIRED",
-      "Twilio Voice platform Push Credentials must be distinct.",
-      { status: 500 }
-    );
+      "Twilio Voice platform Push Credentials must be distinct.", { status: 500 });
+    invariant(provider.pushCredentials[selected.clientPlatform][selected.appEnvironment] !== null,
+      "RESPONDER_NATIVE_VOIP_HELD", "This native Voice platform/environment remains held.",
+      { status: 409, details: { providerEffects: false } });
     return { provider, topology: providerAuthority.topology };
   }
 
@@ -559,6 +547,12 @@ export function createTwilioResponderVoiceAccess({
         ]),
         signerReady,
         issuanceEnabled: mode === "verified" && signerReady,
+        pushSlots: twilioPushSlotMap((slot) => {
+          const [platform, environment] = slot.split(".");
+          return signerReady && registry?.pushSlots?.[platform]?.[environment] === true;
+        }),
+        hasConfiguredPushSlot: signerReady && registry?.hasConfiguredPushSlot === true,
+        legacyRoutingCompatible: signerReady && registry?.legacyRoutingCompatible === true,
         ttlSeconds: SESSION_TTL_SECONDS,
         writerVersion: currentVersion,
         verifierVersions,
@@ -635,7 +629,7 @@ export function createTwilioResponderVoiceAccess({
         "RESPONDER_NATIVE_VOICE_ROUTE_UNAVAILABLE", "Native Voice route is unavailable.", { status: 503 });
       return opaque.identity;
     },
-    openSession(authorityValue, metadataValue, envelopeValue) {
+    async openSession(authorityValue, metadataValue, envelopeValue) {
       const selected = sessionAuthority(authorityValue);
       const metadata = exactObject(metadataValue, [
         "issuedAt", "expiresAt", "identityDigest", "endpointDigest",
@@ -655,7 +649,15 @@ export function createTwilioResponderVoiceAccess({
       }
       instant(metadata.issuedAt, "Voice session issue time");
       instant(metadata.expiresAt, "Voice session expiry time");
-      return open(selected, metadata, envelopeValue);
+      invariant(mode === "verified", "RESPONDER_NATIVE_VOIP_HELD", "Native VoIP access remains held.", { status: 409 });
+      const { provider } = await currentProvider(selected);
+      const accessToken = open(selected, metadata, envelopeValue);
+      const opaque = opaqueAuthority(selected, keyring.get(envelopeValue.keyVersion));
+      const currentMetadata = metadataFor(selected, decodeJwt(accessToken), opaque,
+        provider.pushCredentials[selected.clientPlatform][selected.appEnvironment], provider);
+      invariant(Object.entries(currentMetadata).every(([key, value]) => metadata[key] === value),
+        "TWILIO_RESPONDER_VOICE_ACCESS_UNAVAILABLE", "Native Voice authority changed.", { status: 503 });
+      return accessToken;
     }
   });
 }

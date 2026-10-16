@@ -26,7 +26,8 @@ test("native Dial requires fresh readiness, exact bounded opaque identities, and
   let ready = true, lookups = 0;
   let identities = Array.from({ length: 10 }, (_, i) => `ssr_${i.toString(16).repeat(48)}`);
   const routing = createResponderNativeVoiceRouting({ mode: "verified",
-    voiceAccess: { mode: "verified", async readiness() { return { ready, verified: ready, issuanceEnabled: ready }; } },
+    voiceAccess: { mode: "verified", async readiness() { return { ready, verified: ready, issuanceEnabled: ready, hasConfiguredPushSlot: true, legacyRoutingCompatible: true,
+      pushSlots: { ios: { sandbox: true, production: true }, android: { sandbox: true, production: true } } }; } },
     routes: { kind: "responder-native-voice-routes-postgres", providerEffects: false,
       async readiness() { return { ready: true, verified: true }; },
       async resolveIdentities() { lookups++; return identities; } } });
@@ -63,4 +64,26 @@ test("unavailable native devices do not reject durable inbound handling", async 
   assert.equal(persisted, true);
   assert.equal(result.status, 200);
   assert.equal(result.body, TWILIO_RESPONDER_HELD_VOICE_TWIML);
+});
+
+test("partial support resolves incoming identities through the existing native dial plan", async () => {
+  let lookups = 0;
+  const slots = { ios: { sandbox: false, production: false }, android: { sandbox: true, production: false } };
+  const routing = createResponderNativeVoiceRouting({ mode: "verified",
+    voiceAccess: { mode: "verified", async readiness() { return {
+      ready: true, verified: true, issuanceEnabled: true, hasConfiguredPushSlot: true,
+      legacyRoutingCompatible: false, pushSlots: slots
+    }; } },
+    routes: { kind: "responder-native-voice-routes-postgres", providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      async resolveIdentities() { lookups++; return [`ssr_${"a".repeat(48)}`]; } }
+  });
+  const status = await routing.readiness();
+  assert.equal(status.legacyRoutingReady, false);
+  assert.equal(status.anyRoutingReady, true);
+  assert.deepEqual(status.routingSlots, slots);
+  const plan = createTwilioResponderNativeVoiceDialPlan({ routing, dialResultUrl });
+  assert.equal((await plan.readiness()).ready, true);
+  assert.match(await plan.twiml(receipt), /<Client>ssr_a{48}<\/Client>/u);
+  assert.equal(lookups, 1);
 });

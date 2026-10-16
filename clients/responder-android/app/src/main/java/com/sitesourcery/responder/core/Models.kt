@@ -104,14 +104,42 @@ data class ResponderNativeCapability(
     val voiceRoutingMode: String = "held",
     val routingReady: Boolean = false,
     val operationalCalls: Boolean = false,
+    val routingSlots: NativeVoiceRoutingSlots? = null,
 ) {
     // Distribution readiness is separate from the incoming routing contract.
-    val incomingCallsAvailable: Boolean
+    private val routingAuthorityReady: Boolean
         get() = mounted && backendReady && voipSessionState == "verified" &&
             providerAuthorizationEffects && voiceRoutingMode == "verified-native-client" &&
-            routingReady && operationalCalls &&
             "android" in acceptedRegistrationPlatforms && "twilio_voice_android" in voipTransports
+
+    // Legacy servers have only the all-platform gate. A present slot map never falls back.
+    val incomingCallsAvailable: Boolean
+        get() = routingAuthorityReady && routingReady && operationalCalls
+
+    fun incomingCallsAvailable(environment: NativeAppEnvironment): Boolean =
+        routingAuthorityReady && if (routingSlots == null) {
+            routingReady && operationalCalls
+        } else {
+            routingSlots.android?.available(environment) == true
+        }
 }
+
+@Serializable
+data class NativeVoiceRoutingEnvironments(
+    val sandbox: Boolean = false,
+    val production: Boolean = false,
+) {
+    fun available(environment: NativeAppEnvironment): Boolean = when (environment) {
+        NativeAppEnvironment.sandbox -> sandbox
+        NativeAppEnvironment.production -> production
+    }
+}
+
+@Serializable
+data class NativeVoiceRoutingSlots(
+    val ios: NativeVoiceRoutingEnvironments? = null,
+    val android: NativeVoiceRoutingEnvironments? = null,
+)
 
 @Serializable
 data class NativeClientArtifacts(val ios: Boolean, val android: Boolean)

@@ -193,7 +193,9 @@ class ResponderContainer(application: Application) {
     private suspend fun refreshNativeRouting(): ResponderCapabilities = routingLane.withLock {
         try {
             routingApi.capabilities().also { capabilities ->
-                nativeRoutingReady = capabilities.responderNativeClient.incomingCallsAvailable
+                nativeRoutingReady = capabilities.responderNativeClient.incomingCallsAvailable(
+                    if (BuildConfig.DEBUG) NativeAppEnvironment.sandbox else NativeAppEnvironment.production,
+                )
                 appState.acceptCapabilities(capabilities)
                 if (!nativeRoutingReady) {
                     voiceRegistration.closeIncomingGate()

@@ -1,3 +1,4 @@
+import { twilioPushSlotMap } from "./responder-twilio-provider-registry.mjs";
 import { invariant } from "./errors.mjs";
 
 export function nativeVoiceRoutingModeFromEnvironment(environment = process.env) {
@@ -23,19 +24,28 @@ export function createResponderNativeVoiceRouting({ mode = "held", routes, voice
     kind: "responder-native-voice-routing", mode, providerEffects: false,
     async readiness() {
       let ready = false;
+      let signer = null;
       if (mode === "verified") {
         try {
-          const [storage, signer] = await Promise.all([routes.readiness(), voiceAccess.readiness()]);
+          const [storage, selectedSigner] = await Promise.all([routes.readiness(), voiceAccess.readiness()]);
+          signer = selectedSigner;
           ready = storage.ready === true && storage.verified === true && signer.ready === true &&
             signer.verified === true && signer.issuanceEnabled === true;
         } catch { /* readiness fails closed */ }
       }
-      return { ready, verified: ready, routingReady: ready, operationalCalls: ready,
+      const anyRoutingReady = ready && signer?.hasConfiguredPushSlot === true;
+      const legacyReady = anyRoutingReady && signer?.legacyRoutingCompatible === true;
+      const routingSlots = twilioPushSlotMap((slot) => {
+        const [platform, environment] = slot.split(".");
+        return anyRoutingReady && signer?.pushSlots?.[platform]?.[environment] === true;
+      });
+      return { ready, verified: ready, anyRoutingReady, routingSlots,
+        routingReady: anyRoutingReady, operationalCalls: anyRoutingReady, legacyRoutingReady: legacyReady,
         voiceRoutingMode: mode === "verified" ? "verified-native-client" : "held",
         providerEffects: false };
     },
     async resolveIdentities(input) {
-      if (mode !== "verified" || !(await this.readiness()).routingReady) return [];
+      if (mode !== "verified" || !(await this.readiness()).anyRoutingReady) return [];
       return routes.resolveIdentities(input);
     }
   });

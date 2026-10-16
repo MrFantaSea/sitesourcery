@@ -1,5 +1,6 @@
 package com.sitesourcery.responder.network
 
+import com.sitesourcery.responder.core.NativeAppEnvironment
 import com.sitesourcery.responder.MemorySecureValueStore
 import com.sitesourcery.responder.security.DeviceAuthorityStore
 import kotlinx.coroutines.test.runTest
@@ -13,6 +14,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResponderApiTest {
+    @Test
+    fun exactBuildEnvironmentUsesSlotSupportWithoutOpeningOtherPlatformsOrLegacyClients() = runTest {
+        suspend fun selected(slots: String) = ResponderApi(API_ORIGIN, DeviceAuthorityStore(MemorySecureValueStore()),
+            ScriptedTransport(json(200, capabilities(
+                "\"voiceRoutingMode\":\"verified-native-client\",\"routingReady\":false,\"operationalCalls\":false,\"routingSlots\":$slots,"
+            )))).capabilities().responderNativeClient
+        val android = selected("{\"android\":{\"sandbox\":true,\"production\":false},\"ios\":{\"sandbox\":false,\"production\":false}}")
+        assertTrue(android.incomingCallsAvailable(NativeAppEnvironment.sandbox))
+        assertFalse(android.incomingCallsAvailable(NativeAppEnvironment.production))
+        assertFalse(android.incomingCallsAvailable)
+        assertFalse(android.copy(backendReady = false).incomingCallsAvailable(NativeAppEnvironment.sandbox))
+        assertFalse(android.copy(providerAuthorizationEffects = false).incomingCallsAvailable(NativeAppEnvironment.sandbox))
+        assertFalse(android.copy(voiceRoutingMode = "held").incomingCallsAvailable(NativeAppEnvironment.sandbox))
+        for (slots in listOf("{}", "{\"ios\":{\"sandbox\":true}}", "{\"android\":{\"production\":true}}", "{\"android\":{\"future\":true}}")) {
+            // Even a contradictory true legacy field cannot override an explicit unavailable slot.
+            val capability = selected(slots).copy(routingReady = true, operationalCalls = true)
+            assertFalse(capability.incomingCallsAvailable(NativeAppEnvironment.sandbox))
+        }
+    }
+
     @Test
     fun nativeRoutingAvailabilityDecodesSeparatelyFromDistributionAndTokenEffects() = runTest {
         val transport = ScriptedTransport(json(200, capabilities(
