@@ -744,3 +744,10 @@ Implementation `577d6aeaea42855127b584c9443f1a7ffc7d06a6` preserves the exact te
 
 - [Provenance](../ci-provenance/577d6aeaea42855127b584c9443f1a7ffc7d06a6/provenance.md)
 - [Machine proof](../ci-provenance/577d6aeaea42855127b584c9443f1a7ffc7d06a6/proof.json)
+
+## Care PostgreSQL TCP loopback correction — 2026-10-16
+
+Implementation `2da36648bb18082844cd1996063b16f281a9b26c` / tree `508b3475e0008897e381bd6783e5648f9c6a6478`, protected base `c43c2b43ab3358fae9bb98a5fb38d11e755a53ac`. Original held CI38893161198 failed before fixtures on inet `/32` formatting; only the test SQL projection now uses `host(...)`, preserving strict address/database guards. Actual loopbackTCP Care acceptance with107 migrations and complete npm/build/browser qualification passed; owned DB/scratch/processes removed. Application/migration bytes unchanged. Original failure retained; no native/provider effects.
+
+- [Provenance](../ci-provenance/2da36648bb18082844cd1996063b16f281a9b26c/provenance.md)
+- [Machine proof](../ci-provenance/2da36648bb18082844cd1996063b16f281a9b26c/proof.json)
