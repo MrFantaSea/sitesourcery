@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "58ca68e5641910d2c55ec1a8ff0ce14345247ad7",
+    "treeSha": "57f54d18c74e03e6289a67dca734d2015ab66710",
+    "baseCommitSha": "829c64766c0eeddba8c3dc149b986e6007b69d75"
+  },
+  "provenanceSha256": "9fa4dd5cf946b926aa2afa5b2733e7953f0283221cb9704b2d240d88f43afa63",
+  "ledger": {
+    "previousByteCount": 56015,
+    "previousSha256": "9b4ef67852423552990a54c31fa494d175b01c59b1718a0d2c69b65ce1ce8d5d",
+    "appendSha256": "20fb4a5afcb9f8b6a2d6c1b28bee5681872940aea751d414eed8a2d8538b79e6"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/responder-native-voice-routing.integration.test.mjs",
+      "exitCode": 0,
+      "logSha256": "a0757350923da816f1b1c87a3acd8cb219b947ea53af2e25023974ea28d3317b"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "0f793e5c7474f2831c009832ef34edc3d9b3ff220313d897cf8f279364575d91"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root accepted the sole fixture prior-key correction, exact CI-baseline reproduction and corrected full9-case PG proof; assertions and runtime/native bytes unchanged. Original failures retained, new exact full npm passed; no production or provider effects."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "5473ad95f496f7ac1535fd7c6f3ad43d435154a20d3fbeaa522d2c5dd7b2e4ca"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned PG cluster/databases and full-qualification scratch/processes removed with actual receipts. Original logs/builds and lock-identical shared dependency symlink retained. No production/native/provider disposable created."
+  }
+}
