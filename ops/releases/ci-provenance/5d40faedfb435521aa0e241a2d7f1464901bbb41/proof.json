@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "5d40faedfb435521aa0e241a2d7f1464901bbb41",
+    "treeSha": "45474a54203946e243cf14f65c3f6aa246671542",
+    "baseCommitSha": "d203e53769de20445956ae50ffaeb9b9ef1d8cb8"
+  },
+  "provenanceSha256": "5fdd22ee230fa64a1c8ce446d3a3fb9f0f0a43b0cf1ec0b559799ad4bd9a2586",
+  "ledger": {
+    "previousByteCount": 52085,
+    "previousSha256": "ab766dd3f0c4cb3d2742e7186c7c56aa9de22554c235a3dda4e85502699a20b2",
+    "appendSha256": "d429a1e25a51a5e9f5eb8c5c803e5dc9e0dc4d61236047dcefa86f87b0b1986f"
+  },
+  "proofs": {
+    "focused": {
+      "command": "npm run check:selfhost (executed within the full npm test command)",
+      "exitCode": 0,
+      "logSha256": "02c5515f9f00055f759a34fe564f9561ffb1a627958cc562887795369f4be40c"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "9f0639ea5df64ece49060a7dd78e937ac1138478986d929fb2e6e6d7a23a9173"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed exact sentinel/README diff and preserved native approval, exact-host, private-control, atomic content and integrity guards."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only two tracked publication sentinels and selfhost documentation change; no database code, migrations, queries or dependencies changed."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Both exact owned qualification scratch directories removed after process absence check. Original failure/success logs, toolchains and builds retained; no database clone created."
+  }
+}

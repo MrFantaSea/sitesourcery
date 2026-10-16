@@ -733,3 +733,7 @@ Implementation `f52595331746f5ab9d5edfc587f3f48560392491`, tree `76df73dee12d59f
 ## October 15 — Assessment visibility and operating corrections
 
 Implementation `a47b921d78b0b11f61eb6df368d47c0bdc661696` / tree `f94b3aede39b1e1d043565dde386f06163429bc2`, base `1a3a5926aa36f4f33065285a3ac733500889cbe6`. Actual request policy mismatch fixed with historical terms preserved; physical Pixel inset defect repaired; existing CI regression/cleanup and monitor example aligned. Full npm and focused PostgreSQL/browser/device evidence passed; no live source deployment in this milestone. See [provenance](../ci-provenance/a47b921d78b0b11f61eb6df368d47c0bdc661696/provenance.md) and [proof](../ci-provenance/a47b921d78b0b11f61eb6df368d47c0bdc661696/proof.json).
+
+## October 16 — Publication source preparation
+
+Implementation `5d40faedfb435521aa0e241a2d7f1464901bbb41` / tree `45474a54203946e243cf14f65c3f6aa246671542`, base `d203e53769de20445956ae50ffaeb9b9ef1d8cb8`. Two tracked publication sentinels removed through source release; native approval/hold, isolation and integrity guards unchanged. Full npm/build/browser and selfhost29 passed. DNS/native activation and commercial acceptance remain separate. See [provenance](../ci-provenance/5d40faedfb435521aa0e241a2d7f1464901bbb41/provenance.md) and [proof](../ci-provenance/5d40faedfb435521aa0e241a2d7f1464901bbb41/proof.json).
