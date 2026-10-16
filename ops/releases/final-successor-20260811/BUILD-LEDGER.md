@@ -765,3 +765,10 @@ Implementation `83a4544833a5b244ec48076e6bef08d5d8c61c6e` / tree `ff42a5b53ef68e
 
 - [Provenance](../ci-provenance/83a4544833a5b244ec48076e6bef08d5d8c61c6e/provenance.md)
 - [Machine proof](../ci-provenance/83a4544833a5b244ec48076e6bef08d5d8c61c6e/proof.json)
+
+## Retained CI native-token fixture key correction — 2026-10-16
+
+Implementation `58ca68e5641910d2c55ec1a8ff0ce14345247ad7` / tree `57f54d18c74e03e6289a67dca734d2015ab66710`, protected base `829c64766c0eeddba8c3dc149b986e6007b69d75`. One integration fixture now includes the known synthetic prior key retained by the CI journey, preserving runtime bytes and every assertion. Original heldCI and reproduced8/1 failure retained; corrected full PostgreSQL file9/9 passed, owned cluster removed. The original local npm path-induced FIN-016 failure is retained; one corrected exact npm/build/browser qualification passed after changing only its temporary directory name, with original logs and owned cleanup. Earlier unchanged Android/Swift proofs are reused honestly. Normal protected and held qualification remain required; no native/provider effect.
+
+- [Provenance](../ci-provenance/58ca68e5641910d2c55ec1a8ff0ce14345247ad7/provenance.md)
+- [Machine proof](../ci-provenance/58ca68e5641910d2c55ec1a8ff0ce14345247ad7/proof.json)
