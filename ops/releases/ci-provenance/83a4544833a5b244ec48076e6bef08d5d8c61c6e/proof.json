@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "83a4544833a5b244ec48076e6bef08d5d8c61c6e",
+    "treeSha": "ff42a5b53ef68e85610e182b38939d28c5142069",
+    "baseCommitSha": "7c510fc6eca2c9feae3becf5177b16994f42acbf"
+  },
+  "provenanceSha256": "cedb90b4173849e8026f2057430469f389da4624ec3d43c1efeeacf1d5dd46ab",
+  "ledger": {
+    "previousByteCount": 55005,
+    "previousSha256": "66b6afddc580d444f91adf515ac8968cd043e285af3e125b70c5430bdc3c48d7",
+    "appendSha256": "65d0bb9911e9aadc61bec87be5749fe6dfaeedca2a384086d4d2e667044ad1f8"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/responder-twilio-provider-registry.test.mjs server/hosted/test/responder-twilio-provider-topology-http.test.mjs server/hosted/test/twilio-responder-voice-access.test.mjs server/hosted/test/responder-native-voice-routing.test.mjs server/hosted/test/responder-native-voice-capabilities.test.mjs server/hosted/test/responder-twilio-push-slots-migration.test.mjs",
+      "exitCode": 0,
+      "logSha256": "b80c5a5aadd69e779991e6b2abfaad14257a7bc3ab7fcf49f5f9ec1bac4c319c"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "7f43b48a6e53195ceb1c3c36b2cd2555fa833dfe0ee7c68f699f78f720b762ca"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root accepted the exact frozen27-file implementation, preserved legacy v1 behavior, explicit tenant/platform/environment gates, cached replay authority, migration108 constraints and corrected HTTP composition. Genuine focused/native/isolated PostgreSQL receipts are retained with original failures; no provider or production effects."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "d83dfd02b74d6607ad5142f53ec2363db4004d6d3a8efed6e94fb6a0bd2aa26f"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned PostgreSQL database/cluster and full-qualification scratch/processes removed with actual receipts. Original logs/build outputs retained; existing locked shared dependency symlink retained read-only. No production/native/provider disposable created."
+  }
+}
