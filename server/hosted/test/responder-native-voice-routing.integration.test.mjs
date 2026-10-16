@@ -305,8 +305,10 @@ test("Android-only topology routes through native Dial and cached sessions canno
       topologyEvidenceDigest: digest("synthetic-slot-evidence"), recordedAt: new Date().toISOString()
     });
     const topology = await attest();
-    const tokenAuthority = createResponderNativeTokenAuthority({ pepper: Buffer.alloc(32, 27), pepperVersion: "slot-v1", previousPeppers: { "native-route-v1": Buffer.alloc(32, 29) } });
-    const voiceAccess = createTwilioResponderVoiceAccess({ pepper: Buffer.alloc(32, 27), pepperVersion: "slot-v1", previousPeppers: { "native-route-v1": Buffer.alloc(32, 29) },
+    // Readiness also covers retained keys from the CI migration journey and the preceding routing fixture.
+    const previousPeppers = { "native-pg-v1": Buffer.alloc(32, 19), "native-route-v1": Buffer.alloc(32, 29) };
+    const tokenAuthority = createResponderNativeTokenAuthority({ pepper: Buffer.alloc(32, 27), pepperVersion: "slot-v1", previousPeppers });
+    const voiceAccess = createTwilioResponderVoiceAccess({ pepper: Buffer.alloc(32, 27), pepperVersion: "slot-v1", previousPeppers,
       environment: { SITESOURCERY_TWILIO_VOICE_ACCESS_MODE: "verified" }, providerRegistry, providerTopologyRepository: topologyRepository });
     const native = createPostgresResponderNativeClientRepository({ authority, verifierKeyVersions: tokenAuthority.verifierVersions, voiceAccess });
     const created = await native.createInstallation(customer, { commandId: `slot-create-${randomUUID()}`, installationId: randomUUID(),
