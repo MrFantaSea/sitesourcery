@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "21e51a9918d94b795d1efad786e009cd80b12530",
+    "treeSha": "05b9bcd24b2ae8457126c3a16f56677dcc2751e8",
+    "baseCommitSha": "372b2ed0d1a1e5824e2372b3421fffc2b8255eff"
+  },
+  "provenanceSha256": "f276280876408a6891cb963ca0711f9619f8afec2236be35c113f990c5585c74",
+  "ledger": {
+    "previousByteCount": 54145,
+    "previousSha256": "a6587069a54a81da82e414dd3f55c9b3d48dc37dd0ac5a57c4e5d3f8a0278bdb",
+    "appendSha256": "6dc04a6fcac720c49d316c8464c90fea62273ec9fbe7296cdcdaba6aade14802"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/monitor-public-tls.test.mjs ops/test/monitor-storage.test.mjs ops/test/backup-restore-monitor.test.mjs ops/test/independent-monitor.test.mjs",
+      "exitCode": 0,
+      "logSha256": "7389f5d66c05e3d50074150ecb0f7a825644e5531bca3ce5f7cd104847a85d1b"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "d61de33c26f7e672f0bb350eb9d6985c990b3e5e57ff78c229c902e73cced816"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed the exact three-file monitor delta, unchanged shared authenticated TLS primitive,59 focused checks and actual public TLS proof. File-mode and held behavior remain intact; Care/application/migration/dependency bytes unchanged."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only monitor certificate adapter/configuration and its focused tests changed; no database queries, application or migration changes. Existing Care PostgreSQL proof remains preserved."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned full-qualification scratch removed and no owned process remains. Original logs/build outputs retained. Separately owned historical Care startup clone89910 remains retained; this monitor cohort neither created nor removed it."
+  }
+}
