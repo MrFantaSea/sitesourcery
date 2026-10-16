@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "2da36648bb18082844cd1996063b16f281a9b26c",
+    "treeSha": "508b3475e0008897e381bd6783e5648f9c6a6478",
+    "baseCommitSha": "c43c2b43ab3358fae9bb98a5fb38d11e755a53ac"
+  },
+  "provenanceSha256": "4c2f67bdf61243b0bc2dd5b6ead4fdc53225f7823175194ca2fdd5c6404d962c",
+  "ledger": {
+    "previousByteCount": 53332,
+    "previousSha256": "59fa956688a19d6c5ad87d684028f780faee3eac3f29982addbda664f6dd6180",
+    "appendSha256": "76b60a96980818f28eb985555a2c5922b74860d3f46008edd2b6e39665134e6d"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/care-payment-postgres.test.mjs (PostgreSQL16 over TCP127.0.0.1, isolated whole107, fake provider)",
+      "exitCode": 0,
+      "logSha256": "4265410035d9752b508ba099664fb4e634659448fd37d134313bb7da5693ec97"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "da9896d218b69f193a14e00d662c4263c1af8bc4c6f9f1884e8b06d66dc9610b"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed the exact original inet-to-text failure and one-expression host() correction; loopback and disposable-name guards unchanged. Actual TCP Care acceptance passed; application, migration and provider bytes unchanged."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "599220f9940e82f5bfab69aa26c25a1db189bab7898557d059161c6808c00cf7"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Exact ss_care_catalog_20261016 dropped and absence confirmed; owned full-qualification scratch and processes removed. Original logs/failure/build artifacts retained; no production/provider fixtures."
+  }
+}

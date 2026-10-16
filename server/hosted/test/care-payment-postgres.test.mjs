@@ -15,7 +15,7 @@ test('canonical Care: immutable agreement, scoped checkout, verified periods, re
  const parsed=new URL(url);assert.ok(['localhost','127.0.0.1',''].includes(parsed.hostname));assert.ok([null,'/tmp','localhost','127.0.0.1'].includes(parsed.searchParams.get('host')));assert.match(parsed.pathname,/^\/ss_care_catalog_(?:20261016|ci_[0-9]+_[0-9]+)$/u);
  const pool=new pg.Pool({connectionString:url,max:2});const suffix=randomUUID().replaceAll('-',''),subscriptionId=`sub_${suffix}`,providerCustomerId=`cus_${suffix}`;
  try{
-  const identity=(await pool.query('select current_database() as name,inet_server_addr()::text as address')).rows[0];assert.equal(identity.name,parsed.pathname.slice(1));assert.ok([null,'127.0.0.1','::1'].includes(identity.address));
+  const identity=(await pool.query('select current_database() as name,host(inet_server_addr()) as address')).rows[0];assert.equal(identity.name,parsed.pathname.slice(1));assert.ok([null,'127.0.0.1','::1'].includes(identity.address));
   const db=await pool.connect();const customer={userId:randomUUID(),organizationId:randomUUID()},operator={userId:randomUUID()},stranger={userId:randomUUID(),organizationId:customer.organizationId};const projectId=randomUUID(),unhandedProjectId=randomUUID(),handoffId=randomUUID(),policyId=randomUUID();
   const seedAt='2026-10-01T00:00:00.000Z';
   // Earlier failed attempts in this disposable database are isolated from this
