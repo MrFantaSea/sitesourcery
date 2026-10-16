@@ -322,3 +322,38 @@ export function createCareCommerceHttpBoundary({
     }
   });
 }
+
+// Current paid catalog is additive. Historical held commerce keeps its old routes.
+const CATALOG_OWNER = '/api/v1/operator/care/organizations/:organizationId';
+export const CARE_CATALOG_HTTP_ROUTES = deepFreeze([
+ {method:'GET',pattern:'/api/v1/care/catalog',audience:'customer',operation:'catalog'},
+ {method:'GET',pattern:'/api/v1/care/agreements',audience:'customer',operation:'readCustomer'},
+ {method:'GET',pattern:`${CATALOG_OWNER}/catalog`,audience:'operator',operation:'readOwner'},
+ {method:'POST',pattern:`${CATALOG_OWNER}/offers`,audience:'operator',operation:'createOffer',fields:['projectId','planId','writtenPlan','expiresAt']},
+ {method:'POST',pattern:`${CATALOG_OWNER}/offers/:offerId/void`,audience:'operator',operation:'voidOffer',fields:['reason']},
+ {method:'POST',pattern:'/api/v1/care/offers/:offerId/acceptance',audience:'customer',operation:'acceptOffer',fields:['expectedOfferDigest','acceptanceStatement','legalAcceptance']},
+ ...['checkout','reconciliation','cancellation'].map((suffix,i)=>({method:'POST',pattern:`/api/v1/care/agreements/:agreementId/${suffix}`,audience:'customer',operation:['startCheckout','reconcileCustomer','cancel'][i],fields:[]})),
+ {method:'POST',pattern:`${CATALOG_OWNER}/agreements/:agreementId/reconciliation`,audience:'operator',operation:'reconcileOwner',fields:[]},
+ {method:'POST',pattern:'/api/v1/care/agreements/:agreementId/requests',audience:'customer',operation:'requestWork',fields:['summary']},
+ {method:'POST',pattern:`${CATALOG_OWNER}/agreements/:agreementId/requests/:requestId/work`,audience:'operator',operation:'recordWork',fields:['expectedRevision','state','minutes','note']}
+]);
+const CATALOG_MATCHERS=CARE_CATALOG_HTTP_ROUTES.map(route=>{const names=[];const source=route.pattern.replace(/:([A-Za-z][A-Za-z0-9]*)/gu,(_,name)=>{names.push(name);return `(${UUID_SOURCE})`;});return {route,names,expression:new RegExp(`^${source}$`,'u')};});
+export function matchCareCatalogHttpRoute(method,pathname){for(const {route,names,expression}of CATALOG_MATCHERS){const m=route.method===method&&expression.exec(pathname);if(m)return {...route,params:Object.fromEntries(names.map((n,i)=>[n,m[i+1]]))};}return null;}
+export function createCareCatalogHttpBoundary({service,authenticate,requireWriteGuard}={}){
+ invariant(service?.kind==='care-catalog'&&typeof authenticate==='function'&&typeof requireWriteGuard==='function'&&CARE_CATALOG_HTTP_ROUTES.every(r=>typeof service[r.operation]==='function'),'CARE_CONFIGURATION_REQUIRED','The current Care catalog boundary is unavailable.',{status:500});
+ return Object.freeze({match:matchCareCatalogHttpRoute,manifest:CARE_CATALOG_HTTP_ROUTES,async dispatch(request){
+  const url=new URL(request.url);if(url.search||url.hash)return null;const r=matchCareCatalogHttpRoute(request.method,url.pathname);if(!r)return null;
+  const actor=await authenticate(request,r);invariant(actor,'AUTHENTICATION_REQUIRED','Sign in to continue.',{status:401});
+  const p=r.params;if(r.method==='GET')return json(await (r.operation==='catalog'?service.catalog():r.operation==='readOwner'?service.readOwner(actor,p.organizationId):service.readCustomer(actor)));
+  invariant(await requireWriteGuard(request,actor)===true,'CARE_WRITE_GUARD_REQUIRED','Care write safety could not be verified.',{status:403});
+  const key=request.headers.get('idempotency-key');invariant(typeof key==='string'&&/^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$/u.test(key),'IDEMPOTENCY_KEY_REQUIRED','A stable Care command identity is required.',{status:400});
+  const input=await body(request,r.fields);let result;
+  if(r.operation==='createOffer')result=await service.createOffer(actor,p.organizationId,input,key);
+  else if(r.operation==='voidOffer')result=await service.voidOffer(actor,p.organizationId,p.offerId,input,key);
+  else if(r.operation==='acceptOffer')result=await service.acceptOffer(actor,p.offerId,input,key);
+  else if(r.operation==='recordWork')result=await service.recordWork(actor,p.organizationId,p.agreementId,p.requestId,input,key);
+  else if(r.operation==='reconcileOwner')result=await service.reconcileOwner(actor,p.organizationId,p.agreementId,input,key);
+  else result=await service[r.operation](actor,p.agreementId,input,key);
+  return json(result);
+ }});
+}

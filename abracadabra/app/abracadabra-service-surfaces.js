@@ -92,16 +92,16 @@
     root.setAttribute("aria-labelledby", "hosted-service-surfaces-title");
     var shell = element(documentRef, "div", "site-shell");
     var header = element(documentRef, "header", "service-surfaces-heading");
-    var kicker = element(documentRef, "p", "spark-kicker", "Held services");
+    var kicker = element(documentRef, "p", "spark-kicker", "Your services");
     var title = element(
-      documentRef, "h2", "", "Care and Responder evidence"
+      documentRef, "h2", "", "Care and Responder"
     );
     title.id = "hosted-service-surfaces-title";
     var copy = element(
       documentRef,
       "p",
       "",
-      "Review durable Care and Responder state for the selected organization. Provider delivery, billing, and commercial release remain off."
+      "Review written Care plans and paid work for the selected organization. Historical held Care and Responder evidence remains separate."
     );
     header.append(kicker, title, copy);
     var status = element(
@@ -121,10 +121,12 @@
     var command = element(documentRef, "div", "service-surfaces-command");
     command.dataset.responderCommand = "true";
     command.hidden = true;
-    shell.append(header, status, panels, command);
+    var catalog = element(documentRef, "div", "service-catalog-panel");
+    catalog.dataset.customerCareCatalog = "true";
+    shell.append(header, catalog, status, panels, command);
     root.append(shell);
     controlRoom.after(root);
-    return { root: root, status: status, care: care, responder: responder,
+    return { root: root, catalog: catalog, status: status, care: care, responder: responder,
       command: command };
   }
 
@@ -291,6 +293,7 @@
       windowRef.SiteSourceryAbracadabraHostedSession;
     var api = windowRef && windowRef.SiteSourceryAbracadabraAPI;
     var careModule = windowRef && windowRef.SiteSourceryCareSurfaces;
+    var catalogModule = windowRef && windowRef.SiteSourceryCareCatalog;
     var responderModule = windowRef && windowRef.SiteSourceryResponderSurfaces;
     var controlRoom = documentRef && documentRef.getElementById("control-room");
     if (!documentRef || !session || typeof session.subscribe !== "function" ||
@@ -302,6 +305,7 @@
     var currentState = session.getState();
     var selectedOrganization = "";
     var sequence = 0;
+    var catalogWorkspace = null;
 
     function status(copy, error) {
       shell.status.textContent = copy;
@@ -404,6 +408,8 @@
       if (!state || !state.account || !UUID.test(organizationId)) {
         sequence += 1;
         selectedOrganization = "";
+        if (catalogWorkspace) catalogWorkspace.destroy();
+        catalogWorkspace = null;
         shell.root.hidden = true;
         closeCommand();
         return;
@@ -411,6 +417,11 @@
       shell.root.hidden = false;
       if (organizationId !== selectedOrganization) {
         selectedOrganization = organizationId;
+        if (catalogWorkspace) catalogWorkspace.destroy();
+        if (catalogModule) {
+          catalogWorkspace = catalogModule.createWorkspace({ audience: "customer", container: shell.catalog, documentRef: documentRef, client: client, api: api, organizationId: organizationId });
+          catalogWorkspace.load();
+        }
         closeCommand();
         load(organizationId, false);
       }

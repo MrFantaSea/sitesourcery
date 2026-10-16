@@ -23,6 +23,10 @@ import {
 } from "../server/hosted/test/reviewed-browser-support.mjs";
 import { getBrowserSafeAlakazamCatalog } from
   "../server/commerce-v2/alakazam.mjs";
+import { getCareCatalogPlans } from
+  "../server/hosted/care-commerce-catalog.mjs";
+import { CARE_ACCEPTANCE_STATEMENT } from
+  "../server/hosted/care-payments.mjs";
 
 const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -201,6 +205,26 @@ const PROJECT_LEGAL_AUTHORITY = Object.freeze({
   authorityDigest:
     "ae52bb144a3cb9bd09709cd58ce43878ec2a03d650a19ff197532ea51cd4d1cf",
   documents: PROJECT_LEGAL_DOCUMENTS,
+});
+
+// Distinct local V7 fixture for the new, empty Care account surface. The
+// retained V3 fixture above still proves its original project workflow.
+const CARE_BROWSER_CATALOG = Object.freeze({
+  schema: "sitesourcery.care-catalog/v1",
+  plans: getCareCatalogPlans(),
+  acceptanceStatement: CARE_ACCEPTANCE_STATEMENT,
+  legalAuthority: {
+    schema: "sitesourcery.project-legal-authority/v7",
+    acceptanceStatement: "accepted_exact_project_terms_and_acknowledged_privacy",
+    authorityDigest: "a".repeat(64),
+    documents: ["privacy", "product", "website"].map((kind) => ({
+      kind,
+      version: `SS-CARE-BROWSER-${kind.toUpperCase()}-TEST-V7`,
+      contentDigest: "b".repeat(64),
+      contentUri: `https://example.test/care-browser/${kind}/v7`,
+      effectiveAt: "2026-10-01T00:00:00.000Z",
+    })),
+  },
 });
 
 function paidProject() {
@@ -1454,6 +1478,10 @@ async function startServer() {
         } : { user: null });
         return;
       }
+      if (request.method === "GET" && url.pathname === "/api/v1/care/catalog") {
+        json(response, 200, CARE_BROWSER_CATALOG);
+        return;
+      }
       if (
         request.method === "GET"
         && url.pathname === "/api/v1/capabilities"
@@ -1477,6 +1505,30 @@ async function startServer() {
         return;
       }
       if (paidFixture && request.method === "GET") {
+        if (url.pathname === "/api/v1/care/agreements") {
+          json(response, 200, {
+            schema: "sitesourcery.care-agreements/v1",
+            organizationId: PAID_ORGANIZATION_ID,
+            observedAt: "2026-10-16T00:00:00.000Z",
+            eligibleProjects: [],
+            offers: [],
+            agreements: [],
+            catalog: CARE_BROWSER_CATALOG,
+            readiness: {
+              schema: "sitesourcery.care-catalog-readiness/v1",
+              ready: true,
+              verified: true,
+              commercialReady: false,
+              mode: "held",
+              newCheckoutApproved: false,
+              reconciliationReady: false,
+              paidPeriodsRequireProviderReadback: true,
+              automaticOverage: false,
+              mailDeliveryEffects: false,
+            },
+          });
+          return;
+        }
         if (url.pathname === "/api/v1/organizations") {
           json(response, 200, {
             organizations: [{

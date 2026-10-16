@@ -335,3 +335,31 @@ export function createCareLifecycleExecutor({ careRepository } = {}) {
     }
   });
 }
+
+// Same leased worker and process, with independent durable paid-subscription
+// claims. The old clock-only held-period executor never sees a paid agreement.
+export function createCareCatalogLifecycleBridge({repository,executor,payments,paymentRepository}={}) {
+  invariant(repository?.claimNext&&executor?.execute&&payments?.reconcileSystem&&paymentRepository?.claimReconciliation,
+    'CARE_LIFECYCLE_WORKER_CONFIGURATION_REQUIRED','Care catch-up ports are required.',{status:500});
+  const catalogClaims=new Map();let catalogFirst=true;
+  async function readiness(){const [old,current]=await Promise.all([repository.readiness(),payments.readiness()]);const ready=old.ready===true&&current.ready===true&&current.reconciliationReady===true;return {ready,verified:ready,providerEffects:true,paymentEffects:false,createsCheckoutWithoutAcceptance:false};}
+  return {
+    repository:Object.freeze({kind:repository.kind,readiness,
+      async claimNext(input){
+        const paid=async()=>{const c=await paymentRepository.claimReconciliation(input);if(c)catalogClaims.set(c.jobId,{workerId:input.workerId,fence:c.fence});return c;};
+        const first=catalogFirst;catalogFirst=!catalogFirst;
+        return first?(await paid()??await repository.claimNext(input)):(await repository.claimNext(input)??await paid());
+      },
+      async completeClaim(input){if(input.result?.receiptKind!=='catalog_reconciled')return repository.completeClaim(input);
+        try{return await paymentRepository.finishReconciliation(input);}finally{catalogClaims.delete(input.jobId);}},
+      async releaseClaim(input){if(!catalogClaims.has(input.jobId))return repository.releaseClaim(input);
+        try{return await paymentRepository.finishReconciliation(input);}finally{catalogClaims.delete(input.jobId);}}
+    }),
+    executor:Object.freeze({kind:executor.kind,providerEffects:true,paymentEffects:false,readiness,
+      async execute(claim,options){if(claim.action!=='reconcile_catalog')return executor.execute(claim,options);
+        const lease=catalogClaims.get(claim.jobId);invariant(lease&&lease.fence===claim.fence,'CARE_LIFECYCLE_WORKER_LEASE_LOST','Care catch-up claim is unavailable.',{status:409});
+        return {receiptKind:'catalog_reconciled',result:await payments.reconcileSystem(claim.agreementId,lease)};
+      }
+    })
+  };
+}

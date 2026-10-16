@@ -294,7 +294,7 @@ jobs:
           journey_database=""
           drop_journey_database() {
             if [[ -n "$journey_database" ]]; then
-              [[ "$journey_database" =~ ^ss_(auth_race|support|erasure|reconciliation_fairness|export_admission|domain_readback|native_voice_routing|assessment_intake)_ci_[1-9][0-9]*_[1-9][0-9]*$ ]] || return 1
+              [[ "$journey_database" =~ ^ss_(auth_race|support|erasure|reconciliation_fairness|export_admission|domain_readback|native_voice_routing|assessment_intake|care_catalog)_ci_[1-9][0-9]*_[1-9][0-9]*$ ]] || return 1
               "$pg_bin/psql" "$CI_RELEASE_PG_ADMIN_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
                 --command "select pg_terminate_backend(pid) from pg_stat_activity where datname = '$journey_database' and pid <> pg_backend_pid()" || return 1
               "$pg_bin/dropdb" --host=127.0.0.1 --port=55432 --username=postgres --if-exists "$journey_database" || return 1
@@ -339,6 +339,7 @@ jobs:
           domain_readback SITESOURCERY_PG_DOMAIN_READBACK_TEST_URL spaceship-domain-lifecycle-executor.integration.test.mjs
           native_voice_routing SITESOURCERY_PG_NATIVE_VOICE_ROUTING_TEST_URL responder-native-voice-routing.integration.test.mjs
           assessment_intake SITESOURCERY_PG_ASSESSMENT_INTAKE_TEST_URL assessment-intake-owner-visibility.integration.test.mjs
+          care_catalog SITESOURCERY_PG_CARE_CATALOG_TEST_URL care-payment-postgres.test.mjs
           REGRESSIONS
           cleanup
 

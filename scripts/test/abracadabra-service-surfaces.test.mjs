@@ -100,12 +100,15 @@ test("hosted artifact composes Care and Responder modules after the session", as
   const order = [
     "abracadabra-customer-control-dom.js",
     "abracadabra-care-surfaces.js",
+    "abracadabra-care-catalog.js",
     "abracadabra-responder-surfaces.js",
     "abracadabra-service-surfaces.js"
   ].map((name) => hosted.indexOf(name));
   assert.equal(order.every((value) => value >= 0), true);
   assert.deepEqual(order, [...order].sort((left, right) => left - right));
   for (const asset of [
+    "abracadabra/app/abracadabra-care-catalog.css",
+    "abracadabra/app/abracadabra-care-catalog.js",
     "abracadabra/app/abracadabra-care-surfaces.css",
     "abracadabra/app/abracadabra-care-surfaces.js",
     "abracadabra/app/abracadabra-responder-surfaces.css",

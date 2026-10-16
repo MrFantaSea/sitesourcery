@@ -9,6 +9,8 @@ const ALAKAZAM_RETAINED_PREMIUM_STYLESHEET =
   '<link rel="stylesheet" href="/abracadabra/app/abracadabra-alakazam-retained-premium.css">';
 const CARE_STYLESHEET =
   '<link rel="stylesheet" href="/abracadabra/app/abracadabra-care-surfaces.css">';
+const CARE_CATALOG_STYLESHEET =
+  '<link rel="stylesheet" href="/abracadabra/app/abracadabra-care-catalog.css">';
 const RESPONDER_STYLESHEET =
   '<link rel="stylesheet" href="/abracadabra/app/abracadabra-responder-surfaces.css">';
 const SERVICE_SURFACES_STYLESHEET =
@@ -182,6 +184,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
     '<script src="/abracadabra/app/abracadabra-alakazam-retained-premium.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-customer-control-dom.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-care-surfaces.js" defer></script>',
+    '<script src="/abracadabra/app/abracadabra-care-catalog.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-responder-surfaces.js" defer></script>',
     '<script src="/abracadabra/app/abracadabra-service-surfaces.js" defer></script>',
   ].join("\n  ");
@@ -190,7 +193,7 @@ export function configureHostedAbracadabraHtml(sourceHtml, options = {}) {
     .replace(HOLD_META, HOSTED_META)
     .replace(
       APP_STYLESHEET,
-      `${APP_STYLESHEET}\n  ${ALAKAZAM_35_STYLESHEET}\n  ${ALAKAZAM_50_STYLESHEET}\n  ${ALAKAZAM_RETAINED_PREMIUM_STYLESHEET}\n  ${CARE_STYLESHEET}\n  ${RESPONDER_STYLESHEET}\n  ${SERVICE_SURFACES_STYLESHEET}`
+      `${APP_STYLESHEET}\n  ${ALAKAZAM_35_STYLESHEET}\n  ${ALAKAZAM_50_STYLESHEET}\n  ${ALAKAZAM_RETAINED_PREMIUM_STYLESHEET}\n  ${CARE_STYLESHEET}\n  ${CARE_CATALOG_STYLESHEET}\n  ${RESPONDER_STYLESHEET}\n  ${SERVICE_SURFACES_STYLESHEET}`
     )
     .replace(APP_SCRIPT, hostedScripts);
 }
@@ -204,6 +207,8 @@ export const hostedStagingAssets = Object.freeze([
   "abracadabra/app/abracadabra-alakazam-retained-premium.js",
   "abracadabra/app/abracadabra-api.js",
   "abracadabra/app/abracadabra-billing-views.js",
+  "abracadabra/app/abracadabra-care-catalog.css",
+  "abracadabra/app/abracadabra-care-catalog.js",
   "abracadabra/app/abracadabra-care-surfaces.css",
   "abracadabra/app/abracadabra-care-surfaces.js",
   "abracadabra/app/abracadabra-control-mode.js",

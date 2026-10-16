@@ -60,6 +60,7 @@ import {
   verifyStripeWebhookWithRotation
 } from "../stripe-webhook-rotation.mjs";
 import { createHeldStripeAdapter } from "./held.mjs";
+import { createCareStripeOperations, normalizeCareStripeConfiguration } from "../../hosted/care-payment-config.mjs";
 
 export const STRIPE_API_VERSION = "2026-06-24.dahlia";
 export const STRIPE_PROVIDER_MODES = Object.freeze([
@@ -69,6 +70,7 @@ export const STRIPE_PROVIDER_MODES = Object.freeze([
 ]);
 export const STRIPE_READINESS_PURPOSES = Object.freeze([
   "alakazam",
+  "care",
   "customBuildChange",
   "customBuildFinal",
   "customBuildStart",
@@ -879,15 +881,16 @@ function normalizedExpectation(value, index, livemode) {
   });
 }
 
-function normalizedTaxCodes(value, domainAuthorization) {
+function normalizedTaxCodes(value, domainAuthorization, care) {
+  const fields = care ? [...STRIPE_TAX_CODE_FIELDS, "care"] : STRIPE_TAX_CODE_FIELDS;
   invariant(
-    exactObjectKeys(value, STRIPE_TAX_CODE_FIELDS),
+    exactObjectKeys(value, fields),
     "stripe_tax_codes_required",
     "Stripe requires one exact tax code for every payment purpose",
     { status: 500 }
   );
   const selected = {};
-  for (const field of STRIPE_TAX_CODE_FIELDS) {
+  for (const field of fields) {
     if (
       field === "domainRegistration" &&
       value[field] === null &&
@@ -916,6 +919,7 @@ function normalizedTaxCodes(value, domainAuthorization) {
 }
 
 function normalizedTaxPurposeAuthority(value, config) {
+  const fields = config.care ? [...STRIPE_TAX_CODE_FIELDS, "care"] : STRIPE_TAX_CODE_FIELDS;
   invariant(
     exactObjectKeys(value, [
       "approved",
@@ -930,14 +934,14 @@ function normalizedTaxPurposeAuthority(value, config) {
     ]) &&
       exactObjectKeys(
         value?.purposes,
-        STRIPE_TAX_CODE_FIELDS
+        fields
       ),
     "stripe_tax_purpose_authority_required",
     "Stripe Tax requires one exact purpose-bound authority",
     { status: 500 }
   );
   const purposes = {};
-  for (const field of STRIPE_TAX_CODE_FIELDS) {
+  for (const field of fields) {
     const mode = value.purposes[field];
     invariant(
       field === "domainRegistration" && mode === null
@@ -969,7 +973,7 @@ function normalizedTaxPurposeAuthority(value, config) {
     "Stripe Tax purpose authority does not match the exact runtime",
     { status: 500 }
   );
-  const automaticPurposes = STRIPE_TAX_CODE_FIELDS.filter(
+  const automaticPurposes = fields.filter(
     (field) => purposes[field] === "automatic"
   );
   let automaticActivation = null;
@@ -1484,15 +1488,18 @@ function validateConfig(value, mode, taxClock) {
     priceExpectations,
     config.livemode
   );
+  const care = normalizeCareStripeConfiguration(config.care, priceExpectations, config.livemode);
   const taxCodes = normalizedTaxCodes(
     config.taxCodes,
-    domainAuthorization
+    domainAuthorization,
+    care
   );
   const taxAuthority = normalizedTaxPurposeAuthority(
     config.taxAuthority,
     {
       ...config,
       domainAuthorization,
+      care,
       taxCodes
     }
   );
@@ -1531,7 +1538,8 @@ function validateConfig(value, mode, taxClock) {
     ),
     priceExpectations: Object.freeze(priceExpectations),
     domainAuthorization,
-    alakazam
+    alakazam,
+    care
   });
 }
 
@@ -6594,7 +6602,9 @@ export function createStripeProviderAdapter(options = {}) {
         );
       }
       invariant(
-        priceMatches(observed, expected),
+        priceMatches(observed, expected) &&
+          (!config.care || !Object.values(config.care.planPriceIds).includes(expected.id) ||
+            observed.recurring?.usage_type === "licensed"),
         "stripe_price_mismatch",
         "An owner-approved Stripe Price no longer matches the exact catalog",
         { status: 503, details: { priceId: expected.id } }
@@ -7687,7 +7697,7 @@ export function createStripeProviderAdapter(options = {}) {
   function readinessProjection({ purpose = null } = {}) {
     const taxPurposes =
       purpose === null
-        ? STRIPE_TAX_CODE_FIELDS
+        ? Object.keys(config.taxAuthority.purposes)
         : [purpose];
     for (const taxPurpose of taxPurposes) {
       if (
@@ -7749,6 +7759,9 @@ export function createStripeProviderAdapter(options = {}) {
     };
   }
 
+  const careOperations = createCareStripeOperations({ client, config, requireCapability,
+    credentialTopologyReadiness, verifyPrices, verifyWebhookEndpoint, taxModeFor });
+
   async function readinessForPurpose(purpose) {
     try {
       invariant(
@@ -7772,6 +7785,7 @@ export function createStripeProviderAdapter(options = {}) {
       } else {
         await verifyWebhookEndpoint();
       }
+      if (purpose === "care") await careOperations.verifyCareConfiguration();
       if (purpose === "alakazam") {
         invariant(
           Boolean(config.alakazam),
@@ -7808,7 +7822,9 @@ export function createStripeProviderAdapter(options = {}) {
     }
   }
 
+  const { verifyCareConfiguration, ...careMethods } = careOperations;
   const adapter = {
+    ...careMethods,
     readinessForPurpose,
     async readiness() {
       try {
@@ -7816,6 +7832,7 @@ export function createStripeProviderAdapter(options = {}) {
           credentialTopologyReadiness();
         }
         await verifyWebhookEndpoint();
+        if (config.care) await verifyCareConfiguration();
         if (config.alakazam) {
           await verifyAlakazamConfiguration();
         } else if (capabilities.has("prices:read")) {

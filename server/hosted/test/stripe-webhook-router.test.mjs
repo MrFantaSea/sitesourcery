@@ -66,12 +66,15 @@ function fixture(
     reversalResult = {
       status: "not_alakazam_reversal"
     },
+    careResult = undefined,
+    careError = null,
     providerResult = selectedEvent
   } = {}
 ) {
   const calls = {
     sequence: [],
     verify: [],
+    care: [],
     canonical: [],
     download: [],
     assessment: [],
@@ -92,6 +95,13 @@ function fixture(
       async verifyWebhook(input) {
         calls.verify.push(input);
         return structuredClone(providerResult);
+      }
+    },
+    carePayments: careResult === undefined ? null : {
+      async ingestStripeEvent(input) {
+        calls.care.push(structuredClone(input));
+        if (careError) throw careError;
+        return structuredClone(careResult);
       }
     },
     canonicalService: {
@@ -723,4 +733,51 @@ test("shared webhook router binds a verification receipt to exact request bytes"
       error.status === 400
   );
   assert.equal(rejected.calls.canonical.length, 0);
+});
+
+
+test("Care webhook routes only after verification and cannot fall through while held", async () => {
+  const selected = event({ schema: "sitesourcery_care_subscription_v1", purpose: "care" });
+  const input = { rawBody: Buffer.from("care-event"), signature: "stripe-signature" };
+  const context = fixture(selected, { careResult: { status: "care_reconciled" } });
+  assert.deepEqual(await context.router.ingestStripeWebhook(input), { status: "care_reconciled" });
+  assert.equal(context.calls.verify.length, 1);
+  assert.deepEqual(context.calls.care, [selected]);
+  assert.equal(context.calls.canonical.length, 0);
+  for (const options of [{}, { careResult: { status: "not_care" } }]) {
+    const held = fixture(selected, options);
+    await assert.rejects(held.router.ingestStripeWebhook(input), { code: "STRIPE_CARE_WEBHOOK_HELD" });
+    assert.equal(held.calls.canonical.length, 0);
+  }
+});
+test("Care lifecycle lookup supports untagged reversal events and leaves unrelated events to existing routes", async () => {
+  const selected = { ...event(), type: "charge.refunded", data: { object: { id: "ch_care" } } };
+  const input = { rawBody: Buffer.from("care-reversal"), signature: "stripe-signature" };
+  const context = fixture(selected, { careResult: { status: "care_reconciled" } });
+  assert.deepEqual(await context.router.ingestStripeWebhook(input), { status: "care_reconciled" });
+  assert.equal(context.calls.canonical.length, 0);
+  const other = fixture({ ...event(), type: "invoice.paid" }, { careResult: { status: "not_care" } });
+  assert.deepEqual(await other.router.ingestStripeWebhook(input), { status: "canonical" });
+});
+test("Care readback failure cannot acknowledge or fall through a known Care event", async () => {
+  const context = fixture(event({ purpose: "care" }), { careResult: {}, careError: new Error("readback unavailable") });
+  await assert.rejects(context.router.ingestStripeWebhook({ rawBody: Buffer.from("care"), signature: "signature" }), /readback unavailable/);
+  assert.equal(context.calls.canonical.length, 0);
+});
+
+
+test("changed webhook bytes cannot reach Care reconciliation", async () => {
+  const selected = event({ purpose: "care", schema: "sitesourcery_care_subscription_v1" });
+  const rawBody = Buffer.from("original-care-event"), signature = "t=1,v1=care-bound";
+  const providerResult = verifyStripeWebhookWithRotation({
+    rotation: { schema: "sitesourcery.stripe-webhook-rotation/v1", current: {
+      version: "care-test", secret: "whsec_care-test-only", activatedAt: "1970-01-01T00:00:00.000Z", retiresAt: null
+    }, next: null, overlapSeconds: 0 },
+    now: "2026-10-16T12:00:00.000Z", rawBody, signature, constructEvent() { return selected; }
+  });
+  const context = fixture(selected, { providerResult, careResult: { status: "care_reconciled" } });
+  await assert.rejects(context.router.ingestStripeWebhook({ rawBody: Buffer.from("changed-care-event"), signature }),
+    { code: "STRIPE_WEBHOOK_SIGNATURE_INVALID" });
+  assert.equal(context.calls.care.length, 0);
+  assert.equal(context.calls.canonical.length, 0);
 });

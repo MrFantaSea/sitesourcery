@@ -133,3 +133,9 @@ test("unsupported replica jobs do not block unrelated project lifecycle work", a
   assert.equal(readiness.ready, true);
   assert.equal(readiness.externalReplicas, 1);
 });
+
+test('Care reconciliation is not constructed by default or by another worker purpose', async () => {
+  const factories=createLifecycleWorkerFactories({authority:{kind:'canonical-postgres',readiness:async()=>({ready:true})},purposes:['care-lifecycle'],environment:{},stripeFactory:()=>{throw new Error('held Care must not construct Stripe');},careRepositoryFactory:()=>({kind:'care-lifecycle-postgres',readiness:async()=>({ready:true,verified:true}),claimNext:async()=>null,completeClaim:async()=>{},releaseClaim:async()=>{}})});
+  const composition=await factories['care-lifecycle']({loop:{intervalMs:60000,errorBackoffMs:5000,maximumBackoffMs:300000}});
+  assert.equal((await composition.readiness()).ready,false);assert.equal((await composition.worker.runOnce()).status,'held');
+});

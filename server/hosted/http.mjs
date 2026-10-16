@@ -131,7 +131,7 @@ import {
   createCareSurfacesHttpBoundary
 } from "./care-surfaces-http.mjs";
 import {
-  createCareCommerceHttpBoundary
+  createCareCommerceHttpBoundary, createCareCatalogHttpBoundary
 } from "./care-commerce-http.mjs";
 import {
   createResponderSurfacesHttpBoundary
@@ -906,6 +906,7 @@ export function createHostedApi(
     engagementBootstrap = null,
     careSurfaces = null,
     careCommerce = null,
+  carePayments = null,
     responderSurfaces = null,
     responderCommerce = null,
     operatorWorkQueue = null,
@@ -1087,6 +1088,11 @@ export function createHostedApi(
           return true;
         }
       });
+  const careCatalogHttpBoundary = carePayments === null ? null : createCareCatalogHttpBoundary({
+    service:carePayments,
+    authenticate:(request,route)=>authenticatedOrganizationActor({service,request,route,product:'Care',selectionCode:'CARE_ORGANIZATION_SELECTION_REQUIRED'}),
+    async requireWriteGuard(request){requireCsrf(request,parseCookies(request.headers.get('cookie')));return true;}
+  });
   invariant(
     responderSurfaces === null ||
       (
@@ -1971,6 +1977,7 @@ export function createHostedApi(
             careCommerceReadiness?.mailDeliveryEffects === false &&
             careCommerceReadiness?.paymentEffects === false &&
             careCommerceReadiness?.providerEffects === false,
+          careCatalog: carePayments === null ? {mounted:false,commercialReady:false} : {mounted:true,...await carePayments.readiness()},
           careCommerce: Object.freeze({
             ready:
               careCommerceReadiness?.ready === true &&
@@ -2416,6 +2423,10 @@ export function createHostedApi(
           });
         }
 
+        if (careCatalogHttpBoundary !== null) {
+          const response=await careCatalogHttpBoundary.dispatch(request);
+          if(response!==null)return rootedResponse(response,requestId);
+        }
         if (careSurfacesHttpBoundary !== null) {
           const careResponse =
             await careSurfacesHttpBoundary.dispatch(request);

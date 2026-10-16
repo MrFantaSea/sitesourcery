@@ -1,3 +1,4 @@
+import { isDirectCareStripeEvent, isPotentialCareStripeEvent } from "./care-payment-config.mjs";
 import {
   isPotentialAlakazamStripeEvent,
   isDownloadStripeEvent,
@@ -52,6 +53,7 @@ function providerCode(error) {
 export function createStripeWebhookRouter({
   provider,
   canonicalService,
+  carePayments = null,
   downloadCommerce,
   assessmentCommerce,
   customBuildCommerce,
@@ -148,6 +150,15 @@ export function createStripeWebhookRouter({
           }
         );
       }
+      if (isPotentialCareStripeEvent(event)) {
+        if (carePayments !== null) {
+          invariant(typeof carePayments.ingestStripeEvent === "function", "STRIPE_CARE_ROUTER_INVALID", "Care webhook reconciliation is unavailable.", { status: 503 });
+          const result = await carePayments.ingestStripeEvent(event);
+          if (result?.status !== "not_care") return result;
+        }
+        invariant(!isDirectCareStripeEvent(event), "STRIPE_CARE_WEBHOOK_HELD", "Care webhook reconciliation is held.", { status: 503 });
+      }
+
       if (isDownloadStripeEvent(event)) {
         return downloadCommerce.ingestStripeEvent(
           event

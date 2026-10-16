@@ -2996,6 +2996,7 @@ test("purpose readiness accepts only the exact reviewed purpose registry", async
     [...STRIPE_READINESS_PURPOSES],
     [
       "alakazam",
+      "care",
       "customBuildChange",
       "customBuildFinal",
       "customBuildStart",

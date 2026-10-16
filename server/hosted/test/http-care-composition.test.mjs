@@ -395,3 +395,13 @@ test("Care commerce root rejects external-effect authority", () => {
     (error) => error?.code === "RUNTIME_CONFIGURATION_ERROR"
   );
 });
+
+test('current Care payment readiness is public and independent of historical held commerce', async () => {
+  const {createCarePaymentsService}=await import('../care-payments.mjs');
+  const canonical=canonicalService();canonical.readiness=async()=>({ready:true,verified:true});
+  const carePayments=createCarePaymentsService({repository:{readiness:async()=>({ready:true,verified:true})},provider:{readinessForPurpose:async()=>({ready:true})},release:{approved:true},legalAuthority:{schema:'sitesourcery.project-legal-authority/v7',documents:[],authorityDigest:'a'.repeat(64)}});
+  const api=createHostedApi(canonical,{publicOrigin:ORIGIN,careSurfaces:careSurfaces(),careCommerce:careCommerce(),carePayments});
+  const response=await api.fetch(new Request(ORIGIN+'/api/v1/capabilities'));
+  assert.equal(response.status,200);const body=await response.json();
+  assert.equal(body.careCatalog.mounted,true);assert.equal(body.careCatalog.commercialReady,true);assert.equal(body.careCatalog.reconciliationReady,true);assert.equal(body.careCommerce.commercialReady,false);
+});

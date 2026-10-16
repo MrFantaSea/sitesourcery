@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { createCarePaymentsService } from '../care-payments.mjs';
+import { createPostgresCarePaymentRepository } from '../care-payment-postgres.mjs';
 import "../assert-runtime.mjs";
 
 import { existsSync } from "node:fs";
@@ -1057,6 +1059,15 @@ async function start() {
       "Canonical durable effect-held Care commerce is not ready."
     );
   }
+  const careMode=process.env.SITESOURCERY_CARE_MODE??'held';
+  if(!['held','approved_live'].includes(careMode))throw new Error('Care mode must be held or approved_live.');
+  const carePayments=createCarePaymentsService({
+    repository:createPostgresCarePaymentRepository({authority}),provider:stripeComposition.adapter,
+    release:{approved:careMode==='approved_live'},legalAuthority:projectLegalAuthorityConfig.authority,
+    clock:commerceV2.clock,ids:commerceV2.ids
+  });
+  const careCatalogReadiness=await carePayments.readiness();
+  if(!careCatalogReadiness.ready||!careCatalogReadiness.verified||(careMode==='approved_live'&&!careCatalogReadiness.commercialReady))throw new Error('Canonical Care catalog or approved payment authority is not ready.');
   const responderCore = createResponderCore({
     repository: createPostgresResponderCoreRepository({ authority }),
     provider: createFakeResponderProvider(),
@@ -1498,6 +1509,7 @@ async function start() {
     },
     async loadRows() {
       const publicationStorageReadiness = await publicationPort.readiness();
+      const currentCareCatalogReadiness = await carePayments.readiness();
       const publicationCommandState = publicationCommandServer.snapshot();
       const publicationLocalReady =
         publicationStorageReadiness?.ready === true &&
@@ -1520,7 +1532,7 @@ async function start() {
         alakazam: heldRow(alakazamLocalReady),
         domains: heldRow(domainRuntimeReadiness.ready === true),
         care: heldRow(
-          careReadiness.ready === true && careCommerceReadiness.ready === true
+          careReadiness.ready === true && careCommerceReadiness.ready === true && currentCareCatalogReadiness.ready === true && (careMode!=='approved_live'||currentCareCatalogReadiness.commercialReady===true)
         ),
         responder: heldRow(responderLocalReady),
         operator_support: heldRow(
@@ -1565,6 +1577,7 @@ async function start() {
         customServicesCustomBuildProgress,
         customServicesCustomBuildWork,
         customServicesOwner,
+        carePayments,
         careSurfaces,
         careCommerce,
         responderSurfaces,
@@ -1583,6 +1596,7 @@ async function start() {
         responderTwilioProviderTopologies,
         stripeWebhook: createStripeWebhookRouter({
           provider: stripeComposition.adapter,
+          carePayments,
           canonicalService: service,
           downloadCommerce,
           assessmentCommerce:

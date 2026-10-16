@@ -444,6 +444,7 @@ test("production Stripe composition defaults to held and supplies no latent conf
   assert.equal(composition.adapter, capture.adapter);
   assert.deepEqual(READINESS_PURPOSES, [
     "alakazam",
+    "care",
     "customBuildChange",
     "customBuildFinal",
     "customBuildStart",
@@ -1529,4 +1530,30 @@ test("the hosted server injects one configured adapter for Checkout and every ve
     )?.length,
     1
   );
+});
+
+test("Care composes its own approved fixed monthly Prices without Alakazam capabilities or metadata", () => {
+  const amounts = { plan_host:2500, plan_care_lite:6900, plan_care:11900, plan_care_plus:19900, plan_partner:34900 };
+  const planPriceIds = Object.fromEntries(Object.keys(amounts).map(plan => [plan, `price_${plan}`]));
+  const environment = productionEnvironment({
+    approval: approval({capabilities: [...new Set([...HOSTED_CAPABILITIES, ...STRIPE_PRODUCTION_CONTRACT.careCapabilities])]}),
+    SITESOURCERY_STRIPE_CARE_CONFIGURATION_JSON: JSON.stringify({planPriceIds}),
+    SITESOURCERY_STRIPE_PRICE_EXPECTATIONS_JSON: JSON.stringify(Object.entries(amounts).map(([plan, unitAmount]) => ({
+      id:planPriceIds[plan],productId:'prod_care',livemode:true,currency:'usd',unitAmount,taxBehavior:'exclusive',recurring:{interval:'month',intervalCount:1}
+    }))),
+    SITESOURCERY_CREDENTIAL_TOPOLOGY_JSON: JSON.stringify(credentialTopology({enabledPurposes:['care']}))
+  });
+  const authority = JSON.parse(environment.SITESOURCERY_STRIPE_TAX_PURPOSE_AUTHORITY_JSON);
+  authority.purposes.care = 'disabled_by_owner';
+  environment.SITESOURCERY_STRIPE_TAX_PURPOSE_AUTHORITY_JSON = JSON.stringify(authority);
+  environment.SITESOURCERY_STRIPE_TAX_CODES_JSON = JSON.stringify({...JSON.parse(environment.SITESOURCERY_STRIPE_TAX_CODES_JSON),care:'txcd_10701100'});
+  const capture = capturingFactory();
+  createConfiguredStripeProvider({environment,adapterFactory:capture.factory});
+  assert.deepEqual(capture.calls[0].config.care,{planPriceIds});
+  assert.equal(capture.calls[0].config.alakazam,undefined);
+  assert.equal(capture.calls[0].liveApproval.capabilities.includes('subscription_schedules:write'),false);
+  const insufficient = {...environment,SITESOURCERY_STRIPE_APPROVAL_JSON:JSON.stringify(approval())};
+  assert.throws(() => createConfiguredStripeProvider({environment:insufficient,adapterFactory:capture.factory}),{code:'STRIPE_PRODUCTION_CAPABILITIES_INCOMPLETE'});
+  const malformed = {...environment,SITESOURCERY_STRIPE_CARE_CONFIGURATION_JSON:JSON.stringify({planPriceIds:{...planPriceIds,plan_host:'price_other'}})};
+  assert.throws(() => createConfiguredStripeProvider({environment:malformed,adapterFactory:capture.factory}),{code:'stripe_care_configuration_invalid'});
 });
