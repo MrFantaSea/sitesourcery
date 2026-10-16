@@ -1,20 +1,18 @@
 # Site Sourcery self-host foundation
 
-This is an isolated, dependency-free Node 24.18.0 foundation for serving Site
-Sourcery customer static sites from Dell/HQ-owned Linux machines without
-Cloudflare, Vercel, Supabase, Docker, or GitHub Pages.
+This is the dependency-free Node 24.18.0 runtime for serving Site Sourcery
+customer static sites from existing HQ storage. Node listens only on loopback;
+the separately configured public gateway or tunnel supplies HTTPS ingress.
 
-It is deliberately under **`PUBLICATION_HOLD`**:
+The source-level publication holds have been removed for a qualified release.
+This does not activate serving: the installed runtime still requires
+`/etc/sitesourcery/PUBLICATION_APPROVED` and refuses publication while
+`/etc/sitesourcery/PUBLICATION_HOLD` exists. Hostname authorization, release
+integrity and private publication transport checks remain enforced.
 
-- no process was started;
-- no listener was opened;
-- no Caddy or systemd file was installed;
-- no package was downloaded;
-- no DNS, router, firewall, TLS, or certificate state was changed;
-- no customer site was published.
-
-The repository is an implementation and rehearsal artifact, not production
-approval.
+DNS, TLS and native publication approval must be accepted on the installed
+candidate before customer billing is opened. Source preparation alone is not
+proof of a published customer site.
 
 ## What it implements
 
@@ -135,17 +133,16 @@ platform hostnames can be part of the public product.
 
 ## Publication hold
 
-Four fail-closed guards are represented:
+The runtime requires `/etc/sitesourcery/PUBLICATION_APPROVED` and remains
+unready for tenant serving while `/etc/sitesourcery/PUBLICATION_HOLD` exists.
+The code also honors repository `PUBLICATION_HOLD` sentinels if a future source
+release restores them. Removing a tracked sentinel requires a qualified source
+release; do not edit immutable installed source to bypass release custody.
 
-1. repository `PUBLICATION_HOLD` makes the Node runtime unready and tenant
-   responses unavailable;
-2. Node also requires `/etc/sitesourcery/PUBLICATION_APPROVED`;
-3. the systemd candidate requires that approval file and refuses startup when
-   `/etc/sitesourcery/PUBLICATION_HOLD` exists;
-4. all operational files end in `.held` or `.candidate.held`.
-
-No code path automatically removes a hold. The owner must explicitly approve a
-release checklist after real infrastructure proof.
+The original Caddy/systemd candidate templates remain held reference artifacts.
+Installed production units and ingress are managed by the reviewed release
+procedure. No code path automatically removes a hold. Publication activation
+requires the owner's authorized release and actual infrastructure proof.
 
 ## Backup and restore
 
