@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "bd12fc68a5c47bb155f8a372e203ffcfb7e1852a",
+    "treeSha": "bb6209595965d378dc53e7f9f5530741d6e639b4",
+    "baseCommitSha": "050e6778608ae7a26b76fe8d768cca8c0fa01d68"
+  },
+  "provenanceSha256": "0200f618d0858b2b32ea23f31ca4349f422cebab2b5259907d0afae1e0211c50",
+  "ledger": {
+    "previousByteCount": 57042,
+    "previousSha256": "d3bf07277c5c648f1dcad0014d2cadb60d08406f2d7b3b2d2d99866676eb1b2a",
+    "appendSha256": "dab79bafe0276e39b9d4e4bb27b7e9d604df1a45a5c29c2c31eae84ee76d61e9"
+  },
+  "proofs": {
+    "focused": {
+      "command": "/private/tmp/node-v24.18.0-darwin-arm64/bin/node --test server/hosted/test/responder-twilio-provider-registry.test.mjs server/hosted/test/responder-twilio-provider-topology-http.test.mjs server/hosted/test/twilio-responder-voice-access.test.mjs server/hosted/test/twilio-responder-transport.test.mjs server/hosted/test/twilio-responder-inbound-config.test.mjs server/hosted/test/worker-responder-composition.test.mjs server/hosted/test/http-twilio-responder-inbound.test.mjs server/hosted/test/responder-inbound-followup-worker.test.mjs",
+      "exitCode": 0,
+      "logSha256": "8f58c7ac9c8a192a9964dca371207c5018c4efe982c0a0ec8e079e123d742e54"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "9f176e72d3133e8f13249e4cc93f1543c053aa469c817641c5d080c4b4fbeceb"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed SMS-only/native separation, paired-null SQL checks, exact migration inventory correction, consent/tenant safeguards and optional-companion UI; all focused proofs passed and fresh full npm passed with original failures preserved."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "317868fa4ca77403ff4ded918f1d17535813925eb9be2bd62a3cbe068d803d40"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned isolated PostgreSQL database/cluster and each qualification scratch/process set removed with actual receipts. Original logs/builds and lock-identical shared dependency symlink retained; no production/provider disposable created."
+  }
+}

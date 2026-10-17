@@ -189,3 +189,32 @@ test("explicit v2 attestation preserves null disabled slots and denies contradic
     { ...selected, enabledPushSlots: ["android.future"] }
   ]) await assert.rejects(boundary([]).dispatch(request(body)), /invalid/u);
 });
+
+
+test("SMS-only attestation persists null Voice authority and still requires exact SMS authority", async () => {
+  const sms = attestationBody({ schema: "sitesourcery.responder-twilio-topology-attestation/v2",
+    enabledPushSlots: [], voiceApiKeySid: null, voiceApiKeySecretDigest: null,
+    voiceSandboxPushCredentialSid: null, voiceProductionPushCredentialSid: null,
+    voiceAndroidSandboxPushCredentialSid: null, voiceAndroidProductionPushCredentialSid: null });
+  const send = (calls, body) => boundary(calls).dispatch(new Request(
+    `https://sitesourcery.com/api/v1/operator/responder/organizations/${organizationId}/twilio-topologies`, {
+      method: "POST", headers: { "content-type": "application/json", "idempotency-key": "sms-only-topology-001" },
+      body: JSON.stringify(body)
+    }));
+  const calls = [];
+  assert.equal((await send(calls, sms)).status, 200);
+  assert.equal(calls[0].input.voiceApiKeySidDigest, null);
+  assert.equal(calls[0].input.voiceApiKeySecretDigest, null);
+  assert.deepEqual(calls[0].input.enabledPushSlots, []);
+  assert.equal(calls[0].input.messagingApiKeySidDigest, digest(sms.messagingApiKeySid));
+  for (const delta of [
+    { voiceApiKeySid: sid("SK", "7") }, { voiceApiKeySecretDigest: "f".repeat(64) },
+    { messagingApiKeySecretDigest: null }, { webhookAuthTokenDigest: null },
+    { webhookAuthTokenDigest: sms.messagingApiKeySecretDigest },
+    { enabledPushSlots: ["android.sandbox"], voiceAndroidSandboxPushCredentialSid: sid("CR", "a") }
+  ]) {
+    const rejected = [];
+    await assert.rejects(send(rejected, { ...sms, ...delta }), /invalid/u);
+    assert.equal(rejected.length, 0);
+  }
+});

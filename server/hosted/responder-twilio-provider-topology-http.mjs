@@ -150,6 +150,7 @@ function attestation(route, commandId, parsed, clock) {
     try { parsed = { ...parsed, ...normalizeTwilioPushSlots(parsed) }; }
     catch { throw invalid("The Twilio topology push slots are invalid."); }
   }
+  const smsOnly = slotAware && parsed.enabledPushSlots.length === 0;
   const fields = [
     "accountSid", "messagingServiceSid", "customerProfileSid",
     "brandRegistrationSid", "campaignSid", "messagingApiKeySid",
@@ -176,14 +177,16 @@ function attestation(route, commandId, parsed, clock) {
     ["voiceAndroidProductionPushCredentialSid", SID.pushCredential]
   ];
   if (validators.some(([field, pattern]) =>
-    !(slotAware && Object.values(TWILIO_PUSH_SLOTS).includes(field) && parsed[field] === null) &&
+    !(slotAware && (Object.values(TWILIO_PUSH_SLOTS).includes(field) ||
+        (smsOnly && field === "voiceApiKeySid")) && parsed[field] === null) &&
       (typeof parsed[field] !== "string" || !pattern.test(parsed[field]))) ||
+      (smsOnly && (parsed.voiceApiKeySid !== null || parsed.voiceApiKeySecretDigest !== null)) ||
       parsed.messagingApiKeySid === parsed.voiceApiKeySid ||
       new Set([
         parsed.messagingApiKeySecretDigest,
         parsed.webhookAuthTokenDigest,
         parsed.voiceApiKeySecretDigest
-      ]).size !== 3 ||
+      ].filter((value) => value !== null)).size !== (smsOnly ? 2 : 3) ||
       new Set([
         parsed.voiceSandboxPushCredentialSid,
         parsed.voiceProductionPushCredentialSid,
@@ -195,7 +198,7 @@ function attestation(route, commandId, parsed, clock) {
       ![
         parsed.messagingApiKeySecretDigest,
         parsed.webhookAuthTokenDigest,
-        parsed.voiceApiKeySecretDigest
+        ...(smsOnly ? [] : [parsed.voiceApiKeySecretDigest])
       ].every((value) => typeof value === "string" && SHA256.test(value)) ||
       typeof parsed.evidenceDigest !== "string" ||
       !SHA256.test(parsed.evidenceDigest) ||
@@ -224,7 +227,7 @@ function attestation(route, commandId, parsed, clock) {
     messagingApiKeySidDigest: digest(parsed.messagingApiKeySid),
     messagingApiKeySecretDigest: parsed.messagingApiKeySecretDigest,
     webhookAuthTokenDigest: parsed.webhookAuthTokenDigest,
-    voiceApiKeySidDigest: digest(parsed.voiceApiKeySid),
+    voiceApiKeySidDigest: parsed.voiceApiKeySid === null ? null : digest(parsed.voiceApiKeySid),
     voiceApiKeySecretDigest: parsed.voiceApiKeySecretDigest,
     voiceSandboxPushCredentialSidDigest:
       parsed.voiceSandboxPushCredentialSid === null ? null : digest(parsed.voiceSandboxPushCredentialSid),

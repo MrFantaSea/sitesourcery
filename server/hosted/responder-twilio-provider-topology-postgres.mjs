@@ -169,12 +169,19 @@ function selectedTopology(input) {
   const slotAware = input.schema === "sitesourcery.twilio-isv-provider-topology/v2";
   if (slotAware) {
     const slots = input.enabledPushSlots;
-    invariant(Array.isArray(slots) && slots.length > 0 && slots.length <= 4 &&
+    invariant(Array.isArray(slots) && slots.length <= 4 &&
       slots.every((slot) => typeof slot === "string" && Object.hasOwn(TWILIO_PUSH_SLOTS, slot)) &&
       new Set(slots).size === slots.length && JSON.stringify(slots) === JSON.stringify([...slots].sort()),
     "RESPONDER_TWILIO_TOPOLOGY_INVALID", "Enabled push slots are invalid.", { status: 400 });
   }
   for (const field of DIGEST_FIELDS) {
+    if (slotAware && input.enabledPushSlots.length === 0 &&
+        ["voiceApiKeySidDigest", "voiceApiKeySecretDigest"].includes(field)) {
+      invariant(input[field] === null, "RESPONDER_TWILIO_TOPOLOGY_INVALID",
+        "SMS-only authority must explicitly omit both Voice key digests.", { status: 400 });
+      selected[field] = null;
+      continue;
+    }
     const slot = Object.keys(TWILIO_PUSH_SLOTS).find((slot) => `${TWILIO_PUSH_SLOTS[slot]}Digest` === field);
     if (slotAware && slot && !input.enabledPushSlots.includes(slot)) {
       invariant(input[field] === null, "RESPONDER_TWILIO_TOPOLOGY_INVALID",
@@ -219,10 +226,10 @@ export function createPostgresResponderTwilioProviderTopologyRepository({
           (client) => client.query(`
             select
               to_regprocedure(
-                'ss.hosted_responder_twilio_isv_topology_contract_v2()'
+                'ss.hosted_responder_twilio_isv_topology_contract_v3()'
               ) is not null
-              and ss.hosted_responder_twilio_isv_topology_contract_v2() =
-                'canonical-responder-twilio-isv-topology-v2-explicit-push-slots'
+              and ss.hosted_responder_twilio_isv_topology_contract_v3() =
+                'canonical-responder-twilio-isv-topology-v3-sms-only'
                 as contract_ready,
               (select count(*) = 1
                  and bool_and(relation.relrowsecurity)
@@ -470,8 +477,8 @@ export function createPostgresResponderTwilioProviderTopologyRepository({
                 and messaging_api_key_sid_digest = $7
                 and messaging_api_key_secret_digest = $8
                 and webhook_auth_token_digest = $9
-                and voice_api_key_sid_digest = $10
-                and voice_api_key_secret_digest = $11
+                and voice_api_key_sid_digest is not distinct from $10
+                and voice_api_key_secret_digest is not distinct from $11
                 and voice_sandbox_push_credential_sid_digest is not distinct from $12
                 and voice_production_push_credential_sid_digest is not distinct from $13
                 and voice_android_sandbox_push_credential_sid_digest is not distinct from $14

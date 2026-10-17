@@ -35,11 +35,11 @@ export function twilioPushSlotMap(predicate) {
 
 export function normalizeTwilioPushSlots(value) {
   const slots = value.enabledPushSlots;
-  if (!Array.isArray(slots) || slots.length < 1 || slots.length > 4 ||
+  if (!Array.isArray(slots) || slots.length > 4 ||
       slots.some((slot) => typeof slot !== "string" || !Object.hasOwn(TWILIO_PUSH_SLOTS, slot)) ||
       new Set(slots).size !== slots.length ||
       canonicalJson(slots) !== canonicalJson([...slots].sort())) {
-    throw configuration("Enabled Voice push slots must be a sorted, nonempty exact slot list.");
+    throw configuration("Enabled Voice push slots must be a sorted exact slot list.");
   }
   const normalized = {};
   for (const [slot, field] of Object.entries(TWILIO_PUSH_SLOTS)) {
@@ -145,8 +145,8 @@ function safeTopology(entry) {
     messagingApiKeySidDigest: digest(entry.messagingApiKeySid),
     messagingApiKeySecretDigest: digest(entry.messagingApiKeySecret),
     webhookAuthTokenDigest: digest(entry.webhookAuthToken),
-    voiceApiKeySidDigest: digest(entry.voiceApiKeySid),
-    voiceApiKeySecretDigest: digest(entry.voiceApiKeySecret),
+    voiceApiKeySidDigest: entry.voiceApiKeySid === null ? null : digest(entry.voiceApiKeySid),
+    voiceApiKeySecretDigest: entry.voiceApiKeySecret === null ? null : digest(entry.voiceApiKeySecret),
     voiceSandboxPushCredentialSidDigest:
       entry.voiceSandboxPushCredentialSid === null ? null : digest(entry.voiceSandboxPushCredentialSid),
     voiceProductionPushCredentialSidDigest:
@@ -228,8 +228,15 @@ function selectedEntry(value, slotAware = false) {
   if (!CAMPAIGN_USE_CASES.has(value.campaignUseCase)) {
     throw configuration("The Twilio Campaign use case is invalid.");
   }
-  sid(value.voiceApiKeySid, SID.apiKey, "The Voice API key SID");
-  secret(value.voiceApiKeySecret, "The Voice API key secret");
+  const smsOnly = slotAware && value.enabledPushSlots.length === 0;
+  if (smsOnly) {
+    if (value.voiceApiKeySid !== null || value.voiceApiKeySecret !== null) {
+      throw configuration("SMS-only authority must explicitly omit both Voice API credentials.");
+    }
+  } else {
+    sid(value.voiceApiKeySid, SID.apiKey, "The Voice API key SID");
+    secret(value.voiceApiKeySecret, "The Voice API key secret");
+  }
   for (const field of [
     "voiceSandboxPushCredentialSid",
     "voiceProductionPushCredentialSid",
@@ -373,7 +380,7 @@ export function createTwilioIsvProviderRegistry(document) {
         // Global feature support is a union, never tenant authorization.
         pushSlots: twilioPushSlotMap((slot) => records.some((entry) =>
           entry[TWILIO_PUSH_SLOTS[slot]] !== null)),
-        hasConfiguredPushSlot: true,
+        hasConfiguredPushSlot: records.some((entry) => PUSH_FIELDS.some((field) => entry[field] !== null)),
         legacyRoutingCompatible: records.every((entry) => PUSH_FIELDS.every((field) => entry[field] !== null)),
         customerCount: records.length,
         registryDigest

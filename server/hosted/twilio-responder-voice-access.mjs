@@ -485,6 +485,10 @@ export function createTwilioResponderVoiceAccess({
           ...Object.fromEntries(Object.values(TWILIO_PUSH_SLOTS).map((field) => [field, providerAuthority[field]]))
         });
       } catch { throw configurationError("Twilio Voice push slots are invalid."); }
+      invariant(providerAuthority.topology.enabledPushSlots.includes(
+        `${selected.clientPlatform}.${selected.appEnvironment}`
+      ), "RESPONDER_NATIVE_VOIP_HELD", "This native Voice platform/environment remains held.",
+      { status: 409, details: { providerEffects: false } });
     }
     const provider = Object.freeze({
       accountSid: providerSid(
@@ -535,6 +539,7 @@ export function createTwilioResponderVoiceAccess({
         : [null, null];
       const signerReady = mode === "verified" &&
         registry?.ready === true && registry?.verified === true &&
+        registry?.hasConfiguredPushSlot === true &&
         topology?.ready === true && topology?.verified === true;
       return deepFreeze({
         ready: mode === "held" || signerReady,
