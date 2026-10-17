@@ -772,3 +772,10 @@ Implementation `58ca68e5641910d2c55ec1a8ff0ce14345247ad7` / tree `57f54d18c74e03
 
 - [Provenance](../ci-provenance/58ca68e5641910d2c55ec1a8ff0ce14345247ad7/provenance.md)
 - [Machine proof](../ci-provenance/58ca68e5641910d2c55ec1a8ff0ce14345247ad7/proof.json)
+
+## Responder SMS-only setup and optional companion — 2026-10-16
+
+Implementation `bd12fc68a5c47bb155f8a372e203ffcfb7e1852a` / tree `bb6209595965d378dc53e7f9f5530741d6e639b4`, protected base `050e6778608ae7a26b76fe8d768cca8c0fa01d68`. Explicit SMS-only provider topology no longer needs native Voice/push credentials; strict native readiness, tenant authority, caller consent and forwarding-source guards remain. Append-only109 preserved all308 prior table fields in the isolated PG proof; topology3/3 and focused backend55/55 passed. Android assisted-setup UI compile/lint passed, unchanged native protocol/Swift proofs retained. Original stale-inventory full-run failure is preserved; exact inventory correction passed15/15 and a fresh full npm/build/browser qualification passed. Normal protected and held qualification remain required; no native/provider effect.
+
+- [Provenance](../ci-provenance/bd12fc68a5c47bb155f8a372e203ffcfb7e1852a/provenance.md)
+- [Machine proof](../ci-provenance/bd12fc68a5c47bb155f8a372e203ffcfb7e1852a/proof.json)
