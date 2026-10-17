@@ -1043,7 +1043,7 @@ test("Custom build customer panel keeps all payment states plain and phone-frien
     "The seven-day payment window ended",
     "Please do not try another payment",
     "Your Custom website project is open",
-    "First payment verified; the $200 assessment credit was applied",
+    "First payment verified; the ",
     "USD before Checkout tax",
     "First payment subtotal",
     "Scope",

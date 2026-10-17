@@ -129,9 +129,9 @@ function descendants(root) {
 test("customer and operator presentations expose only held digest-safe facts", () => {
   const ui = load();
   const customer = ui.customerPresentation(snapshot());
-  assert.equal(customer.heading, "Your held Responder");
-  assert.match(customer.summary, /1 consent route, 1 conversation, and 1 event/u);
-  assert.match(customer.holdNotice, /Global kill is engaged/u);
+  assert.equal(customer.heading, "Your Responder");
+  assert.match(customer.summary, /1 contact permission, 1 conversation, and 1 event/u);
+  assert.match(customer.holdNotice, /Responder is paused/u);
   assert.equal(customer.heldCommands, 1);
   const operator = ui.operatorPresentation(snapshot("operator"));
   assert.equal(operator.heading, "Responder operations");
@@ -177,7 +177,7 @@ test("DOM mount is semantic, text-only, and emits bounded command intents", () =
   });
   const elements = descendants(mounted.element);
   assert.equal(elements.find((element) => element.name === "h2").textContent,
-    "Your held Responder");
+    "Your Responder");
   assert.equal(elements.some((element) =>
     element.attributes.get("role") === "status"
   ), true);
@@ -201,7 +201,7 @@ test("DOM mount is semantic, text-only, and emits bounded command intents", () =
     onCommand: (command) => operatorCommands.push(command)
   });
   descendants(operatorMounted.element).find(
-    (element) => element.textContent === "Record consent evidence"
+    (element) => element.textContent === "Record permission"
   ).click();
   assert.deepEqual(JSON.parse(JSON.stringify(operatorCommands)), [{
     action: "operator-consent"

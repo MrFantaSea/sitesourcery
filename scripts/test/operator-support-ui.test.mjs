@@ -275,7 +275,7 @@ test("operator assets remain hosted-only and expose an effect-held responsive de
     hostedOperatorAssets.map((file) => readFile(path.join(ROOT, file), "utf8"))
   );
   assert.match(html, /id="main"[^>]*tabindex="-1"/u);
-  assert.match(html, /does not send customer mail or execute deletion or export requests/u);
+  assert.match(html, /do not send email, delete data, or run exports/u);
   assert.match(html, /Assessment and Custom tools/u);
   assert.match(css, /@media \(max-width: 760px\)/u);
   assert.match(css, /grid-template-columns: 1fr/u);
@@ -290,8 +290,8 @@ test("operator assets remain hosted-only and expose an effect-held responsive de
   assert.match(javascript, /\/number-bindings/u);
   assert.match(javascript, /conditional_forward_destination/u);
   assert.match(html, /id="operator-number-bindings"/u);
-  assert.match(html, /Raw number and SID values are sent once/u);
-  assert.match(html, /cannot retry a provider request, fabricate an effect/u);
+  assert.match(html, /submits those values once and keeps only private reference codes/u);
+  assert.match(html, /does not repeat a provider request or show private messages or phone data/u);
   assert.match(html, /Record resolution only/u);
   assert.match(html, /id="operator-care-surface"/u);
   assert.match(html, /id="operator-responder-surface"/u);
@@ -301,7 +301,7 @@ test("operator assets remain hosted-only and expose an effect-held responsive de
   assert.match(html, /does not update the adjacent source/u);
   assert.match(html, /abracadabra-care-surfaces\.js/u);
   assert.match(html, /abracadabra-responder-surfaces\.js/u);
-  assert.match(javascript, /Retained manual review; no generic repair/u);
+  assert.match(javascript, /Manual review required\. No repair or provider action is available here/u);
   assert.match(javascript, /\/operator\/adjacent-integrations\/contracts/u);
   assert.match(javascript, /\/operator\/adjacent-integrations\/trace/u);
   assert.match(javascript, /\/operator\/adjacent-integrations\/crosswalks/u);

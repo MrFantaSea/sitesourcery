@@ -401,7 +401,7 @@ test("starts with one choice and keeps every later stage hidden and inert", () =
   assert.equal(fields.live.getAttribute("role"), "status");
   assert.equal(fields.live.getAttribute("aria-live"), "polite");
   assert.equal(fields.live.getAttribute("aria-atomic"), "true");
-  assert.equal(fields.live.textContent, "Choose one stuck moment to begin.");
+  assert.equal(fields.live.textContent, "Choose a task to begin.");
   assert.equal(fields.start.hidden, false);
   assert.equal(stages[0].hidden, false);
   assert.equal(
@@ -780,7 +780,7 @@ test("planner copy stays customer-readable while the public page stays conversat
     true
   );
   for (const phrase of [
-    "What keeps falling through the cracks?",
+    "Which task needs attention?",
     "Nothing starts on this page",
     "Your choice only changes this page. It is not saved or sent.",
     "This page cannot place an order or start work.",

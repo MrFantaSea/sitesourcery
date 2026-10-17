@@ -149,15 +149,15 @@
     return Object.freeze({
       audience: audience,
       heading: audience === "customer"
-        ? "Your held Responder"
+        ? "Your Responder"
         : "Responder operations",
-      summary: selected.contacts.length + " consent route" +
+      summary: selected.contacts.length + " contact permission" +
         (selected.contacts.length === 1 ? "" : "s") + ", " +
         selected.interactions.length + " conversation" +
         (selected.interactions.length === 1 ? "" : "s") + ", and " +
         events + " event" + (events === 1 ? "" : "s") + ".",
       holdNotice:
-        "Global kill is engaged. Messages, telephony, billing, and provider work remain off.",
+        "Responder is paused. Messages, calls, billing, and connected services are off.",
       observedAt: selected.observedAt,
       heldCommands: commands,
       contacts: selected.contacts,
@@ -222,8 +222,8 @@
     hold.setAttribute("role", "status");
     var metrics = element(documentRef, "dl", "responder-surface-metrics");
     [
-      ["Held commands", String(shown.heldCommands)],
-      ["Evidence refreshed", shown.observedAt.slice(0, 10)]
+      ["Unsent messages", String(shown.heldCommands)],
+      ["Last updated", shown.observedAt.slice(0, 10)]
     ].forEach(function (fact) {
       var card = element(documentRef, "div", "responder-surface-metric");
       card.append(
@@ -241,7 +241,7 @@
           documentRef,
           "p",
           "responder-surface-meta",
-          title(contact.consentBasis) + " · route digest " +
+          title(contact.consentBasis) + " · private reference " +
             contact.routeDigest.slice(0, 12)
         ),
         action(documentRef, "Record STOP", {
@@ -263,7 +263,7 @@
           "p",
           "responder-surface-meta",
           title(interaction.sourceKind) + " · " + interaction.events.length +
-            " durable event" + (interaction.events.length === 1 ? "" : "s")
+            " recorded event" + (interaction.events.length === 1 ? "" : "s")
         )
       );
       var events = element(documentRef, "ul", "responder-surface-events");
@@ -279,13 +279,13 @@
       card.append(events);
       var controls = element(documentRef, "div", "responder-surface-controls");
       controls.append(
-        action(documentRef, "Request human handoff", {
+        action(documentRef, "Ask for human review", {
           action: "handoff",
           interactionId: interaction.id,
           projectId: interaction.projectId,
           expectedRevision: interaction.revision
         }, onCommand, interaction.state !== "open"),
-        action(documentRef, "Reserve held acknowledgment", {
+        action(documentRef, "Save an unsent reply", {
           action: "held-message",
           interactionId: interaction.id,
           projectId: interaction.projectId,
@@ -303,8 +303,8 @@
     globalControls.append(action(
       documentRef,
       audience === "operator"
-        ? "Reassert organization kill"
-        : "Prepare consent evidence",
+        ? "Keep Responder paused"
+        : "Prepare permission record",
       { action: audience === "operator" ? "global-kill" : "prepare-consent" },
       onCommand,
       false
@@ -312,7 +312,7 @@
     if (audience === "operator") {
       globalControls.append(action(
         documentRef,
-        "Record consent evidence",
+        "Record permission",
         { action: "operator-consent" },
         onCommand,
         false

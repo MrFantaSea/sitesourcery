@@ -631,7 +631,7 @@ test("one hosted build publishes exact Legal V7 while non-legal pages use curren
   );
   assert.match(app, /\$20 once[\s\S]*No renewal[\s\S]*Your HTML file/u);
   assert.match(app, /Full \$20 project credit/u);
-  assert.match(app, /host it with Alakazam for \$25, \$35, or \$50 a month/u);
+  assert.match(app, /host with Alakazam for \$25, \$35, or \$50 a month/u);
   assert.doesNotMatch(
     app,
     /Alakazam is the service that keeps it and puts it online|Your \$5 comes off Alakazam/u,
@@ -1301,7 +1301,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      '<h1 id="spark-title">See your page free. Sign in to save, download, or host it.</h1>',
+      '<h1 id="spark-title">Build your page for free.</h1>',
       '<h1 id="spark-title">Changed product</h1>',
     ),
     "utf8",
@@ -1393,7 +1393,7 @@ test("missing, changed, or mixed reviewed input fails before replacing the last 
   await writeFile(
     appFile,
     originalApp.replace(
-      '<h1 id="spark-title">See your page free. Sign in to save, download, or host it.</h1>',
+      '<h1 id="spark-title">Build your page for free.</h1>',
       '<h1 id="spark-title">Changed after last good</h1>',
     ),
     "utf8",

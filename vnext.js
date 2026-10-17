@@ -205,12 +205,12 @@
         ]
       },
       system: {
-        question: "Which handoff keeps falling through?",
+        question: "Which task needs attention?",
         options: [
           {
             key: "hive-missed-call",
             label: "Missed calls",
-            note: "A legitimate caller reaches nobody and the reason may disappear."
+            note: "People call when nobody is available to answer."
           },
           {
             key: "hive-booking",
@@ -220,17 +220,17 @@
           {
             key: "hive-review-request",
             label: "Review requests",
-            note: "The right customers need one fair request at the right time."
+            note: "I want to ask customers for a review after the work is done."
           },
           {
             key: "hive-after-hours",
             label: "After-hours questions",
-            note: "People need approved facts without invented answers or urgency."
+            note: "Customers ask questions when the business is closed."
           },
           {
             key: "hive-follow-up",
             label: "Follow-up",
-            note: "A promised next step keeps disappearing during the day."
+            note: "We forget to follow up when we said we would."
           },
           {
             key: "hive-getting-paid",
@@ -240,12 +240,12 @@
           {
             key: "commission",
             label: "A different workflow",
-            note: "The channels, rules, or handoff need to fit my business."
+            note: "I need help with a task that is not listed here."
           }
         ]
       },
       service: {
-        question: "Which supporting job is closest?",
+        question: "What kind of website help do you need?",
         options: [
           {
             key: "assessment",
@@ -254,7 +254,7 @@
           },
           {
             key: "foundations",
-            label: "Website foundations",
+            label: "Website fixes",
             note: "Structure, basic accessibility, speed, page information, or launch quality."
           },
           {
@@ -274,22 +274,22 @@
           },
           {
             key: "commerce",
-            label: "Commerce",
+            label: "Selling online",
             note: "Products, buying, delivery, receipts, refunds, or a payment service."
           },
           {
             key: "interfaces",
-            label: "Interfaces",
+            label: "Staff tools",
             note: "Focused controls for a phone, tablet, counter, kiosk, or screen."
           },
           {
             key: "studio",
-            label: "Studio",
+            label: "Design and artwork",
             note: "Art direction, illustration, motion, editorial, or a campaign piece."
           },
           {
             key: "network",
-            label: "Connections",
+            label: "Local listings",
             note: "Listings, directories, referrals, resources, or community discovery."
           }
         ]
@@ -310,51 +310,51 @@
         href: "/abracadabra/"
       },
       "website-unsure": {
-        title: "Compare the website paths",
+        title: "Compare website options",
         copy: "See the made-for-you and build-it-yourself choices side by side, or contact Zack without choosing first.",
         action: "Compare website options",
         href: "/websites/"
       },
       "hive-missed-call": {
         title: "Hive · Missed-call responder",
-        copy: "Use a missed call as the starting point for a short conversation about the better outcome, human handoff, and boundaries.",
-        action: "Open this Hive starting point",
+        copy: "Review how missed calls could be followed up and when a person should take over.",
+        action: "Review this task",
         href: "/hive/#missed-call"
       },
       "hive-booking": {
         title: "Hive · Booking guide",
-        copy: "Use a booking problem as the starting point for a short conversation about the questions, confirmation, and human handoff.",
-        action: "Open this Hive starting point",
+        copy: "Review which details to collect before a person confirms a booking.",
+        action: "Review this task",
         href: "/hive/#booking"
       },
       "hive-review-request": {
         title: "Hive · Review request",
-        copy: "Use a review request as the starting point for a short conversation about timing, permission, and an easy stop.",
-        action: "Open this Hive starting point",
+        copy: "Review when to ask for a review, who may be contacted, and how requests can stop.",
+        action: "Review this task",
         href: "/hive/#review-request"
       },
       "hive-after-hours": {
         title: "Hive · After-hours information",
-        copy: "Use an after-hours question as the starting point for a short conversation about checked facts and the path to a person.",
-        action: "Open this Hive starting point",
+        copy: "Review which questions can be answered after hours and which need a person.",
+        action: "Review this task",
         href: "/hive/#after-hours"
       },
       "hive-follow-up": {
         title: "Hive · Follow-up",
-        copy: "Use a missed follow-up as the starting point for a short conversation about the reason, owner, due time, and human decision.",
-        action: "Open this Hive starting point",
+        copy: "Review who should follow up, when, and what needs a personal decision.",
+        action: "Review this task",
         href: "/hive/#follow-up"
       },
       "hive-getting-paid": {
         title: "Hive · Getting-paid reminder",
-        copy: "Use an overdue invoice as the starting point for a short conversation about a respectful reminder and a clear way to question it.",
-        action: "Open this Hive starting point",
+        copy: "Review when to remind a customer about an invoice and how to handle questions or disputes.",
+        action: "Review this task",
         href: "/hive/#getting-paid"
       },
       commission: {
-        title: "Ask about a working system",
+        title: "Ask about another business task",
         copy: "A separate project may fit when the messages, rules, outside services, controls, or handoff must match your business.",
-        action: "Discuss the system",
+        action: "Describe the task",
         href: "/contact/"
       },
       assessment: {
@@ -364,14 +364,14 @@
         href: "/solutions/#assessment"
       },
       foundations: {
-        title: "Website foundations",
-        copy: "Ask about foundations for site structure, basic accessibility, speed, page information, measurement, or launch quality.",
-        action: "Explore foundations",
+        title: "Website fixes",
+        copy: "Ask about fixing page structure, phone layouts, accessibility, speed, or page titles.",
+        action: "See website fixes",
         href: "/solutions/#foundations"
       },
       care: {
         title: "Care",
-        copy: "Ask about Care for a written maintenance, change, monitoring, recovery, handoff, and exit agreement.",
+        copy: "Ask about a written Care plan covering upkeep, changes, monitoring, backups, and how to leave.",
         action: "Explore Care",
         href: "/solutions/#care"
       },
@@ -383,32 +383,32 @@
       },
       email: {
         title: "Business email",
-        copy: "Ask about business email for role addresses, delivery checks, routing, recovery, moving mail, and exit notes.",
+        copy: "Ask about setting up business email, checking delivery, recovering access, or moving mail.",
         action: "Explore business email",
         href: "/solutions/#email"
       },
       commerce: {
-        title: "Commerce",
-        copy: "Ask whether help is available for product pages and a path to a client-owned payment service.",
-        action: "See possible commerce help",
+        title: "Selling online",
+        copy: "Ask about product pages and connecting a payment service your business controls.",
+        action: "See help with selling online",
         href: "/solutions/#commerce"
       },
       interfaces: {
-        title: "Interfaces",
+        title: "Staff tools",
         copy: "Ask about a focused screen with clear permissions, visible errors, and a manual backup.",
-        action: "Explore Interfaces",
+        action: "See staff tools",
         href: "/solutions/#interfaces"
       },
       studio: {
-        title: "Studio",
+        title: "Design and artwork",
         copy: "Ask about one focused design, illustration, motion, story, campaign, or printed-and-digital piece.",
-        action: "Explore Studio",
+        action: "See design services",
         href: "/solutions/#studio"
       },
       network: {
-        title: "Connections",
+        title: "Local listings",
         copy: "Ask about local listings, directories, referrals, shared resources, or community discovery.",
-        action: "Explore Connections",
+        action: "See local-listing help",
         href: "/solutions/#network"
       }
     };

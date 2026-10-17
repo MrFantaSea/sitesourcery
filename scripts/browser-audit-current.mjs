@@ -3146,7 +3146,7 @@ async function paidCustomBuildJourney(cdp, server, viewport, mode) {
     ? "terminal"
     : "open";
   const expectedOwnerProgress = mode === "completion"
-    ? "Verified completion is immutable"
+    ? "The project is complete"
     : "Action needed from you";
   try {
     await waitFor(
@@ -4074,9 +4074,9 @@ async function customBuildFinalHandoffJourney(
   await waitFor(
     cdp,
     `document.querySelector("[data-owner-custom-build-final]")?.textContent
-      .includes("Immutable handoff created. The 30-day workmanship window now begins.")
+      .includes("Final handoff created. The 30-day workmanship window now begins.")
       && document.querySelector("[data-owner-custom-build-final]")?.textContent
-        .includes("Handoff is immutable")
+        .includes("The handoff cannot be changed")
       && !document.querySelector("[data-owner-custom-build-handoff-form]")`,
   );
   const ownerAfter = await evaluate(
@@ -4534,7 +4534,7 @@ async function customBuildFinalAuthorityRaceJourney(
           "[data-owner-change-completion-refresh], [data-owner-custom-build-final-refresh]"
         ).length,
         changeReadOnlyCopy: change.textContent.includes(
-          "Verified completion is immutable"
+          "The project is complete"
         ),
       };
     })()`,
@@ -5244,10 +5244,10 @@ try {
       ))
       || (mode === "completion" && (
         !paid.initial.ownerProgressText.includes(
-          "Verified completion is immutable"
+          "The project is complete"
         )
         || !paid.initial.customerProgressText.includes(
-          "Completion is immutable"
+          "The project is complete"
         )
         || !paid.initial.customerChangeText.includes(
           "Completion proof is prepared"
@@ -5529,7 +5529,7 @@ try {
         || initialOwner.scrollWidth > initialOwner.viewportWidth
         || initialOwner.paymentProjectionVisible
         || !initialOwner.text.includes(
-          "Verified financial clearance is ready for immutable handoff"
+          "Payment is cleared. The final handoff can be recorded."
         )
         || shortControls.length
         || ownerPaymentRead?.search !==
@@ -5560,9 +5560,9 @@ try {
         || ownerAfter.handoffFormCount !== 0
         || ownerAfter.paymentProjectionCount !== 0
         || !ownerAfter.text.includes(
-          "Immutable handoff created. The 30-day workmanship window now begins."
+          "Final handoff created. The 30-day workmanship window now begins."
         )
-        || !ownerAfter.text.includes("Handoff is immutable")
+        || !ownerAfter.text.includes("The handoff cannot be changed")
       ) {
         failures.push(
           `${viewport.label} ${mode} owner handoff authority/input binding failed: `
@@ -5625,7 +5625,7 @@ try {
           || !customer.finalText.includes("$600.00 USD")
           || !customer.finalText.includes("Final payment, delivery, and workmanship")
           || !customer.finalText.includes(
-            "verified provider-confirmed final-payment clearance"
+            "Delivery is complete and final payment is confirmed."
           )
           || !customer.finalText.includes("SSCB-FINAL-")
         ))

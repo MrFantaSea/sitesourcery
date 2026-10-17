@@ -522,7 +522,7 @@ test("customer assessment invoice offers secure checkout with pre-payment tax tr
     "utf8"
   );
   for (const copy of [
-    "Pay secure $200 assessment invoice",
+    "assessment invoice securely",
     "Stripe will show tax, if applicable, and the exact total before you confirm payment.",
     "Work begins only after Site Sourcery verifies payment."
   ]) {
@@ -1789,7 +1789,7 @@ test("Custom build owner and customer panels expose bounded mobile controls and 
     "Issue exact Custom website quote",
     "Safely void Custom build quote",
     "Safe void is confirmed",
-    "Scale is $4,000 + $270 per computed capacity unit (1–15)",
+    "Scale is $3,600 + $240 per computed capacity unit (1–15)",
     "Accept exact Custom website quote",
     "Assessment credit",
     "Amount remaining",
@@ -1851,9 +1851,9 @@ test("owner workbench is private, phone-friendly, evidence-bound, and delivery-g
     "Owner assessment workbench",
     "Prepare and upload screenshot",
     "Customer-safe findings (up to 10)",
-    "Deliver immutable assessment report",
+    "Deliver final assessment report",
     "Draft findings stay private",
-    "one-use, non-cash $200 credit"
+    "This is a one-use, non-cash "
   ]) assert.ok(source.includes(copy), copy);
   for (const boundary of [
     "listOwnerAssessmentJobs",
@@ -1870,4 +1870,108 @@ test("owner workbench is private, phone-friendly, evidence-bound, and delivery-g
     source,
     /\[401, 403, 503\]\.includes\(error\.status\)[\s\S]*?"unavailable"/u
   );
+});
+
+test("rendered Assessment money follows validated records and retains historical Custom credits", { timeout: 30_000 }, async () => {
+  const original = await readFile(new URL("../../abracadabra/app/abracadabra-customer-control-dom.js", import.meta.url), "utf8");
+  // Expose the existing private render factories only in this browser fixture.
+  // Their bodies and the production validators run unchanged.
+  const exportAnchor = "    createOwnerAssessmentPanel:\n      createOwnerAssessmentPanel";
+  assert.equal(original.split(exportAnchor).length, 2);
+  const source = original.replace(exportAnchor, exportAnchor + ",\n"
+    + "    createAssessmentPanel, createOwnerCustomBuildWorkPanel, createOwnerCustomBuildPanel");
+  const quote = {
+    schema: "sitesourcery.custom-services-assessment-quote/v1", state: "review_required",
+    actions: { acceptQuote: { available: true } },
+    quote: {
+      quoteId: QUOTE_ID, revision: 1, quoteDigest: "b".repeat(64), disclosureDigest: "c".repeat(64),
+      servicePrice: { amountMinor: 35000, currency: "USD", formatted: "$350.00" },
+      tax: { state: "disabled_by_owner" }, payment: { schedule: "full_before_work", invoice: "later_separate_invoice" },
+      scope: { maximumWebsites: 1, maximumFindings: 10, reviewTargets: [{ kind: "page", value: "/" }] },
+      dates: { issuedAt: "2026-08-05T12:00:00.000Z", expiresAt: "2099-08-05T12:00:00.000Z", deliveryDate: "2099-08-20" }
+    }
+  };
+  const assessment = {
+    phase: "ready", projectId: PROJECT_ID,
+    request: { schema: "sitesourcery.custom-services-assessment-request/v1", state: "submitted",
+      caseId: CASE_ID, website: null, facts: null, actions: { withdraw: { available: true } } },
+    quote, invoice: assessmentInvoiceProjection(true), report: customerAssessmentReport()
+  };
+  const badAssessment = structuredClone(assessment);
+  badAssessment.quote.quote.servicePrice = { amountMinor: 20000, currency: "USD", formatted: "$200.00" };
+  const legacyJobs = ownerCustomBuildJobs({ job: paidCustomBuildJob({
+    firstPayment: { grossMinor: 60000, creditMinor: 20000, paidSubtotalMinor: 40000, currency: "USD" },
+    finalHandoff: { amountMinor: 60000, currency: "USD", state: "unpaid" }
+  }) });
+  const noCreditJobs = ownerCustomBuildJobs({ job: paidCustomBuildJob({
+    firstPayment: { grossMinor: 50000, creditMinor: 0, paidSubtotalMinor: 50000, currency: "USD" }
+  }) });
+  const fixtures = { assessment, badAssessment, currentJobs: ownerCustomBuildJobs(), legacyJobs, noCreditJobs,
+    opportunities: ownerCustomBuildOpportunities({ currentQuote: null }) };
+  for (const jobs of [fixtures.currentJobs, legacyJobs, noCreditJobs]) {
+    assert.equal(verifiedOwnerCustomBuildJobs(jobs), jobs);
+  }
+  const html = '<!doctype html><html><head><meta charset="utf-8"></head><body><script>window.module={exports:{}};</script><script src="/control.js"></script></body></html>';
+  const server = createServer((request, response) => {
+    response.writeHead(200, { "Content-Type": request.url === "/control.js" ? "text/javascript" : "text/html" });
+    response.end(request.url === "/control.js" ? source : html);
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  let browser;
+  try {
+    const origin = `http://127.0.0.1:${server.address().port}`;
+    browser = await openReviewedBrowser({ origin, viewport: { width: 900, height: 900, mobile: false } });
+    await browser.navigate(origin + "/");
+    const result = await browser.evaluate(`(() => {
+      const fixtures = ${JSON.stringify(fixtures)}, api = module.exports;
+      const accepted = [], checkedOut = [];
+      const panel = api.createAssessmentPanel(document, {
+        acceptQuote: value => accepted.push(value.quote.quoteId), checkout: value => checkedOut.push(value.invoice.invoiceId)
+      });
+      document.body.append(panel.element); panel.render(fixtures.assessment);
+      const quote = panel.element.querySelector('.customer-assessment-quote');
+      const button = quote.querySelector('button'), checkbox = quote.querySelector('input[type=checkbox]');
+      const disabledBefore = button.disabled;
+      button.click(); const before = [...accepted];
+      checkbox.checked = true; checkbox.dispatchEvent(new Event('change')); button.click();
+      const checkout = panel.element.querySelector('.customer-assessment-checkout'); checkout.click();
+      const assessment = { quote: quote.textContent, invoice: panel.element.querySelector('.customer-assessment-invoice').textContent,
+        credit: panel.element.querySelector('.customer-assessment-build-credit').textContent,
+        checkout: checkout.textContent, disabledBefore, before, accepted, checkedOut };
+      panel.render(fixtures.badAssessment);
+      const invalid = { text: panel.element.textContent, actions: panel.element.querySelectorAll('button').length };
+      const jobs = {};
+      for (const key of ['currentJobs', 'legacyJobs', 'noCreditJobs']) {
+        const work = api.createOwnerCustomBuildWorkPanel(document, {});
+        document.body.append(work.element); work.render({ revealed: true, phase: 'ready', jobs: fixtures[key] });
+        jobs[key] = work.element.querySelector('.customer-custom-build-owner-review').textContent;
+      }
+      const owner = api.createOwnerCustomBuildPanel(document, {});
+      document.body.append(owner.element); owner.render({ phase: 'ready', opportunities: fixtures.opportunities });
+      const creditChoice = owner.element.querySelector('[name=creditSelection]').selectedOptions[0].textContent;
+      const tier = owner.element.querySelector('[name=tierId]'); tier.value = 'scale'; tier.dispatchEvent(new Event('change'));
+      const estimate = owner.element.querySelector('.customer-custom-build-estimate').textContent;
+      return { assessment, invalid, jobs, creditChoice, estimate };
+    })()`);
+    const money = amount => "$" + (amount / 100).toFixed(2);
+    assert.ok(result.assessment.quote.includes(money(quote.quote.servicePrice.amountMinor)));
+    assert.ok(result.assessment.quote.includes("I accept this exact scope, " + money(quote.quote.servicePrice.amountMinor) + " price"));
+    assert.ok(result.assessment.invoice.includes(money(assessment.invoice.invoice.subtotal.amountMinor) + " USD"));
+    assert.ok(result.assessment.checkout.includes(money(assessment.invoice.invoice.subtotal.amountMinor)));
+    assert.ok(result.assessment.credit.includes(money(assessment.report.credit.amountMinor)));
+    assert.doesNotMatch(JSON.stringify(result.assessment), /\$200/u);
+    assert.equal(result.assessment.disabledBefore, true); assert.deepEqual(result.assessment.before, []);
+    assert.deepEqual(result.assessment.accepted, [QUOTE_ID]); assert.deepEqual(result.assessment.checkedOut, [INVOICE_ID]);
+    assert.equal(result.invalid.actions, 0); assert.match(result.invalid.text, /could not be verified/u);
+    assert.ok(result.jobs.currentJobs.includes(money(fixtures.currentJobs.jobs[0].job.firstPayment.creditMinor) + " assessment credit applied"));
+    assert.ok(result.jobs.legacyJobs.includes(money(legacyJobs.jobs[0].job.firstPayment.creditMinor) + " assessment credit applied"));
+    assert.doesNotMatch(result.jobs.legacyJobs, /\$350/u);
+    assert.match(result.jobs.noCreditJobs, /no assessment credit applied/u);
+    assert.doesNotMatch(result.jobs.noCreditJobs, /\$(?:200|350)/u);
+    assert.ok(result.creditChoice.includes(money(fixtures.opportunities.opportunities[0].credit.amountMinor)));
+    assert.match(result.estimate, /\$3,840\.00.*\$3,600\.00 \+ \$240\.00 × 1.*−\$350\.00.*\$3,490\.00/u);
+  } finally {
+    if (browser) await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
 });
