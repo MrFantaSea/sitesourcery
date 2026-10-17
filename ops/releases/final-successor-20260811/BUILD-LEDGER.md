@@ -779,3 +779,10 @@ Implementation `bd12fc68a5c47bb155f8a372e203ffcfb7e1852a` / tree `bb6209595965d3
 
 - [Provenance](../ci-provenance/bd12fc68a5c47bb155f8a372e203ffcfb7e1852a/provenance.md)
 - [Machine proof](../ci-provenance/bd12fc68a5c47bb155f8a372e203ffcfb7e1852a/proof.json)
+
+## Site readability and validated price displays — 2026-10-17
+
+Implementation `37e0ae0b61a0e39dea7a6f7513e93636a5064982` / tree `1e70c8f6b9908ae7ed3f1004bbcb6b19483d1aa3`, protected base `3a539adb01495d564b3352de3ae2631551779e9c`. Larger text/controls, dependable hero contrast, concise public/customer/operator copy and a simpler maker hero. Assessment and Scale displays follow validated current amounts while preserving historical credits. Focused financial/semantic tests, actual24-route readability proof and the fresh complete npm/build/browser ladder passed. Original copy-guard, sandbox-boundary and browser-layout/predicate failures are retained with their exact corrections; unchanged PostgreSQL109/Android proofs are reused truthfully. No backend/provider/native effect; protected and held qualification remain required.
+
+- [Provenance](../ci-provenance/37e0ae0b61a0e39dea7a6f7513e93636a5064982/provenance.md)
+- [Machine proof](../ci-provenance/37e0ae0b61a0e39dea7a6f7513e93636a5064982/proof.json)
