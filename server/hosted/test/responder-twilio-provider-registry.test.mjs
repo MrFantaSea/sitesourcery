@@ -260,3 +260,40 @@ test("global slot support is the union of disjoint customer configurations, not 
     first, { ...second, voiceProductionPushCredentialSid: first.voiceAndroidSandboxPushCredentialSid }
   ])), /shared across customers or platforms/u);
 });
+
+
+test("SMS-only v2 authority has explicit null Voice credentials and no native capability", () => {
+  const sms = entry({ enabledPushSlots: [], voiceApiKeySid: null, voiceApiKeySecret: null,
+    voiceSandboxPushCredentialSid: null, voiceProductionPushCredentialSid: null,
+    voiceAndroidSandboxPushCredentialSid: null, voiceAndroidProductionPushCredentialSid: null });
+  const registry = createTwilioIsvProviderRegistry(slotDocument([sms]));
+  assert.equal(registry.readiness().ready, true);
+  assert.equal(registry.readiness().hasConfiguredPushSlot, false);
+  assert.equal(registry.readiness().legacyRoutingCompatible, false);
+  assert.deepEqual(registry.readiness().pushSlots, {
+    ios: { sandbox: false, production: false }, android: { sandbox: false, production: false }
+  });
+  const provider = registry.resolveOrganization(ids.organization);
+  assert.equal(provider.voiceApiKeySid, null);
+  assert.equal(provider.topology.voiceApiKeySidDigest, null);
+  assert.equal(provider.topology.voiceApiKeySecretDigest, null);
+  assert.deepEqual(provider.topology.enabledPushSlots, []);
+  assert.throws(() => createTwilioIsvProviderRegistry(document([sms])));
+  for (const delta of [
+    { voiceApiKeySid: sid("SK", "7") }, { voiceApiKeySecret: "v".repeat(32) },
+    { voiceApiKeySid: sid("SK", "7"), voiceApiKeySecret: "v".repeat(32) },
+    { enabledPushSlots: ["android.sandbox"], voiceAndroidSandboxPushCredentialSid: sid("CR", "a") },
+    { voiceApiKeySid: undefined }, { voiceSandboxPushCredentialSid: sid("CR", "a") },
+    { messagingApiKeySid: null }, { messagingApiKeySecret: null }, { webhookAuthToken: null }
+  ]) assert.throws(() => createTwilioIsvProviderRegistry(slotDocument([{ ...sms, ...delta }])));
+  const other = entry({ organizationId: ids.secondOrganization, accountSid: sid("AC", "c"),
+    messagingServiceSid: sid("MG", "c"), customerProfileSid: sid("BU", "c"),
+    brandRegistrationSid: sid("BN", "c"), campaignSid: sid("QE", "c"),
+    messagingApiKeySid: sid("SK", "c"), messagingApiKeySecret: "x".repeat(32),
+    webhookAuthToken: "y".repeat(32), enabledPushSlots: ["android.production", "android.sandbox", "ios.production", "ios.sandbox"] });
+  const mixed = createTwilioIsvProviderRegistry(slotDocument([sms, other]));
+  assert.equal(mixed.readiness().hasConfiguredPushSlot, true);
+  assert.deepEqual(mixed.resolveOrganization(ids.organization).topology.enabledPushSlots, []);
+  assert.throws(() => createTwilioIsvProviderRegistry(slotDocument([sms,
+    { ...other, messagingApiKeySid: sms.messagingApiKeySid }])));
+});

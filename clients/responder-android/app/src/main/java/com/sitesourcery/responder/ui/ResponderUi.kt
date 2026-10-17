@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -179,10 +180,10 @@ private fun AuthScreen(
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Brand()
-            Text("Missed calls, handled.", style = MaterialTheme.typography.headlineMedium)
+            Text("Your Responder companion", style = MaterialTheme.typography.headlineMedium)
             HeldCard(
-                "Safe setup mode",
-                "Your existing carrier stays in place. No call, text, or carrier command is automatic during setup.",
+                "Optional companion app",
+                "View Responder activity and use optional business calling. The app is not required for missed-call text-back. Site Sourcery helps with setup; in-app calls stay inactive until configured and enabled.",
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("Sign in", "Create", "Recover").forEachIndexed { index, label ->
@@ -257,7 +258,9 @@ private fun WorkspacePicker(
     ) {
         Brand()
         Text("Choose a workspace", style = MaterialTheme.typography.headlineMedium)
-        if (state.organizations.isEmpty()) Text("No active business workspace is available.")
+        if (state.organizations.isEmpty()) {
+            AssistedSetup("Your account has no active business workspace yet. Contact Site Sourcery to finish setting up your service or restore access to an existing workspace.")
+        }
         state.organizations.forEach { organization ->
             WorkspaceChoice(organization.name, "Role: ${organization.role}") {
                 launch { actions.selectOrganization(organization) }
@@ -266,7 +269,9 @@ private fun WorkspacePicker(
         if (state.selectedOrganization != null) {
             HorizontalDivider()
             Text("Projects for ${state.selectedOrganization.name}", fontWeight = FontWeight.Bold)
-            if (state.projects.isEmpty()) Text("No project is available in this business.")
+            if (state.projects.isEmpty()) {
+                AssistedSetup("Your business has no Responder workspace yet. Contact Site Sourcery to finish setting up your service. You do not need to create or buy a website to get setup help.")
+            }
             state.projects.forEach { project ->
                 WorkspaceChoice(project.name, "Responder workspace") {
                     launch { actions.selectProject(project) }
@@ -364,15 +369,13 @@ private fun ForwardingTab(
     actions: ResponderAppState,
     launch: (suspend () -> Unit) -> Unit,
 ) {
-    var businessLine by remember { mutableStateOf("") }
-    var bindingId by remember { mutableStateOf("") }
     HeldCard(
         "Keep your carrier",
         "Conditional no-answer forwarding is set up by a person. Responder never dials carrier codes or changes your plan.",
     )
     val forwarding = state.forwarding
     if (forwarding == null) {
-        Text("Forwarding details are unavailable.")
+        AssistedSetup("Forwarding details are unavailable. Contact Site Sourcery to check your existing setup before changing your carrier settings.")
         return
     }
     Text("Setup instructions", style = MaterialTheme.typography.headlineSmall)
@@ -385,25 +388,8 @@ private fun ForwardingTab(
         }
     }
     if (forwarding.onboardings.none { it.state != "retired" }) {
-        Text("Request setup", style = MaterialTheme.typography.titleLarge)
-        Field("Existing business line", businessLine, KeyboardType.Phone) { businessLine = it }
-        Field("Assigned destination binding ID", bindingId) { bindingId = it }
-        Button(
-            onClick = {
-                val submittedLine = businessLine
-                val submittedBinding = bindingId
-                businessLine = ""
-                bindingId = ""
-                launch { actions.createForwarding(submittedLine, submittedBinding) }
-            },
-            enabled = businessLine.isNotBlank() && bindingId.isNotBlank(),
-            modifier = Modifier.fillMaxWidth(),
-        ) { Text("Record forwarding request") }
+        AssistedSetup("Forwarding has not been set up for this workspace. Site Sourcery will confirm the right destination and test the handoff with you before activation.")
     }
-    Text(
-        "Business-line entry is transient and is cleared immediately after submission.",
-        style = MaterialTheme.typography.bodySmall,
-    )
 }
 
 @Composable
@@ -472,6 +458,37 @@ private fun DeviceTab(
         "Incoming calls show generic Site Sourcery identity. Caller numbers and message content are never stored in this app.",
         style = MaterialTheme.typography.bodySmall,
     )
+}
+
+@Composable
+private fun AssistedSetup(detail: String) {
+    val uriHandler = LocalUriHandler.current
+    var contactUnavailable by remember { mutableStateOf(false) }
+    HeldCard("Get help with setup", detail)
+    Text("The app is an optional companion. Installing it does not activate calls or texts.")
+    OutlinedButton(
+        onClick = {
+            try {
+                uriHandler.openUri("https://sitesourcery.com/contact/#direct-contact")
+            } catch (_: IllegalArgumentException) {
+                contactUnavailable = true
+            } catch (_: SecurityException) {
+                contactUnavailable = true
+            }
+        },
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("Contact Site Sourcery") }
+    Text("sitesourcery@proton.me", style = MaterialTheme.typography.bodySmall)
+    if (contactUnavailable) {
+        AlertDialog(
+            onDismissRequest = { contactUnavailable = false },
+            title = { Text("Contact page unavailable") },
+            text = { Text("Open sitesourcery.com/contact in your browser or email sitesourcery@proton.me for setup help.") },
+            confirmButton = {
+                TextButton(onClick = { contactUnavailable = false }) { Text("OK") }
+            },
+        )
+    }
 }
 
 @Composable

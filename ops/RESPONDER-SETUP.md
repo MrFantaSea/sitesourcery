@@ -55,9 +55,9 @@ From the Site Sourcery primary Twilio account:
    send/readback operations.
 8. Retain this subaccount's Auth Token only for this customer's webhook
    signatures.
-9. If native Voice is being released, create a different Voice API key and four
-   distinct Push Credentials: iOS sandbox, iOS production, Android sandbox,
-   and Android production.
+9. Native incoming calling is optional. Only if it is being released, create a
+   different Voice API key and a distinct Push Credential for each explicitly
+   enabled platform/environment. SMS-only customers need neither.
 
 Never reuse a subaccount, profile, Brand, Campaign, Messaging Service, API key,
 Auth Token, or Push Credential across organizations. Messaging and Voice keys
@@ -90,8 +90,10 @@ The registry is outside Git and PostgreSQL at the path named by:
 SITESOURCERY_TWILIO_ISV_PROVIDER_REGISTRY_PATH
 ```
 
-It is JSON with schema `sitesourcery.twilio-isv-provider-registry/v1` and an
-`entries` array sorted by `organizationId`. Each entry has exactly:
+Use schema `sitesourcery.twilio-isv-provider-registry/v2` with an `entries` array
+sorted by `organizationId`. Each entry has the following fields plus
+`enabledPushSlots`, a sorted list drawn from `android.production`,
+`android.sandbox`, `ios.production`, and `ios.sandbox`:
 
 ```text
 organizationId
@@ -113,6 +115,18 @@ voiceAndroidSandboxPushCredentialSid
 voiceAndroidProductionPushCredentialSid
 ```
 
+For SMS-only service, set `enabledPushSlots: []`, both Voice API fields to
+`null`, and all four Push Credential fields to `null`. Messaging credentials,
+the webhook Auth Token, and actual A2P authority remain required. A nonempty
+slot list requires the separate Voice key pair and exactly those credentials;
+disabled slots are null, never placeholder IDs. Legacy v1 remains supported
+with its original mandatory four-slot contract.
+
+Keep Voice access, native routing, and telephone dialing modes held for
+conditional-forwarding SMS-only service. The existing Voice webhook receives
+the carrier-forwarded telephone leg without dialing an app. This does not
+remove provider number/message costs or authorize activation.
+
 Installation rules:
 
 - absolute path outside the source tree;
@@ -122,7 +136,7 @@ Installation rules:
 - no group-write or world bits;
 - one sorted entry per organization;
 - every provider identifier/secret unique across customers;
-- all four Push Credentials distinct;
+- every configured Push Credential distinct;
 - Messaging and Voice keys/secrets distinct;
 - file content never printed or copied into evidence.
 
@@ -140,13 +154,21 @@ Through the authenticated operator boundary, POST to:
 
 The write requires the normal operator authentication, CSRF/origin guard, and
 an idempotency key. The request contains the read-back provider identifiers,
-the exact registration class/use case, digests of the three secrets, a current
-readback timestamp, and an evidence digest. The HTTP boundary hashes all raw
-provider identifiers before repository storage.
+the exact registration class/use case, the Messaging and webhook secret digests,
+a current readback timestamp, and an evidence digest. Use attestation schema
+`sitesourcery.responder-twilio-topology-attestation/v2` and the same explicit
+`enabledPushSlots`. SMS-only attestations set `voiceApiKeySid` and
+`voiceApiKeySecretDigest` to null, with every Push Credential null. Native
+attestations also require the Voice secret digest. The HTTP boundary hashes
+actual provider identifiers before repository storage; absent values stay null.
 
 PostgreSQL stores only lifecycle and SHA-256 evidence. It never stores raw
 provider identifiers or secrets. One active topology per organization is
 allowed, and all active provider digests are globally unique.
+
+Migration109 must be installed before attesting an SMS-only topology. It keeps
+existing topology history intact; changing a topology still requires retiring
+its number bindings and topology before a replacement can be attested.
 
 List the topology through the matching operator GET route and verify:
 
@@ -233,3 +255,17 @@ If a customer's phone stops ringing, restore the carrier path first. Then:
 Topology retirement does not delete provider objects or historical evidence.
 Provider cleanup, refunds, number release, and credential revocation are
 separate scoped actions and may require fresh owner approval.
+
+
+## Optional customer app
+
+The hosted missed-call/SMS worker does not depend on a mobile installation,
+FCM/APNS, or native Voice token issuance. The companion app can show Responder
+activity and, when separately configured, receive business calls. Assisted
+setup remains the customer path; internal number-binding IDs are not a
+customer-facing setup step.
+
+Before activation, verify the carrier preserves the expected forwarding-source
+evidence, the exact caller consent authority, replies and STOP. Missing source
+or consent remains a manual-review condition. Do not promise automatic texts
+to every unknown first-time caller or change consent policy to bypass a hold.

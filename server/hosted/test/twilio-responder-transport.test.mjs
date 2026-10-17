@@ -460,3 +460,47 @@ test("a malformed Twilio acceptance never becomes a durable receipt", async () =
     (error) => error?.code === "TWILIO_RESPONDER_RECEIPT_INVALID"
   );
 });
+
+const SMS_ONLY_REGISTRY = createTwilioIsvProviderRegistry({
+  schema: "sitesourcery.twilio-isv-provider-registry/v2",
+  entries: [{
+    organizationId: ORGANIZATION_ID,
+    accountSid: ACCOUNT_SID,
+    messagingApiKeySid: API_KEY_SID,
+    messagingApiKeySecret: API_KEY_SECRET,
+    webhookAuthToken: "fixture-webhook-auth-token-000001",
+    messagingServiceSid: MESSAGING_SERVICE_SID,
+    customerProfileSid: `BU${"1".repeat(32)}`,
+    brandRegistrationSid: BRAND_SID,
+    campaignSid: CAMPAIGN_SID,
+    registrationClass: "LOW_VOLUME_STANDARD",
+    campaignUseCase: "CUSTOMER_CARE",
+    enabledPushSlots: [],
+    voiceApiKeySid: null,
+    voiceApiKeySecret: null,
+    voiceSandboxPushCredentialSid: null,
+    voiceProductionPushCredentialSid: null,
+    voiceAndroidSandboxPushCredentialSid: null,
+    voiceAndroidProductionPushCredentialSid: null
+  }]
+});
+
+
+test("SMS-only registry sends with Messaging authority and no Voice or push credential", async () => {
+  const calls = [];
+  const transport = createTwilioResponderTransport({ ...twilioDependencies({ providerRegistry: SMS_ONLY_REGISTRY }),
+    environment: ENVIRONMENT, materialResolver: materialResolver(), clock: { now: () => NOW },
+    async fetchImpl(url, init) {
+      calls.push({ url, init });
+      assert.equal(init.headers.Authorization, `Basic ${Buffer.from(`${API_KEY_SID}:${API_KEY_SECRET}`).toString("base64")}`);
+      if (init.method === "GET") return providerReadback(url);
+      return json({ sid: MESSAGE_SID, account_sid: ACCOUNT_SID, messaging_service_sid: MESSAGING_SERVICE_SID,
+        to: TO, body: BODY, status: "accepted" }, 201);
+    }
+  });
+  assert.equal((await transport.readiness()).ready, true);
+  assert.equal(SMS_ONLY_REGISTRY.readiness().hasConfiguredPushSlot, false);
+  assert.equal((await transport.sendMessage(delivery())).status, "accepted");
+  assert.equal(calls.filter(call => call.init.method === "POST").length, 1);
+  assert.ok(calls.every(call => !/Calls|Credentials|Tokens/u.test(call.url)));
+});

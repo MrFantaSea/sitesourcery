@@ -1,3 +1,4 @@
+import { createTwilioIsvProviderRegistry } from "../responder-twilio-provider-registry.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 
@@ -171,4 +172,30 @@ test("native incoming composition requires explicit routing authority and exclud
   assert.throws(() => createConfiguredTwilioResponderInboundHttp({ ...options, nativeVoiceRouting: null }));
   assert.throws(() => createConfiguredTwilioResponderInboundHttp({ ...options,
     environment: { ...environment, SITESOURCERY_TWILIO_VOICE_DIAL_MODE: "verified" } }));
+});
+
+
+test("verified inbound composition is ready with a real SMS-only registry and all native modes held", async () => {
+  const c = "a".repeat(32);
+  const registry = createTwilioIsvProviderRegistry({ schema: "sitesourcery.twilio-isv-provider-registry/v2", entries: [{
+    organizationId: "10000000-0000-4000-8000-000000000001", accountSid: `AC${c}`,
+    messagingApiKeySid: `SK${c}`, messagingApiKeySecret: "messaging".padEnd(32, "x"),
+    webhookAuthToken: "webhook".padEnd(32, "y"), messagingServiceSid: `MG${c}`, customerProfileSid: `BU${c}`,
+    brandRegistrationSid: `BN${c}`, campaignSid: `QE${c}`, registrationClass: "LOW_VOLUME_STANDARD",
+    campaignUseCase: "CUSTOMER_CARE", enabledPushSlots: [], voiceApiKeySid: null, voiceApiKeySecret: null
+  }] });
+  const verified = createConfiguredTwilioResponderInboundHttp({
+    environment: verifiedEnvironment({ SITESOURCERY_TWILIO_VOICE_ACCESS_MODE: "held",
+      SITESOURCERY_RESPONDER_NATIVE_VOICE_ROUTING_MODE: "held", SITESOURCERY_TWILIO_VOICE_DIAL_MODE: "held" }),
+    authority: { kind: "canonical-postgres", async service(actor, work) {
+      assert.equal(actor.readOnly, true);
+      return work({ async query() { return { rows: [{ contract_ready: true, tables_ready: true, lookup_keys_cover_bindings: true }] }; } });
+    } }, providerRegistryFactory: () => registry, providerTopologyRepositoryFactory: () => TOPOLOGY,
+    nativeVoiceRouting: { get readiness() { throw new Error("SMS ingress must not use native routing"); } }
+  });
+  const readiness = await verified.readiness();
+  assert.equal(readiness.ready, true);
+  assert.equal(readiness.voiceOperational, false);
+  assert.equal(readiness.providerEffects, false);
+  assert.equal(registry.readiness().hasConfiguredPushSlot, false);
 });

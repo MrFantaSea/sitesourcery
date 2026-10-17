@@ -43,7 +43,7 @@ function providerDependencies(provider = PROVIDER) {
     providerRegistry: {
       kind: "twilio-isv-provider-registry",
       providerEffects: false,
-      async readiness() { return { ready: true, verified: true }; },
+      async readiness() { return { ready: true, verified: true, hasConfiguredPushSlot: true }; },
       resolveOrganization(organizationId) {
         if (organizationId !== AUTHORITY.organizationId) {
           throw new Error("unknown customer");
@@ -296,5 +296,37 @@ test("disjoint customer slots issue independently and never borrow another custo
     await assert.rejects(selected.issueSession({ ...AUTHORITY, organizationId, clientPlatform: clientPlatform === "ios" ? "android" : "ios",
       transport: clientPlatform === "ios" ? "twilio_voice_android" : "twilio_voice_ios", appEnvironment: appEnvironment === "sandbox" ? "production" : "sandbox" }),
     { code: "RESPONDER_NATIVE_VOIP_HELD" });
+  }
+});
+
+
+test("SMS-only customer cannot issue Voice tokens or inherit a native neighbor's slot", async () => {
+  const smsOrg = AUTHORITY.organizationId, nativeOrg = "10000000-0000-4000-8000-000000000009";
+  const entry = (organizationId, c) => ({ organizationId,
+    accountSid: `AC${c.repeat(32)}`, messagingApiKeySid: `SK${c.repeat(32)}`,
+    messagingApiKeySecret: `messaging-${c}`.padEnd(40, c), webhookAuthToken: `webhook-${c}`.padEnd(40, c),
+    messagingServiceSid: `MG${c.repeat(32)}`, customerProfileSid: `BU${c.repeat(32)}`,
+    brandRegistrationSid: `BN${c.repeat(32)}`, campaignSid: `QE${c.repeat(32)}`,
+    registrationClass: "LOW_VOLUME_STANDARD", campaignUseCase: "CUSTOMER_CARE",
+    enabledPushSlots: [], voiceApiKeySid: null, voiceApiKeySecret: null });
+  const sms = entry(smsOrg, "a"), native = { ...entry(nativeOrg, "b"),
+    enabledPushSlots: ["android.sandbox"], voiceApiKeySid: `SK${"c".repeat(32)}`,
+    voiceApiKeySecret: "voice-secret".padEnd(40, "c"), voiceAndroidSandboxPushCredentialSid: `CR${"d".repeat(32)}` };
+  for (const entries of [[sms], [sms, native]]) {
+    const registry = createTwilioIsvProviderRegistry({ schema: "sitesourcery.twilio-isv-provider-registry/v2", entries });
+    let mintCalls = 0;
+    const selected = authority(VERIFIED, { providerRegistry: registry, providerTopologyRepository: {
+      kind: "responder-twilio-provider-topology-postgres", providerEffects: false,
+      async readiness() { return { ready: true, verified: true }; },
+      async requireActiveTopology(topology) { assert.equal(topology, registry.resolveOrganization(topology.organizationId).topology); }
+    } }, { tokenFactory() { mintCalls++; throw new Error("SMS-only must never mint"); } });
+    const readiness = await selected.readiness();
+    assert.equal(readiness.issuanceEnabled, entries.length === 2);
+    assert.equal(readiness.hasConfiguredPushSlot, entries.length === 2);
+    for (const clientPlatform of ["ios", "android"]) for (const appEnvironment of ["sandbox", "production"]) {
+      await assert.rejects(selected.issueSession({ ...AUTHORITY, clientPlatform,
+        transport: `twilio_voice_${clientPlatform}`, appEnvironment }), { code: "RESPONDER_NATIVE_VOIP_HELD" });
+    }
+    assert.equal(mintCalls, 0);
   }
 });

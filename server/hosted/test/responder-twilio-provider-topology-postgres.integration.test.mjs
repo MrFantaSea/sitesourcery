@@ -293,3 +293,63 @@ test("explicit push slots persist nulls, preserve replay and fence concurrent cr
     await assert.rejects(repository.requireActiveTopology(selected), { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
   } finally { await pool.end(); }
 });
+
+
+test("SMS-only topology preserves null authority, replay, tenant isolation and database CHECK guards", { skip: !DATABASE_URL }, async () => {
+  const pool = new Pool({ connectionString: DATABASE_URL, max: 4 });
+  try {
+    assert.match((await pool.query("select current_database() as name")).rows[0].name,
+      /^ss_(?:native_voice_routing|twilio_isv_topology)_(?:[0-9]+|ci_[0-9]+_[0-9]+)$/u);
+    const ids = await seed(pool), authority = createCanonicalPostgresAuthority({ pool });
+    const repository = createPostgresResponderTwilioProviderTopologyRepository({ authority });
+    assert.equal((await repository.readiness()).ready, true);
+    const actor = { kind: "operator", userId: ids.operator, organizationId: ids.organization };
+    const selected = { ...topology(ids.organization, randomUUID()), schema: "sitesourcery.twilio-isv-provider-topology/v2",
+      enabledPushSlots: [], voiceApiKeySidDigest: null, voiceApiKeySecretDigest: null,
+      voiceSandboxPushCredentialSidDigest: null, voiceProductionPushCredentialSidDigest: null,
+      voiceAndroidSandboxPushCredentialSidDigest: null, voiceAndroidProductionPushCredentialSidDigest: null };
+    const input = { ...selected, commandId: `sms-${randomUUID()}`, requestDigest: sha256(randomUUID()),
+      providerReadbackDigest: sha256("synthetic-sms"), topologyEvidenceDigest: sha256("synthetic-sms"), recordedAt: new Date().toISOString() };
+    const receipt = await repository.attestTopology(actor, input);
+    assert.equal(receipt.voiceApiKeySidDigest, null);
+    assert.equal(receipt.voiceApiKeySecretDigest, null);
+    assert.deepEqual(receipt.enabledPushSlots, []);
+    assert.equal((await repository.attestTopology(actor, input)).replayed, true);
+    assert.equal((await repository.requireActiveTopology(selected)).id, receipt.id);
+    await assert.rejects(repository.requireActiveTopology({ ...selected, organizationId: ids.secondOrganization }),
+      { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
+    for (const delta of [{ voiceApiKeySidDigest: sha256("missing-secret") },
+      { voiceApiKeySecretDigest: sha256("missing-key") },
+      { enabledPushSlots: ["android.sandbox"], voiceAndroidSandboxPushCredentialSidDigest: sha256("missing-key-pair") }]) {
+      assert.throws(() => repository.attestTopology(actor, { ...input, ...delta }), { code: "RESPONDER_TWILIO_TOPOLOGY_INVALID" });
+    }
+    const original = (await pool.query("select * from ss.responder_twilio_provider_topologies where id=$1", [receipt.id])).rows[0];
+    // Bypass only the JS validator in this owned synthetic database: SQL must independently reject every partial state.
+    for (const delta of [
+      { voice_api_key_sid_digest: sha256("key-without-secret") },
+      { voice_api_key_secret_digest: sha256("secret-without-key") },
+      { voice_android_sandbox_push_credential_sid_digest: sha256("slot-without-keys") },
+      { voice_api_key_sid_digest: sha256("pair-key"), voice_api_key_secret_digest: sha256("pair-secret") }
+    ]) {
+      const row = { ...original, id: randomUUID(), command_id: `sms-invalid-${randomUUID()}`,
+        request_digest: sha256(randomUUID()), organization_id: ids.secondOrganization,
+        account_sid_digest: sha256(randomUUID()), messaging_service_sid_digest: sha256(randomUUID()),
+        customer_profile_sid_digest: sha256(randomUUID()), brand_registration_sid_digest: sha256(randomUUID()),
+        campaign_sid_digest: sha256(randomUUID()), messaging_api_key_sid_digest: sha256(randomUUID()),
+        messaging_api_key_secret_digest: sha256(randomUUID()), webhook_auth_token_digest: sha256(randomUUID()), ...delta };
+      await assert.rejects(authority.service({ actorKind: "operator", userId: ids.operator, organizationId: ids.secondOrganization }, client =>
+        client.query("insert into ss.responder_twilio_provider_topologies select (jsonb_populate_record(null::ss.responder_twilio_provider_topologies, $1::jsonb)).*", [JSON.stringify(row)])),
+      error => error.code === "23514" && error.constraint === "responder_twilio_sms_or_native_authority");
+    }
+    await assert.rejects(authority.service({ actorKind: "operator", userId: ids.operator, organizationId: ids.organization }, client =>
+      client.query("update ss.responder_twilio_provider_topologies set voice_api_key_sid_digest=$2, voice_api_key_secret_digest=$3, voice_android_sandbox_push_credential_sid_digest=$4 where id=$1",
+        [receipt.id, sha256("later-key"), sha256("later-secret"), sha256("later-push")])) , error => error.code === "55000");
+    const duplicate = { ...input, ...topology(ids.secondOrganization, randomUUID()), ...selected,
+      organizationId: ids.secondOrganization, commandId: `sms-duplicate-${randomUUID()}`, requestDigest: sha256(randomUUID()) };
+    await assert.rejects(repository.attestTopology({ ...actor, organizationId: ids.secondOrganization }, duplicate),
+      { code: "RESPONDER_TWILIO_TOPOLOGY_CONFLICT" });
+    assert.equal((await repository.retireTopology(actor, { organizationId: ids.organization, topologyId: receipt.id,
+      reason: "operator_correction", retireEvidenceDigest: sha256("sms-retire"), recordedAt: new Date().toISOString() })).state, "retired");
+    await assert.rejects(repository.requireActiveTopology(selected), { code: "RESPONDER_TWILIO_TOPOLOGY_NOT_ACTIVE" });
+  } finally { await pool.end(); }
+});
