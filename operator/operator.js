@@ -1240,7 +1240,7 @@
           documentRef,
           "button",
           "operator-button operator-queue-action",
-          "Review typed reconciliation"
+          "Review provider result"
         );
         button.type = "button";
         button.dataset.reconciliationId = item.source.id;
@@ -1253,7 +1253,7 @@
           documentRef,
           "button",
           "operator-button operator-queue-action",
-          "Review identity crosswalk"
+          "Review linked records"
         );
         adjacentButton.type = "button";
         adjacentButton.dataset.adjacentCrosswalkId = item.source.id;
@@ -1263,7 +1263,7 @@
           documentRef,
           "p",
           "operator-held-note",
-          "Retained manual review; no generic repair or provider action is available."
+          "Manual review required. No repair or provider action is available here."
         ));
       }
     }
@@ -1271,7 +1271,7 @@
     function renderQueue() {
       queueCount.textContent = String(state.queue.length);
       if (state.queue.length === 0) {
-        empty(queueRoot, "No canonical source records currently require operator work.");
+        empty(queueRoot, "No work needs attention right now.");
         return;
       }
       var fragment = documentRef.createDocumentFragment();
@@ -1307,7 +1307,7 @@
       if (state.numberBindings.length === 0) {
         empty(
           numberBindingsRoot,
-          "No canonical Twilio number bindings exist in this operator scope."
+          "No Twilio numbers are linked for this account."
         );
         return;
       }
@@ -1614,7 +1614,7 @@
     function renderCases() {
       caseCount.textContent = String(state.cases.length);
       if (state.cases.length === 0) {
-        empty(casesRoot, "No support or privacy cases are open in this operator scope.");
+        empty(casesRoot, "No support or privacy cases are open for this account.");
         return;
       }
       var fragment = documentRef.createDocumentFragment();
@@ -2020,7 +2020,7 @@
             optional: true, pattern: "MG[0-9A-Fa-f]{32}", maxLength: 34
           }
         )),
-        serviceField("Provider readback observed at", serviceInstant(
+        serviceField("Twilio details last checked", serviceInstant(
           "readbackAttestedAt"
         )),
         serviceField("Attestation evidence SHA-256", serviceDigest(
@@ -2032,9 +2032,9 @@
     function openServiceCommand(action) {
       state.serviceCommand = action;
       serviceCommandTitle.textContent = action.product === "care"
-        ? "Record held Care evidence"
+        ? "Record Care evidence"
         : action.product === "responder"
-          ? "Record held Responder evidence"
+          ? "Record Responder evidence"
           : action.action === "retire"
             ? "Retire Responder number binding"
             : "Provision Responder number binding";
@@ -2050,7 +2050,7 @@
         documentRef,
         "button",
         "operator-button operator-button-danger",
-        "Record bounded command"
+        "Save evidence"
       );
       submit.type = "submit";
       form.append(submit);

@@ -516,15 +516,15 @@ for (const viewport of VIEWPORTS) {
           const careForm = [...document.querySelectorAll(
             "#operator-service-command-form input, #operator-service-command-form select"
           )].map((entry) => entry.name);
-          button("Record consent evidence").click();
+          button("Record permission").click();
           const consentForm = [...document.querySelectorAll(
             "#operator-service-command-form input, #operator-service-command-form select"
           )].map((entry) => entry.name);
-          button("Provision attested binding").click();
+          button("Link verified number").click();
           const bindingControls = [...document.querySelectorAll(
             "#operator-service-command-form input"
           )].map((entry) => ({ name: entry.name, type: entry.type }));
-          button("Review identity crosswalk").click();
+          button("Review linked records").click();
           await new Promise((resolve, reject) => {
             const started = Date.now();
             const check = () => {
@@ -554,7 +554,7 @@ for (const viewport of VIEWPORTS) {
               if (
                 document.querySelector("#operator-board")
                   .getAttribute("aria-busy") === "false" &&
-                !button("Review identity crosswalk")
+                !button("Review linked records")
               ) return resolve();
               if (Date.now() - started > 5000) {
                 return reject(new Error(
@@ -570,7 +570,7 @@ for (const viewport of VIEWPORTS) {
             };
             check();
           });
-          button("Record reviewed crosswalk").click();
+          button("Record a reviewed link").click();
           const crosswalkControls = [...document.querySelectorAll(
             "#operator-adjacent-crosswalk-form input, #operator-adjacent-crosswalk-form select"
           )].map((entry) => entry.name);
@@ -579,6 +579,10 @@ for (const viewport of VIEWPORTS) {
           return {
             width: innerWidth,
             height: innerHeight,
+            bodyFontSize: parseFloat(getComputedStyle(document.body).fontSize),
+            fieldFontsReadable: [...document.querySelectorAll("input,select,textarea")]
+              .filter((entry) => entry.getClientRects().length)
+              .every((entry) => parseFloat(getComputedStyle(entry).fontSize) >= 16),
             overflow: document.documentElement.scrollWidth -
               document.documentElement.clientWidth,
             wide: [...document.querySelectorAll("*")].filter((entry) =>
@@ -611,7 +615,7 @@ for (const viewport of VIEWPORTS) {
             heldCopy: document.body.textContent.includes(
               "No provider or billing effect was opened"
             ) || document.body.textContent.includes(
-              "Provider delivery, billing, and commercial release remain held"
+              "It does not send messages, charge customers, or activate services."
             ),
             adjacentHeldCopy: document.body.textContent.includes(
               "No remote or provider effect was executed"
@@ -622,6 +626,8 @@ for (const viewport of VIEWPORTS) {
         })()`, true);
         assert.equal(result.width, viewport.width);
         assert.equal(result.height, viewport.height);
+        assert.ok(result.bodyFontSize >= 18);
+        assert.equal(result.fieldFontsReadable, true);
         assert.equal(result.overflow, 0);
         assert.equal(result.wide, 0);
         assert.equal(result.care, 1);

@@ -779,3 +779,10 @@ Implementation `bd12fc68a5c47bb155f8a372e203ffcfb7e1852a` / tree `bb6209595965d3
 
 - [Provenance](../ci-provenance/bd12fc68a5c47bb155f8a372e203ffcfb7e1852a/provenance.md)
 - [Machine proof](../ci-provenance/bd12fc68a5c47bb155f8a372e203ffcfb7e1852a/proof.json)
+
+## Site readability and validated price displays — 2026-10-17
+
+Implementation `6c4a989432606178fcd5b504b4b57862af30bcdb` / tree `083ac71c53c01c3b9a2934e413b542ef66a36232`, protected base `3a539adb01495d564b3352de3ae2631551779e9c`. Larger text/controls, dependable hero contrast, concise public/customer/operator copy and a simpler maker hero. Assessment and Scale displays follow validated current amounts while preserving historical credits. Focused financial/semantic tests, actual24-route readability proof and the fresh complete npm/build/browser ladder passed. Original copy-guard, sandbox-boundary, browser-layout/predicate and PR98 Linux width failures are retained. One additional milestone wrapping property repairs demonstrated internal overflow; exact CI321 was not reproduced. A later Services navigation timeout remains unexplained after bounded diagnostic success; one authorized fresh full run passed; unchanged PostgreSQL109/Android proofs are reused truthfully. No backend/provider/native effect; protected and held qualification remain required.
+
+- [Provenance](../ci-provenance/6c4a989432606178fcd5b504b4b57862af30bcdb/provenance.md)
+- [Machine proof](../ci-provenance/6c4a989432606178fcd5b504b4b57862af30bcdb/proof.json)

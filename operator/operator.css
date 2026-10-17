@@ -77,7 +77,7 @@
 .operator-eyebrow {
   margin: 0;
   color: var(--operator-gold);
-  font-size: 0.78rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.13em;
   text-transform: uppercase;
@@ -160,7 +160,7 @@
 
 .operator-panel-status {
   color: var(--operator-muted);
-  font-size: 0.875rem;
+  font-size: 1rem;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -209,7 +209,7 @@ button.operator-card:focus-visible {
 .operator-meta {
   margin-top: 0.55rem;
   color: var(--operator-muted);
-  font-size: 0.84rem;
+  font-size: 1rem;
 }
 
 .operator-badge {
@@ -218,7 +218,7 @@ button.operator-card:focus-visible {
   border: 1px solid currentColor;
   border-radius: 999px;
   color: var(--operator-violet);
-  font-size: 0.72rem;
+  font-size: 1rem;
   line-height: 1.35;
   text-transform: uppercase;
 }
@@ -259,7 +259,7 @@ button.operator-card:focus-visible {
 
 .operator-fact dt {
   color: var(--operator-muted);
-  font-size: 0.78rem;
+  font-size: 1rem;
 }
 
 .operator-fact dd {
@@ -299,7 +299,7 @@ button.operator-card:focus-visible {
   display: grid;
   gap: 0.35rem;
   color: var(--operator-muted);
-  font-size: 0.86rem;
+  font-size: 1rem;
 }
 
 .operator-field input,

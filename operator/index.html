@@ -35,7 +35,7 @@
     <section class="operator-hero" aria-labelledby="operator-title">
       <p class="operator-kicker">Private operations</p>
       <h1 id="operator-title">Work queue, support, and privacy cases</h1>
-      <p>Every change is authorized by the signed-in operator and written to the canonical audit ledger. This desk records evidence and decisions; it does not send customer mail or execute deletion or export requests.</p>
+      <p>Review work and support cases. Changes are recorded under your operator account. Case records do not send email, delete data, or run exports.</p>
     </section>
 
     <noscript>
@@ -54,7 +54,7 @@
         </select>
       </label>
       <button class="operator-button" id="operator-reconnect" type="button" disabled>Reconnect session</button>
-      <button class="operator-button operator-button-primary" id="operator-refresh" type="button" disabled>Refresh source records</button>
+      <button class="operator-button operator-button-primary" id="operator-refresh" type="button" disabled>Refresh records</button>
     </section>
 
     <div id="operator-error" class="operator-notice operator-notice-error" role="alert" tabindex="-1" hidden></div>
@@ -64,12 +64,12 @@
       <section class="operator-panel" aria-labelledby="queue-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Source-authoritative</p>
+            <p class="operator-eyebrow">Current records</p>
             <h2 id="queue-title">Work queue</h2>
           </div>
           <span class="operator-count" id="queue-count">0</span>
         </div>
-        <p class="operator-panel-copy">Open work is rebuilt from canonical billing, service, and lifecycle records.</p>
+        <p class="operator-panel-copy">Work that needs attention, based on current billing and service records.</p>
         <p id="operator-queue-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-queue" class="operator-list"></div>
       </section>
@@ -77,12 +77,12 @@
       <section class="operator-panel" aria-labelledby="cases-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Auditable lifecycle</p>
+            <p class="operator-eyebrow">Case history</p>
             <h2 id="cases-title">Support and privacy cases</h2>
           </div>
           <span class="operator-count" id="case-count">0</span>
         </div>
-        <p class="operator-panel-copy">Select a case to review its current state, digests, deadlines, and immutable event trail.</p>
+        <p class="operator-panel-copy">Select a case to review its status, deadlines, evidence, and history.</p>
         <p id="operator-cases-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-cases" class="operator-list"></div>
       </section>
@@ -90,7 +90,7 @@
       <section class="operator-panel" aria-labelledby="operator-care-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Effect-held service</p>
+            <p class="operator-eyebrow">Service paused</p>
             <h2 id="operator-care-title">Care operations</h2>
           </div>
         </div>
@@ -101,7 +101,7 @@
       <section class="operator-panel" aria-labelledby="operator-responder-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Global kill engaged</p>
+            <p class="operator-eyebrow">Service paused</p>
             <h2 id="operator-responder-title">Responder operations</h2>
           </div>
         </div>
@@ -112,13 +112,13 @@
       <section class="operator-panel" aria-labelledby="operator-number-bindings-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Attested provider identity</p>
+            <p class="operator-eyebrow">Verified phone setup</p>
             <h2 id="operator-number-bindings-title">Responder number bindings</h2>
           </div>
           <span class="operator-count" id="operator-number-binding-count">0</span>
         </div>
-        <p class="operator-panel-copy">Bindings are created only from an operator-attested Twilio readback. Raw number and SID values are sent once for server-side digesting and are never returned or retained by this page.</p>
-        <button class="operator-button" id="operator-number-binding-provision" type="button">Provision attested binding</button>
+        <p class="operator-panel-copy">Verify the phone number and account in Twilio before linking them. This page submits those values once and keeps only private reference codes.</p>
+        <button class="operator-button" id="operator-number-binding-provision" type="button">Link verified number</button>
         <p id="operator-number-bindings-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-number-bindings" class="operator-list"></div>
       </section>
@@ -126,12 +126,12 @@
       <section class="operator-panel" aria-labelledby="operator-adjacent-contracts-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Manual read-only boundaries</p>
-            <h2 id="operator-adjacent-contracts-title">Adjacent system contracts</h2>
+            <p class="operator-eyebrow">Manual connections</p>
+            <h2 id="operator-adjacent-contracts-title">Connected-system rules</h2>
           </div>
           <span class="operator-count" id="operator-adjacent-contract-count">0</span>
         </div>
-        <p class="operator-panel-copy">Exact ownership, authentication, reconciliation, and held-effect rules for the six connected Site Sourcery systems.</p>
+        <p class="operator-panel-copy">Review who manages each system, how access is checked, and which actions are disabled.</p>
         <p id="operator-adjacent-contracts-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-adjacent-contracts" class="operator-list"></div>
       </section>
@@ -139,13 +139,13 @@
       <section class="operator-panel" aria-labelledby="operator-adjacent-trace-title">
         <div class="operator-panel-heading">
           <div>
-            <p class="operator-eyebrow">Digest-only integration evidence</p>
-            <h2 id="operator-adjacent-trace-title">Adjacent identity trace</h2>
+            <p class="operator-eyebrow">Connection records</p>
+            <h2 id="operator-adjacent-trace-title">Linked records</h2>
           </div>
           <span class="operator-count" id="operator-adjacent-trace-count">0</span>
         </div>
-        <p class="operator-panel-copy">Global source snapshots, tenant crosswalks, and observations are read from canonical PostgreSQL. Only reviewed Hub SSC/SS codes may appear; all other remote identities remain digests.</p>
-        <button class="operator-button" id="operator-adjacent-crosswalk-open" type="button">Record reviewed crosswalk</button>
+        <p class="operator-panel-copy">Review system snapshots, linked accounts, and observations. Only reviewed Hub SSC/SS codes are shown; other remote identities use private reference codes.</p>
+        <button class="operator-button" id="operator-adjacent-crosswalk-open" type="button">Record a reviewed link</button>
         <p id="operator-adjacent-trace-status" class="operator-panel-status" role="status" aria-live="polite">Waiting for your session.</p>
         <div id="operator-adjacent-trace" class="operator-list"></div>
       </section>
@@ -154,12 +154,12 @@
     <section class="operator-panel operator-detail" id="operator-service-command" aria-labelledby="operator-service-command-title" hidden>
       <div class="operator-panel-heading">
         <div>
-          <p class="operator-eyebrow">Bounded held command</p>
+          <p class="operator-eyebrow">Record only</p>
           <h2 id="operator-service-command-title">Service evidence</h2>
         </div>
         <button class="operator-button" id="operator-service-command-close" type="button">Cancel</button>
       </div>
-      <p class="operator-panel-copy">The selected command records canonical evidence only. Provider delivery, billing, and commercial release remain held.</p>
+      <p class="operator-panel-copy">This action records evidence only. It does not send messages, charge customers, or activate services.</p>
       <div id="operator-service-command-form"></div>
     </section>
 
@@ -291,17 +291,17 @@
         </div>
         <button class="operator-button" id="reconciliation-detail-close" type="button">Close detail</button>
       </div>
-      <p class="operator-panel-copy">This surface can record only a server-authorized evidence-bound resolution. It cannot retry a provider request, fabricate an effect, or expose raw message or phone data.</p>
+      <p class="operator-panel-copy">Record a resolution supported by the available evidence. This does not repeat a provider request or show private messages or phone data.</p>
       <div id="reconciliation-facts" class="operator-facts"></div>
       <form class="operator-action-card operator-resolution-form" id="reconciliation-resolution-form">
-        <h3>Record proved resolution</h3>
+        <h3>Record confirmed resolution</h3>
         <label class="operator-field"><span>Resolution supported by retained evidence</span>
           <select id="reconciliation-resolution-kind" name="resolutionKind" required></select>
         </label>
         <label class="operator-field"><span>Operator evidence SHA-256</span><input name="evidenceDigest" type="text" pattern="[a-f0-9]{64}" maxlength="64" required autocomplete="off"></label>
         <button class="operator-button operator-button-danger" type="submit">Record resolution only</button>
       </form>
-      <p class="operator-held-note" id="reconciliation-no-action" hidden>No resolution is currently proved by retained evidence. Inspect the source evidence; no generic repair is available.</p>
+      <p class="operator-held-note" id="reconciliation-no-action" hidden>The available evidence does not support a resolution yet. Review the source records before taking action.</p>
     </section>
 
     <section class="operator-panel operator-detail" id="operator-adjacent-detail" aria-labelledby="operator-adjacent-detail-title" hidden>
@@ -329,7 +329,7 @@
       <div class="operator-panel-heading">
         <div>
           <p class="operator-eyebrow">Local evidence only</p>
-          <h2 id="operator-adjacent-crosswalk-entry-title">Record reviewed crosswalk</h2>
+          <h2 id="operator-adjacent-crosswalk-entry-title">Record a reviewed link</h2>
         </div>
         <button class="operator-button" id="operator-adjacent-crosswalk-close" type="button">Cancel</button>
       </div>

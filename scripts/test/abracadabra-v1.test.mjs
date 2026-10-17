@@ -465,15 +465,15 @@ test("the Abracadabra lane has a plain HTML door into the maker", () => {
 
 test("guest data-loss truth stays visible in both artifacts and hosted controls boot from complete markup", () => {
   assert.match(pageHtml, /Lives in this tab only — close it and it's gone\./u);
-  assert.match(appSource, /Abracadabra ready\. Your local draft stays in this tab\./u);
+  assert.match(appSource, /Ready\. Your draft stays in this browser tab\./u);
   assert.match(
     hostedHeroMarkup,
-    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*Made versions may survive a refresh in this tab\.[\s\S]*clearing its session storage before saving ordinarily means starting over/u,
+    /<strong>Your guest preview is not saved yet\.<\/strong>[\s\S]*A refresh may keep your preview,[\s\S]*closing this tab or clearing browser storage can erase it\.[\s\S]*Sign in and save before leaving\./u,
   );
-  assert.match(hostedHeroMarkup, /Sign in to save, download, or host it\./u);
+  assert.match(hostedHeroMarkup, /Sign in to save, download the HTML for \$20/u);
   assert.match(
     hostedHeroMarkup,
-    /host it with Alakazam for \$25, \$35, or \$50 a month/u,
+    /host with Alakazam for \$25, \$35, or \$50 a month/u,
   );
   assert.doesNotMatch(
     hostedHeroMarkup,
@@ -481,7 +481,7 @@ test("guest data-loss truth stays visible in both artifacts and hosted controls 
   );
   assert.match(
     hostedReadySource,
-    /Guest work stays only in this tab until you save it to your account\./u,
+    /Save to your account to keep this draft\./u,
   );
   assert.match(hostedReadySource, /bootStatus\.hidden = false/u);
   assert.match(hostedControlMarkup, /id="platform-status" role="status" aria-live="polite"/u);

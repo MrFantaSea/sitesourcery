@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "6c4a989432606178fcd5b504b4b57862af30bcdb",
+    "treeSha": "083ac71c53c01c3b9a2934e413b542ef66a36232",
+    "baseCommitSha": "3a539adb01495d564b3352de3ae2631551779e9c"
+  },
+  "provenanceSha256": "44d26f0b7e622f35daf3fdf0ae7ce0499bd5dbb44562b22664fcec93e9f7d721",
+  "ledger": {
+    "previousByteCount": 58087,
+    "previousSha256": "7b40990493435682031d6b2800a9f19a302685803f06dc8e0a66c9201064f1de",
+    "appendSha256": "c696023297691cfa32952c5f012b4dc7ac371b312616b6377aeca7c579258283"
+  },
+  "proofs": {
+    "focused": {
+      "command": "/private/tmp/node-v24.18.0-darwin-arm64/bin/node --test --test-name-pattern='operator assets remain hosted-only and expose an effect-held responsive desk' scripts/test/operator-support-ui.test.mjs",
+      "exitCode": 0,
+      "logSha256": "bc935e2452dfd5dfe50fac2c296b41ba6275f2095f520ab464b756b0bdb20fdd"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "992d3eabdb72b5eb75616a5105b3c160ca5e693492b2ea51e123255f63b8ccbc"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed readability, financial-render, copy guards and one-property milestone wrap with bounded Linux evidence; exact CI321 not reproduced. Original PR98 and navigation-timeout failures retained. Fresh unchanged-I4 full npm passed; all functional guards retained."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "317868fa4ca77403ff4ded918f1d17535813925eb9be2bd62a3cbe068d803d40"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned qualification scratch/process sets and visual browser/server profiles removed; prior isolated PostgreSQL cleanup retained. Original logs/builds and lock-identical shared dependencies retained. No production/provider disposable created."
+  }
+}
