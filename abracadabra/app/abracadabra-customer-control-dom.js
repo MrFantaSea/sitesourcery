@@ -2111,7 +2111,7 @@
       documentRef,
       "p",
       "",
-      "Prepare a bounded project archive from the selected project. Export does not delete the project or change publication, billing, or provider state."
+      "Download an archive of the selected project. This does not delete it or change its website, billing, or services."
     ));
     var exportStatus = accountElement(
       documentRef,
@@ -2266,7 +2266,7 @@
         connection.setAttribute("data-state", "session-ended");
       } else if (syncing) {
         connection.textContent =
-          "Refreshing current account and project authority…";
+          "Refreshing your account and project…";
         connection.setAttribute("data-state", "syncing");
       } else if (project) {
         connection.textContent =
@@ -3451,7 +3451,7 @@
       site_publishing:
         "Publication is automatic. This page will show the verified live address when it is ready.",
       site_attention_required:
-        "The saved website needs attention. Review the separate publication authority panel for any exact held action that is available."
+        "Your website needs attention. Check the publishing panel for available actions."
     }[account.actions.reason];
     if (!actionNote) {
       actionNote = account.subscription
@@ -7381,13 +7381,16 @@
   }
 
   function customBuildScheduleLine(pricing) {
-    return pricing.paymentSchedule === "full_before_work"
-      ? customBuildMoney(pricing.startDueMinor)
-        + " due before work begins after the $200 assessment credit"
-      : customBuildMoney(pricing.startDueMinor)
-        + " due before work begins after the $200 assessment credit; "
-        + customBuildMoney(pricing.finalDueMinor)
-        + " due before final handoff";
+    var creditCopy = pricing.startCreditMinor > 0
+      ? " after the " + customBuildMoney(pricing.startCreditMinor)
+        + " assessment credit"
+      : "";
+    return customBuildMoney(pricing.startDueMinor)
+      + " due before work begins" + creditCopy
+      + (pricing.paymentSchedule === "full_before_work"
+        ? ""
+        : "; " + customBuildMoney(pricing.finalDueMinor)
+          + " due before final handoff");
   }
 
   function customBuildQuoteFacts(documentRef, quote) {
@@ -7564,7 +7567,11 @@
         facts,
         "First payment subtotal",
         customBuildMoney(job.firstPayment.paidSubtotalMinor)
-          + " USD before Checkout tax · $200 assessment credit applied"
+          + " USD before Checkout tax · "
+          + (job.firstPayment.creditMinor > 0
+            ? customBuildMoney(job.firstPayment.creditMinor)
+              + " assessment credit applied"
+            : "no assessment credit applied")
       );
       appendAccountFact(
         documentRef,
@@ -7837,7 +7844,11 @@
             documentRef,
             "p",
             "customer-assessment-note customer-custom-build-payment-pending",
-            "First payment verified; the $200 assessment credit was applied."
+            selected.job.firstPayment.creditMinor > 0
+              ? "First payment verified; the "
+                + customBuildMoney(selected.job.firstPayment.creditMinor)
+                + " assessment credit was applied."
+              : "First payment verified. No assessment credit was applied."
           ),
           customBuildJobFacts(documentRef, selected.job)
         );
@@ -7923,7 +7934,8 @@
               documentRef,
               "h4",
               "",
-              "$200 Custom base-build credit"
+              customBuildMoney(snapshot.credit.amountMinor)
+                + " Custom base-build credit"
             ),
             creditFacts,
             accountElement(
@@ -8026,7 +8038,9 @@
             "customer-assessment-note",
             snapshot.credit.state === "available"
               || snapshot.credit.state === "released"
-              ? "The quote is no longer active. Its unconsumed $200 assessment credit is available for a replacement eligible quote before the credit deadline."
+              ? "The quote is no longer active. Its unused "
+                + customBuildMoney(snapshot.credit.amountMinor)
+                + " assessment credit is available for a replacement eligible quote before the credit deadline."
               : "The quote is no longer active. The credit status shown here is authoritative."
           )
         );
@@ -8315,8 +8329,8 @@
             "p",
             "customer-assessment-note",
             completionAuthority === "terminal"
-              ? "Completion is immutable. This earlier request remains visible as history, but it can no longer be answered or changed."
-              : "Current completion authority is still being verified. This request remains visible, but no response is available until a current snapshot proves the project is open."
+              ? "The project is complete. This earlier request is saved for reference and cannot be changed."
+              : "Checking whether this project is still open. You can read the request, but cannot respond yet."
           )
         );
         return section;
@@ -8419,9 +8433,9 @@
       ) ? read.completionAuthority : "unknown";
       var readOnly = completionAuthority !== "open";
       status.textContent = completionAuthority === "terminal"
-        ? "Completion is immutable. Project progress and requests are read-only history."
+        ? "The project is complete. Progress and requests are saved for reference and cannot be changed."
         : completionAuthority === "unknown"
-          ? "Current completion authority is not verified yet. Progress remains visible, but every mutation is held."
+          ? "The project status could not be confirmed. You can read progress, but cannot make changes yet."
           : read.command
           ? "Saving your response safely…"
           : snapshot.status.label;
@@ -8446,8 +8460,8 @@
           "p",
           "customer-assessment-note",
           completionAuthority === "terminal"
-            ? "No progress, work-request, response, or delegated-access mutation is available after verified completion."
-            : "No progress, work-request, response, or delegated-access mutation is available until current completion authority proves this project is open."
+            ? "Progress, requests, responses, and access cannot be changed after completion."
+            : "Changes are paused until this project is confirmed open."
         ));
       } else {
         panel.setAttribute(
@@ -8579,7 +8593,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "Review added work separately from the original scope, then see the bounded proof Site Sourcery prepared when the approved work is ready."
+        "Review any added work separately from your original agreement. Completion details appear here when the approved work is ready."
       ),
       status,
       refresh,
@@ -8669,8 +8683,8 @@
           "p",
           "customer-assessment-note",
           completionAuthority === "terminal"
-            ? "Verified completion closed added-work decisions. This retained change remains visible as read-only history."
-            : "Current completion authority is still being verified. This retained change remains visible, but no decision is available until a current snapshot proves the project is open."
+            ? "The project is complete. This added-work decision is saved for reference and cannot be changed."
+            : "Checking whether this project is still open. You can read the added-work details, but cannot decide yet."
         ));
         return section;
       }
@@ -8850,7 +8864,7 @@
         checkout_expired:
           "That Stripe payment page expired. Refresh this panel before requesting one safe replacement.",
         payment_held:
-          "New payment pages are held in this runtime. No charge occurred and the changed work remains paused.",
+          "Payment is unavailable right now. You have not been charged, and the added work remains paused.",
         reconciliation_required:
           "Do not try another payment. A prior payment-page result is uncertain and requires Site Sourcery owner review.",
         paid:
@@ -9082,12 +9096,12 @@
       }
       if (completionAuthority === "terminal") {
         status.textContent = snapshot.state === "ready_for_delivery"
-          ? "Verified completion is immutable. Added-work decisions are read-only history."
-          : "Verified completion is immutable. Added-work decisions and payment actions are read-only history.";
+          ? "The project is complete. Added-work decisions are saved for reference and cannot be changed."
+          : "The project is complete. Added-work decisions and payments are saved for reference; no further action is available.";
         panel.setAttribute("data-customer-change-completion-read-only", "");
       } else if (completionAuthority === "unknown") {
         status.textContent =
-          "Current completion authority is not verified yet. Added-work history remains visible, but every mutation is held.";
+          "The project status could not be confirmed. You can read added-work history, but cannot make changes yet.";
         panel.setAttribute("data-customer-change-completion-read-only", "");
       } else {
         panel.removeAttribute("data-customer-change-completion-read-only");
@@ -9246,7 +9260,7 @@
       documentRef,
       "p",
       "customer-assessment-intro",
-      "Review the completion-bound final installment, provider-confirmed clearance, immutable delivery record, and exact 30-day workmanship-correction window."
+      "Review your final payment, delivery record, and 30-day workmanship-correction period."
     );
     panel.append(
       accountElement(documentRef, "p", "spark-kicker", "Completed build"),
@@ -9317,7 +9331,7 @@
       );
       var note = {
         checkout_held:
-          "New final-payment pages are held in this runtime. No charge occurred and delivery remains unavailable.",
+          "Final payment is unavailable right now. You have not been charged, and delivery remains paused.",
         checkout_available:
           "No charge has occurred. Stripe will show automatic tax and the exact total before you confirm payment.",
         checkout_ready:
@@ -9327,12 +9341,12 @@
         payment_reconciliation_required:
           "Do not try another payment. A prior Stripe result is uncertain and requires Site Sourcery review.",
         paid_handoff_pending:
-          "Stripe payment is verified. Site Sourcery can now create the immutable handoff.",
+          "Stripe confirmed your payment. Site Sourcery can now record the handoff.",
         cleared_no_balance_handoff_pending:
           "No final balance was due. The zero-balance clearance is retained and handoff is ready.",
         handed_off: zeroBalance
           ? "Delivery is complete under the retained zero-balance clearance. Your handoff record and 30-day workmanship window are retained below."
-          : "Delivery is complete under verified provider-confirmed final-payment clearance. Your handoff record and 30-day workmanship window are retained below."
+          : "Delivery is complete and final payment is confirmed. Your handoff record and 30-day workmanship-correction period are shown below."
       }[snapshot.state];
       section.appendChild(accountElement(
         documentRef,
@@ -9411,7 +9425,7 @@
         accountDate(snapshot.handoff.workmanshipEndsAt)
       );
       section.append(
-        accountElement(documentRef, "h4", "", "Immutable handoff"),
+        accountElement(documentRef, "h4", "", "Final handoff"),
         facts,
         accountElement(
           documentRef,
@@ -9433,10 +9447,10 @@
         "button",
         "spark-button spark-button-primary",
         busy
-          ? "Loading verified handoff record…"
+          ? "Loading handoff record…"
           : documentProjection
-            ? "Refresh verified handoff record"
-            : "Retry verified handoff record"
+            ? "Refresh handoff record"
+            : "Try loading the handoff again"
       );
       open.type = "button";
       open.disabled = busy;
@@ -9486,8 +9500,8 @@
         ? "Delivery and workmanship"
         : "Final payment, delivery, and workmanship";
       intro.textContent = zeroBalance
-        ? "Review the completion-bound zero-balance clearance, immutable delivery record, and exact 30-day workmanship-correction window."
-        : "Review the completion-bound final installment, provider-confirmed clearance, immutable delivery record, and exact 30-day workmanship-correction window.";
+        ? "Review your zero balance, delivery record, and 30-day workmanship-correction period."
+        : "Review your final payment, delivery record, and 30-day workmanship-correction period.";
       refresh.textContent = zeroBalance
         ? "Refresh delivery and handoff"
         : "Refresh final payment and handoff";
@@ -9502,9 +9516,9 @@
       );
       if (!snapshot) {
         status.textContent = read.phase === "loading"
-          ? "Loading delivery and handoff authority…"
+          ? "Loading delivery and handoff details…"
           : read.error
-            || "Delivery and handoff authority could not be verified. Refresh before taking action.";
+            || "Delivery and handoff status could not be confirmed. Refresh before taking action.";
         return;
       }
       status.textContent = read.phase === "loading"
@@ -9520,7 +9534,7 @@
               checkout_available: "The exact final installment is ready for secure payment.",
               checkout_ready: "Your retained secure final-payment page is ready.",
               checkout_expired: "The retained final-payment page expired.",
-              payment_reconciliation_required: "Final payment requires owner reconciliation.",
+              payment_reconciliation_required: "Site Sourcery needs to check the final payment.",
               paid_handoff_pending: "Final payment is verified; delivery is pending.",
               cleared_no_balance_handoff_pending: "No final balance is due; delivery is pending.",
               handed_off: "Delivery and the workmanship window are active."
@@ -9628,7 +9642,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "Issue one exact Custom base-build scope from either a direct customer Engagement or a delivered assessment. Assessment credit is an explicit same-project choice; the server remains the only monetary authority."
+        "Prepare a Custom website quote for an existing customer request or delivered assessment. Select an assessment credit only for the same project."
       ),
       status,
       refresh,
@@ -9800,7 +9814,9 @@
         || !["available", "released"].includes(entry.credit.state)
         ? [["no_credit", "No assessment credit"]]
         : [
-            ["apply_assessment_credit", "Apply the $200 assessment credit"],
+            ["apply_assessment_credit", "Apply the "
+              + customBuildMoney(entry.credit.amountMinor)
+              + " assessment credit"],
             ["no_credit", "Do not apply the assessment credit"]
           ];
       var startingCreditSelection = creditChoices.some(function (choice) {
@@ -9952,7 +9968,7 @@
           documentRef,
           "p",
           "customer-custom-build-scale-note",
-          "Scale is $4,000 + $270 per computed capacity unit (1–15). Capacity is the greatest overage beyond Flagship: each extra crafted page or unique layout, each four extra sections or media items, or each 500 extra content words."
+          "Scale is $3,600 + $240 per computed capacity unit (1–15). Capacity is the greatest overage beyond Flagship: each extra crafted page or unique layout, each four extra sections or media items, or each 500 extra content words."
         ),
         estimate,
         error,
@@ -10009,12 +10025,13 @@
         }
         var scaleCopy = publicEstimate.scaleUnits === null
           ? ""
-          : " ($4,000.00 + $270.00 × "
+          : " ($3,600.00 + $240.00 × "
             + publicEstimate.scaleUnits + " capacity unit"
             + (publicEstimate.scaleUnits === 1 ? "" : "s") + ")";
         var creditCopy = publicEstimate.creditAmountMinor === 0
           ? "no assessment credit; "
-          : "−$200.00 assessment credit; ";
+          : "−" + customBuildMoney(publicEstimate.creditAmountMinor)
+            + " assessment credit; ";
         estimate.textContent = "Calculated public estimate: "
           + customBuildMoney(publicEstimate.serviceAmountMinor)
           + scaleCopy + " gross; " + creditCopy
@@ -10736,7 +10753,7 @@
           documentRef,
           "p",
           "customer-assessment-note",
-          "Verified completion closed this request boundary. The retained request and response remain visible as read-only history."
+          "The project is complete. This request and response are saved for reference and cannot be changed."
         ));
         return section;
       }
@@ -10852,11 +10869,11 @@
       }
       var busy = Boolean(read.busy) || Boolean(globallyBusy);
       progressStatus.textContent = completionAuthority === "terminal"
-        ? "Verified completion is immutable. Progress and requests are read-only history."
+        ? "The project is complete. Progress and requests are saved for reference and cannot be changed."
         : completionAuthority === "unknown"
-          ? "Current completion authority is not verified yet. Progress remains visible, but every mutation is held."
+          ? "The project status could not be confirmed. You can read progress, but cannot make changes yet."
           : read.busy
-          ? "Saving one bounded project command…"
+          ? "Saving your change…"
           : snapshot.status.label;
       if (read.error) {
         section.appendChild(
@@ -10880,8 +10897,8 @@
           "p",
           "customer-assessment-note",
           completionAuthority === "terminal"
-            ? "No progress, work-request, delegated-access, or request-resolution mutation is available after verified completion."
-            : "No progress, work-request, delegated-access, or request-resolution mutation is available until current completion authority proves this project is open."
+            ? "Progress, requests, access, and responses cannot be changed after completion."
+            : "Changes are paused until this project is confirmed open."
         ));
       } else {
         section.appendChild(renderProgressForm(entry, snapshot, busy));
@@ -10984,8 +11001,8 @@
           "p",
           "customer-assessment-note",
           completionAuthority === "terminal"
-            ? "Verified completion closed added-work mutations. This retained change remains visible as read-only history."
-            : "Current completion authority is still being verified. This retained change remains visible, but no mutation is available until a current snapshot proves the project is open."
+            ? "The project is complete. This added work is saved for reference and cannot be changed."
+            : "Checking whether this project is still open. You can read the added work, but cannot change it yet."
         ));
         return section;
       }
@@ -11026,7 +11043,7 @@
       var reason = assessmentField(
         documentRef,
         "changeVoidReason",
-        "Bounded reason for voiding this change",
+        "Reason for voiding this change",
         "",
         {
           required: true,
@@ -11381,7 +11398,7 @@
             documentRef,
             "p",
             "customer-assessment-note",
-            "Completion proof is immutable. It is not payment, delivery, launch, handoff, or the start of the 30-day workmanship-correction clock."
+            "Completion proof cannot be changed once saved. It does not confirm payment, delivery, launch, or handoff, and does not start the 30-day workmanship-correction period."
           )
         );
         return section;
@@ -11417,7 +11434,7 @@
         documentRef,
         "h6",
         "",
-        "Prepare immutable completion proof"
+        "Prepare final completion proof"
       ));
       if (!eligible) {
         section.appendChild(accountElement(
@@ -11447,7 +11464,7 @@
         documentRef,
         "legend",
         "",
-        "Canonical customer proof"
+        "Customer completion proof"
       ));
       eligibleEvidence.forEach(function (entryEvidence) {
         var label = accountElement(
@@ -11651,7 +11668,7 @@
       }
       if (read.phase === "loading") {
         status.textContent =
-          "Refreshing exact payment records. The last verified records remain below.";
+          "Refreshing payment records. The last confirmed details remain below.";
       } else if (read.busy) {
         status.textContent =
           "Reconciling one exact Stripe payment result…";
@@ -11749,7 +11766,7 @@
           checkout_expired:
             "The retained Stripe payment page is expired. A fresh customer command is required.",
           payment_held:
-            "Payment-page creation is held. No owner action can mark this invoice paid.",
+            "New payment pages are unavailable. Only confirmed payment can mark this invoice paid.",
           reconciliation_required:
             "The Stripe result is uncertain. Reconcile the retained provider evidence before any retry.",
           paid:
@@ -11861,9 +11878,9 @@
       }
       var busy = Boolean(globallyBusy) || Boolean(read.busy);
       changeStatus.textContent = completionAuthority === "terminal"
-        ? "Verified completion is immutable. Added work, evidence, and completion controls are read-only history."
+        ? "The project is complete. Added work, evidence, and completion details are saved for reference and cannot be changed."
         : completionAuthority === "unknown"
-          ? "Current completion authority is not verified yet. Added-work and completion history remains visible, but every mutation is held."
+          ? "The project status could not be confirmed. You can read added-work and completion history, but cannot make changes yet."
           : read.phase === "loading"
         ? "Refreshing this project. Last verified change and completion data remains below."
         : read.busy
@@ -12004,7 +12021,7 @@
         }
       });
       section.append(
-        accountElement(documentRef, "h5", "", "Immutable handoff"),
+        accountElement(documentRef, "h5", "", "Final handoff"),
         finalStatus,
         refreshFinal
       );
@@ -12031,17 +12048,17 @@
       }
       var busy = Boolean(globallyBusy) || Boolean(read.busy);
       finalStatus.textContent = read.phase === "loading"
-        ? "Refreshing independent handoff and final-payment authority. Last verified details remain below."
+        ? "Refreshing handoff and final-payment status. The last confirmed details remain below."
         : read.busy
           ? "Saving one exact final-payment or handoff command…"
           : read.notice
             || (readiness
               ? {
-                  handoff_available: "Verified financial clearance is ready for immutable handoff.",
+                  handoff_available: "Payment is cleared. The final handoff can be recorded.",
                   handoff_not_ready: "Handoff is not ready. Refresh after the independent financial boundary changes.",
-                  handed_off: "The immutable handoff and workmanship window are active."
+                  handed_off: "The handoff is recorded and the workmanship-correction period has started."
                 }[readiness.state]
-              : "Handoff authority is unavailable to this operator.");
+              : "You do not have access to record this handoff.");
       [read && read.error, read && read.handoffError, read && read.paymentError]
         .filter(Boolean)
         .forEach(function (message) {
@@ -12183,7 +12200,7 @@
           documentRef,
           "button",
           "spark-button spark-button-primary",
-          busy ? "Creating immutable handoff…" : "Create exact handoff"
+          busy ? "Recording the final handoff…" : "Create exact handoff"
         );
         submit.type = "submit";
         submit.disabled = busy;
@@ -12272,7 +12289,7 @@
           documentRef,
           "p",
           "customer-assessment-note",
-          "Handoff is immutable. Later progress, access, work-request, and final-payment commands remain closed."
+          "The handoff cannot be changed. Progress, access, work requests, and final-payment actions stay closed."
         ));
       }
       return section;
@@ -12510,7 +12527,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "Tell Site Sourcery about one public website. The bounded assessment is $200; larger sites receive a separately priced expanded assessment."
+        "Tell Site Sourcery about the website you want reviewed. New standard assessments cost $350; larger sites need a separate quote."
       ),
       status,
       body
@@ -12714,13 +12731,17 @@
           "h4",
           "",
           quoteState.state === "accepted"
-            ? "$200 assessment quote accepted"
-            : "$200 assessment quote"
+            ? customBuildMoney(quoteState.quote.servicePrice.amountMinor)
+              + " assessment quote accepted"
+            : customBuildMoney(quoteState.quote.servicePrice.amountMinor)
+              + " assessment quote"
         )
       );
       var quote = quoteState.quote;
       var facts = accountElement(documentRef, "dl", "");
-      appendAccountFact(documentRef, facts, "Price", "$200.00 USD");
+      appendAccountFact(documentRef, facts, "Price",
+        customBuildMoney(quote.servicePrice.amountMinor)
+          + " " + quote.servicePrice.currency);
       appendAccountFact(
         documentRef,
         facts,
@@ -12766,14 +12787,17 @@
             documentRef,
             "span",
             "",
-            "I accept this exact scope, $200 price, invoice timing, tax disclosure, expiration, and delivery date."
+            "I accept this exact scope, "
+              + customBuildMoney(quote.servicePrice.amountMinor)
+              + " price, invoice timing, tax disclosure, expiration, and delivery date."
           )
         );
         var accept = accountElement(
           documentRef,
           "button",
           "spark-button spark-button-primary",
-          "Accept $200 assessment quote"
+          "Accept " + customBuildMoney(quote.servicePrice.amountMinor)
+            + " assessment quote"
         );
         accept.type = "button";
         accept.disabled = true;
@@ -12822,7 +12846,9 @@
         )
       );
       var facts = accountElement(documentRef, "dl", "");
-      appendAccountFact(documentRef, facts, "Assessment", "$200.00 USD");
+      appendAccountFact(documentRef, facts, "Assessment",
+        customBuildMoney(invoice.subtotal.amountMinor)
+          + " " + invoice.subtotal.currency);
       appendAccountFact(
         documentRef,
         facts,
@@ -12886,7 +12912,8 @@
           documentRef,
           "button",
           "spark-button spark-button-primary customer-assessment-checkout",
-          "Pay secure $200 assessment invoice"
+          "Pay " + customBuildMoney(invoice.subtotal.amountMinor)
+            + " assessment invoice securely"
         );
         checkout.type = "button";
         checkout.disabled = busy;
@@ -13134,13 +13161,14 @@
           documentRef,
           "h5",
           "",
-          "$200 Custom build credit"
+          customBuildMoney(credit.amountMinor) + " Custom build credit"
         ),
         accountElement(
           documentRef,
           "p",
           "customer-assessment-note",
-          "This is a one-use, non-cash $200 credit toward an eligible Custom base build for this same organization and project. "
+          "This is a one-use, non-cash " + customBuildMoney(credit.amountMinor)
+            + " credit toward an eligible Custom base build for this same organization and project. "
             + creditMessages[credit.state]
         )
       );
@@ -13208,7 +13236,7 @@
               documentRef,
               "p",
               "customer-assessment-note",
-              "Request submitted. Site Sourcery is reviewing it and will place the bounded $200 quote here."
+              "Request submitted. Site Sourcery will review it and show the next step here."
             )
           );
         }
@@ -13970,7 +13998,7 @@
         documentRef,
         "p",
         "customer-assessment-intro",
-        "Complete the paid, bounded assessment from Mac or Pixel: add desktop and phone screenshot evidence, author up to ten customer-safe findings, then deliver one immutable report and its one-use $200 Custom build credit."
+        "Complete the paid assessment: add desktop and phone screenshots, write up to ten findings for the customer, and deliver the final report with its one-use Custom build credit."
       ),
       status,
       refresh,
@@ -14437,7 +14465,9 @@
           documentRef,
           deliveredFacts,
           "Build credit",
-          "$200.00 USD · one use · non-cash · "
+          customBuildMoney(job.delivery.credit.amountMinor)
+            + " " + job.delivery.credit.currency
+            + " · one use · non-cash · "
             + accountWords(job.delivery.credit.state)
             + (job.delivery.credit.state === "available"
               ? " through "
@@ -14484,7 +14514,7 @@
           documentRef,
           "span",
           "",
-          "I reviewed the complete desktop and phone evidence and understand delivery freezes the customer report and issues exactly one non-cash $200 same-project Custom build credit."
+          "I reviewed the complete desktop and phone evidence and understand delivery freezes the customer report and issues exactly one non-cash same-project Custom build credit under the accepted assessment terms."
         )
       );
       var readiness = accountElement(
@@ -14507,7 +14537,7 @@
         documentRef,
         "button",
         "spark-button spark-button-primary",
-        "Deliver immutable assessment report"
+        "Deliver final assessment report"
       );
       submit.type = "submit";
       function updateDeliveryButton() {
@@ -14899,7 +14929,7 @@
       documentRef,
       "button",
       "spark-button",
-      "Try loading publication authority again"
+      "Try loading publishing status again"
     );
     retry.type = "button";
     retry.hidden = true;
@@ -14954,7 +14984,7 @@
         panel.setAttribute("aria-busy", String(busy));
         retry.disabled = busy;
         retry.textContent =
-          "Try loading publication authority again";
+          "Try loading publishing status again";
         retry.hidden = ![
           "error",
           "command_error"
@@ -14962,7 +14992,7 @@
         if (readState.phase === "loading") {
           retry.hidden = true;
           status.textContent =
-            "Loading exact publication authority…";
+            "Loading publishing status…";
           body.appendChild(
             accountElement(
               documentRef,
@@ -14979,13 +15009,13 @@
         );
         if (!snapshot) {
           status.textContent =
-            "Publication authority could not be verified.";
+            "Publishing status could not be confirmed.";
           body.appendChild(
             accountElement(
               documentRef,
               "p",
               "customer-alakazam-error",
-              "No publication action is available until exact project authority can be loaded."
+              "Publishing actions are paused until the project status can be confirmed."
             )
           );
           return;
@@ -14999,7 +15029,7 @@
           || commandState === "reconciliation_required";
         retry.textContent = commandOpen || commandBlocked
           ? "Refresh publication status"
-          : "Try loading publication authority again";
+          : "Try loading publishing status again";
         retry.hidden = !(
           ["error", "command_error"]
             .includes(readState.phase)
@@ -15025,7 +15055,7 @@
               || "The publication request was not confirmed. Refresh before trying again."
             : snapshot.command
               ? commandStatus
-              : "Exact publication authority loaded.";
+              : "Publishing status is current.";
         var facts = accountElement(
           documentRef,
           "dl",
@@ -16956,8 +16986,8 @@
             customerSessionWasReady = true;
             announce(
               reason === "online"
-                ? "Connection restored. Current account authority is loaded."
-                : "Current account authority is loaded.",
+                ? "Connection restored. Your account is up to date."
+                : "Your account is up to date.",
               "success"
             );
           } else if (customerSessionEnded) {
@@ -16973,7 +17003,7 @@
           announce(
             explain(
               error,
-              "Current account authority could not be refreshed. No write or payment was repeated."
+              "Your account could not be refreshed. No change or payment was repeated."
             ),
             "error"
           );
@@ -18520,7 +18550,7 @@
       if (typeof client.createOwnerCustomBuildHandoff !== "function") {
         setOwnerCustomBuildFinalError(
           entry,
-          "Immutable handoff is unavailable in this build."
+          "Final handoff is unavailable in this build."
         );
         return Promise.resolve(null);
       }
@@ -18580,7 +18610,7 @@
           phase: "ready",
           handoffSnapshot: current,
           busy: "",
-          notice: "Immutable handoff created. The 30-day workmanship window now begins.",
+          notice: "Final handoff created. The 30-day workmanship window now begins.",
           error: "",
           handoffError: ""
         }));
@@ -22278,7 +22308,7 @@
           );
           if (!snapshot) {
             throw new Error(
-              "The publication authority response was invalid."
+              "Publishing status could not be confirmed."
             );
           }
           alakazamPublicationRead = {
@@ -22316,7 +22346,7 @@
               ? ""
               : explain(
                   error,
-                  "Publication authority could not be loaded."
+                  "Publishing status could not be loaded."
                 )
           };
           renderAlakazamPublicationPanel();

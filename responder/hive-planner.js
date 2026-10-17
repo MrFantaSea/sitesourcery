@@ -568,8 +568,8 @@
         renderPause();
         renderStage({ focus: settings.focus === true });
         fields.live.textContent = settings.announce === true
-          ? "Step 1 of 5 is ready. Choose one stuck moment."
-          : "Choose one stuck moment to begin.";
+          ? "Step 1 of 5 is ready. Choose a task."
+          : "Choose a task to begin.";
         return;
       }
 

@@ -125,8 +125,8 @@
       var card = el("article", "care-catalog-card"); card.dataset.careAgreement = "true";
       var labels = { awaiting_payment: "Awaiting payment", active: "Active paid Care", cancellation_pending: "Cancels at the end of the paid month", cancelled: "Cancelled", past_due: "Payment needs attention", suspended: "Care paused — payment needs review" };
       card.append(el("h3", "", price(a.plan)), el("p", "", projectName(a.projectId)), el("strong", "care-catalog-state", labels[a.state] || "Status unavailable"));
-      if (a.paidThrough) card.append(el("p", "", "Verified paid period ends " + date(a.paidThrough)));
-      if (a.cancelRequestedAt && !a.cancelAtPeriodEnd && !a.cancelledAt) card.append(el("p", "", "Cancellation requested. Provider confirmation is pending."));
+      if (a.paidThrough) card.append(el("p", "", "Paid through " + date(a.paidThrough)));
+      if (a.cancelRequestedAt && !a.cancelAtPeriodEnd && !a.cancelledAt) card.append(el("p", "", "Cancellation requested. Waiting for confirmation from the payment service."));
       var scope = el("details"); scope.append(el("summary", "", "Your accepted responsibilities and terms")); details(scope, a.writtenPlan); card.append(scope);
       if (a.capacity) card.append(el("p", "", a.capacity.usedMinutes + " of " + a.capacity.minutes + " included minutes used; " + a.capacity.usedEdits + " of " + a.capacity.edits + " requests used this paid period. No automatic overage charges."));
       var active = ["active", "cancellation_pending"].includes(a.state) && a.currentPeriodId;
@@ -139,7 +139,7 @@
         } else {
           var url = checkoutUrl(pending.checkoutUrl);
           if (pending.state === "ready" && url && Date.parse(pending.expiresAt) > Date.now()) {
-            var link = el("a", "care-catalog-checkout", "Open your existing secure checkout"); link.href = url; link.rel = "noopener noreferrer"; card.append(link);
+            var link = el("a", "care-catalog-checkout", "Return to secure checkout"); link.href = url; link.rel = "noopener noreferrer"; card.append(link);
           } else card.append(el("p", "", "A checkout already exists or its result is uncertain. Check payment status before starting another."));
         }
       }
@@ -153,19 +153,19 @@
         if (r.ownerNote) item.append(el("p", "", r.ownerNote));
         if (owner && active && r.periodId === a.currentPeriodId && !["completed", "declined"].includes(r.state)) item.append(form("Save work update", function (f) {
           control(f, "state", "Work state", "select", [{value:"in_progress",label:"In progress"},{value:"completed",label:"Completed"},{value:"declined",label:"Declined — no work performed"}], r.state === "requested" ? "in_progress" : r.state);
-          var minutes = control(f, "minutes", "Total minutes spent on this request (cumulative)", "number", null, r.minutes); minutes.min = r.minutes; minutes.max = a.plan.includedMinutes; minutes.step = "1";
-          control(f, "note", "Customer-visible work note", "textarea", null, r.ownerNote || "");
+          var minutes = control(f, "minutes", "Total minutes spent on this request", "number", null, r.minutes); minutes.min = r.minutes; minutes.max = a.plan.includedMinutes; minutes.step = "1";
+          control(f, "note", "Work note shown to the customer", "textarea", null, r.ownerNote || "");
         }, function (f) { command(base + "/agreements/" + a.agreementId + "/requests/" + r.requestId + "/work", { expectedRevision: r.revision, state: val(f, "state"), minutes: Number(val(f, "minutes")), note: val(f, "note") }, "Saving work update"); }));
         card.append(item);
       });
-      var periods = el("details"); periods.append(el("summary", "", "Verified payment periods"));
+      var periods = el("details"); periods.append(el("summary", "", "Payment history"));
       a.periods.forEach(function (p) { periods.append(el("p", "", date(p.startsAt) + " – " + date(p.endsAt) + " · " + money(p.amountMinor) + (p.invalidatedAt ? " · payment reversed or under review" : " · verified paid"))); });
       if (!a.periods.length) periods.append(el("p", "", "No verified paid period yet.")); card.append(periods); return card;
     }
     function render() {
       body.replaceChildren();
-      if (snapshot.readiness.ready !== true || snapshot.readiness.verified !== true) { body.append(el("p", "", "Care storage is temporarily unavailable. Refresh before continuing.")); return; }
-      var catalog = el("details", "care-catalog-plans"); catalog.append(el("summary", "", "Monthly plans and included capacity"));
+      if (snapshot.readiness.ready !== true || snapshot.readiness.verified !== true) { body.append(el("p", "", "Care details are temporarily unavailable. Refresh before continuing.")); return; }
+      var catalog = el("details", "care-catalog-plans"); catalog.append(el("summary", "", "Monthly plans and what is included"));
       snapshot.catalog.plans.forEach(function (p) { catalog.append(el("p", "", price(p) + " · " + p.includedMinutes + " minutes / " + p.editCap + " requests. Responsibilities are defined in your written offer.")); }); body.append(catalog);
       if (owner) {
         var offer = el("section", "care-catalog-card"); offer.append(el("h3", "", "Prepare a written offer"));

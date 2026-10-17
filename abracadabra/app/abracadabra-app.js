@@ -188,7 +188,7 @@
   var bootStatus = document.getElementById("spark-boot-status");
   if (!compiler || !maker || !bootStatus) {
     if (bootStatus) {
-      bootStatus.textContent = "Abracadabra could not open. Reload this page to try again; the maker remains locked.";
+      bootStatus.textContent = "Abracadabra could not open. Reload the page to try again.";
     }
     return;
   }
@@ -654,7 +654,7 @@
     if (keep && currentStep === "preview") bootStatus.hidden = true; // the room speaks for itself
     if (previewLegend) {
       if (!keep) previewLegend.textContent = previewLegendDefault;
-      else if (empty) previewLegend.textContent = "Your page comes first.";
+      else if (empty) previewLegend.textContent = "Make your preview";
       else previewLegend.textContent = "Your page.";
     }
     var heroTitle = document.getElementById("spark-title");
@@ -680,7 +680,7 @@
     openButton.disabled = !hasCurrentVersion;
     if (!current) {
       preview.removeAttribute("srcdoc");
-      versionStatus.textContent = "No version has been made.";
+      versionStatus.textContent = "No preview yet.";
       undoButton.disabled = true;
       return;
     }
@@ -819,7 +819,7 @@
   function openCurrentPreview() {
     var current = versions[currentVersionIndex];
     if (!current) {
-      versionStatus.textContent = "Make a version before opening it. Then try again.";
+      versionStatus.textContent = "Make a preview first, then open it.";
       return;
     }
     openLocalPreview(window, {
@@ -853,7 +853,7 @@
     });
     emitDraftChanged();
     bootStatus.hidden = false;
-    bootStatus.textContent = "Fictional sample loaded. Replace any detail before using the result.";
+    bootStatus.textContent = "Example loaded. Replace the details with your own before using it.";
     element("businessName").focus();
   }
 
@@ -951,7 +951,7 @@
   maker.removeAttribute("inert");
   maker.setAttribute("aria-disabled", "false");
   /* sitesourcery:truth-slot:abracadabra-app-ready:start */
-  bootStatus.textContent = "Abracadabra ready. Your local draft stays in this tab.";
+  bootStatus.textContent = "Ready. Your draft stays in this browser tab.";
   bootStatus.hidden = false;
   /* sitesourcery:truth-slot:abracadabra-app-ready:end */
   markDraftClean();
