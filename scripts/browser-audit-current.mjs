@@ -4824,6 +4824,26 @@ try {
       const linked = new URL(href);
       if (CANONICAL_ROUTES.includes(linked.pathname)) {
         observedCanonicalLinks.add(linked.pathname);
+      } else if (
+        route === "/work/"
+        && !linked.search
+        && !linked.hash
+        && [
+          "/assets/work-demo-trattoria.png",
+          "/assets/work-demo-bright-spark.png",
+        ].includes(linked.pathname)
+      ) {
+        try {
+          const response = await fetch(href, { redirect: "error" });
+          const mediaType = response.headers.get("content-type")
+            ?.split(";")[0].trim();
+          if (response.status !== 200 || mediaType !== "image/png") {
+            throw new Error(`expected HTTP200 image/png, got ${response.status} ${mediaType}`);
+          }
+          await sharp(Buffer.from(await response.arrayBuffer())).raw().toBuffer();
+        } catch (error) {
+          failures.push(`link graph ${route}: invalid full-size design ${href}: ${error.message}`);
+        }
       } else {
         failures.push(
           `link graph ${route}: noncanonical internal link ${href}`,
