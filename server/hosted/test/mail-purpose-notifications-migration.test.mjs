@@ -13,13 +13,14 @@ const migrationUrl = new URL(
 
 test("migration 140 freezes the exact 14-source purpose outbox and reviewed owner mappings", async () => {
   const source = await readFile(migrationUrl, "utf8");
-  assert.equal(Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).length, 14);
+  assert.equal(Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).filter(k=>!k.startsWith("care_catalog_")).length, 14);
   assert.equal([...source.matchAll(/\nunion all\n/gu)].length, 13);
   assert.match(source, /'publication_state_changed'[\s\S]{0,260}command[.]action,[\s\S]{0,100}command[.]project_id::text/u);
   assert.match(source, /'domain_lifecycle_updated'[\s\S]{0,260}'ss[.]domain_provider_lifecycle_states'[\s\S]{0,180}state[.]revision, state[.]state_digest, state[.]lifecycle_status,[\s\S]{0,120}state[.]domain_name::text/u);
   for (const [kind, authority] of Object.entries(
     MAIL_PURPOSE_NOTIFICATION_AUTHORITIES
   )) {
+    if(kind.startsWith("care_catalog_")) continue;
     assert.match(source, new RegExp(`'${kind}'`, "u"));
     assert.match(
       source,

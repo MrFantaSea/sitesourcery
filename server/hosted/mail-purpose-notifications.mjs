@@ -48,6 +48,29 @@ export const MAIL_PURPOSE_NOTIFICATION_AUTHORITIES = deepFreeze({
     "care", "ss.care_commerce_reservation_events", ["cancelled"],
     "care-commerce-reservation-cancelled.v1"
   ),
+  care_catalog_paid_month_receipt: authority(
+    "care", "ss.care_catalog_notification_events", ["paid"],
+    "care-catalog-paid-month-receipt.v1"
+  ),
+  care_catalog_payment_problem: authority(
+    "care", "ss.care_catalog_notification_events",
+    ["past_due", "unpaid", "refunded", "disputed", "resolved"],
+    "care-catalog-payment-problem.v1"
+  ),
+  care_catalog_cancellation_updated: authority(
+    "care", "ss.care_catalog_notification_events",
+    ["requested", "scheduled", "cancelled", "resumed"],
+    "care-catalog-cancellation-updated.v1"
+  ),
+  care_catalog_request_acknowledgment: authority(
+    "care", "ss.care_catalog_notification_events", ["requested"],
+    "care-catalog-request-acknowledgment.v1"
+  ),
+  care_catalog_request_updated: authority(
+    "care", "ss.care_catalog_notification_events",
+    ["in_progress", "completed", "declined"],
+    "care-catalog-request-updated.v1"
+  ),
   responder_commerce_quote_held: authority(
     "responder", "ss.responder_commerce_quotes", ["held"],
     "responder-commerce-quote-held.v1"
@@ -209,6 +232,15 @@ export function normalizeMailPurposeNotification(input, requestedAt) {
     "The notification source identity is invalid.",
     { status: 400 }
   );
+  if (selectedAuthority.table === "ss.care_catalog_notification_events") {
+    uuid(input.source.id, "Care catalog notification event ID");
+    invariant(
+      input.source.revision === 1,
+      "MAIL_PURPOSE_NOTIFICATION_INVALID",
+      "The immutable Care catalog event revision must be one.",
+      { status: 400 }
+    );
+  }
   const selected = {
     schema: MAIL_PURPOSE_NOTIFICATION_SCHEMA,
     actorId: uuid(input.actorId, "Operator actor ID"),
@@ -280,7 +312,7 @@ export function createHeldMailPurposeNotifications() {
         kind: "mail-purpose-notifications",
         code: "MAIL_PURPOSE_NOTIFICATION_HELD",
         purposeCount: 5,
-        sourceCount: 14,
+        sourceCount: 19,
         providerEffects: false,
         deliveryClaimed: false,
         sourceAuthoritative: true

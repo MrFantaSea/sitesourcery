@@ -70,6 +70,10 @@ test('canonical Care: immutable agreement, scoped checkout, verified periods, re
   assert.equal((await service.readCustomer(stranger)).agreements.length,0);
   await assert.rejects(service.voidOffer(operator,customer.organizationId,offer.offerId,{reason:'The customer has already accepted.'},'void-current'),{code:'CARE_CONFLICT'});
   const agreementId=accepted.agreementId;
+  const mailEvents=async()=> (await pool.query('select * from ss.care_catalog_notification_events where agreement_id=$1 order by event_sequence',[agreementId])).rows;
+  const mailCount=async()=>Number((await pool.query("select count(*) as n from ss.mail_purpose_notification_outbox where source_table='ss.care_catalog_notification_events' and reference_id=$1",[agreementId])).rows[0].n);
+  assert.equal((await mailEvents()).length,0,'Acceptance alone never produces a paid receipt');
+
   await assert.rejects(service.requestWork(customer,agreementId,{summary:'Change the public contact number.'},'work-before-paid'),{code:'CARE_UNAVAILABLE'});
   ambiguous=true;await assert.rejects(service.startCheckout(customer,agreementId,{},'checkout-current'),/provider timeout/);ambiguous=false;
   const checkout=await service.startCheckout(customer,agreementId,{},'checkout-current');assert.equal(checkout.state,'ambiguous');assert.equal(calls,1);
@@ -81,6 +85,17 @@ test('canonical Care: immutable agreement, scoped checkout, verified periods, re
   assert.equal((await service.ingestStripeEvent(paidEvent)).status,'processed');assert.equal(calls,1,'Expired unknown-session recovery never creates a second checkout');
   const active=(await service.readCustomer(customer)).agreements[0];assert.equal(active.state,'active');assert.equal(active.capacity.minutes,30);assert.equal(active.periods.length,1);
   assert.equal((await service.reconcileCustomer(customer,agreementId,{})).periods.length,1);
+  const firstEvents=await mailEvents();assert.equal(firstEvents.length,1);assert.equal(firstEvents[0].notification_kind,'care_catalog_paid_month_receipt');assert.equal(firstEvents[0].state,'paid');assert.equal(await mailCount(),1);
+  assert.deepEqual(await service.ingestStripeEvent(paidEvent),{status:'duplicate'});
+  await Promise.all([service.ingestStripeEvent(paidEvent),service.ingestStripeEvent(paidEvent)]);
+  assert.equal((await mailEvents()).length,1,'Provider replay and repeated reconciliation do not duplicate receipt');
+  const beforeFailedMail=Number((await pool.query('select count(*) as n from ss.care_catalog_requests where agreement_id=$1',[agreementId])).rows[0].n);
+  const originalEmail=(await pool.query('select email from auth.users where id=$1',[customer.userId])).rows[0].email;
+  await pool.query('update auth.users set email=$2 where id=$1',[customer.userId,'invalid-address']);
+  try{await assert.rejects(service.requestWork(customer,agreementId,{summary:'Must roll back when mail evidence cannot be reserved.'},'request-atomic-failure'));}
+  finally{await pool.query('update auth.users set email=$2 where id=$1',[customer.userId,originalEmail]);}
+  assert.equal(Number((await pool.query('select count(*) as n from ss.care_catalog_requests where agreement_id=$1',[agreementId])).rows[0].n),beforeFailedMail);
+  assert.equal((await mailEvents()).length,1,'Business request, event and mail all roll back together');
   const originalRead=provider.readCareSubscription;provider.readCareSubscription=async input=>{const result=await originalRead(input);return {...result,invoice:{...result.invoice,paymentIntentId:'pi_changed'}};};
   await assert.rejects(service.reconcileCustomer(customer,agreementId,{}),{code:'CARE_CONFLICT'});provider.readCareSubscription=originalRead;
   await assert.rejects(pool.query("update ss.care_catalog_paid_periods set payment_intent_id='pi_changed' where agreement_id=$1",[agreementId]),e=>e.code==='55000');
@@ -91,10 +106,37 @@ test('canonical Care: immutable agreement, scoped checkout, verified periods, re
   await assert.rejects(service.recordWork(operator,customer.organizationId,agreementId,request.requestId,{expectedRevision:1,state:'completed',minutes:20,note:'Updated the contact number and verified it.'},'work-stale'),{code:'CARE_CONFLICT'});
   for(let i=0;i<2;i++)await service.requestWork(customer,agreementId,{summary:`Another requested text update number ${i}.`},`request-other-${i}`);
   await assert.rejects(service.requestWork(customer,agreementId,{summary:'A fourth requested update exceeds the plan.'},'request-limit'),{code:'CARE_CONFLICT'});
+  const requestEvents=(await mailEvents()).filter(e=>e.request_id===request.requestId);
+  assert.deepEqual(requestEvents.map(e=>e.state),['requested','completed']);
+  assert.equal(JSON.stringify(await mailEvents()).includes('Updated the contact number'),false,'Private owner notes never enter mail source evidence');
+  assert.equal((await pool.query("select count(*)::int as n from ss.mail_purpose_notification_outbox o join ss.hosted_mail_deliveries m on m.id=o.mail_message_id where o.reference_id=$1 and (o.source_customer_user_id<>$2 or m.customer_user_id<>$2 or o.provider_effects_authorized or o.delivery_claimed or m.state<>'pending')",[agreementId,customer.userId])).rows[0].n,0);
+  const guard=await pool.connect();try{
+   await guard.query('begin');await guard.query("select set_config('app.service_actor_kind','system',true)");
+   await assert.rejects(guard.query(`insert into ss.care_catalog_notification_events(id,agreement_id,organization_id,project_id,customer_user_id,notification_kind,state,subject_id,event_sequence,occurred_at)
+     values($1,$2,$3,$4,$5,'care_catalog_payment_problem','past_due',$2,999,clock_timestamp())`,[randomUUID(),agreementId,randomUUID(),projectId,customer.userId]),e=>e.code==='23514');await guard.query('rollback');
+   await guard.query('begin');await guard.query("select set_config('app.service_actor_kind','system',true)");
+   await guard.query("update ss.care_catalog_agreements set provider_status='past_due' where id=$1",[agreementId]);
+   await guard.query(`insert into ss.care_catalog_notification_events(id,agreement_id,organization_id,project_id,customer_user_id,notification_kind,state,subject_id,event_sequence,occurred_at)
+     select $1,$2,$3,$4,$5,'care_catalog_payment_problem','past_due',$2,coalesce(max(event_sequence),0)+1,clock_timestamp() from ss.care_catalog_notification_events where agreement_id=$2`,[randomUUID(),agreementId,customer.organizationId,projectId,customer.userId]);
+   await assert.rejects(guard.query('commit'),e=>e.code==='23514');await guard.query('rollback');
+   assert.equal((await pool.query('select provider_status from ss.care_catalog_agreements where id=$1',[agreementId])).rows[0].provider_status,'active','Missing outbox rejects the entire commit');
+   await assert.rejects(pool.query("update ss.care_catalog_notification_events set state='resolved' where agreement_id=$1",[agreementId]),e=>e.code==='42501');
+  }finally{guard.release();}
   disputed=true;assert.equal((await service.reconcileCustomer(customer,agreementId,{})).state,'suspended');
   disputed=false;assert.equal((await service.reconcileCustomer(customer,agreementId,{})).state,'active');
   now='2026-11-16T12:00:01.000Z';assert.equal((await service.readCustomer(customer)).agreements[0].state,'past_due');assert.equal((await service.readCustomer(customer)).agreements[0].capacity,null,'No clock-only capacity renewal');
   invoiceId=`in_${suffix}_second`;periodStart='2026-11-16T12:00:00.000Z';periodEnd='2026-12-16T12:00:00.000Z';assert.equal((await cycle()).completed,1);const renewal=(await service.readCustomer(customer)).agreements[0];assert.equal(renewal.state,'active');assert.equal(renewal.periods.length,2);assert.equal(renewal.capacity.usedMinutes,0);
+  // A provider-scheduled cancellation can precede a local cancellation command.
+  // Keep this real-PG scenario rollback-only so the following race remains independent.
+  const scheduledClient=await pool.connect();try{
+   await scheduledClient.query('begin');await scheduledClient.query("select set_config('app.service_actor_kind','system',true)");
+   await scheduledClient.query('update ss.care_catalog_agreements set cancel_at_period_end=true,cancel_requested_at=null,cancel_command_id=null where id=$1',[agreementId]);
+   const scopedRepository=createPostgresCarePaymentRepository({authority:{service:async(_options,work)=>work(scheduledClient)}});
+   await scopedRepository.requestCancellation({actorKind:'customer',actorId:customer.userId,organizationId:customer.organizationId,commandId:'provider-scheduled-cancel'},agreementId,now);
+   const observed=(await scheduledClient.query("select state from ss.care_catalog_notification_events where agreement_id=$1 and notification_kind='care_catalog_cancellation_updated' order by event_sequence",[agreementId])).rows;
+   assert.deepEqual(observed.map(e=>e.state),['scheduled'],'Never emit impossible requested after provider scheduled cancellation');
+   await scheduledClient.query('rollback');
+  }catch(error){await scheduledClient.query('rollback');throw error;}finally{scheduledClient.release();}
   // A delayed earlier provider read cannot reopen a newer cancellation.
   let unblock,entered;const started=new Promise(r=>entered=r);blockRead={entered,promise:new Promise(r=>unblock=r)};
   const stale=service.reconcileCustomer(customer,agreementId,{});const staleResult=stale.then(()=>null,e=>e);await started;
@@ -110,6 +152,16 @@ test('canonical Care: immutable agreement, scoped checkout, verified periods, re
   assert.ok((await service.readCustomer(customer)).agreements[0].periods.find(p=>p.invoiceId===`in_${suffix}_first`).invalidatedAt);
   cancelled=true;now='2027-01-16T12:00:01.000Z';await service.reconcileCustomer(customer,agreementId,{});
   const final=await service.readOwner(operator,customer.organizationId);assert.equal(final.agreements[0].cancelledAt,now);assert.equal(final.agreements[0].periods.length,3);assert.equal(final.agreements[0].capacity,null);
+  const beforeDisabled=await mailEvents();await pool.query('update auth.users set disabled_at=clock_timestamp() where id=$1',[customer.userId]);
+  refunded=true;await service.reconcileSystem(agreementId,null);
+  assert.equal((await pool.query('select invalidation_reason from ss.care_catalog_paid_periods where agreement_id=$1 and invoice_id=$2',[agreementId,invoiceId])).rows[0].invalidation_reason,'refunded','Financial reconciliation persists even after recipient deactivation');
+  assert.deepEqual(await mailEvents(),beforeDisabled,'No notification/event for an inactive recipient');
+  await pool.query('update auth.users set disabled_at=null where id=$1',[customer.userId]);
+  const finalEvents=await mailEvents();assert.equal(finalEvents.filter(e=>e.notification_kind==='care_catalog_paid_month_receipt').length,3);
+  assert.equal(new Set(finalEvents.filter(e=>e.notification_kind==='care_catalog_paid_month_receipt').map(e=>e.paid_period_id)).size,3);
+  assert.ok(finalEvents.some(e=>e.notification_kind==='care_catalog_payment_problem'&&e.state==='resolved'));
+  assert.deepEqual(finalEvents.filter(e=>e.notification_kind==='care_catalog_cancellation_updated').map(e=>e.state),['requested','scheduled','cancelled']);
+  assert.equal(await mailCount(),finalEvents.length);assert.deepEqual(finalEvents.map(e=>Number(e.event_sequence)),finalEvents.map((_,i)=>i+1));
   const client=await pool.connect();try{await client.query('begin');await client.query('set local role authenticated');await assert.rejects(client.query('select * from ss.care_catalog_offers'),e=>e.code==='42501');await client.query('rollback');}finally{client.release();}
   console.log(JSON.stringify({proof:'care-catalog-postgres',syntheticHandoffInput:true,fixtureReplicationModeRestored:true,providerEffects:false,agreements:1,paidPeriods:3,checkouts:calls,guards:['tenant','operator','unhanded-project','immutable','idempotency','pending-before-provider','no-clock-renewal','usage','revision','refund','dispute','cancellation','project-lifecycle','rls']}));
  }finally{await pool.end();}

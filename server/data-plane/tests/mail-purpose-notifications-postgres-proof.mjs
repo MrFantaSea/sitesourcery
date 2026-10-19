@@ -75,6 +75,36 @@ const EXPECTED_AUTHORITIES = Object.freeze([
     "care-commerce-reservation-cancelled.v1"
   ]),
   Object.freeze([
+    "care_catalog_paid_month_receipt",
+    "care",
+    "ss.care_catalog_notification_events",
+    "care-catalog-paid-month-receipt.v1"
+  ]),
+  Object.freeze([
+    "care_catalog_payment_problem",
+    "care",
+    "ss.care_catalog_notification_events",
+    "care-catalog-payment-problem.v1"
+  ]),
+  Object.freeze([
+    "care_catalog_cancellation_updated",
+    "care",
+    "ss.care_catalog_notification_events",
+    "care-catalog-cancellation-updated.v1"
+  ]),
+  Object.freeze([
+    "care_catalog_request_acknowledgment",
+    "care",
+    "ss.care_catalog_notification_events",
+    "care-catalog-request-acknowledgment.v1"
+  ]),
+  Object.freeze([
+    "care_catalog_request_updated",
+    "care",
+    "ss.care_catalog_notification_events",
+    "care-catalog-request-updated.v1"
+  ]),
+  Object.freeze([
     "responder_commerce_quote_held",
     "responder",
     "ss.responder_commerce_quotes",
@@ -108,7 +138,7 @@ const EXPECTED_AUTHORITIES = Object.freeze([
 
 const EXPECTED_GATES = Object.freeze([
   "readiness-contract-acl-guards",
-  "exact-14-compiled-source-arms",
+  "exact-19-source-mappings-15-compiled-arms",
   "owner-publication-domain-identities",
   "real-source-operator-authority",
   "concurrent-semantic-single-reservation",
@@ -177,6 +207,49 @@ function reservationInput({
   };
 }
 
+export async function verifyMailPurposeNotificationSourceMappings(pool) {
+  assert.deepEqual(authorityTuples(), EXPECTED_AUTHORITIES);
+  const definitionResult = await pool.query(
+    "select pg_get_viewdef(" +
+    "'ss.mail_purpose_notification_sources'::regclass, true) " +
+    "as definition"
+  );
+  const arms = definitionResult.rows[0].definition.split(/\nUNION ALL\n/u);
+  assert.equal(arms.length, 15);
+  for (const [
+    notificationKind,
+    purposeKind,
+    sourceTable,
+    templateVersion
+  ] of EXPECTED_AUTHORITIES) {
+    if(notificationKind.startsWith("care_catalog_")) continue;
+    const matches = arms.filter((arm) =>
+      arm.includes(`'${notificationKind}'::text AS notification_kind`)
+    );
+    assert.equal(matches.length, 1, notificationKind);
+    assert.match(matches[0], new RegExp(
+      `'${purposeKind}'::text AS purpose_kind`, "u"
+    ));
+    assert.match(matches[0], new RegExp(
+      `'${sourceTable.replaceAll(".", "\\.")}'::text AS source_table`, "u"
+    ));
+    assert.match(matches[0], new RegExp(
+      `'${templateVersion.replaceAll(".", "\\.")}'::text AS template_version`,
+      "u"
+    ));
+  }
+  const careArms=arms.filter(arm=>arm.includes("ss.care_catalog_notification_events"));
+  assert.equal(careArms.length,1);
+  assert.match(careArms[0],/event[.]notification_kind,/u);
+  assert.match(careArms[0],/replace\(event[.]notification_kind, '_'::text, '-'::text\) \|\| '[.]v1'::text/u);
+  assert.match(careArms[0],/1::bigint AS source_revision/u);
+  assert.match(careArms[0],/event[.]event_digest AS source_digest/u);
+  assert.match(careArms[0],/event[.]customer_user_id AS source_customer_user_id/u);
+  const allowed=(await pool.query("select pg_get_constraintdef(oid) as definition from pg_constraint where conrelid='ss.care_catalog_notification_events'::regclass and contype='c'")).rows.map(r=>r.definition).join('\n');
+  for(const [kind] of EXPECTED_AUTHORITIES.filter(([kind])=>kind.startsWith('care_catalog_')))assert.ok(allowed.includes(kind));
+  return arms;
+}
+
 export async function verifyMailPurposeNotificationsPostgres(
   pool,
   { connectionString }
@@ -199,36 +272,8 @@ export async function verifyMailPurposeNotificationsPostgres(
     assert.equal(readiness.deliveryClaimed, false);
     passed("readiness-contract-acl-guards");
 
-    assert.deepEqual(authorityTuples(), EXPECTED_AUTHORITIES);
-    const definitionResult = await pool.query(
-      "select pg_get_viewdef(" +
-      "'ss.mail_purpose_notification_sources'::regclass, true) " +
-      "as definition"
-    );
-    const arms = definitionResult.rows[0].definition.split(/\nUNION ALL\n/u);
-    assert.equal(arms.length, 14);
-    for (const [
-      notificationKind,
-      purposeKind,
-      sourceTable,
-      templateVersion
-    ] of EXPECTED_AUTHORITIES) {
-      const matches = arms.filter((arm) =>
-        arm.includes(`'${notificationKind}'::text AS notification_kind`)
-      );
-      assert.equal(matches.length, 1, notificationKind);
-      assert.match(matches[0], new RegExp(
-        `'${purposeKind}'::text AS purpose_kind`, "u"
-      ));
-      assert.match(matches[0], new RegExp(
-        `'${sourceTable.replaceAll(".", "\\.")}'::text AS source_table`, "u"
-      ));
-      assert.match(matches[0], new RegExp(
-        `'${templateVersion.replaceAll(".", "\\.")}'::text AS template_version`,
-        "u"
-      ));
-    }
-    passed("exact-14-compiled-source-arms");
+    const arms = await verifyMailPurposeNotificationSourceMappings(pool);
+    passed("exact-19-source-mappings-15-compiled-arms");
 
     const publicationArm = arms.find((arm) =>
       arm.includes("'publication_state_changed'::text AS notification_kind")

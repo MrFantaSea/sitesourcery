@@ -8,6 +8,13 @@ import {
   createCapabilityProcessMatrix
 } from "../capability-process-matrix.mjs";
 import { createHostedApi } from "../http.mjs";
+import {
+  MAIL_PURPOSE_NOTIFICATION_AUTHORITIES,
+  createMailPurposeNotifications
+} from "../mail-purpose-notifications.mjs";
+import {
+  createPostgresMailPurposeNotificationRepository
+} from "../mail-purpose-notifications-postgres.mjs";
 
 const ORIGIN = "https://staging.sitesourcery.com";
 
@@ -261,4 +268,62 @@ test("strict core readiness does not fan out to unavailable feature providers", 
   assert.equal(result.status, 200);
   assert.equal((await result.json()).capabilityProcessMatrix.startupReady, true);
   assert.equal(providerCalls, 0);
+});
+
+test("production mail startup gate accepts the current registry and refuses stale or effectful readiness", async () => {
+  const source = await readFile(new URL("../bin/server.mjs", import.meta.url), "utf8");
+  const marker = "const mailPurposeReadiness = await mailPurposeNotifications.readiness();";
+  const markerAt = source.indexOf(marker);
+  const end = source.indexOf("const resendMailEvents =", markerAt);
+  assert.ok(markerAt >= 0 && end > markerAt);
+  assert.ok(end < source.indexOf("await listen(apiServer, apiPort)"));
+  // Exercise the actual entrypoint gate, not a copied version of its condition.
+  const assertStartup = new Function(
+    "mailPurposeReadiness", "MAIL_PURPOSE_NOTIFICATION_AUTHORITIES",
+    source.slice(markerAt + marker.length, end)
+  );
+  let queries = 0;
+  const repository = createPostgresMailPurposeNotificationRepository({
+    authority: {
+      async service(context, work) {
+        assert.deepEqual(context, { actorKind: "system", readOnly: true });
+        return work({ async query() {
+          queries += 1;
+          return { rows: [{
+            purpose_contract_ready: true,
+            dispatch_contract_ready: true,
+            sources_ready: true,
+            rls_ready: true,
+            trigger_ready: true,
+            scope_trigger_ready: true,
+            mail_constraints_ready: true,
+            exception_constraint_ready: true,
+            dispatch_constraint_ready: true,
+            dispatch_trigger_ready: true,
+            source_acl_ready: true,
+            acl_ready: true
+          }] };
+        } });
+      }
+    }
+  });
+  const readiness = await createMailPurposeNotifications({ repository }).readiness();
+  assert.equal(queries, 1);
+  assert.equal(readiness.sourceCount, Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).length);
+  assert.doesNotThrow(() => assertStartup(readiness, MAIL_PURPOSE_NOTIFICATION_AUTHORITIES));
+  for (const mismatch of [
+    { sourceCount: 14 },
+    { sourceCount: readiness.sourceCount + 1 },
+    { ready: false },
+    { verified: false },
+    { fiveFamilyReservationReady: false },
+    { purposeCount: 4 },
+    { providerEffects: true },
+    { deliveryClaimed: true }
+  ]) {
+    assert.throws(
+      () => assertStartup({ ...readiness, ...mismatch }, MAIL_PURPOSE_NOTIFICATION_AUTHORITIES),
+      /Canonical five-family held mail-purpose authority is not ready/u
+    );
+  }
 });

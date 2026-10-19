@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import { digest } from "../security.mjs";
 
 import {
   COMMERCE_NOTIFICATION_AUTHORITIES
@@ -11,6 +12,7 @@ import {
 import {
   CALCULATED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
   REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS,
+  REVIEWED_NOTIFICATION_TEMPLATE_MANIFEST,
   REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
   REVIEWED_NOTIFICATION_TEMPLATE_VERSIONS,
   createNotificationMailPrivateRenderer,
@@ -139,8 +141,10 @@ function renderInput(definition, selectedPreview, overrides = {}) {
 }
 
 test("reviewed registry pins every current support, commerce, and purpose template", () => {
-  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.length, 40);
-  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_VERSIONS.length, 40);
+  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.length, 45);
+  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_VERSIONS.length, 45);
+  assert.equal(REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
+    "5f4815fcaa4a5c9f2916a3b381bf62ddea92d7d654728a08ede3a93f05da1cc1");
   assert.equal(
     CALCULATED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256,
     REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256
@@ -161,7 +165,7 @@ test("reviewed registry pins every current support, commerce, and purpose templa
     REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.filter(
       (definition) => definition.family === "purpose"
     ).length,
-    14
+    19
   );
   assert.equal(
     REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.filter(
@@ -228,6 +232,85 @@ test("reviewed registry pins every current support, commerce, and purpose templa
     assert.match(first.rendered.text, /Never send passwords/u);
     assert.match(first.rendered.html, /Never send passwords/u);
   }
+});
+
+test("the original 40 template definitions retain their reviewed identity", () => {
+  const templates = REVIEWED_NOTIFICATION_TEMPLATE_MANIFEST.templates.filter(
+    (item) => !item.version.startsWith("care-catalog-")
+  );
+  assert.equal(templates.length, 40);
+  assert.equal(digest({
+    schema: REVIEWED_NOTIFICATION_TEMPLATE_MANIFEST.schema,
+    templates
+  }), "f16c963c1cdd7dfb7801eddac0eb92d559e520bda7ee2a0d54bd723597b9cd14");
+});
+
+test("Care catalog mail renders exact states with a fixed account link and no private content", async () => {
+  const definitions = REVIEWED_NOTIFICATION_TEMPLATE_DEFINITIONS.filter(
+    (item) => item.version.startsWith("care-catalog-")
+  );
+  assert.equal(definitions.length, 5);
+  assert.equal(definitions.reduce((total, item) => total + item.states.length, 0), 14);
+  for (const definition of definitions) {
+    assert.equal(definition.family, "purpose");
+    assert.equal(definition.sourceKind, "purpose");
+    assert.equal(definition.accountUrl, "https://sitesourcery.com/abracadabra/app/");
+    if (definition.stateLeads !== undefined) {
+      assert.deepEqual(Object.keys(definition.stateLeads), definition.states);
+    }
+    for (const state of definition.states) {
+      const selectedPreview = preview(definition, CUSTOMER, { state });
+      const renderer = createNotificationMailPrivateRenderer({
+        authority: fakeAuthority({
+          definition,
+          mutateRow: (row) => ({ ...row, source_state: state })
+        }),
+        configuration: configuration()
+      });
+      assert.deepEqual(
+        await renderer.render(renderInput(definition, selectedPreview)),
+        selectedPreview.rendered
+      );
+      const { text, html } = selectedPreview.rendered;
+      assert.ok(text.startsWith(definition.stateLeads?.[state] ?? definition.lead));
+      assert.ok(text.includes("View your account: https://sitesourcery.com/abracadabra/app/"));
+      assert.ok(html.includes('<a href="https://sitesourcery.com/abracadabra/app/">View your account</a>'));
+      assert.equal(text.includes(CUSTOMER), false);
+      assert.equal(html.includes(CUSTOMER), false);
+      assert.equal(text.includes(REFERENCE_ID), false);
+      assert.doesNotMatch(text, /Recorded state:|Revision:/u);
+      for (const field of ["recipient", "ownerNote", "summary", "paymentDetails", "accountUrl"]) {
+        assert.throws(
+          () => previewReviewedNotificationMail({
+            templateVersion: definition.version,
+            to: CUSTOMER,
+            variables: { ...variables(definition, { state }), [field]: "private-content" }
+          }),
+          (error) => error?.code === "NOTIFICATION_PRIVATE_RENDERER_INVALID"
+        );
+      }
+    }
+  }
+  const receipt = definitions.find((item) => item.eventKind === "care_catalog_paid_month_receipt");
+  assert.deepEqual(receipt.states, ["paid"]);
+  for (const state of ["pending", "requested", "past_due", "resolved"]) {
+    assert.throws(
+      () => preview(receipt, CUSTOMER, { state }),
+      (error) => error?.code === "NOTIFICATION_PRIVATE_RENDERER_VARIABLE_INVALID"
+    );
+  }
+  const cancellation = definitions.find((item) => item.eventKind === "care_catalog_cancellation_updated");
+  assert.match(preview(cancellation, CUSTOMER, { state: "requested" }).rendered.text,
+    /received your request to cancel Care/u);
+  assert.doesNotMatch(preview(cancellation, CUSTOMER, { state: "requested" }).rendered.text,
+    /has been cancelled/u);
+  assert.match(preview(cancellation, CUSTOMER, { state: "cancelled" }).rendered.text,
+    /has been cancelled/u);
+  const payment = definitions.find((item) => item.eventKind === "care_catalog_payment_problem");
+  assert.match(preview(payment, CUSTOMER, { state: "resolved" }).rendered.text,
+    /payment issue.*has been resolved/u);
+  assert.doesNotMatch(preview(payment, CUSTOMER, { state: "resolved" }).rendered.text,
+    /receipt|payment.*is confirmed/u);
 });
 
 test("preview refuses arbitrary templates, fields, content, states, and recipients", () => {
@@ -410,8 +493,10 @@ test("renderer source has no logging or external transport boundary", async () =
     new URL("../../../ops/notification-mail-private-renderer.mjs", import.meta.url),
     "utf8"
   );
+  const accountUrl = "https://sitesourcery.com/abracadabra/app/";
+  assert.deepEqual(source.match(/https?:\/\/[^"\s]+/gu), [accountUrl]);
   assert.doesNotMatch(
-    source,
+    source.replace(accountUrl, "REVIEWED_ACCOUNT_LINK"),
     /(?:console[.]|process[.](?:stdout|stderr)|fetch\s*\(|https?:\/\/)/u
   );
   assert.doesNotMatch(source, /\b(?:sendMail|sendNotification)\s*\(/u);

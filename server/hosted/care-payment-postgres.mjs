@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { HostedError, invariant } from './errors.mjs';
 import { digest } from './security.mjs';
+import { careCatalogPaymentProblem, reserveCareCatalogNotification as notify } from './care-catalog-notifications.mjs';
 
 const unavailable = () => invariant(false,'CARE_UNAVAILABLE','The Care resource is unavailable.',{status:404});
 const iso = value => value == null ? null : new Date(value).toISOString();
@@ -62,7 +63,7 @@ export function createPostgresCarePaymentRepository({authority}={}) {
  });}
  const system={actorKind:'system'};
  return Object.freeze({
-  async readiness(){return tx(system,async db=>{const r=one(await db.query("select to_regclass('ss.care_catalog_offers') is not null and to_regclass('ss.care_catalog_provider_events') is not null as ready"));return {ready:r.ready,verified:r.ready,durable:true};},true);},
+  async readiness(){return tx(system,async db=>{const r=one(await db.query("select to_regclass('ss.care_catalog_offers') is not null and to_regclass('ss.care_catalog_provider_events') is not null and to_regprocedure('ss.care_catalog_notifications_contract_v1()') is not null and ss.care_catalog_notifications_contract_v1()='care-catalog-notifications-v1-atomic-held-five-events' as ready"));return {ready:r.ready,verified:r.ready,durable:true};},true);},
   read(s,now=new Date().toISOString()){return tx(s,async db=>{
    const offers=(await db.query(`select o.document,o.offer_digest,v.recorded_at as voided_at,v.reason as void_reason,a.id as acceptance_id from ss.care_catalog_offers o
     left join ss.care_catalog_offer_voids v on v.offer_id=o.id left join ss.care_catalog_acceptances a on a.offer_id=o.id
@@ -115,9 +116,11 @@ export function createPostgresCarePaymentRepository({authority}={}) {
   requestCancellation(s,id,now){return tx(s,async db=>{
    const a=await agreement(db,s,id,true);check(s.actorKind==='customer');
    if(!a.subscription_id){check((await db.query("select id from ss.care_catalog_payment_attempts where agreement_id=$1 and state<>'expired'",[id])).rowCount===0,'Reconcile the existing checkout before cancellation.');
-    await db.query('update ss.care_catalog_agreements set cancel_requested_at=coalesce(cancel_requested_at,$2),cancel_command_id=coalesce(cancel_command_id,$3),cancelled_at=coalesce(cancelled_at,$2),revision=revision+1 where id=$1',[id,now,s.commandId]);return {agreementId:id,state:'cancelled'};}
+    await db.query('update ss.care_catalog_agreements set cancel_requested_at=coalesce(cancel_requested_at,$2),cancel_command_id=coalesce(cancel_command_id,$3),cancelled_at=coalesce(cancelled_at,$2),revision=revision+1 where id=$1',[id,now,s.commandId]);await notify(db,a,'care_catalog_cancellation_updated','cancelled');return {agreementId:id,state:'cancelled'};}
 
    if(!a.cancel_requested_at)await db.query('update ss.care_catalog_agreements set cancel_requested_at=$2,cancel_command_id=$3,revision=revision+1 where id=$1',[id,now,s.commandId]);
+   if(!a.cancel_requested_at&&!a.cancel_at_period_end&&!a.cancelled_at)await notify(db,a,'care_catalog_cancellation_updated','requested');
+   else if(a.cancel_at_period_end&&!a.cancelled_at)await notify(db,a,'care_catalog_cancellation_updated','scheduled');
    return {binding:a.binding,subscriptionId:a.subscription_id,commandId:a.cancel_command_id??s.commandId};
   });},
   saveSubscription(id,response,now,expectedRevision,lease=null){return tx(system,async db=>{
@@ -132,10 +135,19 @@ export function createPostgresCarePaymentRepository({authority}={}) {
     }else if(v.paid&&!v.refunded&&!v.disputed){
      check(v.amountMinor===a.binding.amountMinor&&v.currency==='USD'&&v.settledAt&&Date.parse(v.periodEnd)>Date.parse(v.periodStart),'Care invoice does not pay for the accepted month.');
      check((await db.query('select id from ss.care_catalog_paid_periods where agreement_id=$1 and starts_at<$3 and ends_at>$2',[id,v.periodStart,v.periodEnd])).rowCount===0,'Care paid months must not overlap.');
-     await db.query('insert into ss.care_catalog_paid_periods(id,agreement_id,organization_id,invoice_id,payment_intent_id,charge_id,starts_at,ends_at,amount_minor,currency,settled_at,readback_digest,recorded_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',[randomUUID(),id,a.organization_id,v.invoiceId,v.paymentIntentId,v.chargeId,v.periodStart,v.periodEnd,v.amountMinor,v.currency,v.settledAt,digest(v),now]);
+     const paidPeriodId=randomUUID();
+     await db.query('insert into ss.care_catalog_paid_periods(id,agreement_id,organization_id,invoice_id,payment_intent_id,charge_id,starts_at,ends_at,amount_minor,currency,settled_at,readback_digest,recorded_at) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)',[paidPeriodId,id,a.organization_id,v.invoiceId,v.paymentIntentId,v.chargeId,v.periodStart,v.periodEnd,v.amountMinor,v.currency,v.settledAt,digest(v),now]);
+     await notify(db,a,'care_catalog_paid_month_receipt','paid',{paidPeriodId});
     }
    }
-   return view(db,await agreement(db,system,id),now);
+   const current=await agreement(db,system,id);
+   if(v){const period=(await db.query('select id,invalidation_reason from ss.care_catalog_paid_periods where agreement_id=$1 and invoice_id=$2',[id,v.invoiceId])).rows[0];
+    if(period)await notify(db,current,'care_catalog_payment_problem',careCatalogPaymentProblem({period:true,invalidationReason:period.invalidation_reason}),{paidPeriodId:period.id});}
+   await notify(db,current,'care_catalog_payment_problem',careCatalogPaymentProblem({providerStatus:current.provider_status}));
+   if(current.cancelled_at)await notify(db,current,'care_catalog_cancellation_updated','cancelled');
+   else if(current.cancel_at_period_end)await notify(db,current,'care_catalog_cancellation_updated','scheduled');
+   else if(a.cancel_at_period_end)await notify(db,current,'care_catalog_cancellation_updated','resumed');
+   return view(db,current,now);
   });},
   findEvent(eventId,hints){return tx(system,async db=>{
    const prior=(await db.query('select event_digest from ss.care_catalog_provider_events where event_id=$1',[eventId])).rows[0];
@@ -164,7 +176,8 @@ export function createPostgresCarePaymentRepository({authority}={}) {
    const p=one(await db.query('select * from ss.care_catalog_paid_periods where agreement_id=$1 and invalidated_at is null and starts_at<=$2 and ends_at>$2',[id,now]));
    const usage=one(await db.query("select count(*)::int as n,coalesce(sum(minutes),0)::int as minutes from ss.care_catalog_requests where period_id=$1 and state<>'declined'",[p.id]));
    check(usage.n<a.edit_cap&&usage.minutes<a.included_minutes,'The accepted Care plan has no remaining included requests this month.');
-   const row=one(await db.query("insert into ss.care_catalog_requests(id,organization_id,agreement_id,period_id,summary,state,created_at,updated_at) values($1,$2,$3,$4,$5,'requested',$6,$6) returning *",[request.requestId,s.organizationId,id,p.id,request.summary,now]));return requestView(row);
+   const row=one(await db.query("insert into ss.care_catalog_requests(id,organization_id,agreement_id,period_id,summary,state,created_at,updated_at) values($1,$2,$3,$4,$5,'requested',$6,$6) returning *",[request.requestId,s.organizationId,id,p.id,request.summary,now]));
+   await notify(db,a,'care_catalog_request_acknowledgment','requested',{requestId:row.id});return requestView(row);
   });},
   recordWork(s,id,requestId,input,now){return command(s,async db=>{
    check(s.actorKind==='operator');const a=await agreement(db,s,id,true);await currentProject(db,a);check((await db.query('select id from ss.care_catalog_paid_periods where agreement_id=$1 and invalidated_at is not null and starts_at<=$2 and ends_at>$2',[id,now])).rowCount===0,'Care work is held pending payment reconciliation.');
@@ -173,7 +186,8 @@ export function createPostgresCarePaymentRepository({authority}={}) {
    const used=one(await db.query('select coalesce(sum(minutes),0)::int as n from ss.care_catalog_requests where period_id=$1 and id<>$2',[p.id,requestId])).n;
    check(used+input.minutes<=a.included_minutes&&input.minutes>=r.minutes,'Work exceeds the accepted included Care minutes. Extra work needs separate approval.');
    check(input.state!=='declined'||input.minutes===0,'Completed work cannot be removed from usage.');
-   const row=one(await db.query('update ss.care_catalog_requests set state=$2,minutes=$3,owner_note=$4,revision=revision+1,updated_at=$5 where id=$1 returning *',[requestId,input.state,input.minutes,input.note,now]));return requestView(row);
+   const row=one(await db.query('update ss.care_catalog_requests set state=$2,minutes=$3,owner_note=$4,revision=revision+1,updated_at=$5 where id=$1 returning *',[requestId,input.state,input.minutes,input.note,now]));
+   if(row.state!==r.state)await notify(db,a,'care_catalog_request_updated',row.state,{requestId:row.id});return requestView(row);
   });}
  });
 }

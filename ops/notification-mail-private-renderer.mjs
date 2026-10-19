@@ -15,7 +15,7 @@ const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/u;
 // This value is updated only with the canonical registry manifest below. The
 // root-owned worker configuration must repeat it independently.
 export const REVIEWED_NOTIFICATION_TEMPLATE_REGISTRY_SHA256 =
-  "f16c963c1cdd7dfb7801eddac0eb92d559e520bda7ee2a0d54bd723597b9cd14";
+  "5f4815fcaa4a5c9f2916a3b381bf62ddea92d7d654728a08ede3a93f05da1cc1";
 
 function canonicalJson(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -200,6 +200,59 @@ const PURPOSE_TEMPLATES = Object.freeze([
   ]
 ]);
 
+const CARE_CATALOG_ACCOUNT_URL = "https://sitesourcery.com/abracadabra/app/";
+
+const CARE_CATALOG_TEMPLATES = deepFreeze({
+  care_catalog_paid_month_receipt: {
+    version: "care-catalog-paid-month-receipt.v1",
+    states: ["paid"],
+    subject: "Your Site Sourcery Care payment is confirmed",
+    lead: "Your payment for a month of Site Sourcery Care is confirmed. You can review the amount and dates in your account."
+  },
+  care_catalog_payment_problem: {
+    version: "care-catalog-payment-problem.v1",
+    states: ["past_due", "unpaid", "refunded", "disputed", "resolved"],
+    subject: "Your Site Sourcery Care payment status has changed",
+    lead: "Your Care payment status has changed. You can review it in your account.",
+    stateLeads: {
+      past_due: "A payment for your Care plan is overdue. Review your payment status in your account.",
+      unpaid: "A payment for your Care plan remains unpaid. Review your payment status in your account.",
+      refunded: "A payment for your Care plan has been refunded. Review the details in your account.",
+      disputed: "A payment for your Care plan is under dispute. Review the details in your account.",
+      resolved: "The payment issue on your Care plan has been resolved. Review your current status in your account."
+    }
+  },
+  care_catalog_cancellation_updated: {
+    version: "care-catalog-cancellation-updated.v1",
+    states: ["requested", "scheduled", "cancelled", "resumed"],
+    subject: "Your Site Sourcery Care cancellation has an update",
+    lead: "Your Care cancellation status has changed. You can review it in your account.",
+    stateLeads: {
+      requested: "We received your request to cancel Care. Check your account for confirmation and timing.",
+      scheduled: "Your Care cancellation is scheduled. Check your account for the date service ends.",
+      cancelled: "Your Care plan has been cancelled. You can review the details in your account.",
+      resumed: "Your Care plan is continuing. You can review its current status in your account."
+    }
+  },
+  care_catalog_request_acknowledgment: {
+    version: "care-catalog-request-acknowledgment.v1",
+    states: ["requested"],
+    subject: "We received your Site Sourcery Care request",
+    lead: "We received your Care request. You can follow its progress in your account."
+  },
+  care_catalog_request_updated: {
+    version: "care-catalog-request-updated.v1",
+    states: ["in_progress", "completed", "declined"],
+    subject: "Your Site Sourcery Care request has an update",
+    lead: "Your Care request has an update. You can review it in your account.",
+    stateLeads: {
+      in_progress: "Work on your Care request has started. You can follow its progress in your account.",
+      completed: "Your Care request is complete. You can review the update in your account.",
+      declined: "We cannot take on this Care request. You can review the decision in your account."
+    }
+  }
+});
+
 const COMMERCE_TEMPLATES = deepFreeze({
   assessment_quote_issued: {
     audience: "customer",
@@ -338,7 +391,9 @@ function descriptor({
   audience,
   states,
   subject,
-  lead
+  lead,
+  stateLeads,
+  accountUrl
 }) {
   const variables = ["commerce", "purpose"].includes(family)
     ? Object.freeze({
@@ -359,6 +414,8 @@ function descriptor({
     variables,
     subject,
     lead,
+    ...(stateLeads === undefined ? {} : { stateLeads }),
+    ...(accountUrl === undefined ? {} : { accountUrl }),
     footer:
       "Sign in to Site Sourcery to review current details. Never send passwords, payment credentials, or private keys by email."
   };
@@ -392,6 +449,17 @@ const DESCRIPTORS = [
       lead
     })
   ),
+  ...Object.entries(CARE_CATALOG_TEMPLATES).map(([eventKind, selected]) =>
+    descriptor({
+      ...selected,
+      family: "purpose",
+      messageType: "purpose_customer_notification",
+      sourceKind: "purpose",
+      eventKind,
+      audience: "customer",
+      accountUrl: CARE_CATALOG_ACCOUNT_URL
+    })
+  ),
   ...Object.entries(COMMERCE_TEMPLATES).map(([eventKind, selected]) =>
     descriptor({
       version: `commerce-${eventKind.replaceAll("_", "-")}.v1`,
@@ -410,7 +478,7 @@ const DESCRIPTORS = [
 ].sort((left, right) => left.version.localeCompare(right.version));
 
 if (
-  DESCRIPTORS.length !== 40 ||
+  DESCRIPTORS.length !== 45 ||
   new Set(DESCRIPTORS.map((item) => item.version)).size !== DESCRIPTORS.length ||
   DESCRIPTORS.some((item) => !TEMPLATE_VERSION.test(item.version))
 ) {
@@ -499,6 +567,26 @@ function escapeHtml(value) {
 }
 
 function renderedTemplate(template, variables) {
+  if (template.accountUrl !== undefined) {
+    const lead = template.stateLeads?.[variables.state] ?? template.lead;
+    return deepFreeze({
+      subject: template.subject,
+      subjectReference:
+        `sitesourcery:${template.family}:${template.eventKind}:` +
+        variables.reference,
+      text: [
+        lead,
+        `View your account: ${template.accountUrl}`,
+        template.footer
+      ].join("\n\n"),
+      html: [
+        `<p>${escapeHtml(lead)}</p>`,
+        `<p><a href="${escapeHtml(template.accountUrl)}">View your account</a></p>`,
+        `<p>${escapeHtml(template.footer)}</p>`
+      ].join(""),
+      templateVersion: template.version
+    });
+  }
   const referenceLine = `Reference: ${variables.reference}`;
   const stateLine = ["commerce", "purpose"].includes(template.family)
     ? `Recorded state: ${variables.state}. Revision: ${variables.revision}.`
