@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "4b364a7e3a245b2200589332e7056ad0dfac6c59",
+    "treeSha": "9a2f32b17832184e62bde5771716a5148ef55aee",
+    "baseCommitSha": "5b03dca82d2f3c7e03dbcedc7f8feb2681a94a0d"
+  },
+  "provenanceSha256": "71a68664c3fe01706916aee4748f4c3b7b8b85c8a80bea5e0d84e8227ebdfe2d",
+  "ledger": {
+    "previousByteCount": 59331,
+    "previousSha256": "7e6d63e29d769c05a4f7c209a3197ffd395a9f6200c6627a3d41c5adb8eb1034",
+    "appendSha256": "b24c029af4b49d75c1ce516ac4e1a1d4830a00832fb3301161a21c373fa8bfcf"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test scripts/test/joint-legal-v7.test.mjs",
+      "exitCode": 0,
+      "logSha256": "7df48c2c73bd2bbf0e51b30bfd3378c8e97f1ffb28e9fdfef69b829a76b377fc"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "9a8502f37c81842c9aeec7c2f88c7ca397c382fdd72524915664a6b90d16bc9d"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed actual full-scroll contrast, corrected narrow layouts, two late heroes and final worldwide copy. Exact Work image links validate HTTP/MIME/decode. Legal center restored, original failures retained, full corrected qualification passed."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "317868fa4ca77403ff4ded918f1d17535813925eb9be2bd62a3cbe068d803d40"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned qualification scratch/processes and visual browser/server profiles closed. Original logs, builds, worktrees and shared pinned dependencies retained. Existing isolated PostgreSQL cleanup reused; no native/provider disposable created."
+  }
+}
