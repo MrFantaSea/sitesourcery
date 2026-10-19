@@ -30,7 +30,7 @@ export const SHARED_FOOTER = `<footer class="site-footer">
     <div class="site-shell footer-grid">
       <div class="footer-intro">
         <strong>Site Sourcery</strong>
-        <p>Websites and practical help for small businesses.</p>
+        <p>Websites and practical help for small businesses everywhere.</p>
       </div>
       <nav class="footer-links" aria-label="Footer">
         <strong>Helpful links</strong>
