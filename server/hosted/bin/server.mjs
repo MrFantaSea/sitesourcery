@@ -289,7 +289,8 @@ import {
   createPostgresMailLifecycleRepository
 } from "../mail-lifecycle-postgres.mjs";
 import {
-  createMailPurposeNotifications
+  createMailPurposeNotifications,
+  MAIL_PURPOSE_NOTIFICATION_AUTHORITIES
 } from "../mail-purpose-notifications.mjs";
 import {
   createPostgresMailPurposeNotificationRepository
@@ -808,7 +809,8 @@ async function start() {
     mailPurposeReadiness.verified !== true ||
     mailPurposeReadiness.fiveFamilyReservationReady !== true ||
     mailPurposeReadiness.purposeCount !== 5 ||
-    mailPurposeReadiness.sourceCount !== 14 ||
+    mailPurposeReadiness.sourceCount !==
+      Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).length ||
     mailPurposeReadiness.providerEffects !== false ||
     mailPurposeReadiness.deliveryClaimed !== false
   ) {

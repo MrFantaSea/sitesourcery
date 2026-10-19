@@ -793,3 +793,10 @@ Implementation `4b364a7e3a245b2200589332e7056ad0dfac6c59` / tree `9a2f32b1783218
 
 - [Provenance](../ci-provenance/4b364a7e3a245b2200589332e7056ad0dfac6c59/provenance.md)
 - [Machine proof](../ci-provenance/4b364a7e3a245b2200589332e7056ad0dfac6c59/proof.json)
+
+## Care catalog notifications — 2026-10-19
+
+Implementation `9a4d24645021cfac6de5f447759ff2befdeee394` / tree `c3790ac6f005bff42fc0b960838b89ae21bd8b8a`, protected base `ba5f85b67dfa31e72d8e3c7e7559320f288295c4`. Five customer notification kinds reserve atomically with verified Care facts in the existing held outbox. Migration110 adds one immutable event table without backfill; retries, tenant binding, financial updates for inactive recipients and provider-scheduled cancellation retain strict guards. Focused26 and retained actual isolated PostgreSQL preservation/idempotency/isolation passed. After parent found the stale14-source startup gate, a registry-derived check and actual-gate regression passed8/8 and the new exact I2 complete npm/build/browser qualification passed. Prior candidate qualification is superseded; full assembled110 startup remains required before cutover. Original launcher/browser prerequisite failures remain preserved; no source guard weakened. Owned local resources removed. Source only; native migration and outbound delivery remain separate.
+
+- [Provenance](../ci-provenance/9a4d24645021cfac6de5f447759ff2befdeee394/provenance.md)
+- [Machine proof](../ci-provenance/9a4d24645021cfac6de5f447759ff2befdeee394/proof.json)

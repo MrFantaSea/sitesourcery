@@ -172,6 +172,95 @@ async function requireOperator(client, input) {
   );
 }
 
+// The caller owns the canonical transaction and has validated its business source.
+// Reuse the same digest-only reservation and database guards for automatic Care events.
+export async function reserveMailPurposeNotificationInTransaction(client, input, source) {
+  const messageId = systemRandomUUID();
+  const mail = normalizeMailReservation({
+    commandId: `mail-purpose:${input.requestDigest}`,
+    messageType: "purpose_customer_notification",
+    organizationId: source.organization_id,
+    projectId: source.project_id,
+    customerUserId: source.source_customer_user_id,
+    recipientDigest: input.recipientDigest,
+    subjectReferenceDigest: input.subjectReferenceDigest,
+    contentDigest: input.contentDigest,
+    templateVersion: input.templateVersion,
+    expiresAt: input.expiresAt
+  }, input.requestedAt);
+  await client.query(
+    `insert into ss.hosted_mail_deliveries (
+       id, command_id, request_digest, message_type,
+       organization_id, project_id, customer_user_id,
+       recipient_digest, subject_reference_digest, content_digest,
+       template_version, state, requested_at, expires_at,
+       created_at, updated_at
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+       'pending', $12, $13, $12, $12
+     )`,
+    [
+      messageId, mail.commandId, mail.requestDigest, mail.messageType,
+      mail.organizationId, mail.projectId, mail.customerUserId,
+      mail.recipientDigest, mail.subjectReferenceDigest,
+      mail.contentDigest, mail.templateVersion, mail.requestedAt,
+      mail.expiresAt
+    ]
+  );
+
+  const notificationId = systemRandomUUID();
+  const inserted = await client.query(
+    `insert into ss.mail_purpose_notification_outbox (
+       id, command_id, request_digest, purpose_kind,
+       notification_kind, template_version, source_table, source_id,
+       source_revision, source_digest, source_state,
+       source_occurred_at, reference_id, organization_id, project_id,
+       source_customer_user_id, mail_message_id, mail_request_digest,
+       reservation_digest, state, provider_effects_authorized,
+       delivery_claimed, reserved_at, expires_at, revision, created_at
+     )
+     select
+       $1::uuid, $2::text, $3::ss.sha256_hex, $4::text,
+       $5::text, $6::text, $7::text, $8::text, $9::bigint,
+       $10::ss.sha256_hex, $11::text, source.source_occurred_at,
+       source.reference_id, source.organization_id,
+       source.project_id, source.source_customer_user_id, $12::uuid,
+       $13::ss.sha256_hex,
+       ss.mail_purpose_notification_reservation_digest(
+         $1::uuid, $3::ss.sha256_hex, $12::uuid,
+         $13::ss.sha256_hex
+       ),
+       'held', false, false, $14::timestamptz,
+       $15::timestamptz, 1, $14::timestamptz
+      from ss.mail_purpose_notification_sources source
+     where source.purpose_kind = $4
+       and source.notification_kind = $5
+       and source.template_version = $6
+       and source.source_table = $7
+       and source.source_id = $8
+       and source.source_revision = $9
+       and source.source_digest = $10::ss.sha256_hex
+       and source.source_state = $11
+       and source.source_occurred_at <= $14::timestamptz
+     returning id`,
+    [
+      notificationId, input.commandId, input.requestDigest,
+      input.purposeKind, input.notificationKind,
+      input.templateVersion, input.source.table, input.source.id,
+      input.source.revision, input.source.digest, input.source.state,
+      messageId, mail.requestDigest, input.requestedAt,
+      input.expiresAt
+    ]
+  );
+  invariant(
+    inserted.rowCount === 1,
+    "MAIL_PURPOSE_NOTIFICATION_SOURCE_UNAVAILABLE",
+    "The exact committed notification source is unavailable.",
+    { status: 409 }
+  );
+  return readById(client, notificationId);
+}
+
 export function createPostgresMailPurposeNotificationRepository({
   authority
 } = {}) {
@@ -184,10 +273,10 @@ export function createPostgresMailPurposeNotificationRepository({
           (client) => client.query(`
             select
               to_regprocedure(
-                'ss.hosted_mail_purpose_notification_contract_v1()'
+                'ss.hosted_mail_purpose_notification_contract_v2()'
               ) is not null
-                and ss.hosted_mail_purpose_notification_contract_v1() =
-                  'canonical-mail-purpose-notifications-v1-five-families-14-sources-held'
+                and ss.hosted_mail_purpose_notification_contract_v2() =
+                  'canonical-mail-purpose-notifications-v2-five-families-19-sources-held'
                 as purpose_contract_ready,
               to_regprocedure(
                 'ss.hosted_mail_dispatch_contract_v2()'
@@ -448,7 +537,7 @@ export function createPostgresMailPurposeNotificationRepository({
           kind: "mail-purpose-notifications-postgres",
           code: ready ? null : "MAIL_PURPOSE_NOTIFICATION_NOT_MIGRATED",
           purposeCount: 5,
-          sourceCount: 14,
+          sourceCount: 19,
           fiveFamilyReservationReady: ready,
           sourceAuthoritative: true,
           mailReserved: ready,
@@ -462,7 +551,7 @@ export function createPostgresMailPurposeNotificationRepository({
           kind: "mail-purpose-notifications-postgres",
           code: "MAIL_PURPOSE_NOTIFICATION_DATABASE_UNAVAILABLE",
           purposeCount: 5,
-          sourceCount: 14,
+          sourceCount: 19,
           fiveFamilyReservationReady: false,
           sourceAuthoritative: true,
           mailReserved: false,
@@ -569,90 +658,7 @@ export function createPostgresMailPurposeNotificationRepository({
           );
           const source = sourceResult.rows[0];
 
-          const messageId = systemRandomUUID();
-          const mail = normalizeMailReservation({
-            commandId: `mail-purpose:${input.requestDigest}`,
-            messageType: "purpose_customer_notification",
-            organizationId: source.organization_id,
-            projectId: source.project_id,
-            customerUserId: source.source_customer_user_id,
-            recipientDigest: input.recipientDigest,
-            subjectReferenceDigest: input.subjectReferenceDigest,
-            contentDigest: input.contentDigest,
-            templateVersion: input.templateVersion,
-            expiresAt: input.expiresAt
-          }, input.requestedAt);
-          await client.query(
-            `insert into ss.hosted_mail_deliveries (
-               id, command_id, request_digest, message_type,
-               organization_id, project_id, customer_user_id,
-               recipient_digest, subject_reference_digest, content_digest,
-               template_version, state, requested_at, expires_at,
-               created_at, updated_at
-             ) values (
-               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-               'pending', $12, $13, $12, $12
-             )`,
-            [
-              messageId, mail.commandId, mail.requestDigest, mail.messageType,
-              mail.organizationId, mail.projectId, mail.customerUserId,
-              mail.recipientDigest, mail.subjectReferenceDigest,
-              mail.contentDigest, mail.templateVersion, mail.requestedAt,
-              mail.expiresAt
-            ]
-          );
-
-          const notificationId = systemRandomUUID();
-          const inserted = await client.query(
-            `insert into ss.mail_purpose_notification_outbox (
-               id, command_id, request_digest, purpose_kind,
-               notification_kind, template_version, source_table, source_id,
-               source_revision, source_digest, source_state,
-               source_occurred_at, reference_id, organization_id, project_id,
-               source_customer_user_id, mail_message_id, mail_request_digest,
-               reservation_digest, state, provider_effects_authorized,
-               delivery_claimed, reserved_at, expires_at, revision, created_at
-             )
-             select
-               $1::uuid, $2::text, $3::ss.sha256_hex, $4::text,
-               $5::text, $6::text, $7::text, $8::text, $9::bigint,
-               $10::ss.sha256_hex, $11::text, source.source_occurred_at,
-               source.reference_id, source.organization_id,
-               source.project_id, source.source_customer_user_id, $12::uuid,
-               $13::ss.sha256_hex,
-               ss.mail_purpose_notification_reservation_digest(
-                 $1::uuid, $3::ss.sha256_hex, $12::uuid,
-                 $13::ss.sha256_hex
-               ),
-               'held', false, false, $14::timestamptz,
-               $15::timestamptz, 1, $14::timestamptz
-              from ss.mail_purpose_notification_sources source
-             where source.purpose_kind = $4
-               and source.notification_kind = $5
-               and source.template_version = $6
-               and source.source_table = $7
-               and source.source_id = $8
-               and source.source_revision = $9
-               and source.source_digest = $10::ss.sha256_hex
-               and source.source_state = $11
-               and source.source_occurred_at <= $14::timestamptz
-             returning id`,
-            [
-              notificationId, input.commandId, input.requestDigest,
-              input.purposeKind, input.notificationKind,
-              input.templateVersion, input.source.table, input.source.id,
-              input.source.revision, input.source.digest, input.source.state,
-              messageId, mail.requestDigest, input.requestedAt,
-              input.expiresAt
-            ]
-          );
-          invariant(
-            inserted.rowCount === 1,
-            "MAIL_PURPOSE_NOTIFICATION_SOURCE_UNAVAILABLE",
-            "The exact committed notification source is unavailable.",
-            { status: 409 }
-          );
-          return readById(client, notificationId);
+          return reserveMailPurposeNotificationInTransaction(client, input, source);
         }
       )));
     },

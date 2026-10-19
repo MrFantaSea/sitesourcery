@@ -38,8 +38,8 @@ function input(overrides = {}) {
   };
 }
 
-test("mail-purpose authority freezes five families and the exact 14 reviewed sources", () => {
-  assert.equal(Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).length, 14);
+test("mail-purpose authority freezes five families and the exact 19 reviewed sources", () => {
+  assert.equal(Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).length, 19);
   assert.deepEqual(
     MAIL_PURPOSE_NOTIFICATION_AUTHORITIES.publication_state_changed,
     {
@@ -66,6 +66,52 @@ test("mail-purpose authority freezes five families and the exact 14 reviewed sou
       "marketing_followup"
     ])
   );
+});
+
+test("Care catalog notifications bind only their immutable event source and reviewed states", () => {
+  const expected = {
+    care_catalog_paid_month_receipt: ["care-catalog-paid-month-receipt.v1", ["paid"]],
+    care_catalog_payment_problem: ["care-catalog-payment-problem.v1", ["past_due", "unpaid", "refunded", "disputed", "resolved"]],
+    care_catalog_cancellation_updated: ["care-catalog-cancellation-updated.v1", ["requested", "scheduled", "cancelled", "resumed"]],
+    care_catalog_request_acknowledgment: ["care-catalog-request-acknowledgment.v1", ["requested"]],
+    care_catalog_request_updated: ["care-catalog-request-updated.v1", ["in_progress", "completed", "declined"]]
+  };
+  assert.deepEqual(
+    Object.keys(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES).filter((kind) => kind.startsWith("care_catalog_")),
+    Object.keys(expected)
+  );
+  for (const [notificationKind, [templateVersion, states]] of Object.entries(expected)) {
+    assert.deepEqual(MAIL_PURPOSE_NOTIFICATION_AUTHORITIES[notificationKind], {
+      purposeKind: "care",
+      table: "ss.care_catalog_notification_events",
+      states,
+      templateVersion
+    });
+    for (const state of states) {
+      const selected = input({
+        notificationKind, templateVersion, purposeKind: "care",
+        source: { table: "ss.care_catalog_notification_events", id: SOURCE,
+          revision: 1, digest: SHA, state }
+      });
+      const normalized = normalizeMailPurposeNotification(selected, NOW);
+      assert.deepEqual(normalized.source, selected.source);
+      for (const invalid of [
+        { ...selected, source: { ...selected.source, table: "ss.care_catalog_paid_periods" } },
+        { ...selected, source: { ...selected.source, state: "pending" } },
+        { ...selected, source: { ...selected.source, id: "not-an-event-uuid" } },
+        { ...selected, source: { ...selected.source, revision: 2 } },
+        { ...selected, recipient: "customer@example.test" },
+        { ...selected, ownerNote: "private note" },
+        { ...selected, paymentDetails: "private payment details" },
+        { ...selected, source: { ...selected.source, summary: "private request" } }
+      ]) {
+        assert.throws(
+          () => normalizeMailPurposeNotification(invalid, NOW),
+          (error) => error?.code === "MAIL_PURPOSE_NOTIFICATION_INVALID"
+        );
+      }
+    }
+  }
 });
 
 test("normalization binds exact source evidence without accepting private content", () => {
@@ -113,6 +159,8 @@ test("repository composition delegates normalized evidence and held mode has zer
 
   const held = createHeldMailPurposeNotifications();
   assert.equal((await held.readiness()).ready, false);
+  assert.equal((await held.readiness()).purposeCount, 5);
+  assert.equal((await held.readiness()).sourceCount, 19);
   await assert.rejects(
     held.reserveOperator(input()),
     (error) => error?.code === "MAIL_PURPOSE_NOTIFICATION_HELD" &&

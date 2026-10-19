@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "9a4d24645021cfac6de5f447759ff2befdeee394",
+    "treeSha": "c3790ac6f005bff42fc0b960838b89ae21bd8b8a",
+    "baseCommitSha": "ba5f85b67dfa31e72d8e3c7e7559320f288295c4"
+  },
+  "provenanceSha256": "65b32dcd9ac91e2c90c27ad089dbad176b5be678724ba7a70d5414313bc537b1",
+  "ledger": {
+    "previousByteCount": 60297,
+    "previousSha256": "c6bc22e1b8c012a2fce26acb814fa84cc1c2b253f78f1a9b8c51b8d732f87cc1",
+    "appendSha256": "4d1dd784be04a637de8fe7ef0b33e194a2fcb6684cb650703f90e1e943d55224"
+  },
+  "proofs": {
+    "focused": {
+      "command": "/private/tmp/node-v24.18.0-darwin-arm64/bin/node --test server/hosted/test/production-capability-process-composition.test.mjs",
+      "exitCode": 0,
+      "logSha256": "86397a7443e81c9b2d1a9f3c63a0a57c02715baaf615a22676421d06b66d007a"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "0fabebc352eb85b8f8f98519a0fd1d1e47d24f9cfc19960d12c0724087c183d0"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed transaction/source guards and accepted actual PostgreSQL regressions. Parent found stale startup count after original qualification; registry-derived gate and actual-gate regression accepted. New complete I2 qualification passed. Original proofs/failures preserved; assembled110 boot remains required before cutover."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "baea6d2bea27deca7b456cbe2ca9a7cb48c62804fa608850b9b988f35fff18ef"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned PostgreSQL cluster and all four qualification scratch directories removed after zero owned clients/processes; original logs, qualified builds, worktree and shared tools retained. No production/provider disposable created."
+  }
+}
