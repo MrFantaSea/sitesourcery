@@ -816,3 +816,7 @@ Implementation `34f41e08807357dfd9a52ddf5f174c62be9c829d` / tree `63ba424e20ae03
 ## Native release adapters — 2026-10-20
 
 Implementation `15e309a09dd690532de6b13fd761a019eb9ff527` (`35c30c7bfb45dcb6c277fa171e11950fb39f9447`), base `0529cb26e09108411be2fdf794128ba5fbc36bd6`. Strict release profiles replace per-release source constants across native boundaries; both modes retain their effect gates and separate recovery policies. Focused guards/historical receipt and artifact rehearsals passed; full npm 2,631 passed/33 existing skips/0 failed and 24 routes × 6 widths. No live deployment performed for this ops-only change. Canonical [provenance](../ci-provenance/15e309a09dd690532de6b13fd761a019eb9ff527/provenance.md) and [proof](../ci-provenance/15e309a09dd690532de6b13fd761a019eb9ff527/proof.json).
+
+## External availability and redirect patch — 2026-10-20
+
+Implementation `effc75e9e5da140d79ad3b66da55611fb25ff3b6`, tree `83841a03a1e8d0c1e45cf1866261d33f9725f7df`, base `e7452e932d73f5c709ac76c86506df35a1ad4fbb`. Eight focused tests and full npm 2639passed/33existing skips/0fail;24routes×6widths. [Provenance](../ci-provenance/effc75e9e5da140d79ad3b66da55611fb25ff3b6/provenance.md), [proof](../ci-provenance/effc75e9e5da140d79ad3b66da55611fb25ff3b6/proof.json). External execution and patched native runtime remain separate acceptance boundaries; three full security checks are queued after finished-system acceptance.
