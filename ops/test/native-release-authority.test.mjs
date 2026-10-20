@@ -1,0 +1,137 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import {
+  validateNativeReleaseInput,
+  constructNativeReleaseAuthority,
+  emitNativeReleaseAuthority,
+} from '../native-release-authority.mjs';
+
+const NOW = Date.parse('2026-10-20T18:10:00Z');
+const sha = c => c.repeat(64);
+function input(mode = 'presentation-only') {
+  const system = ['tenant', 'workers', 'cloudflared', 'backup.timer', 'monitor.timer',
+    'monitor', 'api', 'backup', 'backup-recovery'].map(n =>
+    'sitesourcery-hq-' + n + (n.endsWith('.timer') ? '' : '.service'));
+  const marker = '/etc/sitesourcery/FIXTURE_HANDOFF_HOLD';
+  const dropin = 'zz-fixture-handoff-hold.conf';
+  const privateServices = ['client-profile-hub.service', 'client-profile-hub-backup.service',
+    'client-profile-hub-morning-research.service'];
+  const privateTimers = ['client-profile-hub-backup.timer', 'client-profile-hub-morning-research.timer'];
+  const holds = [marker, ...system.map(n => `/etc/systemd/system/${n}.d/${dropin}`)];
+  const baseline = {
+    workerPurposes: ['export', 'notification-mail', 'care-lifecycle'],
+    workerActivation: 'owner-approved', postgresql: {}, privateHqTimers: {},
+  };
+  const evidence = ['successorInput', 'ciFinalReceipt', 'githubRun', 'githubRawLog',
+    'linuxStageReceipt', 'priorOriginSeal', 'priorInstalledReadback', 'priorEpoch',
+    'nativeObservation', 'productionReceipt', 'productionMigrationInputs', 'configurationObservation'];
+  if (mode === 'presentation-only') {
+    baseline.privateHq = {};
+    evidence.push('priorInstallationReceipt', 'schemaObservation');
+  } else {
+    baseline.privateHqServices = {};
+    baseline.careMode = baseline.workerCareMode = 'approved_live';
+    holds.push(...[...privateServices, ...privateTimers]
+      .map(n => `/home/mrfantasea/.config/systemd/user/${n}.d/${dropin}`));
+    evidence.push('coherentBackupReceipt', 'finalHoldsReceipt', 'combinedSmokeReceipt',
+      'heldDatabaseFingerprint', 'rollbackReservationReceipt', 'configurationBoundaryReceipt');
+  }
+  baseline.holdFiles = Object.fromEntries(holds.map(p => [p, {
+    uid: 0, gid: 0, mode: p === marker && mode === 'presentation-only' ? 0o600 : 0o644,
+    bytes: 30, sha256: sha('d'),
+  }]));
+  return {
+    schema: 'sitesourcery.native-release-authority-input/v1', mode,
+    candidate: 'a'.repeat(40), tree: 'b'.repeat(40), priorCandidate: 'c'.repeat(40),
+    priorTree: 'd'.repeat(40), workflowCommit: 'e'.repeat(40), workflowRun: '123', workflowAttempt: '1',
+    emissionApproved: true, activationAllowed: false,
+    issuedAt: '2026-10-20T18:00:00Z', expiresAt: '2026-10-20T18:25:00Z',
+    helperRepository: '/tmp/fixture-repo', outputDirectory: '/tmp/fixture-output',
+    databaseIdentity: { db: 'sitesourcery_production', databaseOid: '76816', username: 'mrfantasea',
+      directory: '/tmp/fixture-db', port: '55433', sockets: '/tmp/fixture-sockets' },
+    expectedSchema: { beforeCount: mode === 'presentation-only' ? 110 : 109, afterCount: 110,
+      manifestSha256: sha('a'), schemaSha256: sha('b'), tableCount: 309 },
+    holdMarker: marker, holdDropin: dropin, baseline,
+    evidence: Object.fromEntries(evidence.map(k => [k, { path: `/tmp/${k}.json`, sha256: sha('c') }])),
+  };
+}
+
+test('both explicit modes accept typed inputs without hardcoded candidate or worker count', () => {
+  for (const mode of ['presentation-only', 'schema-changing']) {
+    const a = input(mode);
+    assert.equal(validateNativeReleaseInput(a, NOW), a);
+    a.baseline.workerPurposes.push('project-lifecycle');
+    assert.equal(validateNativeReleaseInput(a, NOW), a);
+  }
+});
+test('unknown fields and typoed evidence roles fail closed', () => {
+  for (const modify of [
+    a => { a.canddiate = a.candidate; },
+    a => { a.expectedSchema.schemaSHA256 = sha('b'); },
+    a => { a.evidence.schemaObservation.extra = true; },
+    a => { a.baseline.unreviewed = true; },
+  ]) {
+    const a = input(); modify(a);
+    assert.throws(() => validateNativeReleaseInput(a, NOW), /unknown fields/);
+  }
+});
+test('unknown modes, implicit mode changes and absent schema recovery evidence refuse', () => {
+  const unknown = input(); unknown.mode = 'constructor';
+  assert.throws(() => validateNativeReleaseInput(unknown, NOW), /Unknown release mode/);
+  const changed = input(); changed.expectedSchema.afterCount++;
+  assert.throws(() => validateNativeReleaseInput(changed, NOW));
+  const missing = input('schema-changing'); delete missing.evidence.coherentBackupReceipt;
+  assert.throws(() => validateNativeReleaseInput(missing, NOW), /unknown fields/);
+  const missingHold = input('schema-changing');
+  delete missingHold.baseline.holdFiles['/home/mrfantasea/.config/systemd/user/client-profile-hub.service.d/zz-fixture-handoff-hold.conf'];
+  assert.throws(() => validateNativeReleaseInput(missingHold, NOW), /hold inventory/);
+});
+test('expired, future, malformed and overlong emission windows refuse', () => {
+  for (const [issuedAt, expiresAt] of [
+    ['2026-10-20T17:00:00Z', '2026-10-20T17:25:00Z'],
+    ['2026-10-20T19:00:00Z', '2026-10-20T19:25:00Z'],
+    ['invalid', '2026-10-20T18:25:00Z'],
+    ['2026-10-20T18:00:00Z', '2026-10-20T19:25:00Z'],
+  ]) {
+    const a = input(); Object.assign(a, { issuedAt, expiresAt });
+    assert.throws(() => validateNativeReleaseInput(a, NOW), /Emission authority/);
+  }
+});
+test('candidate, digest, worker and native hold mistakes refuse', () => {
+  for (const modify of [
+    a => { a.tree = 'short'; },
+    a => { a.candidate = a.priorCandidate; },
+    a => { a.expectedSchema.manifestSha256 = 'not-a-digest'; },
+    a => { a.baseline.workerPurposes.push('export'); },
+    a => { a.baseline.holdFiles[a.holdMarker].uid = 1000; },
+    a => { a.holdDropin = '../wrong.conf'; },
+    a => { a.evidence.ciFinalReceipt.path = 'relative.json'; },
+    a => { a.expectedSchema.afterCount = '110'; },
+    a => { a.activationAllowed = true; },
+  ]) {
+    const a = input(); modify(a);
+    assert.throws(() => validateNativeReleaseInput(a, NOW));
+  }
+});
+test('bad input bytes, symlinks and expired authority create no output directory', async t => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ss-native-authority-test-'));
+  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  const a = input(), output = path.join(dir, 'must-not-exist');
+  a.outputDirectory = output;
+  const file = path.join(dir, 'input.json'), raw = Buffer.from(JSON.stringify(a));
+  await fs.writeFile(file, raw);
+  const ref = { path: file, sha256: createHash('sha256').update(raw).digest('hex') };
+  await assert.rejects(constructNativeReleaseAuthority({ ...ref, sha256: sha('0') }, { now: NOW }), /Anchored input drift/);
+  const link = path.join(dir, 'link.json'); await fs.symlink(file, link);
+  await assert.rejects(constructNativeReleaseAuthority({ ...ref, path: link }, { now: NOW }), /Invalid receipt file/);
+  // Explicitly expired relative to wall clock, independently of the fixture clock.
+  a.issuedAt = '2000-01-01T00:00:00Z'; a.expiresAt = '2000-01-01T00:25:00Z';
+  const stale = Buffer.from(JSON.stringify(a)); await fs.writeFile(file, stale);
+  await assert.rejects(emitNativeReleaseAuthority({ path: file,
+    sha256: createHash('sha256').update(stale).digest('hex') }), /Emission authority/);
+  await assert.rejects(fs.stat(output), { code: 'ENOENT' });
+});
