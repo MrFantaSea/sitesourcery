@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "effc75e9e5da140d79ad3b66da55611fb25ff3b6",
+    "treeSha": "83841a03a1e8d0c1e45cf1866261d33f9725f7df",
+    "baseCommitSha": "e7452e932d73f5c709ac76c86506df35a1ad4fbb"
+  },
+  "provenanceSha256": "23c8cbb729ff046b45c08177e4238623bdac294da6c47a1019ab842a06185456",
+  "ledger": {
+    "previousByteCount": 64126,
+    "previousSha256": "371885a31b4f0b444c5dfc9c5d488f5ddf960ad547a92d8a42c50946139909e2",
+    "appendSha256": "ff26c1333941c38f3e4670328a8611278569b40db67a5f4b6d17fb683cecf566"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/public-availability.test.mjs ops/test/redirect-credential-boundary.test.mjs",
+      "exitCode": 0,
+      "logSha256": "932752e18594bb08ea459a25427d57f172a4a566ab231bf7bba2856cf61f59b9"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "a5c76f093d8fee9d6a38b05222a3b69a7b895fd14481eb4a5ecf83c5de4c58bd"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed fixed public egress, exact release/legal/TLS/fresh database checks, redacted bounded failures, workflow permissions and free-runner/storage boundaries, one-package patch and real localhost credential stripping regressions."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "No application SQL, query, schema or database contract changes; observer uses public read-only HTTP and dependency fix has localhost HTTP regression coverage. Actual dependency deployment requires separate native acceptance."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Disposable localhost HTTP servers closed in finally; passing browser harness cleaned owned profiles. No production resources, accounts or provider transactions created. All original logs/failed sandbox attempt retained."
+  }
+}

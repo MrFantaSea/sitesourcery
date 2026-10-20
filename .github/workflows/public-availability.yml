@@ -1,0 +1,36 @@
+name: Public availability
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/public-availability.yml
+      - ops/public-availability.mjs
+      - ops/public-availability-target.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-availability
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    if: github.repository == 'MrFantaSea/sitesourcery' && github.event.repository.private == false && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Read the protected observer and public release target
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Use the repository's pinned Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      - name: Observe public page, legal artifact, TLS, API and database readiness
+        run: node ops/public-availability.mjs

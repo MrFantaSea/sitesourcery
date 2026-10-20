@@ -1,0 +1,18 @@
+{
+  "schema": "sitesourcery.public-availability-target/v1",
+  "hostedRelease": {
+    "schema": "sitesourcery.hosted-release-identity/v2",
+    "state": "verified_held",
+    "epochId": "navigation-ci-cleanup-20261020",
+    "bindingSha256": "f13908e403ab08d152d8aa136c6a618e93ac465e6c44e981bbe27b314e3afe7c",
+    "candidateCommitSha": "7c22bf5e6219f4a24337be885dd4411718ffa0af",
+    "candidateTreeSha": "ab234a7b07b4a30c85bfe3b9f4a8643663674d0e",
+    "migrationCount": 110,
+    "latestMigration": "202610190001_care_catalog_notifications.sql"
+  },
+  "privacyArtifact": {
+    "version": "SS-HOSTED-PRIVACY-2026-08-09-V4",
+    "sha256": "2f9edca746f9bffc1dc4b6745613ae42c04813a3ac94cd2e8432e964cfa36e99",
+    "byteCount": 31451
+  }
+}
