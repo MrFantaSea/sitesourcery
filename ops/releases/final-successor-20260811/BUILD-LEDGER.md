@@ -800,3 +800,10 @@ Implementation `9a4d24645021cfac6de5f447759ff2befdeee394` / tree `c3790ac6f005bf
 
 - [Provenance](../ci-provenance/9a4d24645021cfac6de5f447759ff2befdeee394/provenance.md)
 - [Machine proof](../ci-provenance/9a4d24645021cfac6de5f447759ff2befdeee394/proof.json)
+
+## Public navigation and control CI cleanup — 2026-10-20
+
+Implementation `a6887acc1063988a677e5438e033334b4f907c61` / tree `9ae78c75c1d6ab2bd39a0489c0b1187c13116fd2`, protected base `cf6a2e94c73a6f5355c0e869777b14ef48993285`. One maintained shared header/footer covers 22 nonlegal public pages, adds plain service meanings and the customer account destination, and preserves legal and all other page bytes. Required CI provenance remains strict; only exact control-only input changes with authenticated successful source-parent/tree quality proof may skip repeated Chromium/full tests, otherwise full testing runs. Root reviewed the implementation and targeted visual results. Focused31, existing chrome/site/routes checks and six desktop/mobile views passed. The first full audit exposed two unnamed menu buttons; an explicit shared Menu label correction passed four actual AX-tree checks, then one exact corrected complete npm/build/browser qualification passed. Original failure retained; assertions unchanged. Owned scratch/browser resources were removed, originals retained. No database, provider, native or external release effect.
+
+- [Provenance](../ci-provenance/a6887acc1063988a677e5438e033334b4f907c61/provenance.md)
+- [Machine proof](../ci-provenance/a6887acc1063988a677e5438e033334b4f907c61/proof.json)

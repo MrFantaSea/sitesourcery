@@ -62,6 +62,7 @@ import {
 } from "../ci-release-proof-repository.mjs";
 import {
   proveDatabaseAbsent,
+  resolveCiQualityScope,
   runCiReleaseProofCli,
   writeCiReleaseSuccessorInputAnchored
 } from "../ci-release-proof.mjs";
@@ -1123,12 +1124,193 @@ test("provenance rejects evidence symlinks and modified checkout without clearin
 test("candidate provenance is mandatory in Site quality and both held proof boundaries", async () => {
   const quality = await readFile(path.join(projectRoot, ".github/workflows/site-quality.yml"), "utf8");
   assert.match(quality, /fetch-depth: 0/u);
-  assert.match(quality, /run: node ops\/ci-release-proof\.mjs provenance --root "\$GITHUB_WORKSPACE"/u);
+  assert.match(quality, /run: node ops\/ci-release-proof\.mjs quality-scope --root "\$GITHUB_WORKSPACE"/u);
+  assert.match(quality, /jobs:\n  static-quality:/u);
+  assert.equal((quality.match(/if: steps\.quality-scope\.outputs\.mode != 'control-only'/gu) ?? []).length, 2);
+  assert.match(quality, /- name: Install locked dependencies\n        run: npm ci --ignore-scripts/u);
   assert.doesNotMatch(quality, /continue-on-error:/u);
   const cli = await readFile(path.join(projectRoot, "ops/ci-release-proof.mjs"), "utf8");
+  const scope = cli.slice(cli.indexOf("export async function resolveCiQualityScope"));
+  assert.ok(scope.indexOf("await verifyCiCandidateProvenance") < scope.indexOf("return full("));
   for (const command of ["input", "final"]) {
     const body = cli.slice(cli.indexOf(`if (command === "${command}")`));
     assert.ok(body.indexOf("await verifyCiCandidateProvenance") < body.indexOf("return "));
+  }
+});
+
+async function qualityControlFixture() {
+  const f = await candidateProvenanceFixture();
+  const source = await git(f.root, ["commit-tree", f.evidenceTree, "-p", f.base, "-m", "protected source"]);
+  await git(f.root, ["checkout", "--detach", source]);
+  const epoch = structuredClone(releaseInput().epoch);
+  epoch.source = { commitSha: source, treeSha: f.evidenceTree };
+  const input = createCiReleaseSuccessorInput({
+    originReleaseInput: createOriginReleaseInput({ releaseId: source, epoch }),
+    migrationInventory: migrationInventory(), legalV4Pages: successorInput().legalV4Pages
+  });
+  const inputPath = ciReleaseSuccessorInputRelativePath(source);
+  await mkdir(path.dirname(path.join(f.root, inputPath)), { recursive: true });
+  await writeFile(path.join(f.root, inputPath), `${canonicalJson(input)}\n`);
+  await git(f.root, ["add", inputPath]);
+  await git(f.root, ["commit", "-m", "one control input"]);
+  return { ...f, source, control: await git(f.root, ["rev-parse", "HEAD"]) };
+}
+
+function qualityApiFixture(f, { pr = false, mutate = () => {} } = {}) {
+  const repository = { id: 123, full_name: "Example/site" };
+  const headSha = pr ? f.evidence : f.source;
+  const run = {
+    id: 456, run_attempt: 1, status: "completed", conclusion: "success",
+    event: pr ? "pull_request" : "push", path: ".github/workflows/site-quality.yml",
+    head_sha: headSha, head_commit: { id: headSha, tree_id: f.evidenceTree }, head_branch: "main",
+    repository: structuredClone(repository), head_repository: structuredClone(repository)
+  };
+  const jobs = { total_count: 1, jobs: [{
+    id: 789, run_id: 456, run_attempt: 1, name: "static-quality", head_sha: headSha,
+    status: "completed", conclusion: "success",
+    steps: ["Install locked dependencies", "Require current candidate provenance",
+      "Install exact reviewed Chromium", "Run static quality checks"].map((name) => ({
+      name, status: "completed", conclusion: "success"
+    }))
+  }] };
+  const pull = {
+    number: 9, merged: true, state: "closed", merged_at: "2026-10-19T20:00:00Z",
+    merge_commit_sha: f.source,
+    base: { ref: "main", repo: structuredClone(repository) },
+    head: { sha: f.evidence, repo: structuredClone(repository) }
+  };
+  mutate({ run, jobs, pull });
+  const calls = [];
+  const environment = {
+    GITHUB_REPOSITORY: repository.full_name, GITHUB_REPOSITORY_ID: String(repository.id),
+    GITHUB_API_URL: "https://api.github.com", GITHUB_TOKEN: "private-test-token", GITHUB_RUN_ID: "999"
+  };
+  const fetchImpl = async (url, options) => {
+    assert.equal(options.method, "GET");
+    assert.equal(options.redirect, "error");
+    assert.equal(options.headers.Authorization, "Bearer private-test-token");
+    assert.ok(options.signal instanceof AbortSignal);
+    assert.ok(url.startsWith("https://api.github.com/repos/Example/site/"));
+    calls.push(url);
+    const parsed = new URL(url);
+    let data;
+    if (parsed.pathname.endsWith("/actions/workflows/site-quality.yml/runs")) {
+      const expectedHead = parsed.searchParams.get("head_sha");
+      data = { workflow_runs: pr && expectedHead === f.source ? [] : [run] };
+    } else if (parsed.pathname.endsWith(`/commits/${f.source}/pulls`)) data = pr ? [{ number: 9 }] : [];
+    else if (parsed.pathname.endsWith("/pulls/9")) data = pull;
+    else if (parsed.pathname.endsWith("/actions/runs/456/attempts/1/jobs")) data = jobs;
+    else throw new Error("Unexpected fixture URL");
+    return new Response(JSON.stringify(data), { status: 200 });
+  };
+  return { environment, fetchImpl, calls };
+}
+
+test("quality scope reuses exact authenticated source proof for sole-input controls and merge refs", async (t) => {
+  const f = await qualityControlFixture();
+  const githubOutput = `${f.root}-quality-output`;
+  try {
+    for (const pr of [false, true]) {
+      await t.test(pr ? "ordinary squash source PR" : "exact main source push", async () => {
+        const api = qualityApiFixture(f, { pr });
+        let output = "";
+        const scope = await runCiReleaseProofCli({
+          arguments_: ["quality-scope", "--root", f.root], ...api,
+          environment: { ...api.environment, GITHUB_OUTPUT: githubOutput },
+          writeOutput: (value) => { output += value; }
+        });
+        assert.equal(scope.mode, "control-only");
+        assert.equal(scope.provenance.controlSha, f.control);
+        assert.equal(scope.provenance.candidateSha, f.source);
+        assert.equal(scope.sourceProof.treeSha, f.evidenceTree);
+        assert.equal(scope.sourceProof.headSha, pr ? f.evidence : f.source);
+        assert.equal(scope.sourceProof.pullNumber, pr ? 9 : null);
+        assert.equal(scope.sourceProof.attempt, 1);
+        assert.match(scope.sourceProof.runApiSha256, /^[a-f0-9]{64}$/u);
+        assert.match(scope.sourceProof.jobsApiSha256, /^[a-f0-9]{64}$/u);
+        assert.equal(await readFile(githubOutput, "utf8"), "mode=control-only\n");
+        await rm(githubOutput);
+        assert.doesNotMatch(output, /private-test-token/u);
+      });
+    }
+    const controlTree = await git(f.root, ["rev-parse", "HEAD^{tree}"]);
+    const merge = await git(f.root, ["commit-tree", controlTree, "-p", f.source, "-p", f.control, "-m", "control merge ref"]);
+    await git(f.root, ["checkout", "--detach", merge]);
+    assert.equal((await resolveCiQualityScope({ projectRoot: f.root, ...qualityApiFixture(f) })).mode, "control-only");
+  } finally {
+    await rm(githubOutput, { force: true });
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("quality scope requires exact source identity and an actually completed full test", async (t) => {
+  const f = await qualityControlFixture();
+  const cases = [
+    ["wrong source head", ({ run }) => { run.head_sha = "a".repeat(40); }],
+    ["wrong source commit metadata", ({ run }) => { run.head_commit.id = "a".repeat(40); }],
+    ["wrong source tree", ({ run }) => { run.head_commit.tree_id = "a".repeat(40); }],
+    ["wrong repository", ({ run }) => { run.repository.id = 321; }],
+    ["fork proof", ({ run }) => { run.head_repository.full_name = "Other/site"; }],
+    ["wrong workflow", ({ run }) => { run.path = ".github/workflows/other.yml"; }],
+    ["wrong event", ({ run }) => { run.event = "workflow_dispatch"; }],
+    ["non-main push", ({ run }) => { run.head_branch = "elsewhere"; }],
+    ["current run cannot prove itself", ({ run }) => { run.id = 999; }],
+    ["rerun", ({ run }) => { run.run_attempt = 2; }],
+    ["failed run", ({ run }) => { run.conclusion = "failure"; }],
+    ["wrong job head", ({ jobs }) => { jobs.jobs[0].head_sha = "a".repeat(40); }],
+    ["wrong job run", ({ jobs }) => { jobs.jobs[0].run_id = 111; }],
+    ["wrong job attempt", ({ jobs }) => { jobs.jobs[0].run_attempt = 2; }],
+    ["incomplete jobs page", ({ jobs }) => { jobs.total_count = 2; }],
+    ["failed job", ({ jobs }) => { jobs.jobs[0].conclusion = "failure"; }],
+    ["skipped full test", ({ jobs }) => { jobs.jobs[0].steps.at(-1).conclusion = "skipped"; }],
+    ["missing full test", ({ jobs }) => { jobs.jobs[0].steps.pop(); }],
+    ["skipped provenance", ({ jobs }) => { jobs.jobs[0].steps[1].conclusion = "skipped"; }],
+    ["duplicate full-test name", ({ jobs }) => { jobs.jobs[0].steps.push(jobs.jobs[0].steps.at(-1)); }]
+  ];
+  try {
+    for (const [name, mutate] of cases) await t.test(name, async () => {
+      assert.equal((await resolveCiQualityScope({ projectRoot: f.root, ...qualityApiFixture(f, { mutate }) })).mode, "full");
+    });
+    for (const [name, mutate] of [
+      ["wrong squash target", ({ pull }) => { pull.merge_commit_sha = "a".repeat(40); }],
+      ["unmerged PR", ({ pull }) => { pull.merged = false; }],
+      ["wrong PR base", ({ pull }) => { pull.base.ref = "other"; }],
+      ["wrong PR source repository", ({ pull }) => { pull.head.repo.id = 999; }],
+      ["PR source tree mismatch", ({ run }) => { run.head_commit.tree_id = "a".repeat(40); }]
+    ]) await t.test(name, async () => {
+      assert.equal((await resolveCiQualityScope({ projectRoot: f.root, ...qualityApiFixture(f, { pr: true, mutate }) })).mode, "full");
+    });
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
+  }
+});
+
+test("quality scope defaults to full on missing API evidence and never softens provenance failure", async () => {
+  const f = await qualityControlFixture();
+  try {
+    const api = qualityApiFixture(f);
+    for (const fetchImpl of [
+      async () => { throw new Error("private-test-token must not be logged"); },
+      async () => new Response("unavailable", { status: 403 }),
+      async () => new Response("not-json", { status: 200 }),
+      async () => new Response(JSON.stringify({ workflow_runs: [] }), { status: 200 })
+    ]) {
+      const scope = await resolveCiQualityScope({ projectRoot: f.root, ...api, fetchImpl });
+      assert.equal(scope.mode, "full");
+      assert.doesNotMatch(JSON.stringify(scope), /private-test-token/u);
+    }
+    assert.equal((await resolveCiQualityScope({ projectRoot: f.root, environment: {}, fetchImpl: api.fetchImpl })).mode, "full");
+    assert.equal(api.calls.length, 0);
+    await git(f.root, ["checkout", "--detach", f.source]);
+    assert.equal((await resolveCiQualityScope({ projectRoot: f.root, ...api })).reason, "source_candidate");
+    assert.equal(api.calls.length, 0);
+    await git(f.root, ["checkout", "--detach", f.control]);
+    await writeFile(path.join(f.root, "tracked.txt"), "extra unproved source\n");
+    await git(f.root, ["commit", "-am", "invalid mixed control"]);
+    await assert.rejects(resolveCiQualityScope({ projectRoot: f.root, ...api }), /canonical provenance/u);
+    assert.equal(api.calls.length, 0);
+  } finally {
+    await rm(f.root, { recursive: true, force: true });
   }
 });
 

@@ -2,6 +2,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import {
+  appendFile,
   lstat,
   mkdir,
   mkdtemp,
@@ -553,9 +554,119 @@ export async function proveDatabaseAbsent({
   }
 }
 
+export async function resolveCiQualityScope({
+  projectRoot,
+  environment = process.env,
+  fetchImpl = globalThis.fetch
+}) {
+  assertCiReleaseSafeEnvironment(environment);
+  // Invalid provenance fails the job; it is never converted into a fast path.
+  const provenance = await verifyCiCandidateProvenance({ projectRoot });
+  const full = (reason) => ({
+    schema: "sitesourcery.ci-quality-scope/v1", mode: "full", reason, provenance
+  });
+  if (provenance.status !== "verified" || !provenance.controlSha) {
+    return full("source_candidate");
+  }
+  const repository = environment.GITHUB_REPOSITORY;
+  const repositoryId = environment.GITHUB_REPOSITORY_ID;
+  const token = environment.GITHUB_TOKEN;
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository ?? "") ||
+      !/^[1-9][0-9]*$/u.test(repositoryId ?? "") || !token ||
+      environment.GITHUB_API_URL !== "https://api.github.com") {
+    return full("authenticated_source_proof_unavailable");
+  }
+  const { stdout } = await executeFile("git", [
+    "--no-replace-objects", "-c", "core.fsmonitor=false", "-C", projectRoot,
+    "rev-parse", `${provenance.candidateSha}^{tree}`
+  ], { encoding: "utf8" });
+  const tree = stdout.trim();
+  if (!/^[a-f0-9]{40}$/u.test(tree)) throw new Error("Quality source tree is invalid.");
+  const prefix = `/repos/${repository}`;
+  const signal = AbortSignal.timeout(15_000);
+  const positiveId = (value) => Number.isSafeInteger(value) && value > 0;
+  const sameRepository = (value) => value?.full_name === repository &&
+    String(value?.id) === repositoryId;
+  const succeeded = (value) => value?.status === "completed" && value?.conclusion === "success";
+  const get = async (suffix) => {
+    const response = await fetchImpl(`https://api.github.com${prefix}${suffix}`, {
+      method: "GET", redirect: "error", signal,
+      headers: {
+        Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`,
+        "X-GitHub-Api-Version": "2022-11-28"
+      }
+    });
+    if (!response.ok) throw new Error("Source proof API unavailable.");
+    return response.json();
+  };
+  const findProof = async (headSha, event, pullNumber = null) => {
+    const list = await get(`/actions/workflows/site-quality.yml/runs?head_sha=${headSha}&event=${event}&status=success&per_page=5`);
+    if (!Array.isArray(list.workflow_runs)) return null;
+    for (const run of list.workflow_runs.slice(0, 5)) {
+      if (!positiveId(run.id) || String(run.id) === environment.GITHUB_RUN_ID ||
+          run.run_attempt !== 1 || !succeeded(run) || run.event !== event ||
+          run.path !== ".github/workflows/site-quality.yml" || run.head_sha !== headSha ||
+          run.head_commit?.id !== headSha || run.head_commit?.tree_id !== tree ||
+          !sameRepository(run.repository) || !sameRepository(run.head_repository) ||
+          (event === "push" && run.head_branch !== "main")) continue;
+      const jobs = await get(`/actions/runs/${run.id}/attempts/1/jobs?per_page=100`);
+      if (!Array.isArray(jobs.jobs) || jobs.total_count !== jobs.jobs.length) continue;
+      const matches = jobs.jobs.filter((job) => job.name === "static-quality");
+      if (matches.length !== 1) continue;
+      const job = matches[0];
+      if (!positiveId(job.id) || job.run_id !== run.id || job.run_attempt !== 1 || job.head_sha !== headSha ||
+          !succeeded(job) || !Array.isArray(job.steps)) continue;
+      const requiredSteps = [
+        "Install locked dependencies", "Require current candidate provenance",
+        "Install exact reviewed Chromium", "Run static quality checks"
+      ];
+      if (!requiredSteps.every((name) => {
+        const steps = job.steps.filter((step) => step.name === name);
+        return steps.length === 1 && succeeded(steps[0]);
+      })) continue;
+      return {
+        runId: run.id, attempt: 1, jobId: job.id, event, headSha, treeSha: tree, pullNumber,
+        runApiSha256: sha256Bytes(Buffer.from(canonicalJson(run))),
+        jobsApiSha256: sha256Bytes(Buffer.from(canonicalJson(jobs)))
+      };
+    }
+    return null;
+  };
+  try {
+    let sourceProof = await findProof(provenance.candidateSha, "push");
+    if (!sourceProof) {
+      // An ordinary squash changes commit identity, so require its actual merged
+      // PR and an equal proved source tree before reusing that PR's full test.
+      const pulls = await get(`/commits/${provenance.candidateSha}/pulls?per_page=5`);
+      if (!Array.isArray(pulls)) return full("authenticated_source_proof_unavailable");
+      for (const linked of pulls.slice(0, 5)) {
+        if (!positiveId(linked.number)) continue;
+        const pull = await get(`/pulls/${linked.number}`);
+        if (pull.number !== linked.number || pull.merged !== true || pull.state !== "closed" ||
+            !Number.isFinite(Date.parse(pull.merged_at)) ||
+            pull.merge_commit_sha !== provenance.candidateSha || pull.base?.ref !== "main" ||
+            !sameRepository(pull.base?.repo) || !sameRepository(pull.head?.repo) ||
+            !/^[a-f0-9]{40}$/u.test(pull.head?.sha ?? "")) continue;
+        sourceProof = await findProof(pull.head.sha, "pull_request", pull.number);
+        if (sourceProof) break;
+      }
+    }
+    if (!sourceProof) return full("authenticated_source_proof_unavailable");
+    return {
+      schema: "sitesourcery.ci-quality-scope/v1", mode: "control-only",
+      reason: "exact_source_full_quality_verified", provenance, sourceProof
+    };
+  } catch {
+    // Rate limits, outages, timeouts, malformed/absent evidence and auth errors
+    // cost a full run; they never create a skipped required validation.
+    return full("authenticated_source_proof_unavailable");
+  }
+}
+
 export async function runCiReleaseProofCli({
   arguments_ = process.argv.slice(2),
   environment = process.env,
+  fetchImpl = globalThis.fetch,
   writeOutput = (value) => process.stdout.write(value)
 } = {}) {
   assertCiReleaseSafeEnvironment(environment);
@@ -566,6 +677,18 @@ export async function runCiReleaseProofCli({
     const proof = await verifyCiCandidateProvenance({ projectRoot: values.get("--root") });
     writeOutput(`${JSON.stringify(proof)}\n`);
     return proof;
+  }
+
+  if (command === "quality-scope") {
+    exactFlags(values, ["--root"]);
+    const scope = await resolveCiQualityScope({
+      projectRoot: values.get("--root"), environment, fetchImpl
+    });
+    if (environment.GITHUB_OUTPUT) {
+      await appendFile(environment.GITHUB_OUTPUT, `mode=${scope.mode}\n`, "utf8");
+    }
+    writeOutput(`${JSON.stringify(scope)}\n`);
+    return scope;
   }
 
   if (command === "generate") {

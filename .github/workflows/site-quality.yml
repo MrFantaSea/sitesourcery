@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  pull-requests: read
 
 jobs:
   static-quality:
@@ -26,8 +28,13 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --ignore-scripts
       - name: Require current candidate provenance
-        run: node ops/ci-release-proof.mjs provenance --root "$GITHUB_WORKSPACE"
+        id: quality-scope
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node ops/ci-release-proof.mjs quality-scope --root "$GITHUB_WORKSPACE"
       - name: Install exact reviewed Chromium
+        if: steps.quality-scope.outputs.mode != 'control-only'
         run: bash scripts/install-reviewed-chromium.sh "$RUNNER_TEMP/reviewed-chromium" "$GITHUB_ENV"
       - name: Run static quality checks
+        if: steps.quality-scope.outputs.mode != 'control-only'
         run: npm test
