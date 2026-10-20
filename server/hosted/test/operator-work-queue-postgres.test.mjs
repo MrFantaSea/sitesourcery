@@ -17,6 +17,7 @@ test("operator queue PostgreSQL repository fails closed without canonical author
 test("readiness proves every queue source table is forced-RLS and effect-free", async () => {
   const calls = [];
   const repository = createPostgresOperatorWorkQueueRepository({
+    automaticMail: false,
     authority: {
       async service(context, work) {
         calls.push(context);
@@ -62,6 +63,7 @@ test("list, refresh, and repair reject an operator organization outside active m
   const contexts = [];
   const queries = [];
   const repository = createPostgresOperatorWorkQueueRepository({
+    automaticMail: false,
     authority: {
       async service(context, work) {
         contexts.push(context);

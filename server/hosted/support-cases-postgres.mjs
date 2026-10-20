@@ -4,6 +4,7 @@ import { randomUUID as systemRandomUUID } from "node:crypto";
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 import { digest } from "./security.mjs";
+import { reserveSupportCaseNotification } from "./support-case-notifications.mjs";
 
 const RETRY_CODES = new Set(["40001", "40P01", "55P03"]);
 const CONSTRAINT_CODES = new Set(["23503", "23505", "23514", "55000"]);
@@ -338,8 +339,10 @@ async function requireActorScope(client, input, actorKind) {
   );
 }
 
-export function createPostgresSupportCaseRepository({ authority } = {}) {
+export function createPostgresSupportCaseRepository({ authority, automaticNotifications = true } = {}) {
   const database = validateAuthority(authority);
+  invariant(typeof automaticNotifications === "boolean", "SUPPORT_CASE_CONFIGURATION_REQUIRED",
+    "Automatic support notification preparation must be a boolean.", { status: 500 });
 
   async function open(input, actorKind) {
     const action = input.requestKind === "appeal" ? "appeal_open" : "open";
@@ -410,6 +413,9 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
             ]
           );
         }
+        if (automaticNotifications) await reserveSupportCaseNotification(client, {
+          caseId, action, recordedAt: input.recordedAt
+        });
         return loadForActor(client, caseId, input.recordedAt, actorKind);
       }
     ));
@@ -445,6 +451,9 @@ export function createPostgresSupportCaseRepository({ authority } = {}) {
           actorKind: "operator",
           eventKind,
           evidenceDigest: input.requestDigest
+        });
+        if (automaticNotifications) await reserveSupportCaseNotification(client, {
+          caseId: input.caseId, action, recordedAt: input.recordedAt
         });
         return loadOperator(client, input.caseId, input.recordedAt);
       }

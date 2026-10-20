@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -724,6 +725,7 @@ export function createHeldCustomServicesAssessmentWork() {
 
 export function createPostgresCustomServicesAssessmentWork({
   authority,
+  automaticMail = true,
   clock = { now: () => new Date().toISOString() },
   randomUUID = systemRandomUUID
 } = {}) {
@@ -1472,6 +1474,7 @@ export function createPostgresCustomServicesAssessmentWork({
               "Assessment delivery did not create its report and credit.",
               { status: 500 }
             );
+            if (automaticMail) await reserveCommerceTransitionMail(client, "assessment_report_delivered", reportId);
             return deliveryReceipt(delivered, Date.parse(deliveredAt));
           }
         )

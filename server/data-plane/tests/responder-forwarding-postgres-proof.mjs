@@ -181,8 +181,10 @@ async function seed(pool) {
   await pool.query(
     `insert into ss.hosted_account_profiles (user_id, display_name, state)
      values ($1, 'Forwarding Operator', 'active'),
-            ($2, 'Forwarding Authorizer', 'active')`,
-    [ids.operator, ids.authorizer]
+            ($2, 'Forwarding Authorizer', 'active'),
+            ($3, 'Forwarding Customer', 'active'),
+            ($4, 'Forwarding Other Customer', 'active')`,
+    [ids.operator, ids.authorizer, ids.customer, ids.otherCustomer]
   );
   await pool.query(
     `insert into ss.operator_profiles (

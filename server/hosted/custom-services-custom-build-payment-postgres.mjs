@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -863,6 +864,7 @@ export function createHeldCustomServicesCustomBuildPayment() {
 
 export function createPostgresCustomServicesCustomBuildPayment({
   authority,
+  automaticMail = true,
   provider,
   release,
   clock,
@@ -1661,6 +1663,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
           "The uncertain Custom build credit could not be fenced.",
           { status: 500 }
         );
+        if (automaticMail) await reserveCommerceTransitionMail(client, "custom_initial_payment_reconciliation_required", event.eventId);
         return reconciliationResult(resolution);
       }
     ));
@@ -1880,6 +1883,7 @@ export function createPostgresCustomServicesCustomBuildPayment({
               settledAt
             ]
           );
+          if (automaticMail) await reserveCommerceTransitionMail(client, "custom_initial_payment_settled", receiptId);
           await client.query(
             `insert into ss.service_custom_build_jobs (
                id, organization_id, project_id, case_id,

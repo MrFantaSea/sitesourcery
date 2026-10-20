@@ -275,7 +275,7 @@ test("operator assets remain hosted-only and expose an effect-held responsive de
     hostedOperatorAssets.map((file) => readFile(path.join(ROOT, file), "utf8"))
   );
   assert.match(html, /id="main"[^>]*tabindex="-1"/u);
-  assert.match(html, /do not send email, delete data, or run exports/u);
+  assert.match(html, /Eligible project-case updates queue email notices; notes and review steps stay internal/u);
   assert.match(html, /Assessment and Custom tools/u);
   assert.match(css, /@media \(max-width: 760px\)/u);
   assert.match(css, /grid-template-columns: 1fr/u);

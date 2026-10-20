@@ -587,6 +587,7 @@ test("professional reversal PostgreSQL journey is monotonic, replay-safe, and op
   await seedFixture(pool);
   const authority = createCanonicalPostgresAuthority({ pool });
   const repository = createPostgresProfessionalServicesReversalRepository({
+    automaticMail: false,
     authority
   });
   const clock = { now: () => NOW };
@@ -756,6 +757,7 @@ test("direct no-credit Custom receipts normalize all payment kinds without synth
   await seedCustomBindingFixtures(pool);
   const authority = createCanonicalPostgresAuthority({ pool });
   const repository = createPostgresProfessionalServicesReversalRepository({
+    automaticMail: false,
     authority
   });
   const service = createProfessionalServicesReversalService({

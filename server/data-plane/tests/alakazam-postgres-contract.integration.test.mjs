@@ -2599,6 +2599,10 @@ test(
         [authority.organizationId, authority.projectId]
       );
       const rollbackCommandId = randomUUID();
+      await insertRow(client, "hosted_account_profiles", {
+        user_id: authority.userId,
+        display_name: "Publication notification fixture"
+      });
       const queuedRollback = await publication.request(
         publicationScope,
         {
@@ -2623,6 +2627,26 @@ test(
         })).command.commandDigest,
         queuedRollback.command.commandDigest
       );
+      const publicationMail = await client.query(
+        `select notice.source_customer_user_id, notice.state,
+                notice.provider_effects_authorized, notice.delivery_claimed,
+                mail.state as mail_state
+           from ss.mail_purpose_notification_outbox notice
+           join ss.hosted_mail_deliveries mail on mail.id = notice.mail_message_id
+          where notice.source_table = 'ss.publication_control_commands'
+            and notice.source_id = $1
+            and notice.notification_kind = 'publication_state_changed'`,
+        [rollbackCommandId]
+      );
+      assert.equal(publicationMail.rowCount, 1,
+        "ordinary publication command and replay reserve one notification");
+      assert.deepEqual(publicationMail.rows[0], {
+        source_customer_user_id: authority.userId,
+        state: "held",
+        provider_effects_authorized: false,
+        delivery_claimed: false,
+        mail_state: "pending"
+      });
       await assert.rejects(
         publication.request(publicationScope, {
           commandId: randomUUID(),

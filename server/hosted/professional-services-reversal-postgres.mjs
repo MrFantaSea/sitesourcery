@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import {
   PROFESSIONAL_REVERSAL_DECISION_SCHEMA,
   exactProfessionalPayment
@@ -316,7 +317,8 @@ function assertDecision(result, decision) {
 }
 
 export function createPostgresProfessionalServicesReversalRepository({
-  authority
+  authority,
+  automaticMail = true,
 } = {}) {
   const database = validateAuthority(authority);
 
@@ -576,7 +578,12 @@ export function createPostgresProfessionalServicesReversalRepository({
             input.recordedAt
           ]
         ), "professionalReversalRecord");
-        return assertDecision(resultFromRow(selected), input.decision);
+        const result = assertDecision(resultFromRow(selected), input.decision);
+        if (automaticMail && result.status !== "replay") {
+          await reserveCommerceTransitionMail(client, input.evidenceCertainty === "verified"
+            ? "professional_reversal_recorded" : "professional_reversal_review_required", result.lifecycleId);
+        }
+        return result;
       }
     ));
   }

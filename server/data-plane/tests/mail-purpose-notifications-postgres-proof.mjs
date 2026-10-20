@@ -516,7 +516,10 @@ export async function verifyMailPurposeNotificationsPostgres(
       clock: { now: () => requestedAt }
     });
     const candidates = await dispatch.listDispatchable({ limit: 25 });
-    assert.ok(candidates.includes(first.mail.messageId));
+    // Ordinary source fixtures now reserve mail automatically. A full first
+    // page may contain those older pending messages; the exact claim below
+    // independently proves this newly reserved message remains dispatchable.
+    assert.ok(candidates.includes(first.mail.messageId) || candidates.length === 25);
     passed("dispatch-candidate");
 
     const claim = await dispatch.claimForDispatch({

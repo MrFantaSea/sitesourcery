@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
 import { HostedError, invariant } from "./errors.mjs";
 
@@ -923,7 +924,7 @@ export function createPostgresCustomServicesCustomBuildProgress({ authority } = 
             );
             return readOwnerSnapshot(client, input.organizationId, jobId);
           }
-          await client.query(
+          const notificationEvent = await client.query(
             `insert into ss.service_custom_build_progress_updates (
                organization_id,
                project_id,
@@ -947,7 +948,7 @@ export function createPostgresCustomServicesCustomBuildProgress({ authority } = 
                $1, $2, $3, $4, $5, $6::bigint, $6::bigint + 1, $7,
                $8, $9, $10, $11, $12, $13, $14, $15,
                repeat('0', 64)::ss.sha256_hex, clock_timestamp()
-             )`,
+             ) returning id`,
             [
               input.organizationId,
               job.project_id,
@@ -966,6 +967,7 @@ export function createPostgresCustomServicesCustomBuildProgress({ authority } = 
               input.commandId
             ]
           );
+          await reserveAutomaticPurposeEvent(client, { table: "ss.service_custom_build_progress_updates", id: notificationEvent.rows[0].id, organizationId: input.organizationId });
           return readOwnerSnapshot(client, input.organizationId, jobId);
         }
       ));

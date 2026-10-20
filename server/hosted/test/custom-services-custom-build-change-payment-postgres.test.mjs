@@ -112,6 +112,7 @@ function invoiceRow(overrides = {}) {
 function projectionBoundary(row, release = HELD_RELEASE) {
   const queries = [];
   const payment = createPostgresCustomServicesCustomBuildChangePayment({
+    automaticMail: false,
     authority: {
       async service(context, work) {
         assert.deepEqual(context, {
@@ -604,6 +605,7 @@ function createServiceProofHarness({
   };
 
   const payment = createPostgresCustomServicesCustomBuildChangePayment({
+    automaticMail: false,
     authority,
     provider: paymentProvider,
     release: { ...HELD_RELEASE, approved: true },

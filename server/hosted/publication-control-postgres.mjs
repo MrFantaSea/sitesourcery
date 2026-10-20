@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import {
   CommerceV2Error,
   invariant
@@ -1110,6 +1111,7 @@ export function createPostgresPublicationControlRepository({
               command.requestedAt
             ]
           );
+          await reserveAutomaticPurposeEvent(client, { table: "ss.publication_control_commands", id: command.commandId, organizationId: command.tenantId });
           const stored = storedCommand({
             ...inserted.rows[0],
             release_state: "released",

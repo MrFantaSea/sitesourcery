@@ -1520,6 +1520,7 @@ test(
     });
     const assessmentSettlement =
       createPostgresCustomServicesAssessmentSettlement({
+        automaticMail: false,
         authority,
         provider: payment.port,
         clock: commerceV2.clock,
@@ -1533,10 +1534,11 @@ test(
         reconciliation: assessmentSettlement
       });
     const customServicesCustomBuild =
-      createPostgresCustomServicesCustomBuild({ authority });
+      createPostgresCustomServicesCustomBuild({ automaticMail: false, authority });
     const customBuildProviderCalls = [];
     const customServicesCustomBuildPayment =
       createPostgresCustomServicesCustomBuildPayment({
+        automaticMail: false,
         authority,
         provider: {
           async createCustomBuildStartCheckout(...args) {
@@ -1577,6 +1579,7 @@ test(
         payment: assessmentPayment,
         quoteRepository:
           createPostgresCustomServicesAssessmentQuoteRepository({
+            automaticMail: false,
             authority
           }),
         requestRepository:
@@ -1590,7 +1593,7 @@ test(
         resolveSession: commerceV2.resolveSession
       });
     const customServicesOwner =
-      createPostgresCustomServicesOwner({ authority });
+      createPostgresCustomServicesOwner({ automaticMail: false, authority });
     const alakazamRepository =
       createPostgresAlakazamRepository({ authority });
     const alakazamAccount =
@@ -4534,7 +4537,7 @@ test(
           Date.now() + 1000
         ).toISOString();
         const supportCases = createSupportCaseService({
-          repository: createPostgresSupportCaseRepository({ authority }),
+          repository: createPostgresSupportCaseRepository({ authority, automaticNotifications: false }),
           mailLifecycle,
           clock: commerceV2.clock
         });

@@ -133,6 +133,7 @@ function inertProvider() {
 function projectionBoundary(row) {
   const queries = [];
   const payment = createPostgresCustomServicesCustomBuildFinalPayment({
+    automaticMail: false,
     authority: {
       async service(context, work) {
         assert.deepEqual(context, {
@@ -673,6 +674,7 @@ function createHarness({
   };
 
   const payment = createPostgresCustomServicesCustomBuildFinalPayment({
+    automaticMail: false,
     authority,
     provider,
     release: RELEASE,

@@ -2421,6 +2421,15 @@
         });
         renderCases();
         renderDetail();
+        var notificationKind = { "/response": "response", "/denial": "denial", "/closure": "closure" }[suffix];
+        if (notificationKind) {
+          var reserved = state.selectedCase.notifications.some(function (entry) {
+            return entry.kind === notificationKind;
+          });
+          notice += reserved
+            ? " An email notice is recorded for this case."
+            : " No email notice was queued for this case.";
+        }
         showNotice(notice);
       } catch (error) {
         showError(error);
@@ -2552,7 +2561,7 @@
         } else if (kind === "response") {
           mutateCase("/response", {
             responseDigest: formValue(form, "responseDigest")
-          }, "Response digest recorded; no customer message was sent.");
+          }, "Response digest recorded.");
         } else if (kind === "denial") {
           var appeal = form.elements.namedItem("appealAvailable").checked;
           mutateCase("/denial", {
@@ -2561,7 +2570,7 @@
             appealAvailable: appeal,
             appealDueAt: appeal ? localInstant(formValue(form, "appealDueAt")) : null,
             appealBasisDigest: appeal ? formValue(form, "appealBasisDigest") : null
-          }, "Denial evidence recorded; no customer message was sent.");
+          }, "Denial evidence recorded.");
         } else if (kind === "closure") {
           mutateCase("/closure", {
             closureReasonCode: formValue(form, "closureReasonCode"),

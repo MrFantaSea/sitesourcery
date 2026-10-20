@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -101,6 +102,7 @@ async function priorCommand(client, input, resourceKind, resourceId) {
 }
 
 async function recordCommand(client, input, resourceKind, resourceId, uuid) {
+  const id = uuid();
   await client.query(
     `insert into ss.care_commands (
        id, organization_id, project_id, command_id, action,
@@ -108,12 +110,13 @@ async function recordCommand(client, input, resourceKind, resourceId, uuid) {
        request_digest, result_digest, recorded_at, created_at
      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12)`,
     [
-      uuid(), input.organizationId, input.projectId, input.commandId,
+      id, input.organizationId, input.projectId, input.commandId,
       input.action, resourceKind, resourceId, input.actorKind,
       input.actorId, input.requestDigest,
       commandResult(input, resourceKind, resourceId), input.recordedAt
     ]
   );
+  return id;
 }
 
 async function contractProjection(client, contractId, organizationId) {
@@ -461,7 +464,7 @@ export function createPostgresCareCoreRepository({
         if (await priorCommand(client, input, "ticket", input.ticketId)) {
           return ticketProjection(client, input.ticketId, input.organizationId);
         }
-        await recordCommand(client, input, "ticket", input.ticketId, uuid);
+        const sourceId = await recordCommand(client, input, "ticket", input.ticketId, uuid);
         await client.query(
           `insert into ss.care_tickets (
              id, organization_id, project_id, contract_id, period_id,
@@ -481,6 +484,7 @@ export function createPostgresCareCoreRepository({
             input.workScopeDigest, input.commandId, input.recordedAt
           ]
         );
+        await reserveAutomaticPurposeEvent(client, { table: "ss.care_commands", id: sourceId, organizationId: input.organizationId });
         return ticketProjection(client, input.ticketId, input.organizationId);
       }));
     },
@@ -505,7 +509,7 @@ export function createPostgresCareCoreRepository({
           "The Care ticket changed; refresh before retrying.",
           { status: 409 }
         );
-        await recordCommand(client, input, "ticket", input.ticketId, uuid);
+        const sourceId = await recordCommand(client, input, "ticket", input.ticketId, uuid);
         await client.query(
           `update ss.care_tickets
               set state = $2, revision = revision + 1,
@@ -521,6 +525,7 @@ export function createPostgresCareCoreRepository({
             where id = $1`,
           [input.ticketId, input.targetState, input.commandId, input.recordedAt]
         );
+        await reserveAutomaticPurposeEvent(client, { table: "ss.care_commands", id: sourceId, organizationId: input.organizationId });
         return ticketProjection(client, input.ticketId, input.organizationId);
       }));
     },

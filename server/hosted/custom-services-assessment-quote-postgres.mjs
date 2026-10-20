@@ -1,3 +1,4 @@
+import { reserveCommerceInvoiceMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -738,7 +739,8 @@ where quote.organization_id = $1
 limit 2`;
 
 export function createPostgresCustomServicesAssessmentQuoteRepository({
-  authority
+  authority,
+  automaticMail = true,
 } = {}) {
   const database = validateAuthority(authority);
 
@@ -995,6 +997,7 @@ export function createPostgresCustomServicesAssessmentQuoteRepository({
                 ),
                 "customServicesNewQuoteAcceptance"
               );
+              if (automaticMail) await reserveCommerceInvoiceMail(client, "assessment_invoice_prepared", input.quoteId);
             }
             const receipt = acceptanceReceipt(acceptance);
             invariant(

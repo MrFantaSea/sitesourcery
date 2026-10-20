@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail, reserveCommerceInvoiceMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -1314,6 +1315,7 @@ export function createHeldCustomServicesCustomBuildChangeCompletion() {
 
 export function createPostgresCustomServicesCustomBuildChangeCompletion({
   authority,
+  automaticMail = true,
   clock = { now: () => new Date().toISOString() },
   randomUUID = systemRandomUUID
 } = {}) {
@@ -1593,6 +1595,7 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             ),
             "new Custom-build change acceptance"
           );
+          if (automaticMail) await reserveCommerceInvoiceMail(client, "custom_change_invoice_prepared", changeOrderId);
           return customerSnapshot(client, scope);
         }
       ));
@@ -1774,7 +1777,7 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             );
             return ownerSnapshot(client, input.organizationId, jobId);
           }
-          one(
+          const issuedChange = one(
             await client.query(
               `insert into ss.service_custom_build_change_orders (
                  id,
@@ -1798,6 +1801,7 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             ),
             "new Custom-build change order"
           );
+          if (automaticMail) await reserveCommerceTransitionMail(client, "custom_change_quote_issued", issuedChange.id);
           return ownerSnapshot(client, input.organizationId, jobId);
         }
       ));
@@ -2224,7 +2228,7 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             "latest progress revision",
             1
           );
-          one(
+          const completion = one(
             await client.query(
               `insert into ss.service_custom_build_completion_packages (
                  id,
@@ -2255,6 +2259,10 @@ export function createPostgresCustomServicesCustomBuildChangeCompletion({
             ),
             "new Custom-build completion package"
           );
+          if (automaticMail) {
+            await reserveCommerceTransitionMail(client, "custom_completion_ready", completion.id);
+            await reserveCommerceInvoiceMail(client, "custom_final_invoice_prepared", completion.id);
+          }
           return ownerSnapshot(client, input.organizationId, jobId);
         }
       ));

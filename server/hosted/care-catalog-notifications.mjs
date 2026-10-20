@@ -30,6 +30,16 @@ export async function reserveCareCatalogNotification(db, agreement, kind, state,
     where agreement_id=$1 and notification_kind=$2 and subject_id=$3
     order by event_sequence desc limit 1`, [agreement.id, kind, subjectId])).rows[0];
   if (prior?.state === state || (!prior && state === 'resolved')) return null;
+  const account = (await db.query('select email from auth.users where id=$1 and disabled_at is null',
+    [agreement.customer_user_id])).rows[0];
+  invariant(account, 'CARE_MAIL_SOURCE_UNAVAILABLE', 'The Care notification source is unavailable.', { status: 409 });
+  // Use the reviewed renderer's exact recipient digest before creating an event:
+  // every event requires an outbox entry, and suppressed mail cannot enter it.
+  const recipientPreview = previewReviewedNotificationMail({ templateVersion: `${kind.replaceAll('_', '-')}.v1`,
+    to: account.email, variables: { reference: agreement.id, revision: 1, state } });
+  const suppressed = (await db.query(`select 1 from ss.hosted_mail_recipient_suppressions
+    where recipient_digest=$1`, [recipientPreview.evidence.recipientDigest])).rows.length > 0;
+  if (suppressed) return null;
   const priorActor = (await db.query("select current_setting('app.service_actor_kind',true) as kind")).rows[0].kind;
   // The caller already authorized the customer/operator and locked the exact
   // scoped agreement. The existing mail guards require system reservations.
@@ -44,9 +54,7 @@ export async function reserveCareCatalogNotification(db, agreement, kind, state,
     agreement.customer_user_id, kind, state, subjectId, paidPeriodId, requestId])).rows[0];
   const source = (await db.query(`select * from ss.mail_purpose_notification_sources
     where source_table='ss.care_catalog_notification_events' and source_id=$1`, [event.id])).rows[0];
-  const account = (await db.query('select email from auth.users where id=$1 and disabled_at is null',
-    [agreement.customer_user_id])).rows[0];
-  invariant(source && account, 'CARE_MAIL_SOURCE_UNAVAILABLE', 'The Care notification source is unavailable.', { status: 409 });
+  invariant(source, 'CARE_MAIL_SOURCE_UNAVAILABLE', 'The Care notification source is unavailable.', { status: 409 });
   const preview = previewReviewedNotificationMail({ templateVersion: source.template_version,
     to: account.email, variables: { reference: source.reference_id, revision: Number(source.source_revision), state } });
   const requestedAt = new Date(event.occurred_at).toISOString();

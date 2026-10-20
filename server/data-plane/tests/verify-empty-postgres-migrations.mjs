@@ -897,7 +897,7 @@ async function verifySupportPrivacyCaseLifecycle(pool) {
   `)).rows[0];
   assert.ok(scope, "support case proof requires the MAIL-01 operator/customer fixture");
   const authority = createCanonicalPostgresAuthority({ pool });
-  const supportRepository = createPostgresSupportCaseRepository({ authority });
+  const supportRepository = createPostgresSupportCaseRepository({ authority, automaticNotifications: false });
   const mailRepository = createPostgresMailLifecycleRepository({ authority });
   let current = "2026-08-10T16:00:00.000Z";
   const clock = { now: () => current };
@@ -1337,6 +1337,7 @@ async function verifyOperatorWorkQueue(pool) {
 
   const database = createCanonicalPostgresAuthority({ pool });
   const repository = createPostgresOperatorWorkQueueRepository({
+    automaticMail: false,
     authority: database
   });
   let observedAt = new Date().toISOString();
@@ -2385,6 +2386,7 @@ async function verifyCustomerEngagementBootstrapJourney(pool) {
   assert.equal(claim.provenance, "direct_custom_inquiry");
 
   const customBuild = createPostgresCustomServicesCustomBuild({
+    automaticMail: false,
     authority: database
   });
   const directOpportunities = await customBuild.listOpportunities({

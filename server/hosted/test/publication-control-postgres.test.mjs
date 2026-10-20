@@ -252,6 +252,13 @@ test("one new exact command atomically adds released authority and one queued wo
         inserts.push(["job", values]);
         return { rowCount: 1, rows: [] };
       }
+      if (sql.includes('from ss.mail_purpose_notification_sources source')) return { rowCount: 1, rows: [{
+        source_table: 'ss.publication_control_commands', notification_kind: 'publication_state_changed',
+        purpose_kind: 'publication_domain', template_version: 'publication-state-changed.v1', source_state: 'publish',
+        source_id: IDS.command, source_revision: 1, source_digest: DIGEST, project_id: IDS.project,
+        source_customer_user_id: IDS.customer
+      }] };
+      if (sql.includes('select id from ss.mail_purpose_notification_outbox') || sql.includes('select u.email from auth.users')) return { rowCount: 0, rows: [] };
       throw new Error(`unexpected query ${sql.slice(0, 80)}`);
     })
   });

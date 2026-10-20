@@ -77,7 +77,7 @@ test("operator queue persists digest-only finalization evidence and refreshes id
     );
 
     const authority = createCanonicalPostgresAuthority({ pool });
-    const repository = createPostgresOperatorWorkQueueRepository({ authority });
+    const repository = createPostgresOperatorWorkQueueRepository({ automaticMail: false, authority });
     let selectedNow = new Date().toISOString();
     const service = createOperatorWorkQueue({
       repository,
