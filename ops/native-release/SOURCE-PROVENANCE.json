@@ -1,0 +1,52 @@
+{
+  "scope": "Maintained parameterization of accepted native adapters; source constants become validated profile fields. Original receipts and scripts remain unchanged.",
+  "sources": {
+    "install-presentation.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/cleanup/resume-20261020/same-schema-release/native-update.py",
+      "sha256": "11ea23926665bbece650e288c5b83163532a2d680997efa4314ecbe425106d62",
+      "mode": "presentation-only"
+    },
+    "install-schema.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/native-release/handoff-attempt2/installation/native-update.py",
+      "sha256": "0c9a86d437353ef67c7c572edb485e15cc0a3581077eadf162a8743235397011",
+      "mode": "schema-changing"
+    },
+    "inventory.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/cleanup/resume-20261020/same-schema-release/verify-staged.py",
+      "sha256": "d9f76a5854ad472f63fc46e763fdebb19184f8734bf0c80eb69e9c90dbfcc271"
+    },
+    "handoff-presentation.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/cleanup/resume-20261020/same-schema-release/durable-handoff.py",
+      "sha256": "fd545a18ad8ee8294aedcf265f0c13adfcc73ff24138ae34a143d33bd06f5141",
+      "mode": "presentation-only"
+    },
+    "handoff-schema.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/native-release/handoff-attempt2/correction-marker/durable-handoff-marker0644.py",
+      "sha256": "5f3dd29d7846fcaae694857749c94700185abfb54564172ecc093ebee2b40cdc",
+      "mode": "schema-changing"
+    },
+    "accept-presentation.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/cleanup/resume-20261020/same-schema-release/read-resumed-runtime.py",
+      "sha256": "cd2854355bafd3baa2b114a1555497b8ec771cf2c7aeabbbc89fa9106251fbfa",
+      "mode": "presentation-only"
+    },
+    "accept-schema.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/native-release/handoff-attempt2/read-resumed-runtime.BOUND.py",
+      "sha256": "d0bccf9dc643a893d22473323024098cb4bad71dd4108d40812d4c5eac712ebd",
+      "mode": "schema-changing"
+    },
+    "prepare-stage.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/native-release/stage/prepare-stage-packet.py",
+      "sha256": "fa8af0ba3805f3bdd85ee2099d71b8cfab0a6b3c0156c1b43cafcb8b73d659ea"
+    },
+    "stage.py": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/native-release/stage/stage-dependencies-new-hosted-body.py",
+      "sha256": "501e0a406d00e508db7ba9b1f725de38ab566e6d3fb67ab67f04e033cff24fa7"
+    },
+    "migrate-once.mjs": {
+      "original": "/Users/fantaseamac/SITESOURCERY-R5-CARE-MAIL-2026-10-19/native-release/handoff-attempt2/production-binding/BOUND/upgrade-care-mail-once.mjs",
+      "sha256": "80eaf1fc906d48ceb0ed03ac6329c661ba69c8e738c20d1ab27d053a52f796a8",
+      "scope": "Additive migrations only; every retained field and financial total remains exact."
+    }
+  }
+}
