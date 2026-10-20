@@ -39,6 +39,7 @@ import {
   immutableLegalArtifactFiles,
 } from "./hosted-truth/legal-artifacts.mjs";
 import { validateWorkPublicTruth } from "./work-public-truth.mjs";
+import { applySharedChrome, SHARED_CHROME_FILES } from "./sync-shared-chrome.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -550,6 +551,18 @@ try {
 }
 const sources = new Map();
 for (const page of pages) sources.set(page, await readFile(path.join(ROOT, page), "utf8"));
+
+// Compare authored public chrome to its maintained source, including 404.
+// Legal pages keep their separately sealed chrome and are not sync targets.
+for (const file of SHARED_CHROME_FILES) {
+  try {
+    if (applySharedChrome(sources.get(file), file) !== sources.get(file)) {
+      fail(file, "shared header/footer drift; run node scripts/sync-shared-chrome.mjs");
+    }
+  } catch (error) {
+    fail(file, error.message);
+  }
+}
 
 const routes = new Set(pages.map(routeOf));
 const idsByRoute = new Map(
