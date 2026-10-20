@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "15e309a09dd690532de6b13fd761a019eb9ff527",
+    "treeSha": "35c30c7bfb45dcb6c277fa171e11950fb39f9447",
+    "baseCommitSha": "0529cb26e09108411be2fdf794128ba5fbc36bd6"
+  },
+  "provenanceSha256": "d60c007e8023bab4fe41ca653cd8fa604d5c29148cf21f8821b2465fe3313646",
+  "ledger": {
+    "previousByteCount": 63396,
+    "previousSha256": "8fde913eb8968261bcc4999f574e6595fee74052dbdc97c1b51c677ba41ed960",
+    "appendSha256": "4fea7896cbd976fce11be9f2802c311c018120720ca76173ec634f03641b86e0"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/native-release-adapters.test.mjs; offline recorded authority-to-installer and artifact/retention rehearsals",
+      "exitCode": 0,
+      "logSha256": "efab9d3ae0f9b0cacd0c36b7a9ee036f7e448e0dba61bd9f9593e28c27609b67"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "c47a49e9daa986dfaafce9400cc58b6319f25c734e0ebe9a21ec7efa0d592688"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed strict profile, fixed topology, bundle custody, finite authority, exact held/runtime bindings, exclusive migration journal, no schema code-only rollback, and actual historical receipt/artifact interoperability. Original native receipts and scripts preserved."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Operations adapter parameterization changes no application schema or database queries. Pure multi-file SQL wrapper/retention tests and actual recorded migration before/durable evidence passed; no new production transaction or redundant restore is claimed."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned 52-file fixture/archive directory removed with inventory and proof hashes retained; browser suite profiles cleaned. Original source receipts and failure logs preserved; no production resources created by source qualification."
+  }
+}

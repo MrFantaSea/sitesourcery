@@ -811,3 +811,8 @@ Implementation `a6887acc1063988a677e5438e033334b4f907c61` / tree `9ae78c75c1d6ab
 ## Typed native release authority — 2026-10-20
 
 Implementation `34f41e08807357dfd9a52ddf5f174c62be9c829d` / tree `63ba424e20ae037ec9953d98619d2257934b58e4`. Two modes consolidated; six typed tests, six byte-exact canonical outputs, eight refusal rehearsals, and full npm2628passed/33skipped/0failed. Native cutover adapters remain separately reviewed. [Provenance](../ci-provenance/34f41e08807357dfd9a52ddf5f174c62be9c829d/provenance.md) · [Proof](../ci-provenance/34f41e08807357dfd9a52ddf5f174c62be9c829d/proof.json).
+
+
+## Native release adapters — 2026-10-20
+
+Implementation `15e309a09dd690532de6b13fd761a019eb9ff527` (`35c30c7bfb45dcb6c277fa171e11950fb39f9447`), base `0529cb26e09108411be2fdf794128ba5fbc36bd6`. Strict release profiles replace per-release source constants across native boundaries; both modes retain their effect gates and separate recovery policies. Focused guards/historical receipt and artifact rehearsals passed; full npm 2,631 passed/33 existing skips/0 failed and 24 routes × 6 widths. No live deployment performed for this ops-only change. Canonical [provenance](../ci-provenance/15e309a09dd690532de6b13fd761a019eb9ff527/provenance.md) and [proof](../ci-provenance/15e309a09dd690532de6b13fd761a019eb9ff527/proof.json).
