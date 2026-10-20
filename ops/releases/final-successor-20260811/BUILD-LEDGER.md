@@ -807,3 +807,7 @@ Implementation `a6887acc1063988a677e5438e033334b4f907c61` / tree `9ae78c75c1d6ab
 
 - [Provenance](../ci-provenance/a6887acc1063988a677e5438e033334b4f907c61/provenance.md)
 - [Machine proof](../ci-provenance/a6887acc1063988a677e5438e033334b4f907c61/proof.json)
+
+## Typed native release authority — 2026-10-20
+
+Implementation `34f41e08807357dfd9a52ddf5f174c62be9c829d` / tree `63ba424e20ae037ec9953d98619d2257934b58e4`. Two modes consolidated; six typed tests, six byte-exact canonical outputs, eight refusal rehearsals, and full npm2628passed/33skipped/0failed. Native cutover adapters remain separately reviewed. [Provenance](../ci-provenance/34f41e08807357dfd9a52ddf5f174c62be9c829d/provenance.md) · [Proof](../ci-provenance/34f41e08807357dfd9a52ddf5f174c62be9c829d/proof.json).

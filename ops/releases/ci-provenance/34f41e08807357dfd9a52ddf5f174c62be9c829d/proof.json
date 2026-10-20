@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "34f41e08807357dfd9a52ddf5f174c62be9c829d",
+    "treeSha": "63ba424e20ae037ec9953d98619d2257934b58e4",
+    "baseCommitSha": "f9b315959a90b02427147f0622b1efa6d87065d3"
+  },
+  "provenanceSha256": "a8b4ee6c925ee61c8c418d85c0cdd162153cc764f627aaa7445231b8e29d7615",
+  "ledger": {
+    "previousByteCount": 62873,
+    "previousSha256": "8e362742e5bed6db4492acdccf3d1a129df369c7c4c9803ee768d5352b21225a",
+    "appendSha256": "6383c8cef1de36af73123dbecbeb07a86423bce56c651868625936e0d8b1ef17"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node run-rehearsal.mjs (disposable offline accepted-receipt fixtures, both modes; no production effects)",
+      "exitCode": 0,
+      "logSha256": "ffce8392dd708a979a80d6ae450b0debd495ad872a68eae78ff35275ca3a8ce4"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "8c2ee01c9fcfa711b4cf7eb0598905e0b79e36bc0b7474432a553e8c6cc7edb8"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed three-file source diff and both retained constructors; strict inputs, source/CI/predecessor/hold/recovery checks retained. Six canonical outputs byte-exact and eight negative cases refused before output. No live cutover automation claimed."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only local operational authority construction, documentation and tests changed. Database schema/application queries/runtime unchanged; accepted actual migration/schema receipts reused as offline fixtures."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned temporary receipt copies and derived mutation fixtures removed after rehearsal; original receipts and failure logs retained. Existing reviewed browser reused; suite-owned browser profiles cleaned. No production resource created."
+  }
+}
