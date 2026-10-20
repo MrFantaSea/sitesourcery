@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "a6887acc1063988a677e5438e033334b4f907c61",
+    "treeSha": "9ae78c75c1d6ab2bd39a0489c0b1187c13116fd2",
+    "baseCommitSha": "cf6a2e94c73a6f5355c0e869777b14ef48993285"
+  },
+  "provenanceSha256": "1c99e27275f38c37eb7bc221344bf51bf631716d94fab84e8af469ce294ff19b",
+  "ledger": {
+    "previousByteCount": 61555,
+    "previousSha256": "08f2015a6758bc02544c97a031d2e78937dfedc4b44c8911b9718aa075f3cd7c",
+    "appendSha256": "67f5d4cbbf28356fc68da17642378c3e3af2f1ea9c385681a8c6148b6279c733"
+  },
+  "proofs": {
+    "focused": {
+      "command": "/private/tmp/node-v24.18.0-darwin-arm64/bin/node --test ops/test/ci-release-proof.test.mjs",
+      "exitCode": 0,
+      "logSha256": "888099ae7af3f2c6df0bebb2f4871d889e2e1fd8b2ec5382771e4501ea6795a2"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "aa87a6716df169f0354b0197802c01560bd6e900d4c5dbd2000131e47b951838"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed exact integrated navigation/CI and the accessible-menu correction after the original full browser failure. Prior focused checks and six visual views are reused with exact CI/visual-source equality; four corrected AX checks and one corrected complete qualification passed. Required provenance and full fallback are retained; source effects only."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "The exact 27-path cleanup changes public shared chrome/checks and CI source-proof reuse only. No database, migration, server business path, dependency or native-client source changed."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned targeted browser/profile/server and qualification scratch removed after zero remaining owned processes. Original logs, screenshots, qualified builds, worktree and shared tools retained. No native/provider disposable created."
+  }
+}
