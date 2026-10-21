@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "4409aaa7fd1b14e866ef78243a2d5124d84afc15",
+    "treeSha": "9bd7423d3e8e0c7f3a7464ef6bada7f2852ca93a",
+    "baseCommitSha": "3fcbd1cf33d7275f890a4a70602a77b0f21ba64c"
+  },
+  "provenanceSha256": "fe6a4257544dbfd4be846e1c07c48b511c61478a3a58c15f8422364fb2e9a972",
+  "ledger": {
+    "previousByteCount": 67910,
+    "previousSha256": "dc87cb0bff5a37c8c37a2d51573d8bd7516ff7a9516034e8d235ca7fa86191a5",
+    "appendSha256": "2deb5c1251137230c726c16262544a2e3e342b6867c56bf4fcbd192afb9e4c6d"
+  },
+  "proofs": {
+    "focused": {
+      "command": "python3 ops/native-release/test-contracts.py",
+      "exitCode": 0,
+      "logSha256": "e34aa0cfd58611375fa96a7591905e8fd642f290da387d508d808e095f0e6494"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "76a76230a130bfc662ee41c1611d588454ded9b9397077525af74035ba4945cd"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root and independent reviewers accepted the exact four-path observation-only change. Repeated ordered arrays, typed empty checks and strict refusal remain; expected public identity equals committed and actual installed security release. Full122-file hosted output and7workflows unchanged. Installed release is not relabeled."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only native observation/parser/test and outside availability target/test change. No application query, schema, role or database contract change; unchanged actual PG proofs retained."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Passing harness exited and closed owned loopback servers, browser and temporary profiles through checked cleanup paths. No new database, customer or provider fixture was created; tracked source remained unchanged."
+  }
+}

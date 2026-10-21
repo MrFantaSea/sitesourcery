@@ -876,5 +876,79 @@ class Contracts(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'owner-readable'):isolation.native_context(p)
 
 
+    def observation_output(self, overrides=None, omitted=()):
+        values={name:'' for name in isolation.PROPERTIES}
+        values.update(ExecStart='{ path=/fixture/node ; argv[]=/fixture/node /fixture/app ; pid=123 ; }',
+                      ExecStartPre='', After='z.service a.service', Requires='z.service a.service')
+        values.update(overrides or {})
+        return '\n'.join(k+'='+v for k,v in values.items() if k not in omitted)+'\n'
+
+    def test_observation_keeps_ordered_repeated_arrays(self):
+        first='{ path=/guard ; argv[]=/guard one ; pid=1 ; }'
+        second='{ path=/ready ; argv[]=/ready two ; pid=2 ; }'
+        raw=self.observation_output({'ExecStartPre':first,'EnvironmentFiles':'/first (ignore_errors=no)'})
+        raw+='ExecStartPre='+second+'\nEnvironmentFiles=/second (ignore_errors=no)\n'
+        with patch.object(isolation.subprocess,'check_output',return_value=raw) as call:
+            result=isolation.effective_units()
+        self.assertEqual(call.call_count,4)
+        for unit in result.values():
+            self.assertEqual(unit['ExecStartPre'],['/guard one ','/ready two '])
+            self.assertEqual(unit['EnvironmentFiles'],'/first (ignore_errors=no) /second (ignore_errors=no)')
+
+    def test_observation_missing_arrays_require_exact_typed_bus_reads(self):
+        raw=self.observation_output(omitted=('EnvironmentFiles','ExecStartPre'))
+        def response(argv,**kwargs):
+            if argv[0]=='/usr/bin/systemctl':return raw
+            self.assertEqual(argv[:5],['/usr/bin/busctl','--system','--json=short','get-property','org.freedesktop.systemd1'])
+            self.assertEqual(argv[5],'/org/freedesktop/systemd1/unit/sitesourcery_2dhq_2dgateway_2eservice')
+            self.assertEqual(argv[6],'org.freedesktop.systemd1.Service')
+            return json.dumps({'type':{'EnvironmentFiles':'a(sb)','ExecStartPre':'a(sasbttttuii)'}[argv[-1]],'data':[]})
+        with patch.object(isolation.subprocess,'check_output',side_effect=response) as call:
+            value=isolation.systemd_properties('sitesourcery-hq-gateway.service')
+        self.assertEqual(call.call_count,3);self.assertEqual(value['ExecStartPre'],'');self.assertEqual(value['EnvironmentFiles'],'')
+
+    def test_observation_rejects_unproved_or_nonempty_omission(self):
+        raw=self.observation_output(omitted=('EnvironmentFiles',))
+        for value in ({'type':'a(sb)','data':[['/secret',False]]},{'type':'as','data':[]},
+                      {'type':'a(sb)','data':None},{'type':'a(sb)','data':[],'extra':True},[], 'not-json'):
+            response=value if isinstance(value,str) else json.dumps(value)
+            with patch.object(isolation.subprocess,'check_output',side_effect=[raw,response]):
+                with self.assertRaises(ValueError):isolation.systemd_properties(isolation.UNITS[0])
+
+    def test_observation_rejects_duplicate_scalars_and_empty_mixed_arrays(self):
+        for tail in ('User=ss-api\n','ExecStartPre=\n','EnvironmentFiles=/other\n','Unknown=thing\n','malformed\n'):
+            with patch.object(isolation.subprocess,'check_output',return_value=self.observation_output()+tail) as call:
+                with self.assertRaises(ValueError):isolation.systemd_properties(isolation.UNITS[0])
+                self.assertEqual(call.call_count,1)
+
+    def test_observation_missing_scalar_or_execstart_never_defaults(self):
+        for name in ('User','NoNewPrivileges','ExecStart'):
+            with patch.object(isolation.subprocess,'check_output',return_value=self.observation_output(omitted=(name,))) as call:
+                with self.assertRaisesRegex(ValueError,'incomplete'):isolation.systemd_properties(isolation.UNITS[0])
+                self.assertEqual(call.call_count,1)
+
+    def test_observation_sorts_dependencies_without_dropping_names(self):
+        for raw in (self.observation_output({'After':'z a a','Requires':'z a'}),
+                    self.observation_output({'After':'a z a','Requires':'a z'})):
+            with patch.object(isolation.subprocess,'check_output',return_value=raw):
+                value=isolation.systemd_properties(isolation.UNITS[0])
+            self.assertEqual(value['After'],'a a z');self.assertEqual(value['Requires'],'a z')
+
+    def test_observation_repeated_readiness_commands_cannot_hide_earlier_operand(self):
+        old=isolation.READINESS_HELPER.replace('20261020','20261016')
+        raw='ExecStartPre={ path=/node ; argv[]=/node '+old+' ; }\n'
+        raw+='ExecStartPre={ path=/node ; argv[]=/node '+isolation.READINESS_HELPER+' ; }\n'
+        with patch.object(isolation.subprocess,'check_output',return_value=raw):
+            with self.assertRaisesRegex(ValueError,'readiness operand'):isolation.verify_readiness_operand()
+
+    def test_observation_dbus_failure_and_unregistered_commands_fail_closed(self):
+        with patch.object(isolation.subprocess,'check_output',side_effect=[self.observation_output(omitted=('EnvironmentFiles',)),OSError('bus unavailable')]):
+            with self.assertRaises(OSError):isolation.systemd_properties(isolation.UNITS[0])
+        for unit,names in (('unrelated.service',isolation.PROPERTIES),(isolation.UNITS[0],('User',)),
+                           ('sitesourcery-hq-gateway.service',('ExecStartPre',))):
+            with patch.object(isolation.subprocess,'check_output',side_effect=AssertionError('command must not run')):
+                with self.assertRaisesRegex(ValueError,'unregistered'):isolation.systemd_properties(unit,names)
+
+
 if __name__ == '__main__':
     unittest.main()

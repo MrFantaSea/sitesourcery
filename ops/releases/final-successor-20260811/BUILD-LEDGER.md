@@ -865,3 +865,11 @@ Native isolation and final installed security verification remain pending.
 
 - [Canonical provenance](../ci-provenance/23de0649b65038757a9c52c3fc2cc8f548b4e0d7/provenance.md)
 - [Machine-readable proof](../ci-provenance/23de0649b65038757a9c52c3fc2cc8f548b4e0d7/proof.json)
+
+
+## Security observation fixes — 2026-10-21
+
+Implementation `4409aaa7fd1b14e866ef78243a2d5124d84afc15`, tree `9bd7423d3e8e0c7f3a7464ef6bada7f2852ca93a`, protected base `3fcbd1cf33d7275f890a4a70602a77b0f21ba64c`. Preserve ordered systemd observation and typed empty-array verification; align the outside observer with installed951581c9/schema110/security-hardening epoch. Native44 and public observer6 focused cases passed; full npm2709passed/38optionalPGskips/0failed and24routes×6widths passed. Complete122-file hosted output and all7workflows remain identical. No runtime redeployment, provider action or new database proof.
+
+- [Canonical provenance](../ci-provenance/4409aaa7fd1b14e866ef78243a2d5124d84afc15/provenance.md)
+- [Machine-readable proof](../ci-provenance/4409aaa7fd1b14e866ef78243a2d5124d84afc15/proof.json)
