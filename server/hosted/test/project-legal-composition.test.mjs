@@ -114,7 +114,7 @@ test("ready project creation records only the User-Agent digest and ignores forw
 
 test("project legal readiness differentiates catalog and data proof with exact trigger relations", async () => {
   const calls = [];
-  const pool = {
+  const client = {
     async query(text, values = []) {
       calls.push({ text, values });
       if (text.includes("current_database() as database_name")) {
@@ -188,8 +188,16 @@ test("project legal readiness differentiates catalog and data proof with exact t
       }
       return { rows: [{}], rowCount: 1 };
     },
+    release() {
+      calls.push({ text: "release", values: [] });
+    }
+  };
+  const pool = {
+    async query() {
+      throw new Error("Bare login must not read application tables");
+    },
     async connect() {
-      throw new Error("readiness must not open a transaction");
+      return client;
     }
   };
   const authority = createCanonicalPostgresAuthority({ pool });

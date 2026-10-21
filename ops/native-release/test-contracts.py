@@ -90,6 +90,26 @@ class Contracts(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.directory = Path(self.temporary.name).resolve()
 
+    def test_worker_health_binds_dedicated_custody_without_weakening_legacy_acceptance(self):
+        p = profile()
+        legacy = {'uid': 1000, 'gid': 1000, 'mode': 0o600}
+        self.assertTrue(contract.worker_health_metadata_ok(p, legacy))
+        p['runtime']['workerHealth'] = {'path': '/run/sitesourcery/health/export-worker-health.json',
+                                      'uid': 321, 'gid': 654, 'mode': 0o640}
+        contract.validate_profile(p)
+        actual = {'uid': 321, 'gid': 654, 'mode': 0o640}
+        self.assertTrue(contract.worker_health_metadata_ok(p, actual))
+        self.assertFalse(contract.worker_health_metadata_ok(p, legacy))
+        for key, wrong in [('uid', 1000), ('gid', 1000), ('mode', 0o660)]:
+            bad = dict(actual); bad[key] = wrong
+            self.assertFalse(contract.worker_health_metadata_ok(p, bad))
+            bad_profile = copy.deepcopy(p); bad_profile['runtime']['workerHealth'][key] = wrong
+            with self.assertRaises(ValueError): contract.validate_profile(bad_profile)
+        for wrong in ['/etc/passwd', '/run/sitesourcery/export-worker-health.json',
+                      '/run/sitesourcery/../health/export-worker-health.json']:
+            bad = copy.deepcopy(p); bad['runtime']['workerHealth']['path'] = wrong
+            with self.assertRaises(ValueError): contract.validate_profile(bad)
+
     def test_new_schema_and_eight_workers_validate_every_python_adapter(self):
         for mode in ['presentation-only', 'schema-changing']:
             p = profile(mode); ref = write_json(self.directory / (mode + '.json'), p)

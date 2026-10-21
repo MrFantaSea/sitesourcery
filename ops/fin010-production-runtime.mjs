@@ -11,6 +11,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { canonicalJson } from "./immutable-evidence.mjs";
+import { PUBLIC_HTML_CONTENT_SECURITY_POLICY } from "./public-html-security-policy.mjs";
 
 export const FIN010_RUNTIME_SCHEMA =
   "sitesourcery.fin010-production-runtime/v1";
@@ -729,6 +730,7 @@ ${legacyRedirects}
       X-Frame-Options "SAMEORIGIN"
       Permissions-Policy "camera=(), geolocation=(), microphone=()"
       Strict-Transport-Security "max-age=31536000"
+      Content-Security-Policy "${PUBLIC_HTML_CONTENT_SECURITY_POLICY}"
     }
     reverse_proxy 127.0.0.1:8899 {
       health_uri /

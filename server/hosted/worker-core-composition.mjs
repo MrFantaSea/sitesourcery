@@ -6,6 +6,7 @@ import {
 } from "./cancellation-worker.mjs";
 import { invariant } from "./errors.mjs";
 import { createPrivateExportObjectStore } from "./export-object-store.mjs";
+import { exportStoreAccessFromEnvironment } from "./runtime-filesystem-policy.mjs";
 import {
   createExportWorker,
   exportWorkerOptionsFromEnvironment
@@ -234,6 +235,7 @@ export function createCoreWorkerFactories({
             "/var/lib/sitesourcery"
         );
         const exportStore = await exportStoreFactory({
+          ...exportStoreAccessFromEnvironment(environment),
           root: path.resolve(
             environment.SITESOURCERY_EXPORT_ROOT ??
               path.join(dataRoot, "private-exports")

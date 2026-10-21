@@ -100,7 +100,7 @@ def validate_authority(directory,digests,new):
  for name,key in [('final-release-epoch-v2.json','epoch'),('origin-seal.json','origin-seal'),('origin-installed-readback.json','installed-readback')]:args+=['--'+key,str(directory/name),'--'+key+'-sha256',digests[name]]
  v=json.loads(run(['/usr/sbin/runuser','-u','mrfantasea','--']+args));require(v.get('valid') is True and v['candidateCommitSha']==new.name and v['migrationCount']==COUNT,'Canonical authority verification failed');return v
 
-def validate_staged_authority(directory,digests,new):
+def validate_staged_authority(directory,digests,new,prior_worker,worker_delta):
  for parent in (HERE,directory):
   st=parent.lstat();require(stat.S_ISDIR(st.st_mode) and st.st_uid==0 and st.st_gid==1000 and stat.S_IMODE(st.st_mode)==0o750,'Staged authority directory custody changed')
  for name in AUTH:
@@ -111,13 +111,16 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
-const [release,directory,pinnedDigests]=process.argv.slice(1);
+const [release,directory,pinnedDigests,priorWorker,workerDelta]=process.argv.slice(1);
 const digests=JSON.parse(pinnedDigests);
 const read=name=>{const bytes=fs.readFileSync(path.join(directory,name));assert.equal(createHash('sha256').update(bytes).digest('hex'),digests[name]);return JSON.parse(bytes);};
 const {validateInstalledFinalReleaseEpochV2Chain}=await import(pathToFileURL(path.join(release,'ops/final-release-epoch-v2.mjs')).href);
-const epoch=validateInstalledFinalReleaseEpochV2Chain({epoch:read('final-release-epoch-v2.json'),originSeal:read('origin-seal.json'),installedReadback:read('origin-installed-readback.json')});
+const seal=read('origin-seal.json');
+const epoch=validateInstalledFinalReleaseEpochV2Chain({epoch:read('final-release-epoch-v2.json'),originSeal:seal,installedReadback:read('origin-installed-readback.json')});
+const {assertSameSchemaWorkerChange}=await import(pathToFileURL(path.join(release,'ops/native-release-authority.mjs')).href);
+assertSameSchemaWorkerChange(JSON.parse(priorWorker),seal.worker,JSON.parse(workerDelta) ?? undefined);
 console.log(JSON.stringify({valid:true,candidateCommitSha:epoch.identity.sourceCommitSha,migrationCount:epoch.identity.migrationCount}));"""
- v=json.loads(run(['/usr/sbin/runuser','-u','mrfantasea','--',NODE,'--input-type=module','-e',script,str(new),str(directory),json.dumps(digests)]))
+ v=json.loads(run(['/usr/sbin/runuser','-u','mrfantasea','--',NODE,'--input-type=module','-e',script,str(new),str(directory),json.dumps(digests),json.dumps(prior_worker),json.dumps(worker_delta)]))
  require(v.get('valid') is True and v['candidateCommitSha']==new.name and v['migrationCount']==COUNT,'Canonical staged authority verification failed');return v
 
 def schema_observation(a,rollback_originals=None):
@@ -286,10 +289,10 @@ def main():
  for name in AUTH:
   b=raw(HERE/'authority'/name);require(sha(b)==a['authorityFiles'][name]==authority['files'][name]['sha256'],'Authority payload mismatch');digests[name]=sha(b);payloads[str(CONFIG/name)]=b
  require(sha(raw(a['nativeObservationBinding']['path']))==authority['files']['native-observation-binding.json']['sha256'],'Authority sidecar bytes mismatch')
- validate_staged_authority(HERE/'authority',digests,new)
  old_seal=json.loads(raw(CONFIG/'origin-seal.json'));new_seal=json.loads(raw(HERE/'authority'/'origin-seal.json'))
+ validate_staged_authority(HERE/'authority',digests,new,old_seal['worker'],authority.get('workerSourceDelta'))
  require(old_seal['migration']==new_seal['migration'],'Candidate changes migration inventory')
- for key in ('units','environmentSchema','worker','legal','ingress'):require(old_seal[key]['sha256']==new_seal[key]['sha256'],'Unexpected runtime contract change: '+key)
+ for key in ('units','environmentSchema','legal','ingress'):require(old_seal[key]['sha256']==new_seal[key]['sha256'],'Unexpected runtime contract change: '+key)
  for name in ['hosted.env','tenant.env']:
   b=raw(CONFIG/name)
   for auth,key in AUTH.items():b,count=re.subn(rb'(?m)^'+key.encode()+rb'="[a-f0-9]{64}"$',key.encode()+b'="'+digests[auth].encode()+b'"',b);require(count==1,'Missing exact anchor field')

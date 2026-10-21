@@ -296,7 +296,7 @@ export function createPostgresIdentityBridge({
     "Identity rate limits are invalid.",
     { status: 500 }
   );
-  const configuredRegistrationRecoveryRateLimit = {
+  const configuredAggregateRateLimit = {
     perIp: {
       ...DEFAULT_INGRESS_POLICY.identity.perIp,
       ...registrationRecoveryRateLimit?.perIp
@@ -306,7 +306,7 @@ export function createPostgresIdentityBridge({
       ...registrationRecoveryRateLimit?.global
     }
   };
-  for (const selected of Object.values(configuredRegistrationRecoveryRateLimit)) {
+  for (const selected of Object.values(configuredAggregateRateLimit)) {
     invariant(
       Number.isInteger(selected.attempts) &&
         selected.attempts >= 1 && selected.attempts <= 10_000 &&
@@ -315,7 +315,7 @@ export function createPostgresIdentityBridge({
         Number.isInteger(selected.blockMs) &&
         selected.blockMs >= 1_000 && selected.blockMs <= 24 * 60 * 60 * 1000,
       "IDENTITY_CONFIGURATION_ERROR",
-      "Registration and recovery rate limits are invalid.",
+      "Identity aggregate rate limits are invalid.",
       { status: 500 }
     );
   }
@@ -339,6 +339,15 @@ export function createPostgresIdentityBridge({
     return Buffer.isBuffer(prior) ? prior : null;
   }
 
+  // A non-account verifier keeps admitted missing/inactive-account attempts on
+  // the same KDF path. It is never accepted as an account credential. Construct
+  // it without startup hashing; every actual attempt remains behind admission.
+  const dummyCredential = [
+    "scrypt", SCRYPT_N, SCRYPT_R, SCRYPT_P, pepperVersion,
+    Buffer.alloc(16).toString("base64url"),
+    Buffer.alloc(SCRYPT_BYTES).toString("base64url")
+  ].join("$");
+
   function subjectDigest(scope, subject) {
     return createHmac("sha256", pepper)
       .update(`${scope}\u0000${subject}`, "utf8")
@@ -349,7 +358,7 @@ export function createPostgresIdentityBridge({
     if (scope === "recovery") {
       return new HostedError(
         "RECOVERY_RATE_LIMITED",
-        "Wait before asking for another recovery email.",
+        "Wait before trying account recovery again.",
         { status: 429 }
       );
     }
@@ -412,7 +421,9 @@ export function createPostgresIdentityBridge({
         );
       }
     });
-    return { now, subjectDigest: selectedBuckets[0].subjectDigest };
+    // Lock order is independent of which subject may be cleared on success.
+    // A successful sign-in must never clear shared client/global budgets.
+    return { now, subjectDigest: subjectDigest(scope, buckets[0].subject) };
   }
 
   function consumeRateAttempt(scope, subject) {
@@ -422,12 +433,12 @@ export function createPostgresIdentityBridge({
     }]);
   }
 
-  function consumeRegistrationRecoveryRate(scope, email, requestContext) {
+  function consumeIdentityRate(scope, subject, requestContext) {
     const clientAddress = String(requestContext?.clientAddress ?? "unavailable");
     return consumeRateAttempts(scope, [
-      { subject: email, limit: configuredRateLimit },
-      { subject: `client:${clientAddress}`, limit: configuredRegistrationRecoveryRateLimit.perIp },
-      { subject: "global", limit: configuredRegistrationRecoveryRateLimit.global }
+      { subject, limit: configuredRateLimit },
+      { subject: `client:${clientAddress}`, limit: configuredAggregateRateLimit.perIp },
+      { subject: "global", limit: configuredAggregateRateLimit.global }
     ]);
   }
 
@@ -595,7 +606,7 @@ export function createPostgresIdentityBridge({
           replayed: true
         };
       }
-      const gate = await consumeRegistrationRecoveryRate(
+      const gate = await consumeIdentityRate(
         "registration",
         email,
         requestContext
@@ -1182,12 +1193,13 @@ export function createPostgresIdentityBridge({
       return registrationMailPort.readiness();
     },
 
-    async signIn({ email: rawEmail, password: rawPassword }) {
+    async signIn({ email: rawEmail, password: rawPassword }, requestContext) {
       const email = normalizeEmail(rawEmail);
       password(rawPassword);
-      const gate = await consumeRateAttempt(
+      const gate = await consumeIdentityRate(
         "sign_in",
-        email
+        email,
+        requestContext
       );
       const found = await query(
         `select
@@ -1208,15 +1220,20 @@ export function createPostgresIdentityBridge({
         [email]
       );
       const row = found.rows[0] ?? null;
+      const credential = decodeCredential(row?.password_phc);
+      const credentialPepper = credential && await pepperFor(credential.pepperVersion);
+      const verified = await verifyPasswordWithPepper(
+        rawPassword,
+        credential && Buffer.isBuffer(credentialPepper) && credentialPepper.byteLength >= 32
+          ? row.password_phc
+          : dummyCredential,
+        pepperFor
+      );
       const valid =
         row &&
         !row.disabled_at &&
         row.state === "active" &&
-        (await verifyPasswordWithPepper(
-          rawPassword,
-          row.password_phc,
-          pepperFor
-        ));
+        verified;
       if (!valid) {
         throw genericAuthFailure();
       }
@@ -1386,7 +1403,7 @@ export function createPostgresIdentityBridge({
           }
         };
       }
-      const gate = await consumeRegistrationRecoveryRate(
+      const gate = await consumeIdentityRate(
         "recovery",
         email,
         requestContext
@@ -1454,8 +1471,31 @@ export function createPostgresIdentityBridge({
       };
     },
 
-    async completeRecovery(rawToken, rawPassword) {
+    async completeRecovery(rawToken, rawPassword, requestContext) {
       const tokenDigest = sha256(text(rawToken, "Recovery token", 512, 32));
+      password(rawPassword);
+      // Issuance and completion share existing client/global recovery budgets.
+      // The token-specific HMAC bucket stores neither token nor client address.
+      await consumeIdentityRate("recovery", `token:${tokenDigest}`, requestContext);
+      const eligible = await query(
+        `select token.id
+           from ss.hosted_recovery_tokens token
+           join ss.hosted_recovery_delivery_requests delivery
+             on delivery.recovery_token_id = token.id
+          where token.token_digest = $1
+            and token.used_at is null
+            and token.expires_at > $2
+            and delivery.state in ('provider_accepted', 'delivered')`,
+        [tokenDigest, iso(clock())]
+      );
+      invariant(
+        eligible.rowCount === 1,
+        "RECOVERY_TOKEN_INVALID",
+        "That recovery link is invalid or expired.",
+        { status: 409 }
+      );
+      // This precheck grants no authority: repeat eligibility under locks after
+      // the KDF, then recheck time after acquiring the credential fence below.
       const encoded = await hashPasswordWithPepper(rawPassword, {
         pepper,
         pepperVersion,

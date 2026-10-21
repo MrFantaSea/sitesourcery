@@ -8,10 +8,33 @@ import {
   validateNativeReleaseInput,
   constructNativeReleaseAuthority,
   emitNativeReleaseAuthority,
+  assertSameSchemaWorkerChange,
 } from '../native-release-authority.mjs';
 
 const NOW = Date.parse('2026-10-20T18:10:00Z');
 const sha = c => c.repeat(64);
+function workerFixture() {
+  const files = [
+    { path: 'ops/deploy/hq/workers.env.example', sha256: sha('a'), byteCount: 10 },
+    { path: 'server/hosted/bin/server.mjs', sha256: sha('b'), byteCount: 20 },
+    { path: 'server/hosted/bin/worker.mjs', sha256: sha('c'), byteCount: 30 },
+  ];
+  const prior = { domain: 'origin-worker-runtime', files, fileCount: 3, byteCount: 60,
+    sha256: sha('d'), contractSha256: sha('e'), contract: {
+      activation: 'held', apiEntrypoint: { path: files[1].path, sha256: files[1].sha256 },
+      workerEntrypoint: { path: files[2].path, sha256: files[2].sha256 },
+      allowsProviderEffects: false, selectedPurposes: ['export'],
+    } };
+  const candidate = structuredClone(prior);
+  candidate.files[1].sha256 = sha('f'); candidate.files[1].byteCount = 25;
+  candidate.byteCount = 65; candidate.sha256 = sha('1'); candidate.contractSha256 = sha('2');
+  candidate.contract.apiEntrypoint.sha256 = sha('f');
+  const delta = { beforeSha256: prior.sha256, afterSha256: candidate.sha256, files: [{
+    path: files[1].path, before: { sha256: sha('b'), byteCount: 20 },
+    after: { sha256: sha('f'), byteCount: 25 },
+  }] };
+  return { prior, candidate, delta };
+}
 function input(mode = 'presentation-only') {
   const system = ['tenant', 'workers', 'cloudflared', 'backup.timer', 'monitor.timer',
     'monitor', 'api', 'backup', 'backup-recovery'].map(n =>
@@ -66,6 +89,37 @@ test('both explicit modes accept typed inputs without hardcoded candidate or wor
     assert.equal(validateNativeReleaseInput(a, NOW), a);
     a.baseline.workerPurposes.push('project-lifecycle');
     assert.equal(validateNativeReleaseInput(a, NOW), a);
+  }
+});
+test('same-schema worker changes require exact reviewed source bindings and preserve contract semantics', () => {
+  const { prior, candidate, delta } = workerFixture();
+  assertSameSchemaWorkerChange(prior, structuredClone(prior));
+  assertSameSchemaWorkerChange(prior, candidate, delta);
+  assert.throws(() => assertSameSchemaWorkerChange(prior, candidate), /without pinned/);
+  const a = input(); a.workerSourceDelta = delta;
+  assert.equal(validateNativeReleaseInput(a, NOW), a);
+  const schema = input('schema-changing'); schema.workerSourceDelta = delta;
+  assert.throws(() => validateNativeReleaseInput(schema, NOW), /same-schema/);
+});
+test('worker delta refuses hidden file, permission contract, missing, stale and invented changes', () => {
+  for (const change of [
+    f => { f.candidate.files[0].sha256 = sha('3'); },
+    f => { f.candidate.files.push({ path: 'new.mjs', sha256: sha('4'), byteCount: 4 }); },
+    f => { f.candidate.files[2].sha256 = sha('4'); },
+    f => { f.candidate.contract.allowsProviderEffects = true; },
+    f => { f.candidate.contract.selectedPurposes.push('notification-mail'); },
+    f => { f.candidate.byteCount++; },
+    f => { f.delta.beforeSha256 = sha('5'); },
+    f => { f.delta.afterSha256 = sha('5'); },
+    f => { f.delta.files[0].after.byteCount++; },
+    f => { f.delta.files[0].before.sha256 = sha('5'); },
+    f => { f.delta.files[0].path = 'ops/deploy/hq/workers.env.example'; },
+    f => { f.delta.files.push(structuredClone(f.delta.files[0])); },
+    f => { f.delta.files = []; },
+    f => { f.delta.unreviewed = true; },
+  ]) {
+    const fixture = workerFixture(); change(fixture);
+    assert.throws(() => assertSameSchemaWorkerChange(fixture.prior, fixture.candidate, fixture.delta));
   }
 });
 test('unknown fields and typoed evidence roles fail closed', () => {

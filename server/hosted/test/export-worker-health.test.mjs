@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, chown, lstat, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,6 +7,28 @@ import { createExportWorkerHealthReader, createExportWorkerHealthRecorder } from
 
 const event = { event: "sitesourcery.worker.export", workerId: "hosted-export-fixture-1234", state: "running" };
 const cycle = { ...event, cycle: 1, result: { processed: 0, ready: 0, failed: 0, aborted: false } };
+
+test("shared health binds the actual writer and read-only group across atomic replacement", async () => fixture(async ({ options, root, filePath }) => {
+  await chown(root, process.getuid(), process.getgid());
+  const ownerUid = process.getuid(), sharedGroupId = (await lstat(root)).gid;
+  await chmod(root, 0o2750);
+  const shared = { ...options, ownerUid, sharedGroupId };
+  const writer = createExportWorkerHealthRecorder(shared);
+  for (const number of [1, 2]) {
+    writer.record({ ...cycle, cycle: number }); await writer.flush();
+    const metadata = await lstat(filePath);
+    assert.equal(metadata.mode & 0o777, 0o640);
+    assert.equal(metadata.gid, sharedGroupId);
+    assert.equal((await createExportWorkerHealthReader(shared).readiness()).ready, true);
+  }
+  assert.equal((await createExportWorkerHealthReader({ ...shared, ownerUid: ownerUid + 1 }).readiness()).ready, false);
+  assert.equal((await createExportWorkerHealthReader({ ...shared, sharedGroupId: sharedGroupId + 1 }).readiness()).ready, false);
+  await chmod(filePath, 0o660);
+  assert.equal((await createExportWorkerHealthReader(shared).readiness()).ready, false);
+  await chmod(root, 0o2770);
+  writer.record(cycle); await assert.rejects(writer.flush(), /could not be recorded/u);
+  assert.throws(() => createExportWorkerHealthRecorder({ ...shared, ownerUid: ownerUid + 1 }), TypeError);
+}));
 
 async function fixture(work) {
   const root = await mkdtemp(path.join(os.tmpdir(), "ss-export-health-"));

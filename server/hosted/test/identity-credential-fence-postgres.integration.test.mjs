@@ -21,7 +21,9 @@ const PEPPER = randomBytes(32);
 // and canonical service-role transactions use the same controlled interleaving.
 function controlledPool(pool) {
   let nextGate = null;
+  const calls = [];
   async function query(execute, sql, values) {
+    calls.push(sql);
     const gate = nextGate?.matches(sql) ? nextGate : null;
     if (gate) nextGate = null;
     if (gate?.before) await gate.pause();
@@ -30,6 +32,7 @@ function controlledPool(pool) {
     return result;
   }
   return {
+    calls,
     query: (sql, values) => query(pool.query.bind(pool), sql, values),
     async connect() {
       const client = await pool.connect();
@@ -74,7 +77,7 @@ test("PostgreSQL password changes fence concurrent credential use", {
       pepperVersion: "fixture-v1"
     });
 
-    async function fixture(canonical) {
+    async function fixture(canonical, { perIp = 1000 } = {}) {
       const userId = randomUUID();
       const email = `credential-fence-${userId}@example.test`;
       await pool.query("insert into auth.users (id, email) values ($1, $2)", [userId, email]);
@@ -88,14 +91,26 @@ test("PostgreSQL password changes fence concurrent credential use", {
       );
       const controlled = controlledPool(pool);
       let clockOffset = 0;
+      let passwordSalts = 0;
       const identity = createPostgresIdentityBridge({
         pool: controlled,
         authority: canonical ? createCanonicalPostgresAuthority({ pool: controlled }) : null,
         pepper: PEPPER,
         pepperVersion: "fixture-v1",
-        clock: () => new Date(Date.now() + clockOffset)
+        clock: () => new Date(Date.now() + clockOffset),
+        randomBytes(length) {
+          if (length === 16) passwordSalts += 1;
+          return randomBytes(length);
+        },
+        // These many independent race fixtures share a DB and default client
+        // context; keep aggregate admission out of their deliberate lock races.
+        // The bounded-admission subtest below supplies its own small limit.
+        registrationRecoveryRateLimit: {
+          perIp: { attempts: perIp, windowMs: 60_000, blockMs: 60_000 },
+          global: { attempts: 1000, windowMs: 60_000, blockMs: 60_000 }
+        }
       });
-      return { userId, email, identity, controlled, advance: (ms) => { clockOffset += ms; } };
+      return { userId, email, identity, controlled, passwordSalts: () => passwordSalts, advance: (ms) => { clockOffset += ms; } };
     }
 
     async function recovery(f) {
@@ -128,12 +143,58 @@ test("PostgreSQL password changes fence concurrent credential use", {
       );
       return {
         complete: () => f.identity.completeRecovery(delivery.token, NEW_PASSWORD),
-        expiresAt: delivery.expiresAt
+        expiresAt: delivery.expiresAt,
+        tokenId: delivery.tokenId
       };
     }
 
     for (const canonical of [false, true]) {
       const mode = canonical ? "canonical SERIALIZABLE" : "pool READ COMMITTED";
+      await t.test(`${mode}: invalid recovery skips hashing and a stale positive precheck cannot rotate credentials`, async () => {
+        const f = await fixture(canonical);
+        await assert.rejects(f.identity.completeRecovery("invalid-".repeat(8), NEW_PASSWORD), (error) => error.code === "RECOVERY_TOKEN_INVALID");
+        assert.equal(f.passwordSalts(), 0);
+        const prepared = await recovery(f);
+        const gate = f.controlled.pauseNext((sql) => /select token\.id\s+from ss\.hosted_recovery_tokens/iu.test(sql));
+        const rejected = assert.rejects(prepared.complete(), (error) => error.code === "RECOVERY_TOKEN_INVALID");
+        try {
+          await gate.reached;
+          await pool.query("update ss.hosted_recovery_tokens set used_at = clock_timestamp() where id = $1", [prepared.tokenId]);
+        } finally { gate.release(); }
+        await rejected;
+        assert.equal(f.passwordSalts(), 1);
+        assert.equal((await pool.query("select revision from ss.hosted_password_credentials where user_id = $1", [f.userId])).rows[0].revision, "1");
+      });
+
+      await t.test(`${mode}: simultaneous recovery completions retain one-use authority`, async () => {
+        const f = await fixture(canonical);
+        const prepared = await recovery(f);
+        const gate = f.controlled.pauseNext((sql) => /select token\.id\s+from ss\.hosted_recovery_tokens/iu.test(sql));
+        const first = prepared.complete().then(value => ({ value }), error => ({ error }));
+        let second;
+        try {
+          await gate.reached;
+          second = await prepared.complete();
+        } finally { gate.release(); }
+        assert.equal(second.completed, true);
+        const result = await first;
+        assert.ok(["RECOVERY_TOKEN_INVALID", "40001"].includes(result.error?.code));
+        assert.equal((await pool.query("select revision from ss.hosted_password_credentials where user_id = $1", [f.userId])).rows[0].revision, "2");
+        const before = f.passwordSalts();
+        await assert.rejects(prepared.complete(), (error) => error.code === "RECOVERY_TOKEN_INVALID");
+        assert.equal(f.passwordSalts(), before, "used token must fail before KDF");
+      });
+
+      await t.test(`${mode}: successful sign-ins cannot replenish a shared client budget`, async () => {
+        const f = await fixture(canonical, { perIp: 2 });
+        const context = { clientAddress: `disposable-client-${randomUUID()}` };
+        for (let index = 0; index < 2; index++) await f.identity.signIn({ email: f.email, password: OLD_PASSWORD }, context);
+        const before = f.controlled.calls.length;
+        await assert.rejects(f.identity.signIn({ email: f.email, password: OLD_PASSWORD }, context), (error) => error.code === "AUTHENTICATION_FAILED" && error.status === 429);
+        assert.equal(f.controlled.calls.slice(before).some(sql => /from auth\.users users/iu.test(sql)), false);
+        assert.equal((await pool.query("select count(*)::integer as count from ss.hosted_sessions where user_id = $1", [f.userId])).rows[0].count, 2);
+      });
+
       for (const replacement of ["rotation", "recovery"]) {
         for (const operation of ["sign-in", "rotation"]) {
           await t.test(`${mode}: stale ${operation} loses to completed ${replacement}`, async () => {

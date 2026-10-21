@@ -2543,8 +2543,8 @@ export function createCanonicalPostgresAuthority({
   });
 
   async function readiness() {
-    try {
-      const result = await pool.query(READINESS_QUERY);
+    const read = async (client) => {
+      const result = await client.query(READINESS_QUERY);
       const row = result.rows[0];
       if (!row?.shadow_schema_absent) {
         return {
@@ -2555,7 +2555,7 @@ export function createCanonicalPostgresAuthority({
         };
       }
       const legalCatalog = (
-        await pool.query(PROJECT_LEGAL_CATALOG_QUERY)
+        await client.query(PROJECT_LEGAL_CATALOG_QUERY)
       ).rows[0] ?? {};
       let legalData = {};
       const legalCatalogReady = [
@@ -2571,7 +2571,7 @@ export function createCanonicalPostgresAuthority({
         "v48_catalog_privileges"
       ].every((key) => legalCatalog[key] === true);
       if (legalCatalogReady) {
-        legalData = (await pool.query(PROJECT_LEGAL_DATA_QUERY)).rows[0] ?? {};
+        legalData = (await client.query(PROJECT_LEGAL_DATA_QUERY)).rows[0] ?? {};
       }
       Object.assign(row, {
         legal_privacy_v3_contract_ready: legalCatalogReady &&
@@ -2585,7 +2585,7 @@ export function createCanonicalPostgresAuthority({
           legalData.authority_ready === true
       });
       if (row.custom_services_schema_ready) {
-        const customServices = await pool.query(
+        const customServices = await client.query(
           CUSTOM_SERVICES_READINESS_QUERY
         );
         Object.assign(row, customServices.rows[0] ?? {
@@ -2601,7 +2601,7 @@ export function createCanonicalPostgresAuthority({
         });
       }
       if (row.custom_service_quotes_schema_ready) {
-        const customServiceQuotes = await pool.query(
+        const customServiceQuotes = await client.query(
           CUSTOM_SERVICE_QUOTES_READINESS_QUERY
         );
         Object.assign(row, customServiceQuotes.rows[0] ?? {
@@ -2685,6 +2685,12 @@ export function createCanonicalPostgresAuthority({
         missing: [],
         projectCreationLegal
       };
+    };
+    try {
+      // NOINHERIT runtime logins have no direct application-table privileges.
+      // Read catalog/data readiness using the same bounded role transaction as
+      // application work, including visibility-sensitive information_schema.
+      return await transaction({ role: "service", readOnly: true }, read);
     } catch {
       return {
         ready: false,
@@ -2749,7 +2755,10 @@ export function createCanonicalPostgresAuthority({
       expected.schema,
       expected.authorityDigest
     );
-    const result = await pool.query(PROJECT_LEGAL_CONSTANTS_QUERY, values);
+    const result = await transaction(
+      { role: "service", readOnly: true },
+      (client) => client.query(PROJECT_LEGAL_CONSTANTS_QUERY, values)
+    );
     const row = result.rows[0] ?? {};
     return row.contract_marker_ready === true &&
       row.exact_documents_ready === true &&

@@ -16,6 +16,7 @@ import {
 } from "./domain-lifecycle-worker-postgres.mjs";
 import { invariant } from "./errors.mjs";
 import { createPrivateExportObjectStore } from "./export-object-store.mjs";
+import { exportStoreAccessFromEnvironment } from "./runtime-filesystem-policy.mjs";
 import {
   createLeasedLifecycleWorker,
   lifecycleWorkerOptionsFromEnvironment
@@ -123,6 +124,7 @@ export function createLifecycleWorkerFactories({
                 environment.SITESOURCERY_DATA_ROOT ?? "/var/lib/sitesourcery"
               );
               const objectStore = await exportStoreFactory({
+                ...exportStoreAccessFromEnvironment(environment),
                 root: path.resolve(
                   environment.SITESOURCERY_EXPORT_ROOT ??
                     path.join(dataRoot, "private-exports")

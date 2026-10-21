@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { lstat, chmod, unlink } from "node:fs/promises";
+import { optionalRuntimeId, runtimeIdFromEnvironment } from "./runtime-filesystem-policy.mjs";
 import { createServer, request as httpRequest } from "node:http";
 import { createConnection } from "node:net";
 import path from "node:path";
@@ -99,8 +100,10 @@ export function createPublicationCommandConfiguration({
   token,
   maximumBodyBytes = MAXIMUM_BODY_BYTES,
   deadlineMs = MAXIMUM_DEADLINE_MS,
-  allowedSocketRoot = "/run/sitesourcery"
+  allowedSocketRoot = "/run/sitesourcery",
+  sharedGroupId = null
 } = {}) {
+  optionalRuntimeId(sharedGroupId, "Publication command group");
   const normalizedRoot = path.resolve(allowedSocketRoot);
   const normalizedSocket = path.resolve(socketPath);
   invariant(
@@ -132,7 +135,8 @@ export function createPublicationCommandConfiguration({
     token: canonicalToken(token),
     maximumBodyBytes,
     deadlineMs,
-    allowedSocketRoot: normalizedRoot
+    allowedSocketRoot: normalizedRoot,
+    ...(sharedGroupId === null ? {} : { sharedGroupId })
   });
 }
 
@@ -144,6 +148,7 @@ export function publicationCommandConfigurationFromEnvironment(
       environment.SITESOURCERY_PUBLICATION_COMMAND_SOCKET ??
       DEFAULT_PUBLICATION_COMMAND_SOCKET,
     token: environment.SITESOURCERY_PUBLICATION_COMMAND_TOKEN,
+    sharedGroupId: runtimeIdFromEnvironment(environment, "SITESOURCERY_PUBLICATION_COMMAND_GROUP_ID"),
     maximumBodyBytes: Number(
       environment.SITESOURCERY_PUBLICATION_COMMAND_MAX_BODY_BYTES ??
         MAXIMUM_BODY_BYTES
@@ -728,7 +733,10 @@ export function createPublicationCommandServer({
     try {
       const parent = await lstat(path.dirname(configuration.socketPath));
       invariant(
-        parent.isDirectory() && !parent.isSymbolicLink(),
+        parent.isDirectory() && !parent.isSymbolicLink() &&
+          (configuration.sharedGroupId == null ||
+            (parent.uid === process.getuid?.() && parent.gid === configuration.sharedGroupId &&
+              (parent.mode & 0o2777) === 0o2750)),
         "PUBLICATION_COMMAND_SOCKET_UNSAFE",
         "Publication command socket directory is unsafe.",
         { status: 500 }
@@ -786,11 +794,13 @@ export function createPublicationCommandServer({
           resolve();
         });
       });
-      await chmod(configuration.socketPath, 0o600);
+      const socketMode = configuration.sharedGroupId == null ? 0o600 : 0o660;
+      await chmod(configuration.socketPath, socketMode);
       const created = await lstat(configuration.socketPath);
       invariant(
         created.isSocket() && !created.isSymbolicLink() &&
-          (created.mode & 0o777) === 0o600 &&
+          (created.mode & 0o777) === socketMode &&
+          (configuration.sharedGroupId == null || created.gid === configuration.sharedGroupId) &&
           (ownerUid === null || created.uid === ownerUid),
         "PUBLICATION_COMMAND_SOCKET_UNSAFE",
         "Publication command socket authority is invalid.",
