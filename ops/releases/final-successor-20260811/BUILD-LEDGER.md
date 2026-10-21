@@ -841,3 +841,15 @@ Implementation `c78bb4f23dae60d55d0b4d644e8cb45d8c145c70`, tree `a545ca0fd6a7029
 
 - [Provenance](../ci-provenance/c78bb4f23dae60d55d0b4d644e8cb45d8c145c70/provenance.md)
 - [Machine proof](../ci-provenance/c78bb4f23dae60d55d0b4d644e8cb45d8c145c70/proof.json)
+
+
+### Authentication and service isolation preparation — October 21, 2026
+
+Qualified implementation `d8707f82c80be737ec9354ea2134c0102073956f` / tree `bd62a04ad35332b910898654f662e7a79ce5ad25` from `9ea58903563368d4e78c99811e19ce7e4ef4ffcc`.
+Full npm 2704 passed / 38 optional PG skips / zero
+failed; separate actual PG29 and Linux distinct-identity15. Exact tree-equivalence
+and failed-attempt evidence preserved. Production isolation and final security
+verification remain open.
+
+- [Canonical provenance](../ci-provenance/d8707f82c80be737ec9354ea2134c0102073956f/provenance.md)
+- [Machine-readable proof](../ci-provenance/d8707f82c80be737ec9354ea2134c0102073956f/proof.json)

@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "d8707f82c80be737ec9354ea2134c0102073956f",
+    "treeSha": "bd62a04ad35332b910898654f662e7a79ce5ad25",
+    "baseCommitSha": "9ea58903563368d4e78c99811e19ce7e4ef4ffcc"
+  },
+  "provenanceSha256": "ad20e925ca91b97425f0e579b94521dbcd3ca47906e5ffe0172b530430aa8212",
+  "ledger": {
+    "previousByteCount": 66490,
+    "previousSha256": "a4eb3c10cf73915ece275ef3c85f4d006682be834c176ee8bde8777d47daefa8",
+    "appendSha256": "6b02496ca6270c695dd74ec044beb19e91e78078476556e22ecb703e5b7c4a92"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/identity-admission-security.test.mjs server/hosted/test/identity-postgres.test.mjs server/hosted/test/identity-registration-contract.test.mjs server/hosted/test/http-boundary.test.mjs",
+      "exitCode": 0,
+      "logSha256": "d9d8c3016778f5dd242fb4538170b0fadaf295eb66eb87c69acff269ff283eaf"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "a77964a2f61a13dcdeb303932e6a14c7fc1086f527c691e8f795e87b38961992"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Independent bounded auth/database/runtime source reviews plus root CSP/integration review accepted prepared source. Production native findings remain open; this is not live security acceptance."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "7747a65b33355fd7757a61cfc087b4e8f8d4bd3b2bfd9702ba094aaa8a72a22f"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Owned local auth/database fixtures removed without FORCE; Linux distinct-UID synthetic data removed with marker validation. Browser fixtures closed by passing harness. No production fixture or additional real message."
+  }
+}
