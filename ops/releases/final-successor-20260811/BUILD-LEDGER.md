@@ -820,3 +820,16 @@ Implementation `15e309a09dd690532de6b13fd761a019eb9ff527` (`35c30c7bfb45dcb6c277
 ## External availability and redirect patch — 2026-10-20
 
 Implementation `effc75e9e5da140d79ad3b66da55611fb25ff3b6`, tree `83841a03a1e8d0c1e45cf1866261d33f9725f7df`, base `e7452e932d73f5c709ac76c86506df35a1ad4fbb`. Eight focused tests and full npm 2639passed/33existing skips/0fail;24routes×6widths. [Provenance](../ci-provenance/effc75e9e5da140d79ad3b66da55611fb25ff3b6/provenance.md), [proof](../ci-provenance/effc75e9e5da140d79ad3b66da55611fb25ff3b6/proof.json). External execution and patched native runtime remain separate acceptance boundaries; three full security checks are queued after finished-system acceptance.
+
+
+### Automatic service mail and ordinary payment completion — October 20, 2026
+
+Qualified implementation `e345c6bba0dc9b614aacf64cac98fc7aa4fd6218` / tree `e5c1075784529c1ec55863a7a750f05b1dd13339` from `b2e4b5eb6480f6e96b50eb9168df66d3d88b51ef`.
+Ordinary approved source actions reserve their notices atomically; final payment
+and handoff preserve immutable-table grants and existing job serialization.
+Full npm2688passed/37optionalPGskips/0failed;24routes×6widths. Separate actual
+PostgreSQL and cleanup receipts are retained. Native deployment and the owner's
+three subsequent full security checks remain separate acceptance boundaries.
+
+- [Canonical provenance](../ci-provenance/e345c6bba0dc9b614aacf64cac98fc7aa4fd6218/provenance.md)
+- [Machine-readable proof](../ci-provenance/e345c6bba0dc9b614aacf64cac98fc7aa4fd6218/proof.json)
