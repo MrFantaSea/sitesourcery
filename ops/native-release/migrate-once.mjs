@@ -74,7 +74,9 @@ assert.deepEqual(input.reservedRollbackNames,profile.migration.reservedRollbackN
 for(const count of [String(beforeCount),String(profile.expectedSchema.afterCount)])assert.match(input.schemas[count]??'',/^[a-f0-9]{64}$/,'Genuine schema fingerprint required');
 assert.equal(source,'/home/mrfantasea/.local/share/sitesourcery-production/releases/'+auth.candidateCommit);
 assert.equal(await fs.realpath(source),source);
-assert.deepEqual(input.database,{host:profile.databaseIdentity.sockets,port:Number(profile.databaseIdentity.port),user:profile.databaseIdentity.username,database:profile.databaseIdentity.db,dataDirectory:profile.databaseIdentity.directory});
+// The observed socket list is an identity assertion, never a connection address.
+// Privileged maintenance retains the existing owner peer endpoint in either mode.
+assert.deepEqual(input.database,{host:'/run/user/1000/sitesourcery-production-postgresql',port:Number(profile.databaseIdentity.port),user:profile.databaseIdentity.username,database:profile.databaseIdentity.db,dataDirectory:profile.databaseIdentity.directory});
 await file(profile.runtime.node,{sha256:profile.migration.nodeSha256,byteCount:profile.migration.nodeBytes});
 for(const [p,want] of Object.entries(input.runtimeFiles))await file(source+'/'+p,want);
 assertMigrationDelta(input,profile);

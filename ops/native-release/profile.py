@@ -82,7 +82,8 @@ def validate_profile(p):
     for value in p['owner'].values():
         require(type(value) is str and re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', value), 'invalid owner identity')
     keys(p['runtime'], 'node nodeVersion sharpVersion' +
-         (' workerHealth' if 'workerHealth' in p['runtime'] else ''), 'runtime')
+         (' workerHealth' if 'workerHealth' in p['runtime'] else '') +
+         (' isolation' if 'isolation' in p['runtime'] else ''), 'runtime')
     require(p['runtime']['node'].startswith('/home/mrfantasea/.local/share/sitesourcery-'), 'unreviewed runtime root')
     absolute(p['runtime']['node'])
     require(re.fullmatch('v[0-9]+[.][0-9]+[.][0-9]+', p['runtime']['nodeVersion'] or ''), 'invalid node version')
@@ -99,10 +100,17 @@ def validate_profile(p):
                     'worker health must use dedicated non-owner identities')
         require(type(health['mode']) is int and health['mode'] == 0o640,
                 'worker health must be read-only to its API group')
+    if 'isolation' in p['runtime']:
+        keys(p['runtime']['isolation'], 'policySha256 priorAcceptanceSha256', 'runtime isolation')
+        for value in p['runtime']['isolation'].values(): digest(value)
+        require(p['runtime'].get('workerHealth') == {'path':'/run/sitesourcery/health/export-worker-health.json',
+                'uid':911,'gid':917,'mode':0o640}, 'isolated worker health identity changed')
     db = p['databaseIdentity']
     keys(db, 'db databaseOid username directory port sockets', 'database identity')
+    expected_sockets = '/run/user/1000/sitesourcery-production-postgresql' + (
+        ',/run/sitesourcery-database' if 'isolation' in p['runtime'] else '')
     require(db['db'] == 'sitesourcery_production' and db['username'] == 'mrfantasea'
-            and db['port'] == '55433' and db['sockets'] == '/run/user/1000/sitesourcery-production-postgresql', 'unreviewed database endpoint')
+            and db['port'] == '55433' and db['sockets'] == expected_sockets, 'unreviewed database endpoint')
     require(re.fullmatch('[1-9][0-9]*', db['databaseOid'] or ''), 'invalid database oid')
     absolute(db['directory'])
     require(db['directory'].startswith('/home/mrfantasea/.local/share/sitesourcery-production-postgresql-')
@@ -150,7 +158,8 @@ def derived(p):
     cohort = p['cohort']
     marker = '/etc/sitesourcery/' + cohort.upper().replace('-', '_') + '_HANDOFF_HOLD'
     drop = 'zz-' + cohort + '-handoff-hold.conf'
-    paths = [marker] + ['/etc/systemd/system/sitesourcery-hq-' + n + '.d/' + drop for n in SYSTEM]
+    systems = SYSTEM + (['gateway.service'] if 'isolation' in p['runtime'] else [])
+    paths = [marker] + ['/etc/systemd/system/sitesourcery-hq-' + n + '.d/' + drop for n in systems]
     if p['mode'] == 'schema-changing':
         paths += ['/home/mrfantasea/.config/systemd/user/' + n + '.d/' + drop for n in PRIVATE]
     return {'marker': marker, 'dropin': drop, 'markerText': 'Site Sourcery ' + cohort + ' handoff\n',

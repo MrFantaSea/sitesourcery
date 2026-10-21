@@ -7,6 +7,8 @@ from pathlib import Path
 import importlib.util
 _profile_spec=importlib.util.spec_from_file_location('sitesourcery_release_profile',Path(__file__).with_name('profile.py'))
 _profile=importlib.util.module_from_spec(_profile_spec);_profile_spec.loader.exec_module(_profile)
+_isolation_spec=importlib.util.spec_from_file_location('sitesourcery_release_isolation',Path(__file__).with_name('isolation.py'))
+_isolation=importlib.util.module_from_spec(_isolation_spec);_isolation_spec.loader.exec_module(_isolation)
 require_profile=_profile.require
 require_profile(len(sys.argv)>=4,'PROFILE SHA256 ACTION required')
 PROFILE_REF={'path':sys.argv[1],'sha256':sys.argv[2]}
@@ -23,16 +25,16 @@ MARKER=Path(PATHS['marker']);MARKER_BYTES=PATHS['markerText'].encode()
 DROP=PATHS['dropin'];DROP_BYTES=('[Unit]\nConditionPathExists=!'+str(MARKER)+'\n').encode()
 PRIOR=PROFILE['priorCandidate'];PRIOR_TREE=PROFILE['priorTree']
 API=('system','sitesourcery-hq-api.service');PG=('user','sitesourcery-production-postgresql.service');GATEWAY=('system','sitesourcery-hq-gateway.service');MOUNT=('user','sitesourcery-hq-backup-mount.service')
-RUNTIME=[('system','sitesourcery-hq-tenant.service'),('system','sitesourcery-hq-workers.service')]
+RUNTIME=[('system','sitesourcery-hq-tenant.service'),('system','sitesourcery-hq-workers.service')]+([GATEWAY] if _isolation.enabled(PROFILE) else [])
 ADMISSION=[('system','sitesourcery-hq-cloudflared.service'),('system','sitesourcery-hq-backup.timer'),('system','sitesourcery-hq-monitor.timer')]
 PASSIVE=[('system','sitesourcery-hq-monitor.service')]
 LATE=[API,('system','sitesourcery-hq-backup.service'),('system','sitesourcery-hq-backup-recovery.service')]
 EARLY=RUNTIME+ADMISSION+PASSIVE;ALL=EARLY+LATE
 PRIVATE=[('user','client-profile-hub.service'),('user','client-profile-hub-backup.timer'),('user','client-profile-hub-morning-research.timer'),('user','client-profile-hub-backup.service'),('user','client-profile-hub-morning-research.service')]
 PRIVATE_APP=PRIVATE[0];PRIVATE_TIMERS=PRIVATE[1:3];PRIVATE_JOBS=PRIVATE[3:]
-INDEPENDENT=[PG,GATEWAY,MOUNT];INITIAL=EARLY+PRIVATE;CONTROLLED=ALL+PRIVATE
+INDEPENDENT=[PG,MOUNT]+([] if _isolation.enabled(PROFILE) else [GATEWAY]);INITIAL=EARLY+PRIVATE;CONTROLLED=ALL+PRIVATE
 IDENTITY=Path('/home/mrfantasea/.config/sitesourcery-hq-operator/identity.json')
-READY_FILES=['/usr/local/libexec/sitesourcery-worker-readiness-20261016/wait-api-ready.mjs','/etc/systemd/system/sitesourcery-hq-workers.service.d/99-api-readiness-wait.conf']
+READY_FILES=[_isolation.READINESS_HELPER,'/etc/systemd/system/sitesourcery-hq-workers.service.d/99-api-readiness-wait.conf']
 SNAPSHOT=Path(PATHS['readinessSnapshot'])
 sha=lambda b:hashlib.sha256(b).hexdigest()
 now=lambda:datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -42,9 +44,11 @@ def require(ok,message):
 def prefix(scope):return ['/usr/bin/systemctl'] if scope=='system' else ['/usr/sbin/runuser','-u','mrfantasea','--','/usr/bin/env','XDG_RUNTIME_DIR=/run/user/1000','DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus','/usr/bin/systemctl','--user']
 def state(u):
  names=['LoadState','ActiveState','SubState','UnitFileState','FragmentPath','DropInPaths']+([] if u[1].endswith('.timer') else ['MainPID','NRestarts','WorkingDirectory'])
+ if _isolation.enabled(PROFILE) and u==GATEWAY:names+=['InvocationID']
  raw=subprocess.check_output(prefix(u[0])+['show',u[1],'--property='+','.join(names)],stderr=subprocess.PIPE,timeout=15)
  v=dict(l.split('=',1) for l in raw.decode().splitlines());require(v['LoadState']=='loaded','unit_missing:'+key(u));return v
 def control(u,action):
+ if action=='start':_profile.current_window(a,3600)
  require((u in ALL and u[0]=='system') or (u in PRIVATE and u[0]=='user'),'unlisted_service_control_forbidden');subprocess.run(prefix(u[0])+[action,u[1]],check=True,timeout=90,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 def reload():
  for s in ['system','user']:subprocess.run(prefix(s)+['daemon-reload'],check=True,timeout=20,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -80,7 +84,7 @@ def release(units):
  _profile.current_window(a,3600)
  exact(MARKER,MARKER_BYTES,0o644)
  for u in units:exact(drop(u),DROP_BYTES,0o644)
- for u in units:drop(u).unlink()
+ for u in units:_profile.current_window(a,3600);drop(u).unlink()
  reload()
 def envvalues(name):
  d={}
@@ -89,12 +93,16 @@ def envvalues(name):
   k,v=line.split('=',1);require(k not in d,'duplicate_env_key');d[k]=json.loads(v) if v.startswith('"') else v
  return d
 def observe():
+ _isolation.verify_readiness_operand()
+ isolation=_isolation.observe(PROFILE)
  units={key(u):state(u) for u in ALL+INDEPENDENT+PRIVATE};files={}
  for v in units.values():
   for p in [v['FragmentPath'],*v['DropInPaths'].split()]:files[p]=unit_definition_meta(Path(p))
  for p in READY_FILES+[str(IDENTITY)]+['/etc/sitesourcery/'+n for n in ['hosted.env','workers.env','tenant.env','backup.env','monitor.env','WORKERS_APPROVED','PUBLICATION_APPROVED','origin-seal.json','origin-installed-readback.json','final-release-epoch-v2.json']]:files[p]=meta(Path(p))
+ if isolation:
+  for name in [str(_isolation.POLICY),str(_isolation.MARKER),*isolation['files']]:files[name]=meta(Path(name))
  worker=envvalues('workers.env');config=json.loads(worker['SITESOURCERY_WORKER_CONFIG']);require(config['activation']=='owner-approved' and config['purposes']==PROFILE['workerPurposes'],'current_configured_purpose_Care_baseline_required')
- return {'source':str((BASE/'current').resolve()),'units':units,'files':files,'workerPurposes':config['purposes'],'workerConfigSha256':sha(worker['SITESOURCERY_WORKER_CONFIG'].encode()),'careMode':envvalues('hosted.env').get('SITESOURCERY_CARE_MODE','held'),'workerCareMode':worker.get('SITESOURCERY_CARE_MODE','held')}
+ return {'source':str((BASE/'current').resolve()),'units':units,'files':files,'workerPurposes':config['purposes'],'workerConfigSha256':sha(worker['SITESOURCERY_WORKER_CONFIG'].encode()),'careMode':envvalues('hosted.env').get('SITESOURCERY_CARE_MODE','held'),'workerCareMode':worker.get('SITESOURCERY_CARE_MODE','held'),**({'isolation':isolation} if isolation else {})}
 def unchanged_baseline(j):
  for u in INDEPENDENT:
   require(state(u)==j['baseline']['units'][key(u)],'untouched_unit_changed:'+key(u))
@@ -107,10 +115,12 @@ def unchanged_baseline(j):
  for p in READY_FILES:require(meta(Path(p))==j['baseline']['files'][p],'readiness_file_changed')
  for name in ['workers.env','WORKERS_APPROVED']:
   require(meta(CONFIG/name)==j['baseline']['files'][str(CONFIG/name)],'worker_configuration_changed:'+name)
+ if _isolation.enabled(PROFILE):require(meta(Path(_isolation.WORKER_ENV))==j['baseline']['files'][_isolation.WORKER_ENV],'isolated_worker_configuration_changed')
 def fence_free():
  for n in ['BACKUP_QUIESCE','BACKUP_CYCLE_STATE.json']:require(not os.path.lexists(Path('/srv/sitesourcery-storage/production/backup-control')/n),'backup_recovery_pending')
 def ready(candidate,count,tree):
- req=urllib.request.Request('http://127.0.0.1:8081/api/v1/ready',headers={'Host':'sitesourcery.com','X-Forwarded-Proto':'https'})
+ port=18988 if _isolation.enabled(PROFILE) else 8081
+ req=urllib.request.Request('http://127.0.0.1:'+str(port)+'/api/v1/ready',headers={'Host':'sitesourcery.com','X-Forwarded-Proto':'https'})
  with urllib.request.urlopen(req,timeout=5) as r:v=json.load(r)
  require(v['ready'] is True and v['release']['candidateCommitSha']==candidate and v['release']['migrationCount']==count and v['release']['candidateTreeSha']==tree,'exact_API_not_ready');return v['release']
 def private_process_identity():
@@ -169,6 +179,7 @@ def main():
    try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB);break
    except BlockingIOError:require(time.monotonic()<end,'operations_busy');time.sleep(.1)
  if action=='initial':
+  if _isolation.enabled(PROFILE):_isolation.observe(PROFILE,PROFILE['runtime']['isolation']['priorAcceptanceSha256'])
   before=observe();require(before==anchored(a['baselineReceipt']),'fresh_baseline_changed');require(before['source']==str(BASE/'releases'/PRIOR),'prior_source_changed');ready(PRIOR,BEFORE_COUNT,PRIOR_TREE)
   require(not os.path.lexists(OUT) and not os.path.lexists(MARKER) and not os.path.lexists(SNAPSHOT) and all(not os.path.lexists(drop(u)) for u in CONTROLLED),'prior_handoff_exists')
   require(all(before['units'][key(u)]['ActiveState']=='inactive' for u in PASSIVE+LATE[1:]+PRIVATE_JOBS),'background_one_shot_active');require(all(before['units'][key(u)]['ActiveState'] in ['active','inactive'] for u in CONTROLLED),'transitioning_unit')
@@ -186,15 +197,16 @@ def main():
   for i,s in enumerate(READY_FILES):
    source=Path(s);m=meta(source);require(m==before['files'][s],'readiness_source_drift');dest=SNAPSHOT/('file-'+str(i));create(dest,source.read_bytes(),0o640);os.chown(dest,0,1000);entries.append({'originalPath':s,'snapshotMember':'configuration/recovery/'+SNAPSHOT.name+'/'+dest.name,'originalMetadata':m})
   b=(json.dumps({'schema':'sitesourcery.native-recovery-files/v1','entries':entries,'automaticRestore':False},indent=2)+'\n').encode();create(SNAPSHOT/'manifest.json',b,0o640);os.chown(SNAPSHOT/'manifest.json',0,1000)
-  save('initial-holds.json',{'at':now(),'phase':'initial','units':{key(u):state(u) for u in CONTROLLED},'holdPaths':[str(MARKER)]+[str(drop(u)) for u in INITIAL],'privateHqHoldReceipt':privateRef,'readinessRecoverySnapshot':str(SNAPSHOT),'apiIntentionallyActive':True});print(json.dumps({'phase':'initial','passed':True,'backupNotRun':True,'ownedHoldFileCount':12,'privateHqHoldReceipt':privateRef}));sys.exit(0)
+  save('initial-holds.json',{'at':now(),'phase':'initial','units':{key(u):state(u) for u in CONTROLLED},'holdPaths':[str(MARKER)]+[str(drop(u)) for u in INITIAL],'privateHqHoldReceipt':privateRef,'readinessRecoverySnapshot':str(SNAPSHOT),'apiIntentionallyActive':True});print(json.dumps({'phase':'initial','passed':True,'backupNotRun':True,'ownedHoldFileCount':len(INITIAL)+1,'privateHqHoldReceipt':privateRef}));sys.exit(0)
  j=anchored(a['journal']);unchanged_baseline(j);exact(MARKER,MARKER_BYTES,0o644)
  if action!='resume-admission':private_held(j,a['privateHqHoldReceipt'])
  else:private_resumed(j,a['privateHqHoldReceipt'],a['privateHqResumeReceipt'])
  if action=='final':
   for u in INITIAL:exact(drop(u),DROP_BYTES,0o644)
   require(all(state(u)['ActiveState']=='inactive' and state(u).get('MainPID','0')=='0' for u in CONTROLLED),'all_writers_and_operations_must_be_stopped');report=anchored(a['backupOriginalReport']);require(report['ok'] is True and report['action']=='run' and report['artifactCount']==2 and re.fullmatch('[a-f0-9]{64}',report['manifestSha256']) and datetime.datetime.fromisoformat(report['completedAt'].replace('Z','+00:00'))>=datetime.datetime.fromisoformat(j['at']),'fresh_successful_backup_required');hold(LATE);reload();unchanged_baseline(j);private_held(j,a['privateHqHoldReceipt'])
-  save('final-holds.json',{'at':now(),'phase':'final','units':{key(u):state(u) for u in CONTROLLED},'holdPaths':[str(MARKER)]+[str(drop(u)) for u in CONTROLLED],'backupOriginalReport':a['backupOriginalReport'],'privateHqHoldReceipt':a['privateHqHoldReceipt'],'databaseMutationPerformed':False,'independentServicesPreserved':True,'privateHqRemainsHeld':True});print(json.dumps({'phase':'final','passed':True,'ownedHoldFileCount':15}));sys.exit(0)
+  save('final-holds.json',{'at':now(),'phase':'final','units':{key(u):state(u) for u in CONTROLLED},'holdPaths':[str(MARKER)]+[str(drop(u)) for u in CONTROLLED],'backupOriginalReport':a['backupOriginalReport'],'privateHqHoldReceipt':a['privateHqHoldReceipt'],'databaseMutationPerformed':False,'independentServicesPreserved':True,'privateHqRemainsHeld':True});print(json.dumps({'phase':'final','passed':True,'ownedHoldFileCount':len(CONTROLLED)+1}));sys.exit(0)
  installed=anchored(a['installedReceipt']);require(installed['state']=='installed_held' and installed['migrationCount']==COUNT and installed['databaseAlreadyMigrated'] is True and installed['privateHqHeldPreserved'] is True and installed['codeOnlyRollbackAllowed'] is False and installed['activationAllowed'] is False and installed['candidate']==a['candidate'] and installed['tree']==a['tree'],'genuine_installed_receipt_required');require((BASE/'current').resolve()==BASE/'releases'/a['candidate'],'installed_source_changed')
+ _isolation.verify_installed(PROFILE,installed)
  if action=='resume-api':
   release([API]);control(API,'start');end=time.monotonic()+60
   try:
@@ -221,7 +233,7 @@ def main():
  for u in selected:
   if j['baseline']['units'][key(u)]['ActiveState']=='active':control(u,'start')
  units=restored_states(selected,j);unchanged_baseline(j);private_resumed(j,a['privateHqHoldReceipt'],a['privateHqResumeReceipt'],False)
- require(all(not os.path.lexists(drop(u)) for u in CONTROLLED),'remaining_owned_hold');MARKER.unlink()
+ require(all(not os.path.lexists(drop(u)) for u in CONTROLLED),'remaining_owned_hold');_profile.current_window(a,3600);MARKER.unlink()
  save('resume-admission.json',{'at':now(),'phase':action,'units':units,'privateHqResumeReceipt':a['privateHqResumeReceipt'],'workerPurposes':j['baseline']['workerPurposes'],'readinessFilesPreserved':True,'enablementUnchanged':True,'privateHqTimersRestored':True,'privateHqMorningResearchDisabled':state(PRIVATE_TIMERS[1])['UnitFileState']=='disabled','ownedHoldFilesRemaining':0});print(json.dumps({'phase':action,'passed':True}))
 
 if __name__=='__main__':main()

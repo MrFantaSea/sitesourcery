@@ -853,3 +853,15 @@ verification remain open.
 
 - [Canonical provenance](../ci-provenance/d8707f82c80be737ec9354ea2134c0102073956f/provenance.md)
 - [Machine-readable proof](../ci-provenance/d8707f82c80be737ec9354ea2134c0102073956f/proof.json)
+
+
+### Preserve isolation across native releases — October 21, 2026
+
+Qualified implementation `23de0649b65038757a9c52c3fc2cc8f548b4e0d7` / tree `1d14bbffa04ee09b90cf4d7a567eed3c093a38b9` from `c29c1418e02cbbf6424d47c8410d19859ca65d49`.
+Full npm2709passed/38optionalPGskips/0fail;24routes×6widths. Focused36Python
+and13JavaScript contracts;15actualLinuxACL checks with owned fixture removed.
+Unchanged application retains prior29actualPG and15runtimefilesystem proofs.
+Native isolation and final installed security verification remain pending.
+
+- [Canonical provenance](../ci-provenance/23de0649b65038757a9c52c3fc2cc8f548b4e0d7/provenance.md)
+- [Machine-readable proof](../ci-provenance/23de0649b65038757a9c52c3fc2cc8f548b4e0d7/proof.json)

@@ -6,6 +6,8 @@ from pathlib import Path
 import importlib.util
 _profile_spec=importlib.util.spec_from_file_location('sitesourcery_release_profile',Path(__file__).with_name('profile.py'))
 _profile=importlib.util.module_from_spec(_profile_spec);_profile_spec.loader.exec_module(_profile)
+_isolation_spec=importlib.util.spec_from_file_location('sitesourcery_release_isolation',Path(__file__).with_name('isolation.py'))
+_isolation=importlib.util.module_from_spec(_isolation_spec);_isolation_spec.loader.exec_module(_isolation)
 require_profile=_profile.require
 require_profile(len(sys.argv)>=4,'PROFILE SHA256 ACTION required')
 PROFILE_REF={'path':sys.argv[1],'sha256':sys.argv[2]}
@@ -25,11 +27,11 @@ def run(*args, cwd=None):
 
 def inventory(root):
     tree=CONFIG['tree'] if root.name==CONFIG['candidate'] else CONFIG['oldTree']
-    return json.loads(command('/usr/bin/python3','-I','-B',str(Path(__file__).with_name('inventory.py')),root.name,tree,'--entries'))
+    return json.loads(command('/usr/bin/python3','-I','-B',str(Path(__file__).with_name('inventory.py')),root.name,tree,'--custody' if _isolation.enabled(PROFILE) else '--entries'))
 
 assert len(sys.argv)==4,'stage.py PROFILE SHA256 STAGE_INPUT SHA256 ARCHIVE'
 CONFIG=_profile.read_pinned(sys.argv[1],sys.argv[2]);_profile.bind_operation(CONFIG,PROFILE,PROFILE_REF)
-_profile.keys(CONFIG,'schema profile authorized issuedAt expiresAt helpers old oldTree releases node candidate tree releaseInput sourceInputSha256 priorActualReceiptSha256 expectedSource oldInventorySha256 minimumAvailableBytes hostedArchiveSha256 hostedArchiveBytes hostedFiles packages packageReuse','stage input')
+_profile.keys(CONFIG,'schema profile authorized issuedAt expiresAt helpers old oldTree releases node candidate tree releaseInput sourceInputSha256 priorActualReceiptSha256 expectedSource oldInventorySha256 minimumAvailableBytes hostedArchiveSha256 hostedArchiveBytes hostedFiles packages packageReuse'+(' priorIsolationAcceptanceSha256 priorCustodySha256' if _isolation.enabled(PROFILE) else ''),'stage input')
 assert CONFIG['schema']=='sitesourcery.native-stage-input/v1' and CONFIG['authorized'] is True
 _profile.verify_bundle(CONFIG,Path(__file__).resolve().parent)
 import datetime
@@ -45,6 +47,12 @@ assert CONFIG['releaseInput']['epoch']['migration']['count']==COUNT and CONFIG['
 assert command('hostname') == 'FantaSeaLand'
 assert os.getuid() == 1000 and command('id', '-un') == 'mrfantasea'
 os.umask(0o077)
+_isolation.check_mode(PROFILE)
+if _isolation.enabled(PROFILE):
+ assert CONFIG['priorIsolationAcceptanceSha256']==PROFILE['runtime']['isolation']['priorAcceptanceSha256']
+ prior_isolation=_isolation.observe(PROFILE,CONFIG['priorIsolationAcceptanceSha256'])
+ assert (prior_isolation['candidate'],prior_isolation['tree'])==(CONFIG['old'],CONFIG['oldTree'])
+ assert prior_isolation['custodySha256']==CONFIG['priorCustodySha256']
 old = Path(CONFIG['releases']) / CONFIG['old']
 new = Path(CONFIG['releases']) / CONFIG['candidate']
 assert old.resolve() == old and new.parent.resolve() == new.parent
@@ -63,6 +71,7 @@ assert command(CONFIG['node'], '--version') == PROFILE['runtime']['nodeVersion']
 assert command('git', '--no-optional-locks', '-c', 'safe.directory='+str(old), '-C', str(old), 'rev-parse', 'HEAD') == CONFIG['old']
 assert command('git', '--no-optional-locks', '-c', 'safe.directory='+str(old), '-C', str(old), 'rev-parse', 'HEAD^{tree}') == CONFIG['oldTree']
 old_inventory = inventory(old)
+if _isolation.enabled(PROFILE):assert old_inventory['custody']['custodySha256']==CONFIG['priorCustodySha256']
 assert old_inventory['inventorySha256'] == CONFIG['oldInventorySha256'], 'Prior verified bytes or file modes changed'
 space = os.statvfs(old)
 assert space.f_bavail * space.f_frsize >= CONFIG['minimumAvailableBytes'], 'Insufficient space for separate copied release'
@@ -135,6 +144,11 @@ for source_expected in CONFIG['expectedSource']:
         assert actual['target'] == source_expected['target'], ('Tracked symlink drift',source_expected['path'])
 assert inventory(old)['inventorySha256'] == CONFIG['oldInventorySha256'], 'Original release changed during staging'
 
+if _isolation.enabled(PROFILE):
+ assert inventory(old)['custody']==old_inventory['custody'],'Predecessor ACL custody changed'
+ _isolation.observe(PROFILE,CONFIG['priorIsolationAcceptanceSha256'])
+ dep=lambda v:[e for e in v['custody']['entries'] if e['path']=='node_modules' or e['path'].startswith('node_modules/')]
+ assert dep(new_inventory)==dep(old_inventory),'Dependency ACL/owner custody changed during copy'
 payload = lambda value: [x for x in value['entries'] if x['path']=='node_modules' or x['path'].startswith('node_modules/')]
 assert payload(new_inventory) == payload(old_inventory), 'Reused Linux dependency bytes, modes or internal links changed'
 assert command('git', '--no-optional-locks', '-c', 'safe.directory='+str(old), '-C', str(old), 'status', '--porcelain=v1', '--untracked-files=all') == ''
@@ -142,4 +156,4 @@ print(json.dumps({'schema':'sitesourcery.hq-linux-release-reuse/v1','status':'st
     'oldRelease':str(old),'newRelease':str(new),'priorInventorySha256':old_inventory['inventorySha256'],
     'sourceInputSha256':CONFIG['sourceInputSha256'],'priorActualReceiptSha256':CONFIG['priorActualReceiptSha256'],
     'trackedSourceFilesVerified':len(CONFIG['expectedSource']),'originalReleaseUnchanged':True,'gitHistorySeededFrom':CONFIG['old'],'independentGitObjectsVerified':True,'npmInstallCount':0,'hostedBuildCount':0,'independentCopies':True,'dependencyPayloadByteIdentical':True,'hostedArtifactReused':False,'hostedArchiveSha256':CONFIG['hostedArchiveSha256'],
-    'validation':validation,'inventory':new_inventory},indent=2))
+    'validation':validation,'inventory':{k:v for k,v in new_inventory.items() if k!='custody'},**({'custody':new_inventory['custody']} if _isolation.enabled(PROFILE) else {})},indent=2))
