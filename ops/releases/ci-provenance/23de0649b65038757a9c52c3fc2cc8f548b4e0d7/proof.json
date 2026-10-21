@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "23de0649b65038757a9c52c3fc2cc8f548b4e0d7",
+    "treeSha": "1d14bbffa04ee09b90cf4d7a567eed3c093a38b9",
+    "baseCommitSha": "c29c1418e02cbbf6424d47c8410d19859ca65d49"
+  },
+  "provenanceSha256": "2739f4aa86ed66010b1da69cecfed4c23a9f3dfd6bc4c57ca5a3caa28d87e9ea",
+  "ledger": {
+    "previousByteCount": 67169,
+    "previousSha256": "36de7ed06198ea5ed03532e01f53ec7dcfd94fc838d93980d07342dd65762229",
+    "appendSha256": "643cc781af09f4b9db30361821a8d2e4655a44e35ba1fcfff5eae25b1bd18e1d"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/native-release-authority.test.mjs",
+      "exitCode": 0,
+      "logSha256": "8a7c1cd9c01f812fc6e625566d65b9b93a2630fc8d5d20330c5d1cf106b95635"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "8bda0c8d071a414571dbe030bba2dd888bba933864c9ca09a702f1cdfdf9e0ca"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Independent exact15-path source reviews and root integration hash checks passed. Native isolation and final security acceptance remain pending."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "7747a65b33355fd7757a61cfc087b4e8f8d4bd3b2bfd9702ba094aaa8a72a22f"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Actual Linux ACL fixture removed; browser fixtures closed by full passing harness. Prior actual PostgreSQL fixtures remain removed; no database fixture rerun or production message."
+  }
+}
