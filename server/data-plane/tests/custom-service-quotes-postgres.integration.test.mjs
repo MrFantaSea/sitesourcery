@@ -578,6 +578,7 @@ async function insertQuoteRevision(
 }
 
 test("custom-service assessment quotes are exact, append-only, and account-bound", async () => {
+  const priorOperatorRecipient = process.env.SITESOURCERY_NOTIFICATION_MAIL_OPERATOR_RECIPIENT;
   const pool = new Pool({ connectionString: DATABASE_URL, max: 4 });
   const client = await pool.connect();
   const providerRunToken = randomUUID().replaceAll("-", "_");
@@ -664,6 +665,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         "service_management_manage"
       ]
     );
+    // Use the already-capable isolated fixture operator for automatic alerts.
+    process.env.SITESOURCERY_NOTIFICATION_MAIL_OPERATOR_RECIPIENT =
+      `second-${secondOperatorId}@example.test`;
     const thirdOperatorId = await seedOperator(client, "third");
     const handoffOnlyOperatorId = await seedOperator(
       client,
@@ -4022,6 +4026,220 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
           customerSummary
         )
       );
+
+      // Exercise the ordinary final-payment and handoff repositories before
+      // the independent raw-SQL H1M race below. A savepoint retains the same
+      // completed fixture while removing every temporary source/mail effect.
+      // All provider methods below are local stubs; no transport is supplied.
+      await client.query("savepoint ordinary_final_mail");
+      let ordinaryReceiptId;
+      let ordinaryHandoffReceiptId;
+      let ordinaryDocumentId;
+      let ordinaryMailIds = [];
+      const ordinaryProviderCalls = { checkout: 0, readback: 0, lifecycle: 0 };
+      const ordinarySessionId =
+        `cs_test_ordinary_final_${randomUUID().replaceAll("-", "_")}`;
+      const ordinaryEventId =
+        `evt_test_ordinary_final_${randomUUID().replaceAll("-", "_")}`;
+      let ordinaryPurpose;
+      let ordinaryPurposeDigest;
+      const ordinaryAuthority = {
+        service(context, work) {
+          return positiveAuthority.service(context, (db) => work({
+            async query(...args) {
+              try {
+                return await db.query(...args);
+              } catch (error) {
+                throw new Error("Ordinary final-payment fixture SQL failed", { cause: error });
+              }
+            }
+          }));
+        }
+      };
+      try {
+        const ordinaryFinal = createPostgresCustomServicesCustomBuildFinalPayment({
+          authority: ordinaryAuthority,
+          provider: {
+            async createCustomBuildFinalCheckout(input) {
+              ordinaryProviderCalls.checkout += 1;
+              ordinaryPurpose = structuredClone(input.purpose);
+              ordinaryPurposeDigest = input.purposeDigest;
+              assert.equal(input.stripeCustomerId, positiveCustomerId);
+              assert.equal(input.purpose.jobId, positiveJobId);
+              assert.equal(input.purpose.price.amountMinor, 50000);
+              return {
+                checkoutId: ordinarySessionId,
+                url: "https://checkout.stripe.com/c/pay/local_ordinary_final_fixture",
+                expiresAt: input.checkoutExpiresAt
+              };
+            },
+            async retrieveCustomBuildFinalPayment(input) {
+              ordinaryProviderCalls.readback += 1;
+              assert.equal(input.checkoutSessionId, ordinarySessionId);
+              assert.deepEqual(input.purpose, ordinaryPurpose);
+              assert.equal(input.purposeDigest, ordinaryPurposeDigest);
+              const facts = {
+                schema: "sitesourcery.stripe-custom-build-final-payment-facts/v1",
+                provider: "stripe",
+                checkoutSessionId: ordinarySessionId,
+                paymentIntentId: `pi_test_ordinary_final_${randomUUID().replaceAll("-", "_")}`,
+                chargeId: `ch_test_ordinary_final_${randomUUID().replaceAll("-", "_")}`,
+                customerId: positiveCustomerId,
+                paymentStatus: "paid",
+                chargeCaptured: true,
+                amountRefundedMinor: 0,
+                disputed: false,
+                subtotalMinor: 50000,
+                taxMinor: 0,
+                totalMinor: 50000,
+                taxMode: "disabled_by_owner",
+                currency: "USD",
+                purposeDigest: ordinaryPurposeDigest,
+                providerPaymentTime: new Date().toISOString()
+              };
+              return { ...facts, providerFactsDigest: digest(facts) };
+            },
+            async retrieveCustomBuildFinalCheckoutLifecycle() {
+              ordinaryProviderCalls.lifecycle += 1;
+              throw new Error("ordinary final fixture must use local paid readback");
+            }
+          },
+          release: {
+            approved: true,
+            currency: "USD",
+            holdScope: "new_checkout_creation_only",
+            providerEffectProcessing: "settlement_and_reconciliation_continue",
+            taxMode: "disabled_by_owner"
+          }
+        });
+        const ordinaryCheckoutInput = {
+          ...customerAssessmentScope,
+          commandId: `ordinary-final-checkout-${randomUUID()}`,
+          invoiceId: positiveFinalRow.invoice_id,
+          invoiceDigest: positiveFinalRow.invoice_digest
+        };
+        const ordinaryCheckout = await ordinaryFinal.createCheckout(ordinaryCheckoutInput);
+        assert.equal(ordinaryCheckout.state, "ready");
+        assert.equal(ordinaryCheckout.checkout.chargeOccurred, false);
+        assert.deepEqual(await ordinaryFinal.createCheckout(ordinaryCheckoutInput), ordinaryCheckout);
+        const p = ordinaryPurpose;
+        const ordinaryEvent = {
+          id: ordinaryEventId,
+          type: "checkout.session.completed",
+          livemode: false,
+          api_version: "2026-06-24.dahlia",
+          created: Math.floor(Date.now() / 1000),
+          data: { object: { id: ordinarySessionId, metadata: {
+            schema: "sitesourcery_custom_build_final_checkout_v1",
+            tenant_id: p.tenantId,
+            customer_id: p.customerId,
+            project_id: p.projectId,
+            job_id: p.jobId,
+            quote_id: p.quoteId,
+            quote_revision_id: p.quoteRevisionId,
+            quote_acceptance_id: p.quoteAcceptanceId,
+            completion_package_id: p.completionPackageId,
+            final_obligation_id: p.finalObligationId,
+            invoice_id: p.invoiceId,
+            invoice_number: p.invoiceNumber,
+            installment_number: "2",
+            workmanship_correction_days: "30",
+            accepted_quote_digest: p.acceptedQuoteDigest,
+            accepted_disclosure_digest: p.acceptedDisclosureDigest,
+            commercial_contract_digest: p.commercialContractDigest,
+            base_scope_digest: p.baseScopeDigest,
+            effective_change_order_digests_digest: digest(p.effectiveChangeOrderDigests),
+            effective_scope_digest: p.effectiveScopeDigest,
+            completion_package_digest: p.completionPackageDigest,
+            final_obligation_digest: p.finalObligationDigest,
+            invoice_digest: p.invoiceDigest,
+            purpose_digest: ordinaryPurposeDigest
+          } } }
+        };
+        const ordinarySettlement = await ordinaryFinal.ingestStripeEvent(ordinaryEvent);
+        assert.equal(ordinarySettlement.status, "payment_settled");
+        ordinaryReceiptId = ordinarySettlement.receiptId;
+        assert.deepEqual(await ordinaryFinal.ingestStripeEvent(ordinaryEvent), ordinarySettlement);
+        const ordinaryHandoff = createPostgresCustomServicesCustomBuildHandoff({
+          authority: ordinaryAuthority
+        });
+        const ordinaryHandoffInput = {
+          commandId: `ordinary-final-handoff-${randomUUID()}`,
+          organizationId: customer.organizationId,
+          expectedCompletionPackageDigest: positiveFinalRow.completion_package_digest,
+          expectedFinalObligationDigest: positiveFinalRow.obligation_digest,
+          customerSummary: positiveHandoffSummary,
+          deliveryManifest: positiveDeliveryManifest.items
+        };
+        const ordinaryDelivered = await ordinaryHandoff.createHandoff(
+          operatorActor, positiveJobId, ordinaryHandoffInput
+        );
+        assert.equal(ordinaryDelivered.state, "handed_off");
+        ordinaryHandoffReceiptId = ordinaryDelivered.receiptId;
+        ordinaryDocumentId = ordinaryDelivered.documentId;
+        assert.deepEqual(await ordinaryHandoff.createHandoff(
+          operatorActor, positiveJobId, ordinaryHandoffInput
+        ), ordinaryDelivered);
+        await client.query("set constraints all immediate");
+        const ordinaryNotices = await client.query(
+          `select notice.notification_kind, notice.source_id,
+                  notice.state, notice.provider_effects_authorized,
+                  notice.delivery_claimed, notice.mail_message_id,
+                  mail.state as mail_state,
+                  (select count(*)::int from ss.hosted_mail_dispatch_claims claim
+                   where claim.message_id = mail.id) as dispatch_claim_count,
+                  (select count(*)::int from ss.hosted_mail_delivery_events event
+                   where event.message_id = mail.id) as delivery_event_count
+             from ss.commerce_transition_notification_outbox notice
+             join ss.hosted_mail_deliveries mail on mail.id = notice.mail_message_id
+            where (notice.notification_kind = 'custom_final_payment_settled'
+                   and notice.source_id = $1)
+               or (notice.notification_kind = 'custom_handoff_completed'
+                   and notice.source_id = $2)
+            order by notice.notification_kind`,
+          [ordinaryReceiptId, ordinaryHandoffReceiptId]
+        );
+        assert.equal(ordinaryNotices.rowCount, 2);
+        assert.deepEqual(ordinaryNotices.rows.map((row) => row.notification_kind),
+          ["custom_final_payment_settled", "custom_handoff_completed"]);
+        ordinaryMailIds = ordinaryNotices.rows.map((row) => row.mail_message_id);
+        for (const row of ordinaryNotices.rows) {
+          assert.equal(row.state, "held");
+          assert.equal(row.mail_state, "pending");
+          assert.equal(row.provider_effects_authorized, false);
+          assert.equal(row.delivery_claimed, false);
+          assert.equal(row.dispatch_claim_count, 0);
+          assert.equal(row.delivery_event_count, 0);
+        }
+        assert.deepEqual(ordinaryProviderCalls, { checkout: 1, readback: 1, lifecycle: 0 });
+      } finally {
+        await client.query("rollback to savepoint ordinary_final_mail");
+        await client.query("release savepoint ordinary_final_mail");
+      }
+      const ordinaryCleanup = await client.query(
+        `select
+           (select count(*)::int from ss.service_custom_build_final_checkout_attempts
+            where checkout_session_id = $1) as checkout_attempts,
+           (select count(*)::int from ss.service_custom_build_final_stripe_events
+            where id = $2) as stripe_events,
+           (select count(*)::int from ss.service_custom_build_final_payment_receipts
+            where id = $3) as payment_receipts,
+           (select count(*)::int from ss.service_custom_build_handoff_receipts
+            where id = $4) as handoff_receipts,
+           (select count(*)::int from ss.commerce_transition_notification_outbox
+            where source_id = any($5::text[])) as notices,
+           (select count(*)::int from ss.hosted_mail_deliveries
+            where id = any($6::uuid[])) as pending_mail,
+           (select count(*)::int from ss.service_documents
+            where id = $7) as handoff_documents`,
+        [ordinarySessionId, ordinaryEventId, ordinaryReceiptId,
+          ordinaryHandoffReceiptId, [ordinaryReceiptId, ordinaryHandoffReceiptId],
+          ordinaryMailIds, ordinaryDocumentId]
+      );
+      assert.deepEqual(ordinaryCleanup.rows[0], {
+        checkout_attempts: 0, stripe_events: 0, payment_receipts: 0,
+        handoff_receipts: 0, notices: 0, pending_mail: 0, handoff_documents: 0
+      });
 
       await setActor(client, "customer", customer);
       await client.query(
@@ -7744,42 +7962,80 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         }),
       clock: { now: () => reservationTime }
     });
-    function notificationInput(row, suffix) {
-      return {
-        commandId: `assessment-custom-e2e-${suffix}-${randomUUID()}`,
-        audienceKind: row.audience_kind,
-        notificationKind: row.notification_kind,
-        source: {
-          table: row.source_table,
-          id: row.source_id,
-          revision: Number(row.source_revision),
-          digest: row.source_digest,
-          state: row.source_state
-        },
-        recipientDigest: digest({ suffix, kind: "recipient" }),
-        subjectReferenceDigest: digest({ suffix, kind: "subject" }),
-        contentDigest: digest({ suffix, kind: "content" }),
-        templateVersion: `${suffix}_v1`,
-        expiresAt: new Date(
-          Date.parse(reservationTime) + 3_600_000
-        ).toISOString()
-      };
+    // Ordinary business commands queue their notices. The raw final-payment
+    // and handoff race intentionally bypasses those repositories; the
+    // savepoint proof above exercises their ordinary hooks without backfill.
+    // Explicit/manual reservation behavior has its own integration proof.
+    const automaticMail = await notifications.listCustomer({
+      actorId: positiveJourneyEvidence.customerId,
+      organizationId: positiveJourneyEvidence.organizationId,
+      projectId: positiveJourneyEvidence.projectId
+    });
+    function exactAutomatic(source) {
+      const matches = automaticMail.items.filter((entry) =>
+        entry.notificationKind === source.notification_kind &&
+        entry.source.table === source.source_table &&
+        entry.source.id === source.source_id &&
+        entry.source.revision === Number(source.source_revision) &&
+        entry.source.digest === source.source_digest
+      );
+      assert.equal(matches.length, 1, `one automatic ${source.notification_kind}`);
+      return matches[0];
     }
-    const handoffMailInput = notificationInput(handoffSource, "handoff");
-    const handoffMail = await notifications.reserve(handoffMailInput);
-    assert.deepEqual(
-      await notifications.reserve(handoffMailInput),
-      handoffMail
+    const reversalMail = exactAutomatic(reversalSource);
+    const rawRaceMail = await pool.query(
+      `select id from ss.commerce_transition_notification_outbox
+        where (notification_kind = 'custom_final_payment_settled'
+               and source_id = $1)
+           or (notification_kind = 'custom_handoff_completed'
+               and source_id = $2)`,
+      [positiveJourneyEvidence.finalReceiptId, positiveJourneyEvidence.handoffReceiptId]
     );
-    const reversalMail = await notifications.reserve(
-      notificationInput(reversalSource, "reversal")
-    );
-    for (const reserved of [handoffMail, reversalMail]) {
+    assert.equal(rawRaceMail.rowCount, 0,
+      "raw SQL race sources are not historically backfilled by normal reads or replays");
+    assert.equal(automaticMail.items.some((entry) =>
+      entry.notificationKind === handoffSource.notification_kind &&
+      entry.source.id === handoffSource.source_id
+    ), false);
+    for (const kind of [
+      'assessment_quote_issued', 'assessment_invoice_prepared',
+      'assessment_payment_settled', 'assessment_report_delivered',
+      'custom_quote_issued', 'custom_initial_invoice_prepared',
+      'custom_initial_payment_settled', 'custom_change_quote_issued',
+      'custom_change_invoice_prepared', 'custom_change_payment_settled',
+      'custom_completion_ready', 'custom_final_invoice_prepared',
+      'professional_reversal_recorded'
+    ]) {
+      assert.ok(automaticMail.items.some((entry) => entry.notificationKind === kind),
+        `ordinary customer journey queued ${kind}`);
+    }
+    for (const reserved of [reversalMail]) {
       assert.equal(reserved.reservation.state, "held");
       assert.equal(reserved.mail.lifecycleState, "pending");
       assert.equal(reserved.mail.deliveryConfirmed, false);
       assert.equal(reserved.providerEffectsAuthorized, false);
       assert.equal(reserved.deliveryClaimed, false);
+    }
+    const progressMail = await pool.query(
+      `select progress.id, count(notice.id)::int as notification_count,
+              bool_and(mail.state = 'pending') as pending,
+              bool_and(not notice.provider_effects_authorized
+                       and not notice.delivery_claimed) as held
+         from ss.service_custom_build_progress_updates progress
+         left join ss.mail_purpose_notification_outbox notice
+           on notice.source_table = 'ss.service_custom_build_progress_updates'
+          and notice.source_id = progress.id::text
+          and notice.notification_kind = 'custom_progress_updated'
+         left join ss.hosted_mail_deliveries mail on mail.id = notice.mail_message_id
+        where progress.job_id = $1
+        group by progress.id`,
+      [positiveJourneyEvidence.jobId]
+    );
+    assert.ok(progressMail.rowCount > 0, "the ordinary journey recorded progress");
+    for (const row of progressMail.rows) {
+      assert.equal(row.notification_count, 1, "each progress event queued one notice");
+      assert.equal(row.pending, true);
+      assert.equal(row.held, true);
     }
     const exactHeldMail = await pool.query(
       `select mail.id, mail.state,
@@ -7790,9 +8046,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
         where mail.id = any($1::uuid[])
         group by mail.id, mail.state
         order by mail.id`,
-      [[handoffMail.mail.messageId, reversalMail.mail.messageId]]
+      [[reversalMail.mail.messageId]]
     );
-    assert.equal(exactHeldMail.rowCount, 2);
+    assert.equal(exactHeldMail.rowCount, 1);
     assert.equal(
       exactHeldMail.rows.every(
         (row) => row.state === "pending" && row.dispatch_claim_count === 0
@@ -7806,9 +8062,9 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
     });
     assert.equal(
       customerMail.items.filter((item) =>
-        [handoffMail.id, reversalMail.id].includes(item.id)
+        item.id === reversalMail.id
       ).length,
-      2
+      1
     );
     const browserProof = await proveAssessmentCustomArtifactContractRender({
       projectId: positiveJourneyEvidence.projectId,
@@ -7890,6 +8146,11 @@ test("custom-service assessment quotes are exact, append-only, and account-bound
       evidence: 5
     });
   } finally {
+    if (priorOperatorRecipient === undefined) {
+      delete process.env.SITESOURCERY_NOTIFICATION_MAIL_OPERATOR_RECIPIENT;
+    } else {
+      process.env.SITESOURCERY_NOTIFICATION_MAIL_OPERATOR_RECIPIENT = priorOperatorRecipient;
+    }
     await client.query("rollback").catch(() => {});
     client.release();
     await pool.end();

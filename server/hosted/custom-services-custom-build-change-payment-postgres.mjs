@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -1188,6 +1189,7 @@ export function createHeldCustomServicesCustomBuildChangePayment() {
 
 export function createPostgresCustomServicesCustomBuildChangePayment({
   authority,
+  automaticMail = true,
   provider,
   release,
   clock,
@@ -1911,6 +1913,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
           "Unsafe Custom-build change payment evidence could not be retained.",
           { status: 500 }
         );
+        if (automaticMail) await reserveCommerceTransitionMail(client, "custom_change_payment_reconciliation_required", event.eventId);
         return reconciliationResult(resolution);
       }
     ));
@@ -2190,6 +2193,7 @@ export function createPostgresCustomServicesCustomBuildChangePayment({
               settledAt
             ]
           );
+          if (automaticMail) await reserveCommerceTransitionMail(client, "custom_change_payment_settled", receiptId);
           result = settlementResult(
             eventId === null
               ? {

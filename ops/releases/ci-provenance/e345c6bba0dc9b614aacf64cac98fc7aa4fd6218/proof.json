@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "e345c6bba0dc9b614aacf64cac98fc7aa4fd6218",
+    "treeSha": "e5c1075784529c1ec55863a7a750f05b1dd13339",
+    "baseCommitSha": "b2e4b5eb6480f6e96b50eb9168df66d3d88b51ef"
+  },
+  "provenanceSha256": "8ba625d2fe086a06386f6c7891f5152ed4460ad47417ed240968e03f7dc0b48b",
+  "ledger": {
+    "previousByteCount": 64753,
+    "previousSha256": "554edcd7ed03b62e2781c12dadc80a3087e1c8a80e2978824fe0cd1a4af25f98",
+    "appendSha256": "0cfc7a4c45c602d126ce58ef926990180bd148f69b1a5318af721a75f6b30e2f"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test server/hosted/test/custom-services-custom-build-final-payment-postgres.test.mjs server/hosted/test/custom-services-custom-build-handoff-postgres.test.mjs",
+      "exitCode": 0,
+      "logSha256": "0dc3e22df5914869ca8f55115d762defc9234d59e1da620d1e3961687bb219c0"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "970f3fe44f90679b34b30c2363f09e4d3b766093133f646ea7878579a179aa96"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root integration plus independent support, commerce, purpose, Care and final immutable-read functional reviews passed; source, transaction scope, recipient eligibility, deduplication and rollback checks retained. This is not a full security audit."
+    },
+    "postgres": {
+      "status": "passed",
+      "receiptSha256": "1483217510fe37100aa872ef25976ccd15f5d173f31261831a9ccc26210287a4"
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "All owned local PostgreSQL databases removed after exact ownership and zero-session checks, without FORCE; actual receipts bound in PostgreSQL aggregate. Passing browser harness closed its server/browser/profile; no production fixture or additional real message."
+  }
+}

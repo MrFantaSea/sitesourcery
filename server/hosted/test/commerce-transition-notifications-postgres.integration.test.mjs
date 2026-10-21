@@ -69,7 +69,7 @@ test("committed payment failure reserves one held MAIL row without claiming deli
     );
 
     const authority = createCanonicalPostgresAuthority({ pool });
-    const queueRepository = createPostgresOperatorWorkQueueRepository({ authority });
+    const queueRepository = createPostgresOperatorWorkQueueRepository({ automaticMail: false, authority });
     const selectedNow = new Date().toISOString();
     const queue = createOperatorWorkQueue({
       repository: queueRepository,

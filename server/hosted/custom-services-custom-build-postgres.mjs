@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail, reserveCommerceInvoiceMail } from "./commerce-transition-auto-mail.mjs";
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -926,6 +927,7 @@ export function createHeldCustomServicesCustomBuild() {
 
 export function createPostgresCustomServicesCustomBuild({
   authority,
+  automaticMail = true,
   randomUUID = systemRandomUUID
 } = {}) {
   const database = validateAuthority(authority);
@@ -1214,6 +1216,7 @@ export function createPostgresCustomServicesCustomBuild({
                 input.expiresAt
               ]
             );
+            if (automaticMail) await reserveCommerceTransitionMail(client, "custom_quote_issued", revisionId);
             await client.query(
               `insert into ss.service_custom_build_quote_commands (
                  quote_id, command_id
@@ -1331,6 +1334,7 @@ export function createPostgresCustomServicesCustomBuild({
                 input.expiresAt
               ]
             );
+            if (automaticMail) await reserveCommerceTransitionMail(client, "custom_quote_issued", revisionId);
             await client.query(
               `insert into ss.service_custom_build_quote_commands (
                  quote_id, command_id
@@ -1527,6 +1531,7 @@ export function createPostgresCustomServicesCustomBuild({
                 input.commandId
               ]
             );
+            if (automaticMail) await reserveCommerceInvoiceMail(client, "custom_initial_invoice_prepared", input.quoteId);
             const row = await selectQuoteById(client, input.quoteId);
             invariant(
               row.organization_id === input.organizationId &&

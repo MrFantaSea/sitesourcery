@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -406,6 +407,7 @@ export function createHeldCustomServicesOwner() {
 
 export function createPostgresCustomServicesOwner({
   authority,
+  automaticMail = true,
   randomUUID = systemRandomUUID
 } = {}) {
   const database = validateAuthority(authority);
@@ -841,6 +843,7 @@ export function createPostgresCustomServicesOwner({
                 ),
                 "newAssessmentQuoteRevision"
               );
+              if (automaticMail) await reserveCommerceTransitionMail(client, "assessment_quote_issued", revisionId);
             }
 
             const receipt = quoteReceipt(revision);

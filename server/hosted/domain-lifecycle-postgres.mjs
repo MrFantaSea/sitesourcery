@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import {
@@ -483,6 +484,10 @@ export function createPostgresDomainLifecycleRepository({
             resultDigest
           ]
         );
+        if (["active", "grace", "redemption", "expired", "transferred_out"].includes(state.lifecycleStatus) &&
+            retained.rows[0]?.lifecycle_status !== state.lifecycleStatus) {
+          await reserveAutomaticPurposeEvent(client, { table: "ss.domain_provider_lifecycle_states", id: lifecycleStateId, organizationId: selected.organizationId });
+        }
         return Object.freeze({
           replayed: false,
           result: clone(resultDocument)

@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -619,6 +620,7 @@ export function createPostgresCareCommerceRepository({
               quote.quoteDigest, JSON.stringify(quote)
             ]
           );
+          await reserveAutomaticPurposeEvent(client, { table: "ss.care_commerce_quotes", id: quote.quoteId, organizationId: command.organizationId });
         }
       ));
     },
@@ -671,16 +673,19 @@ export function createPostgresCareCommerceRepository({
                $18,$19,$20,false,false,false,$21,$22,$23,$24::jsonb,$25,$25)`,
             values
           );
-          await client.query(
+          const notificationEvent = await client.query(
             `insert into ss.care_commerce_reservation_events (
                organization_id,project_id,reservation_id,quote_id,command_id,
                actor_user_id,state,revision,reservation_digest,reservation_document,
                provider_effects_authorized,recorded_at
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11)`,
+             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11) returning id`,
             [command.organizationId, command.projectId, value.reservationId,
               value.quoteId, command.commandId, command.actorId, value.state,
               value.revision, value.reservationDigest, JSON.stringify(value), value.updatedAt]
           );
+          if (["held", "cancelled"].includes(value.state)) {
+            await reserveAutomaticPurposeEvent(client, { table: "ss.care_commerce_reservation_events", id: notificationEvent.rows[0].id, organizationId: command.organizationId });
+          }
         }
       ));
     },
@@ -742,16 +747,19 @@ export function createPostgresCareCommerceRepository({
           );
           invariant(updated.rowCount === 1, "CARE_COMMERCE_REPOSITORY_CONFLICT",
             "The Care reservation changed before transition.", { status: 409 });
-          await client.query(
+          const notificationEvent = await client.query(
             `insert into ss.care_commerce_reservation_events (
                organization_id,project_id,reservation_id,quote_id,command_id,
                actor_user_id,state,revision,reservation_digest,reservation_document,
                provider_effects_authorized,recorded_at
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11)`,
+             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11) returning id`,
             [command.organizationId, command.projectId, next.reservationId,
               next.quoteId, command.commandId, command.actorId, next.state,
               next.revision, next.reservationDigest, JSON.stringify(next), next.updatedAt]
           );
+          if (["held", "cancelled"].includes(next.state)) {
+            await reserveAutomaticPurposeEvent(client, { table: "ss.care_commerce_reservation_events", id: notificationEvent.rows[0].id, organizationId: command.organizationId });
+          }
         }
       ));
     }

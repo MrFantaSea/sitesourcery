@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -1418,6 +1419,7 @@ export function createHeldCustomServicesCustomBuildFinalPayment() {
 
 export function createPostgresCustomServicesCustomBuildFinalPayment({
   authority,
+  automaticMail = true,
   provider,
   release,
   clock,
@@ -1611,6 +1613,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
           { status: 500 }
         );
 
+        // H1M serializes checkout mutations. These immutable obligation and
+        // invoice rows intentionally grant service_role SELECT only.
         const invoiceResult = await client.query(
           `select
              obligation.id as obligation_id,
@@ -1666,8 +1670,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
            where obligation.organization_id = $1
              and obligation.project_id = $2
              and obligation.customer_user_id = $3
-             and invoice.id = $4
-           for update of obligation, invoice`,
+             and invoice.id = $4`,
           [
             input.organizationId,
             input.projectId,
@@ -2213,6 +2216,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
           "Unsafe final-payment evidence could not be retained.",
           { status: 500 }
         );
+        if (automaticMail) await reserveCommerceTransitionMail(client, "custom_final_payment_reconciliation_required", event.eventId);
         return reconciliationRequiredResult(resolution);
       }
     ));
@@ -2273,6 +2277,8 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
           }
         }
 
+        // Retain the mutable attempt row lock under H1M; immutable source
+        // rows require no UPDATE privilege or row lock.
         const selected = await client.query(
           `select
              obligation.id as obligation_id,
@@ -2331,7 +2337,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
             and receipt.obligation_id = obligation.id
            where obligation.organization_id = $1
              and obligation.id = attempt.obligation_id
-           for update of obligation, invoice, attempt`,
+           for update of attempt`,
           [
             resolution.organizationId,
             resolution.invoiceId,
@@ -2544,6 +2550,7 @@ export function createPostgresCustomServicesCustomBuildFinalPayment({
               settledAt
             ]
           );
+          if (automaticMail) await reserveCommerceTransitionMail(client, "custom_final_payment_settled", receiptId);
           result = settlementResult({
             completionPackageId: resolution.completionPackageId,
             invoiceId: resolution.invoiceId,

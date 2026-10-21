@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -206,7 +207,7 @@ function evidence(row) {
   });
 }
 
-export function createPostgresOperatorWorkQueueRepository({ authority: input } = {}) {
+export function createPostgresOperatorWorkQueueRepository({ authority: input, automaticMail = true } = {}) {
   const database = authority(input);
   return Object.freeze({
     async readiness() {
@@ -335,6 +336,7 @@ export function createPostgresOperatorWorkQueueRepository({ authority: input } =
               input.reasonCode, input.providerCreatedAt, input.recordedAt
             ]
           );
+          if (automaticMail) await reserveCommerceTransitionMail(client, "invoice_finalization_failed", inserted.rows[0].id);
           return evidence(inserted.rows[0]);
         }
       ));

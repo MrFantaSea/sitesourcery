@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -1140,6 +1141,7 @@ export function createHeldCustomServicesCustomBuildHandoff() {
 
 export function createPostgresCustomServicesCustomBuildHandoff({
   authority,
+  automaticMail = true,
   ids
 } = {}) {
   const database = validateAuthority(authority);
@@ -1246,6 +1248,8 @@ export function createPostgresCustomServicesCustomBuildHandoff({
           input.organizationId,
           input.jobId
         );
+        // H1M serializes every context read and handoff below. Obligation
+        // and completion-package sources are immutable and SELECT-only.
         const prior = await client.query(
           `/* handoff:command */
            select *
@@ -1285,8 +1289,7 @@ export function createPostgresCustomServicesCustomBuildHandoff({
               `/* handoff:context */
                ${HANDOFF_CONTEXT_SELECT}
                where obligation.organization_id = $1
-                 and obligation.job_id = $2
-               for update of obligation, package`,
+                 and obligation.job_id = $2`,
               [input.organizationId, input.jobId]
             ),
             "replayed Custom-build handoff"
@@ -1342,8 +1345,7 @@ export function createPostgresCustomServicesCustomBuildHandoff({
             `/* handoff:context */
              ${HANDOFF_CONTEXT_SELECT}
              where obligation.organization_id = $1
-               and obligation.job_id = $2
-             for update of obligation, package`,
+               and obligation.job_id = $2`,
             [input.organizationId, input.jobId]
           ),
           "Custom-build handoff authority"
@@ -1390,6 +1392,9 @@ export function createPostgresCustomServicesCustomBuildHandoff({
           "database-created Custom-build handoff"
         );
         const receiptId = storedUuid(created.receipt_id, "handoff receipt ID");
+        if (automaticMail && selected.handoff_receipt_id == null) {
+          await reserveCommerceTransitionMail(client, "custom_handoff_completed", receiptId);
+        }
         const documentId = storedUuid(created.document_id, "handoff document ID");
         storedDigest(created.handoff_digest, "handoff receipt digest");
         const handedOffAt = storedIso(created.handed_off_at, "handoff time");
@@ -1411,8 +1416,7 @@ export function createPostgresCustomServicesCustomBuildHandoff({
             `/* handoff:created-context */
              ${HANDOFF_CONTEXT_SELECT}
              where obligation.organization_id = $1
-               and obligation.job_id = $2
-             for update of obligation, package`,
+               and obligation.job_id = $2`,
             [input.organizationId, input.jobId]
           ),
           "created Custom-build handoff"

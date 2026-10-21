@@ -26,6 +26,7 @@ function input(overrides = {}) {
 test("owner quote repository rejects browser price and invalid scope before PostgreSQL", async () => {
   let calls = 0;
   const owner = createPostgresCustomServicesOwner({
+    automaticMail: false,
     authority: {
       async service() {
         calls += 1;
@@ -78,6 +79,7 @@ test("owner quote repository rejects browser price and invalid scope before Post
 test("owner queue requires the database-controlled operator grant", async () => {
   const contexts = [];
   const owner = createPostgresCustomServicesOwner({
+    automaticMail: false,
     authority: {
       async service(context, work) {
         contexts.push(context);

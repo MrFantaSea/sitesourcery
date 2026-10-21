@@ -1,3 +1,4 @@
+import { reserveCommerceTransitionMail } from "./commerce-transition-auto-mail.mjs";
 import { createHash, randomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -571,6 +572,7 @@ function eventMatches(row, event, resolution) {
 
 export function createPostgresCustomServicesAssessmentSettlement({
   authority,
+  automaticMail = true,
   provider,
   clock,
   ids
@@ -796,6 +798,7 @@ export function createPostgresCustomServicesAssessmentSettlement({
             "The unsafe assessment payment evidence could not be retained.",
             { status: 500 }
           );
+          if (automaticMail) await reserveCommerceTransitionMail(client, "assessment_payment_reconciliation_required", event.eventId);
           return reconciliationResult(resolution);
         }
       )
@@ -1050,6 +1053,7 @@ export function createPostgresCustomServicesAssessmentSettlement({
                 settledAt
               ]
             );
+            if (automaticMail) await reserveCommerceTransitionMail(client, "assessment_payment_settled", receiptId);
             await client.query(
               `insert into ss.service_assessment_jobs (
                  id, organization_id, project_id, case_id,

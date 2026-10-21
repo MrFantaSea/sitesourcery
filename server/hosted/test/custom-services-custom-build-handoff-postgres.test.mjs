@@ -505,6 +505,7 @@ function createHarness({
     }
   };
   const service = createPostgresCustomServicesCustomBuildHandoff({
+    automaticMail: false,
     authority,
     ids
   });

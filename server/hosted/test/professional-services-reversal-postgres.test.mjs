@@ -70,6 +70,7 @@ function resultRow(overrides = {}) {
 function harness(handler) {
   const calls = [];
   const repository = createPostgresProfessionalServicesReversalRepository({
+    automaticMail: false,
     authority: {
       async service(context, work) {
         calls.push({ context });
@@ -317,7 +318,7 @@ test("durable event replay lookup is organization-bound and exact-identity fence
   );
 });
 
-test("recording calls only the evidence-first database function", async () => {
+test("explicit legacy fixture records through the evidence-first database function", async () => {
   const { repository, calls } = harness((text) => {
     assert.match(text, /record_service_professional_reversal/u);
     assert.doesNotMatch(text, /stripe|refunds[.]create|payment_intents[.]create/iu);

@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -539,6 +540,7 @@ export function createPostgresResponderCommerceRepository({
               quote.disclosureDigest, quote.quoteDigest, JSON.stringify(quote)
             ]
           );
+          await reserveAutomaticPurposeEvent(client, { table: "ss.responder_commerce_quotes", id: quote.quoteId, organizationId: selected.organizationId });
         }
       ));
     },
@@ -604,12 +606,12 @@ export function createPostgresResponderCommerceRepository({
              )`,
             reservationValues(selected, reservation)
           );
-          await client.query(
+          const notificationEvent = await client.query(
             `insert into ss.responder_commerce_reservation_events (
                organization_id,project_id,reservation_id,quote_id,command_id,
                actor_user_id,state,revision,reservation_digest,
                reservation_document,provider_effects_authorized,recorded_at
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11)`,
+             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11) returning id`,
             [
               selected.organizationId, selected.projectId,
               reservation.reservationId, reservation.quoteId,
@@ -618,6 +620,9 @@ export function createPostgresResponderCommerceRepository({
               JSON.stringify(reservation), reservation.updatedAt
             ]
           );
+          if (["held", "cancelled"].includes(reservation.state)) {
+            await reserveAutomaticPurposeEvent(client, { table: "ss.responder_commerce_reservation_events", id: notificationEvent.rows[0].id, organizationId: selected.organizationId });
+          }
         }
       ));
     },
@@ -703,12 +708,12 @@ export function createPostgresResponderCommerceRepository({
             "Responder reservation changed before transition.",
             { status: 409 }
           );
-          await client.query(
+          const notificationEvent = await client.query(
             `insert into ss.responder_commerce_reservation_events (
                organization_id,project_id,reservation_id,quote_id,command_id,
                actor_user_id,state,revision,reservation_digest,
                reservation_document,provider_effects_authorized,recorded_at
-             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11)`,
+             ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,false,$11) returning id`,
             [
               selected.organizationId, selected.projectId, next.reservationId,
               next.quoteId, selected.commandId, selected.actorId, next.state,
@@ -716,6 +721,9 @@ export function createPostgresResponderCommerceRepository({
               next.updatedAt
             ]
           );
+          if (["held", "cancelled"].includes(next.state)) {
+            await reserveAutomaticPurposeEvent(client, { table: "ss.responder_commerce_reservation_events", id: notificationEvent.rows[0].id, organizationId: selected.organizationId });
+          }
         }
       ));
     }

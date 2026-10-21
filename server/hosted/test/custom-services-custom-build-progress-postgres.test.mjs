@@ -271,8 +271,15 @@ test("owner progress update uses exact actor scope and server-owned job facts", 
         next_step: values[12],
         progress_recorded_at: "2026-08-07T11:00:00.000Z"
       });
-      return result([]);
+      return result([{ id: REQUEST_ID }]);
     }
+    if (text.includes('from ss.mail_purpose_notification_sources source')) return result([{
+      source_table: 'ss.service_custom_build_progress_updates', notification_kind: 'custom_progress_updated',
+      purpose_kind: 'project_progress', template_version: 'custom-build-progress-updated.v1', source_state: 'building',
+      source_id: REQUEST_ID, source_revision: 1, source_digest: 'a'.repeat(64), project_id: PROJECT_ID,
+      source_customer_user_id: CUSTOMER_ID
+    }]);
+    if (text.includes('select id from ss.mail_purpose_notification_outbox') || text.includes('select u.email from auth.users')) return result([]);
     if (/from ss\.service_custom_build_jobs job/u.test(text)) {
       return result([current]);
     }

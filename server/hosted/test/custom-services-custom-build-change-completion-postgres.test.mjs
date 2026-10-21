@@ -393,6 +393,7 @@ test("constructor rejects missing authority, time, and ID sources", () => {
   );
   assert.throws(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: { service() {} },
       clock: null
     }),
@@ -408,6 +409,7 @@ test("readiness requires the exact migration-44 marker in a read-only transactio
     }]);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value
   });
   const readiness = await service.readiness();
@@ -423,6 +425,7 @@ test("readiness requires the exact migration-44 marker in a read-only transactio
   const wrong = authority(() => result([{ runtime_contract: "wrong" }]));
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: wrong.value
     }).readiness(),
     (error) =>
@@ -434,6 +437,7 @@ test("readiness requires the exact migration-44 marker in a read-only transactio
 test("customer read returns a private not-available projection without a paid job", async () => {
   const database = snapshotAuthority(fixtures({ customerHasJob: false }));
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value
   });
   const projection = await service.readCustomer(customerScope());
@@ -466,6 +470,7 @@ test("customer projection exposes active and historical commercial truth without
   });
   const database = snapshotAuthority(state);
   const projection = await createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value
   }).readCustomer(customerScope());
   assert.equal(projection.state, "change_order_review");
@@ -518,6 +523,7 @@ test("customer completion exposes only evidence selected into the immutable pack
     completion: completion()
   });
   const projection = await createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: snapshotAuthority(state).value
   }).readCustomer(customerScope());
   assert.equal(projection.state, "ready_for_final_payment");
@@ -552,6 +558,7 @@ test("owner projection is capability-gated and includes exact paid-job work auth
   });
   const database = snapshotAuthority(state);
   const projection = await createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value
   }).readOwner({ userId: OPERATOR_ID }, JOB_ID, ORGANIZATION_ID);
   assert.deepEqual(projection.job, {
@@ -583,6 +590,7 @@ test("owner projection is capability-gated and includes exact paid-job work auth
   const denied = snapshotAuthority(state, { authorize: false });
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: denied.value
     }).readOwner({ userId: OPERATOR_ID }, JOB_ID, ORGANIZATION_ID),
     (error) => error.code === "OPERATOR_ACCESS_REQUIRED" && error.status === 403
@@ -615,6 +623,7 @@ test("customer evidence read is package-bound and verifies exact bytes", async (
     }]);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value
   });
   const selected = await service.readCustomerEvidence(
@@ -637,6 +646,7 @@ test("customer evidence read fails closed on absent or corrupt package evidence"
   const absent = authority(() => result([]));
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: absent.value
     }).readCustomerEvidence(customerScope(), EVIDENCE_ID),
     (error) =>
@@ -659,6 +669,7 @@ test("customer evidence read fails closed on absent or corrupt package evidence"
   }]));
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: corrupt.value
     }).readCustomerEvidence(customerScope(), EVIDENCE_ID),
     (error) =>
@@ -690,6 +701,7 @@ test("issueChangeOrder inserts only bounded owner input and trigger-derived auth
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => CHANGE_ID
   });
@@ -764,6 +776,7 @@ test("issueChangeOrder replays the same command and rejects command reuse", asyn
   }
   const same = selectedAuthority(replay);
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: same.value,
     randomUUID: () => {
       throw new Error("replay must not allocate an ID");
@@ -787,6 +800,7 @@ test("issueChangeOrder replays the same command and rejects command reuse", asyn
   const reused = selectedAuthority({ ...replay, unit_count: "3" });
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: reused.value
     }).issueChangeOrder(
       { userId: OPERATOR_ID },
@@ -842,6 +856,7 @@ test("acceptChangeOrder binds the exact customer project and two accepted digest
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => COMMAND_RECORD_ID
   });
@@ -896,6 +911,7 @@ test("acceptChangeOrder replays safely and rejects stale quote authority", async
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => {
       throw new Error("replay must not allocate an ID");
@@ -929,6 +945,7 @@ test("acceptChangeOrder replays safely and rejects stale quote authority", async
   });
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: stale.value
     }).acceptChangeOrder(customerScope(), CHANGE_ID, acceptanceInput()),
     (error) =>
@@ -981,6 +998,7 @@ test("declineChangeOrder records both declined digests and replays without a sec
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => {
       allocations += 1;
@@ -1049,6 +1067,7 @@ test("voidChangeOrder rejects a stale digest and preserves replay authority", as
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => {
       allocations += 1;
@@ -1097,6 +1116,7 @@ test("voidChangeOrder rejects a stale digest and preserves replay authority", as
   });
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: stale.value
     }).voidChangeOrder(
       { userId: OPERATOR_ID },
@@ -1145,6 +1165,7 @@ test("expireChangeOrder seals an elapsed issued quote once and frees active work
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => {
       allocations += 1;
@@ -1198,6 +1219,7 @@ test("expireChangeOrder seals an elapsed issued quote once and frees active work
   });
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: notElapsed.value
     }).expireChangeOrder(
       { userId: OPERATOR_ID },
@@ -1261,6 +1283,7 @@ test("uploadEvidence writes exact image bytes and identity in one locked transac
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     clock: {
       now() {
@@ -1359,6 +1382,7 @@ test("uploadEvidence replay is stable and conflicting bytes cannot reuse a comma
   };
   const same = replayAuthority(prior);
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: same.value,
     clock: { now: () => { throw new Error("replay must not read time"); } },
     randomUUID: () => { throw new Error("replay must not allocate IDs"); }
@@ -1382,6 +1406,7 @@ test("uploadEvidence replay is stable and conflicting bytes cannot reuse a comma
   const conflict = replayAuthority(prior);
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: conflict.value
     }).uploadEvidence(
       { userId: OPERATOR_ID },
@@ -1448,6 +1473,7 @@ test("recordCompletion derives the latest progress revision and leaves scope, mo
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value,
     randomUUID: () => {
       allocations += 1;
@@ -1513,6 +1539,7 @@ test("recordCompletion rejects missing progress and noncanonical evidence before
     throw new Error(`Unexpected query: ${text}`);
   });
   const service = createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
     authority: database.value
   });
   await assert.rejects(
@@ -1546,6 +1573,7 @@ test("database authorization, absence, migration, and concurrency errors transla
     });
     await assert.rejects(
       () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
         authority: database.value
       }).readOwner({ userId: OPERATOR_ID }, JOB_ID, ORGANIZATION_ID),
       (error) => error.code === "OPERATOR_ACCESS_REQUIRED" && error.status === 403
@@ -1560,6 +1588,7 @@ test("database authorization, absence, migration, and concurrency errors transla
     });
     await assert.rejects(
       () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
         authority: database.value
       }).readCustomer(customerScope()),
       (error) =>
@@ -1574,6 +1603,7 @@ test("database authorization, absence, migration, and concurrency errors transla
     });
     await assert.rejects(
       () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
         authority: database.value
       }).readCustomer(customerScope()),
       (error) =>
@@ -1590,6 +1620,7 @@ test("database authorization, absence, migration, and concurrency errors transla
     });
     await assert.rejects(
       () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
         authority: database.value
       }).readCustomer(customerScope()),
       (error) =>
@@ -1605,6 +1636,7 @@ test("malformed stored commercial authority fails as a storage conflict", async 
   }));
   await assert.rejects(
     () => createPostgresCustomServicesCustomBuildChangeCompletion({
+    automaticMail: false,
       authority: database.value
     }).readCustomer(customerScope()),
     (error) =>

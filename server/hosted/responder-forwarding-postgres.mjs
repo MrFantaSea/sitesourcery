@@ -1,3 +1,4 @@
+import { reserveAutomaticPurposeEvent } from './purpose-event-notifications.mjs';
 import { randomUUID as systemRandomUUID } from "node:crypto";
 
 import { deepFreeze } from "../commerce-v2/canonical.mjs";
@@ -696,6 +697,7 @@ export function createPostgresResponderForwardingRepository({
               selected.consentEvidenceDigest, actor.kind, actor.userId,
               selected.recordedAt]
           );
+          await reserveAutomaticPurposeEvent(client, { table: "ss.responder_forwarding_commands", id: selected.commandId, organizationId: selected.organizationId });
           return transitionReceipt(command.rows[0], onboarding.rows[0]);
         }
       ));
@@ -896,6 +898,9 @@ export function createPostgresResponderForwardingRepository({
             "Responder forwarding state changed; retry safely.",
             { status: 409 }
           );
+          if (resultingState !== onboarding.rows[0].state) {
+            await reserveAutomaticPurposeEvent(client, { table: "ss.responder_forwarding_commands", id: selected.commandId, organizationId: selected.organizationId });
+          }
           return transitionReceipt(command.rows[0], changed.rows[0]);
         }
       ));
@@ -1023,6 +1028,7 @@ export function createPostgresResponderForwardingRepository({
             "Responder forwarding state changed; retry safely.",
             { status: 409 }
           );
+          await reserveAutomaticPurposeEvent(client, { table: "ss.responder_forwarding_commands", id: selected.commandId, organizationId: selected.organizationId });
           return transitionReceipt(command.rows[0], changed.rows[0]);
         }
       ));
