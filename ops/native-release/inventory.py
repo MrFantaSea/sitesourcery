@@ -1,6 +1,6 @@
 import os,stat,json,hashlib,subprocess,re,sys
 from pathlib import Path
-assert len(sys.argv) in (3,4) and (len(sys.argv)==3 or sys.argv[3]=='--entries')
+assert len(sys.argv) in (3,4) and (len(sys.argv)==3 or sys.argv[3] in ('--entries','--custody'))
 C,T=sys.argv[1:3]
 assert re.fullmatch('[a-f0-9]{40}',C) and re.fullmatch('[a-f0-9]{40}',T)
 root=Path('/home/mrfantasea/.local/share/sitesourcery-production/releases')/C
@@ -33,4 +33,11 @@ canonical=(json.dumps(entries,sort_keys=True,separators=(',',':'),ensure_ascii=F
 assert not subprocess.check_output(['git','--no-optional-locks','-c','safe.directory='+str(root),'status','--porcelain=v1','--untracked-files=all'],cwd=root,text=True)
 result={'inventorySha256':hashlib.sha256(canonical).hexdigest(),'fileCount':sum(x['type']=='file' for x in entries),'totalFileBytes':total}
 if len(sys.argv)==4:result['entries']=entries
+if len(sys.argv)==4 and sys.argv[3]=='--custody':
+ import importlib.util
+ spec=importlib.util.spec_from_file_location('release_isolation',Path(__file__).with_name('isolation.py'))
+ isolation=importlib.util.module_from_spec(spec);spec.loader.exec_module(isolation)
+ custody=isolation.collect_custody(root)
+ assert isolation.legacy_inventory(custody)==result,'Legacy/custody observation changed'
+ result['custody']=custody
 print(json.dumps(result))

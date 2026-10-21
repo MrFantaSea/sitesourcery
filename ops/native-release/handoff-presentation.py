@@ -7,6 +7,8 @@ from pathlib import Path
 import importlib.util
 _profile_spec=importlib.util.spec_from_file_location('sitesourcery_release_profile',Path(__file__).with_name('profile.py'))
 _profile=importlib.util.module_from_spec(_profile_spec);_profile_spec.loader.exec_module(_profile)
+_isolation_spec=importlib.util.spec_from_file_location('sitesourcery_release_isolation',Path(__file__).with_name('isolation.py'))
+_isolation=importlib.util.module_from_spec(_isolation_spec);_isolation_spec.loader.exec_module(_isolation)
 require_profile=_profile.require
 require_profile(len(sys.argv)>=4,'PROFILE SHA256 ACTION required')
 PROFILE_REF={'path':sys.argv[1],'sha256':sys.argv[2]}
@@ -23,15 +25,15 @@ MARKER=Path(PATHS['marker']);MARKER_BYTES=PATHS['markerText'].encode()
 DROP=PATHS['dropin'];DROP_BYTES=('[Unit]\nConditionPathExists=!'+str(MARKER)+'\n').encode()
 PRIOR=PROFILE['priorCandidate'];PRIOR_TREE=PROFILE['priorTree']
 API=('system','sitesourcery-hq-api.service');PG=('user','sitesourcery-production-postgresql.service');GATEWAY=('system','sitesourcery-hq-gateway.service');MOUNT=('user','sitesourcery-hq-backup-mount.service')
-RUNTIME=[('system','sitesourcery-hq-tenant.service'),('system','sitesourcery-hq-workers.service')]
+RUNTIME=[('system','sitesourcery-hq-tenant.service'),('system','sitesourcery-hq-workers.service')]+([GATEWAY] if _isolation.enabled(PROFILE) else [])
 ADMISSION=[('system','sitesourcery-hq-cloudflared.service'),('system','sitesourcery-hq-backup.timer'),('system','sitesourcery-hq-monitor.timer')]
 PASSIVE=[('system','sitesourcery-hq-monitor.service')]
 LATE=[API,('system','sitesourcery-hq-backup.service'),('system','sitesourcery-hq-backup-recovery.service')]
 EARLY=RUNTIME+ADMISSION+PASSIVE;ALL=EARLY+LATE
 PRIVATE=[('user','client-profile-hub.service'),('user','client-profile-hub-backup.timer'),('user','client-profile-hub-morning-research.timer'),('user','client-profile-hub-backup.service'),('user','client-profile-hub-morning-research.service')]
-INDEPENDENT=[PG,GATEWAY,MOUNT]+PRIVATE
+INDEPENDENT=[PG,MOUNT]+([] if _isolation.enabled(PROFILE) else [GATEWAY])+PRIVATE
 IDENTITY=Path('/home/mrfantasea/.config/sitesourcery-hq-operator/identity.json')
-READY_FILES=['/usr/local/libexec/sitesourcery-worker-readiness-20261016/wait-api-ready.mjs','/etc/systemd/system/sitesourcery-hq-workers.service.d/99-api-readiness-wait.conf']
+READY_FILES=[_isolation.READINESS_HELPER,'/etc/systemd/system/sitesourcery-hq-workers.service.d/99-api-readiness-wait.conf']
 sha=lambda b:hashlib.sha256(b).hexdigest()
 now=lambda:datetime.datetime.now(datetime.timezone.utc).isoformat()
 key=lambda u:':'.join(u)
@@ -40,9 +42,11 @@ def require(ok,message):
 def prefix(scope):return ['/usr/bin/systemctl'] if scope=='system' else ['/usr/sbin/runuser','-u','mrfantasea','--','/usr/bin/env','XDG_RUNTIME_DIR=/run/user/1000','DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus','/usr/bin/systemctl','--user']
 def state(u):
  names=['LoadState','ActiveState','SubState','UnitFileState','FragmentPath','DropInPaths']+([] if u[1].endswith('.timer') else ['MainPID','NRestarts','WorkingDirectory'])
+ if _isolation.enabled(PROFILE) and u==GATEWAY:names+=['InvocationID']
  raw=subprocess.check_output(prefix(u[0])+['show',u[1],'--property='+','.join(names)],stderr=subprocess.PIPE,timeout=15)
  v=dict(l.split('=',1) for l in raw.decode().splitlines());require(v['LoadState']=='loaded','unit_missing:'+key(u));return v
 def control(u,action):
+ if action=='start':_profile.current_window(a,3600)
  require(u in ALL and u[0]=='system','non_site_service_control_forbidden');subprocess.run(prefix(u[0])+[action,u[1]],check=True,timeout=90,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 def reload():
  for s in ['system']:subprocess.run(prefix(s)+['daemon-reload'],check=True,timeout=20,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -78,7 +82,7 @@ def release(units):
  _profile.current_window(a,3600)
  exact(MARKER,MARKER_BYTES,0o600)
  for u in units:exact(drop(u),DROP_BYTES,0o644)
- for u in units:drop(u).unlink()
+ for u in units:_profile.current_window(a,3600);drop(u).unlink()
  reload()
 def envvalues(name):
  d={}
@@ -87,12 +91,16 @@ def envvalues(name):
   k,v=line.split('=',1);require(k not in d,'duplicate_env_key');d[k]=json.loads(v) if v.startswith('"') else v
  return d
 def observe():
+ _isolation.verify_readiness_operand()
+ isolation=_isolation.observe(PROFILE)
  units={key(u):state(u) for u in ALL+INDEPENDENT};files={}
  for v in units.values():
   for p in [v['FragmentPath'],*v['DropInPaths'].split()]:files[p]=unit_definition_meta(Path(p))
  for p in READY_FILES+[str(IDENTITY)]+['/etc/sitesourcery/'+n for n in ['hosted.env','workers.env','tenant.env','backup.env','monitor.env','WORKERS_APPROVED','PUBLICATION_APPROVED','origin-seal.json','origin-installed-readback.json','final-release-epoch-v2.json']]:files[p]=meta(Path(p))
+ if isolation:
+  for name in [str(_isolation.POLICY),str(_isolation.MARKER),*isolation['files']]:files[name]=meta(Path(name))
  worker=envvalues('workers.env');config=json.loads(worker['SITESOURCERY_WORKER_CONFIG']);require(config['activation']=='owner-approved' and config['purposes']==PROFILE['workerPurposes'],'accepted_configured_purposes_required');require(worker.get('SITESOURCERY_CARE_MODE','held')==PROFILE['workerCareMode'],'existing_Care_activation_changed')
- return {'source':str((BASE/'current').resolve()),'units':units,'files':files,'workerPurposes':config['purposes'],'workerConfigSha256':sha(worker['SITESOURCERY_WORKER_CONFIG'].encode())}
+ return {'source':str((BASE/'current').resolve()),'units':units,'files':files,'workerPurposes':config['purposes'],'workerConfigSha256':sha(worker['SITESOURCERY_WORKER_CONFIG'].encode()),**({'isolation':isolation} if isolation else {})}
 def unchanged_baseline(j):
  for u in INDEPENDENT:
   require(state(u)==j['baseline']['units'][key(u)],'untouched_unit_changed:'+key(u))
@@ -101,10 +109,12 @@ def unchanged_baseline(j):
  require(meta(IDENTITY)==j['baseline']['files'][str(IDENTITY)],'existing_owner_identity_changed')
  for p in READY_FILES:require(meta(Path(p))==j['baseline']['files'][p],'readiness_file_changed')
  require(meta(CONFIG/'workers.env')==j['baseline']['files'][str(CONFIG/'workers.env')],'worker_configuration_changed')
+ if _isolation.enabled(PROFILE):require(meta(Path(_isolation.WORKER_ENV))==j['baseline']['files'][_isolation.WORKER_ENV],'isolated_worker_configuration_changed')
 def fence_free():
  for n in ['BACKUP_QUIESCE','BACKUP_CYCLE_STATE.json']:require(not os.path.lexists(Path('/srv/sitesourcery-storage/production/backup-control')/n),'backup_recovery_pending')
 def ready(candidate,count,tree):
- req=urllib.request.Request('http://127.0.0.1:8081/api/v1/ready',headers={'Host':'sitesourcery.com','X-Forwarded-Proto':'https'})
+ port=18988 if _isolation.enabled(PROFILE) else 8081
+ req=urllib.request.Request('http://127.0.0.1:'+str(port)+'/api/v1/ready',headers={'Host':'sitesourcery.com','X-Forwarded-Proto':'https'})
  with urllib.request.urlopen(req,timeout=5) as r:v=json.load(r)
  require(v['ready'] is True and v['release']['candidateCommitSha']==candidate and v['release']['migrationCount']==count and v['release']['candidateTreeSha']==tree,'exact_API_not_ready');return v['release']
 def main():
@@ -124,6 +134,7 @@ def main():
    try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB);break
    except BlockingIOError:require(time.monotonic()<end,'operations_busy');time.sleep(.1)
  if action=='initial':
+  if _isolation.enabled(PROFILE):_isolation.observe(PROFILE,PROFILE['runtime']['isolation']['priorAcceptanceSha256'])
   before=observe();require(before==anchored(a['baselineReceipt']),'fresh_baseline_changed');require(before['source']==str(BASE/'releases'/PRIOR),'prior_source_changed');ready(PRIOR,BEFORE_COUNT,PRIOR_TREE)
   require(not os.path.lexists(OUT) and not os.path.lexists(MARKER) and all(not os.path.lexists(drop(u)) for u in ALL),'prior_handoff_exists')
   require(all(before['units'][key(u)]['ActiveState']=='inactive' for u in PASSIVE+LATE[1:]),'background_one_shot_active');require(all(before['units'][key(u)]['ActiveState'] in ['active','inactive'] for u in ALL),'transitioning_unit')
@@ -133,7 +144,7 @@ def main():
   _profile.current_window(a,3600);os.umask(0o077);OUT.mkdir(mode=0o700);save('journal.json',{'at':now(),'baseline':before,'authoritySha256':sys.argv[3]});create(MARKER,MARKER_BYTES,0o600);hold(ALL);reload()
   for u in ADMISSION+PASSIVE+list(reversed(RUNTIME))+LATE:control(u,'stop')
   require(all(state(u)['ActiveState']=='inactive' and state(u)['MainPID']=='0' for u in ALL if not u[1].endswith('.timer')),'site_writer_not_stopped');require(all(state(u)['ActiveState']=='inactive' for u in ALL),'site_timer_or_operation_not_held');unchanged_baseline({'baseline':before})
-  save('initial-holds.json',{'at':now(),'phase':'initial','units':{key(u):state(u) for u in ALL},'holdPaths':[str(MARKER)]+[str(drop(u)) for u in ALL],'apiIntentionallyActive':False,'independentServicesPreserved':True,'backupNotRun':True,'databaseMutationPerformed':False});print(json.dumps({'phase':'initial','passed':True,'backupNotRun':True,'durableHoldPathCount':10}));sys.exit(0)
+  save('initial-holds.json',{'at':now(),'phase':'initial','units':{key(u):state(u) for u in ALL},'holdPaths':[str(MARKER)]+[str(drop(u)) for u in ALL],'apiIntentionallyActive':False,'independentServicesPreserved':True,'backupNotRun':True,'databaseMutationPerformed':False});print(json.dumps({'phase':'initial','passed':True,'backupNotRun':True,'durableHoldPathCount':len(ALL)+1}));sys.exit(0)
  j=anchored(a['journal']);unchanged_baseline(j)
  if action=='rehold':
   require(not os.path.lexists(OUT/'rehold-intent.json') and not os.path.lexists(OUT/'rehold.json'),'rehold_attempt_already_exists')
@@ -161,7 +172,7 @@ def main():
    exact(drop(u),DROP_BYTES,0o644);v=state(u);expected=installed['after']['timers' if u[1].endswith('.timer') else 'units'][u[1]]
    require(v['ActiveState']=='inactive' and (u[1].endswith('.timer') or v['MainPID']=='0') and all(v[k]==value for k,value in expected.items() if k!='Id'),'exact_native_stopped_state_not_restored:'+key(u))
   exact(MARKER,MARKER_BYTES,0o600);unchanged_baseline(j)
-  save('rehold.json',{'at':now(),'phase':'rehold','candidate':a['candidate'],'tree':a['tree'],'holdPaths':[str(MARKER)]+[str(drop(u)) for u in ALL],'holdFiles':{str(path):meta(path) for path in [MARKER]+[drop(u) for u in ALL]},'units':{key(u):state(u) for u in ALL},'explicitResetFailedUnits':reset_units,'exactNativeStoppedStateRestored':True,'independentServicesPreserved':True,'automaticRollback':False});print(json.dumps({'phase':'rehold','passed':True,'durableHoldPathCount':10}));sys.exit(0)
+  save('rehold.json',{'at':now(),'phase':'rehold','candidate':a['candidate'],'tree':a['tree'],'holdPaths':[str(MARKER)]+[str(drop(u)) for u in ALL],'holdFiles':{str(path):meta(path) for path in [MARKER]+[drop(u) for u in ALL]},'units':{key(u):state(u) for u in ALL},'explicitResetFailedUnits':reset_units,'exactNativeStoppedStateRestored':True,'independentServicesPreserved':True,'automaticRollback':False});print(json.dumps({'phase':'rehold','passed':True,'durableHoldPathCount':len(ALL)+1}));sys.exit(0)
  exact(MARKER,MARKER_BYTES,0o600)
  restoring=action.startswith('restore-');phase_action=action.replace('restore-','resume-');target_candidate=PRIOR if restoring else a['candidate'];target_tree=PRIOR_TREE if restoring else a['tree']
  receipt_ref=a['rollbackReceipt'] if restoring else a['installedReceipt']
@@ -171,6 +182,7 @@ def main():
   require(installed['state']=='rolled_back_held' and installed['candidate']==PRIOR and installed['tree']==PRIOR_TREE and installed['migrationCount']==COUNT and installed['schemaUnchanged'] is True and installed['databaseEffectsThisOperation'] is False and installed['serviceStartsOrStops'] is False and installed['activationAllowed'] is False,'genuine_prior_rollback_receipt_required')
  else:
   require(installed['state']=='installed_held' and installed['migrationCount']==COUNT and installed['schemaUnchanged'] is True and installed['databaseEffectsThisOperation'] is False and installed['siteCodeWritersRemainHeld'] is True and installed['independentPrivateHqPreserved'] is True and installed['activationAllowed'] is False and installed['candidate']==a['candidate'] and installed['tree']==a['tree'],'genuine_same_schema_installed_receipt_required')
+ _isolation.verify_installed(PROFILE,installed)
  require((BASE/'current').resolve()==BASE/'releases'/target_candidate,'installed_source_changed')
  if phase_action=='resume-api':
   release([API]);control(API,'start');end=time.monotonic()+60
@@ -191,7 +203,7 @@ def main():
  for u in selected:require(state(u)['ActiveState']==j['baseline']['units'][key(u)]['ActiveState'] and state(u)['UnitFileState']==j['baseline']['units'][key(u)]['UnitFileState'],'prior_state_not_restored:'+key(u))
  unchanged_baseline(j)
  if phase_action=='resume-admission':
-  require(all(not os.path.lexists(drop(u)) for u in ALL),'remaining_owned_hold');MARKER.unlink()
+  require(all(not os.path.lexists(drop(u)) for u in ALL),'remaining_owned_hold');_profile.current_window(a,3600);MARKER.unlink()
  save(action+'.json',{'at':now(),'phase':action,'units':{key(u):state(u) for u in selected},'workerPurposes':j['baseline']['workerPurposes'],'readinessFilesPreserved':True,'enablementUnchanged':True});print(json.dumps({'phase':action,'passed':True}))
 
 if __name__=='__main__':main()

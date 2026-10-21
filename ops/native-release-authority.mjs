@@ -103,9 +103,14 @@ export function validateNativeReleaseInput(a, now = Date.now()) {
     'workflowCommit', 'workflowRun', 'workflowAttempt', 'emissionApproved', 'activationAllowed',
     'issuedAt', 'expiresAt', 'helperRepository', 'outputDirectory', 'databaseIdentity',
     'expectedSchema', 'holdMarker', 'holdDropin', 'baseline', 'evidence',
-    ...(Object.hasOwn(a, 'workerSourceDelta') ? ['workerSourceDelta'] : [])], 'input');
+    ...(Object.hasOwn(a, 'workerSourceDelta') ? ['workerSourceDelta'] : []),
+    ...(Object.hasOwn(a, 'runtimeIsolation') ? ['runtimeIsolation'] : [])], 'input');
   assert.equal(a.schema, 'sitesourcery.native-release-authority-input/v1');
   assert(Object.hasOwn(MODE_EVIDENCE, a.mode), 'Unknown release mode');
+  if (Object.hasOwn(a, 'runtimeIsolation')) {
+    exactKeys(a.runtimeIsolation, ['policySha256', 'priorAcceptanceSha256'], 'runtime isolation');
+    for (const value of Object.values(a.runtimeIsolation)) hex(value, 64, 'isolation digest');
+  }
   if (Object.hasOwn(a, 'workerSourceDelta')) {
     assert.equal(a.mode, 'presentation-only', 'Worker source delta is only for same-schema releases');
     validateWorkerSourceDelta(a.workerSourceDelta);
@@ -125,7 +130,9 @@ export function validateNativeReleaseInput(a, now = Date.now()) {
   assert.equal(a.databaseIdentity.username, 'mrfantasea');
   assert.match(a.databaseIdentity.databaseOid ?? '', /^[1-9][0-9]*$/);
   assert.match(a.databaseIdentity.port ?? '', /^[1-9][0-9]{0,4}$/);
-  absolute(a.databaseIdentity.directory, 'database directory'); absolute(a.databaseIdentity.sockets, 'database sockets');
+  absolute(a.databaseIdentity.directory, 'database directory');
+  assert.equal(a.databaseIdentity.sockets, '/run/user/1000/sitesourcery-production-postgresql'
+    + (a.runtimeIsolation ? ',/run/sitesourcery-database' : ''), 'Exact database socket identity required');
   exactKeys(a.expectedSchema, ['beforeCount', 'afterCount', 'manifestSha256', 'schemaSha256', 'tableCount'], 'expectedSchema');
   for (const k of ['beforeCount', 'afterCount', 'tableCount']) positive(a.expectedSchema[k], k);
   hex(a.expectedSchema.manifestSha256, 64, 'manifestSha256'); hex(a.expectedSchema.schemaSha256, 64, 'schemaSha256');
@@ -139,7 +146,8 @@ export function validateNativeReleaseInput(a, now = Date.now()) {
   assert(Array.isArray(purposes) && purposes.includes('export') && purposes.every(p => typeof p === 'string' && /^[a-z][a-z-]*$/.test(p)));
   assert.equal(new Set(purposes).size, purposes.length, 'Duplicate worker purpose');
   assert.equal(a.baseline.workerActivation, 'owner-approved');
-  const holds = [a.holdMarker, ...SYSTEM.map(n => `/etc/systemd/system/${n}.d/${a.holdDropin}`)];
+  const controlled = a.runtimeIsolation ? [...SYSTEM, 'sitesourcery-hq-gateway.service'] : SYSTEM;
+  const holds = [a.holdMarker, ...controlled.map(n => `/etc/systemd/system/${n}.d/${a.holdDropin}`)];
   if (a.mode === 'schema-changing') holds.push(...[...PRIVATE_SERVICES, ...PRIVATE_TIMERS]
     .map(n => `/home/mrfantasea/.config/systemd/user/${n}.d/${a.holdDropin}`));
   exactKeys(a.baseline.holdFiles, holds, 'durable hold inventory');
@@ -169,7 +177,18 @@ function held(o, a, now) {
   for (const name of SYSTEM.filter(n => n.endsWith('.service'))) {
     assert.equal(o.units[name].ActiveState, 'inactive'); assert.equal(o.units[name].MainPID, '0');
   }
-  assert.equal(o.units['sitesourcery-hq-gateway.service'].ActiveState, 'active');
+  assert.equal(o.units['sitesourcery-hq-gateway.service'].ActiveState, a.runtimeIsolation ? 'inactive' : 'active');
+  if (a.runtimeIsolation) {
+    assert.equal(o.units['sitesourcery-hq-gateway.service'].MainPID, '0');
+    assert.equal(o.files['/etc/sitesourcery/runtime/isolation-policy.json'].sha256, a.runtimeIsolation.policySha256);
+    assert.equal(o.files['/etc/sitesourcery/runtime/isolation-accepted.json'].sha256, a.runtimeIsolation.priorAcceptanceSha256);
+    assert.equal(o.isolation.binding.sha256, a.runtimeIsolation.priorAcceptanceSha256);
+    assert.equal(o.isolation.candidate, a.priorCandidate);
+    assert.equal(o.isolation.tree, a.priorTree);
+  } else {
+    assert.equal(o.isolation, undefined, 'Isolation cannot be silently downgraded');
+    assert.equal(o.files['/etc/sitesourcery/runtime/isolation-accepted.json'], undefined);
+  }
   assert.deepEqual(o.userUnits['sitesourcery-production-postgresql.service'], expected.postgresql);
   assert.equal(expected.postgresql.ActiveState, 'active'); assert(Number(expected.postgresql.MainPID) > 0);
   assert.deepEqual(o.userTimers, expected.privateHqTimers);
@@ -334,7 +353,7 @@ export async function constructNativeReleaseAuthority(inputRef, { now = Date.now
    state:a.mode==='presentation-only'?'held_same_schema_successor_authority_constructed':'held_migration_successor_authority_constructed',
    candidate:C,tree:T,priorCandidate:OLD,migrationCount:target.afterCount,activationAllowed:false,nativeInstallationPending:true,
    databaseMigrationPerformedByThisCommand:false,providerRequests:0,serviceCommands:0,input:inputRef,
-   evidence:a.evidence,files:Object.fromEntries(Object.entries(output).map(([name,b])=>[name,{sha256:hash(b),bytes:b.length}]))};
+   evidence:a.evidence,...(a.runtimeIsolation ? {runtimeIsolation:a.runtimeIsolation} : {}),files:Object.fromEntries(Object.entries(output).map(([name,b])=>[name,{sha256:hash(b),bytes:b.length}]))};
  if(a.workerSourceDelta) receipt.workerSourceDelta=structuredClone(a.workerSourceDelta);
  Object.assign(receipt,{[productionKey]:a.evidence.productionReceipt,
    productionMigrationInputs:a.evidence.productionMigrationInputs,

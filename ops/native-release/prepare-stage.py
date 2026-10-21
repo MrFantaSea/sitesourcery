@@ -7,6 +7,8 @@ from pathlib import Path
 import importlib.util
 _profile_spec=importlib.util.spec_from_file_location('sitesourcery_release_profile',Path(__file__).with_name('profile.py'))
 _profile=importlib.util.module_from_spec(_profile_spec);_profile_spec.loader.exec_module(_profile)
+_isolation_spec=importlib.util.spec_from_file_location('sitesourcery_release_isolation',Path(__file__).with_name('isolation.py'))
+_isolation=importlib.util.module_from_spec(_isolation_spec);_isolation_spec.loader.exec_module(_isolation)
 require_profile=_profile.require
 require_profile(len(sys.argv)>=4,'PROFILE SHA256 ACTION required')
 PROFILE_REF={'path':sys.argv[1],'sha256':sys.argv[2]}
@@ -27,7 +29,7 @@ def anchored(ref):
 def main():
  assert len(sys.argv)==4,'prepare-stage.py PROFILE SHA256 REVIEWED_BINDING SHA256 OUTPUT_DIRECTORY'
  os.umask(0o077);raw=anchored({'path':sys.argv[1],'sha256':sys.argv[2]});a=json.loads(raw);_profile.bind_operation(a,PROFILE,PROFILE_REF)
- _profile.keys(a,'profile reviewed nativeEffectsAuthorized candidate tree helperRepository localNode successorInput priorStageReceipt qualifiedHostedRoot','stage preparation')
+ _profile.keys(a,'profile reviewed nativeEffectsAuthorized candidate tree helperRepository localNode successorInput priorStageReceipt qualifiedHostedRoot'+(' isolationInputs' if _isolation.enabled(PROFILE) else ''),'stage preparation')
  local_node=Path(a['localNode']);assert local_node.is_absolute() and local_node.resolve()==local_node
  NODE=str(local_node)
  assert a['reviewed'] is True and a['nativeEffectsAuthorized'] is False
@@ -57,6 +59,10 @@ def main():
  prior_packages={e['path']:e['sha256'] for e in prior['inventory']['entries'] if e['path'] in ('package.json','package-lock.json')}
  assert prior_packages=={'package.json':sha(old_package),'package-lock.json':sha(old_lock)}
  inv=prior['inventory'];_profile.digest(inv['inventorySha256'])
+ isolation_binding=None
+ if _isolation.enabled(PROFILE):
+  _,isolation_binding=_isolation.local_inputs(PROFILE,a['isolationInputs'],a['priorStageReceipt'])
+  inv=isolation_binding['inventory']
  artifact=Path(a['qualifiedHostedRoot']);assert artifact==repo/'_hosted' and artifact.resolve()==artifact
  js="import {pathToFileURL} from 'node:url';const {collectCiRollbackArtifactEvidence}=await import(pathToFileURL(process.argv[1]+'/ops/ci-release-proof-repository.mjs'));console.log(JSON.stringify(await collectCiRollbackArtifactEvidence({artifactRoot:process.argv[2]})));"
  measured=json.loads(subprocess.check_output([NODE,'--input-type=module','-e',js,str(repo),str(artifact)]))
@@ -92,6 +98,9 @@ def main():
  archive=(out/'hosted.tar').read_bytes()
  cfg={'schema':'sitesourcery.native-stage-input/v1','profile':PROFILE_REF,'authorized':False,'issuedAt':None,'expiresAt':None,'helpers':{p.name:sha(p.read_bytes()) for p in P.iterdir() if p.suffix in ['.py','.mjs']},'old':OLD,'oldTree':OT,'releases':'/home/mrfantasea/.local/share/sitesourcery-production/releases/','node':PROFILE['runtime']['node']}
  cfg.update(candidate=C,tree=T,releaseInput=release,sourceInputSha256=sha(inpraw),priorActualReceiptSha256=sha(priorraw),expectedSource=sorted(source,key=lambda x:x['path']),oldInventorySha256=inv['inventorySha256'],minimumAvailableBytes=2*inv['totalFileBytes']+len(archive),hostedArchiveSha256=sha(archive),hostedArchiveBytes=len(archive),hostedFiles=measured['files'])
+ if isolation_binding is not None:
+  cfg['priorIsolationAcceptanceSha256']=PROFILE['runtime']['isolation']['priorAcceptanceSha256']
+  cfg['priorCustodySha256']=isolation_binding['custody']['custodySha256']
  cfg['packages']=packages # Package and lock are byte-identical to the retained2f dependency payload.
  cfg['packageReuse']={'scope':'exact package and lock byte equality','prior':prior_packages,'candidate':packages,'lockByteIdentical':True,'packageByteIdentical':True}
  configuration=(json.dumps(cfg,indent=2)+'\n').encode()

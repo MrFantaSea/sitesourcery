@@ -7,6 +7,8 @@ from pathlib import Path
 import importlib.util
 _profile_spec=importlib.util.spec_from_file_location('sitesourcery_release_profile',Path(__file__).with_name('profile.py'))
 _profile=importlib.util.module_from_spec(_profile_spec);_profile_spec.loader.exec_module(_profile)
+_isolation_spec=importlib.util.spec_from_file_location('sitesourcery_release_isolation',Path(__file__).with_name('isolation.py'))
+_isolation=importlib.util.module_from_spec(_isolation_spec);_isolation_spec.loader.exec_module(_isolation)
 require_profile=_profile.require
 require_profile(len(sys.argv)>=4,'PROFILE SHA256 ACTION required')
 PROFILE_REF={'path':sys.argv[1],'sha256':sys.argv[2]}
@@ -55,15 +57,17 @@ def main():
   require((BASE/'current').resolve()==BASE/'releases'/C,'current_source_changed')
   journal=read(J/'journal.json');resume=read(J/runtime_name);require(resume['phase']==('restore-runtime' if restoring else 'resume-runtime') and resume['workerPurposes']==PURPOSES,'genuine_runtime_resume_required')
   installedPath=Path(PATHS['installation'])/('rollback-result.json' if restoring else 'result.json');installed=read(installedPath);require(installed['state']==('rolled_back_held' if restoring else 'installed_held') and installed['candidate']==C and installed['tree']==T and installed['migrationCount']==COUNT and installed['schemaUnchanged'] is True and installed['databaseEffectsThisOperation'] is False and installed['activationAllowed'] is False and (restoring or installed['independentPrivateHqPreserved'] is True),'genuine_install_or_prior_rollback_required')
+  isolation=_isolation.verify_installed(PROFILE,installed)
   epoch=read(Path('/etc/sitesourcery/final-release-epoch-v2.json'))
   for n in ['workers.env','WORKERS_APPROVED']:
    p=Path('/etc/sitesourcery')/n;require(regular(p)[1]['sha256']==journal['baseline']['files'][str(p)]['sha256'],'worker_configuration_changed')
   identityRaw,identityMeta=regular(ID);identity=json.loads(identityRaw);require(identityMeta['uid']==1000 and identityMeta['mode']==0o600 and identity['userId']==USER and identity['organizationId']==ORG,'existing_owner_identity_required');require(identityMeta['sha256']==journal['baseline']['files'][str(ID)]['sha256'],'owner_identity_changed_since_hold')
   units=runtimes();require(all(v['ActiveState']=='active' and int(v['MainPID'])>0 for v in units.values()),'runtime_not_active')
   require(show('sitesourcery-hq-cloudflared.service')['ActiveState']=='inactive','admission_must_still_be_held')
-  for name in ['sitesourcery-production-postgresql.service','sitesourcery-hq-gateway.service','client-profile-hub.service']:
+  for name in ['sitesourcery-production-postgresql.service','client-profile-hub.service']+([] if _isolation.enabled(PROFILE) else ['sitesourcery-hq-gateway.service']):
    key=('user:' if name in ['sitesourcery-production-postgresql.service','client-profile-hub.service'] else 'system:')+name
    require(all(units[name][k]==journal['baseline']['units'][key][k] for k in ['ActiveState','MainPID','NRestarts']),'preserved_runtime_changed')
+  gateway=_isolation.verify_gateway(PROFILE,installed,resume,units,journal) if isolation else None
   phase='api_readiness';ready=get(8081,'/api/v1/ready');release=ready['release']
   require(ready['ready'] is True and release['candidateCommitSha']==C and release['candidateTreeSha']==T and release['migrationCount']==COUNT and release['epochId']==epoch['epochId'] and release['bindingSha256']==epoch['bindingSha256'],'exact_readiness_required')
   capabilities=get(8081,'/api/v1/capabilities')
@@ -96,7 +100,7 @@ def main():
   queue=get(8790,'/api/v1/operator/work-queue?'+urllib.parse.urlencode({'operatorOrganizationId':ORG}));require(queue['schema']=='sitesourcery.operator-work-queue/v1' and isinstance(queue['items'],list),'owner_queue_shape_changed')
   require(regular(ID)[0]==identityRaw,'identity_changed_during_gets');require(runtimes()==units,'runtime_changed_during_acceptance')
   require(show('sitesourcery-hq-cloudflared.service')['ActiveState']=='inactive','admission_changed_during_acceptance');require(datetime.datetime.now(datetime.timezone.utc)<expires,'approval_expired')
-  print(json.dumps({'state':'passed','acceptanceMode':'restored-prior' if restoring else 'new','at':now(),'candidate':C,'tree':T,'migrationCount':COUNT,'release':release,'capabilities':capabilities,'units':units,'workerPurposes':PURPOSES,'workerInvocationId':invocation,'workerCycles':cycleProof,'workerJournalSha256':sha(raw),'workerStartedJournalSha256':sha(startedRaw),'exportHeartbeat':{k:health[k] for k in ['schema','state','successful','cycle','checkedAtMs','purpose','errorCode','workerId'] if k in health},'exportHealthSha256':sha(hb),'exportHealthAgeMs':age,'privateHq':{'sameExistingOwner':True,'sameExistingOrganization':True,'ownerRole':True,'queueRead':True,'queueItemCount':len(queue['items']),'identityUnchanged':True,'identitySha256':sha(identityRaw),'naturalExistingSessionReconnectPossible':True,'forcedRotation':False},'http':http,'runtimeResumeReceiptSha256':sha((J/runtime_name).read_bytes()),'installedReceiptSha256':sha(installedPath.read_bytes()),'publicAdmissionStillHeld':True,'serviceCommandsInvoked':False,'customerCommandsInvoked':False,'providerMutationCommandsInvoked':False,'sqlInvokedByCollector':False},indent=2))
+  print(json.dumps({'state':'passed','acceptanceMode':'restored-prior' if restoring else 'new','at':now(),'candidate':C,'tree':T,'migrationCount':COUNT,'release':release,'capabilities':capabilities,'units':units,'workerPurposes':PURPOSES,'workerInvocationId':invocation,'workerCycles':cycleProof,'workerJournalSha256':sha(raw),'workerStartedJournalSha256':sha(startedRaw),'exportHeartbeat':{k:health[k] for k in ['schema','state','successful','cycle','checkedAtMs','purpose','errorCode','workerId'] if k in health},'exportHealthSha256':sha(hb),'exportHealthAgeMs':age,'privateHq':{'sameExistingOwner':True,'sameExistingOrganization':True,'ownerRole':True,'queueRead':True,'queueItemCount':len(queue['items']),'identityUnchanged':True,'identitySha256':sha(identityRaw),'naturalExistingSessionReconnectPossible':True,'forcedRotation':False},'http':http,**({'isolation':isolation,'gateway':gateway} if isolation else {}),'runtimeResumeReceiptSha256':sha((J/runtime_name).read_bytes()),'installedReceiptSha256':sha(installedPath.read_bytes()),'publicAdmissionStillHeld':True,'serviceCommandsInvoked':False,'customerCommandsInvoked':False,'providerMutationCommandsInvoked':False,'sqlInvokedByCollector':False},indent=2))
  except Exception as e:
   print(json.dumps({'state':'failed','phase':phase,'name':type(e).__name__,'reason':str(e) if type(e) is RuntimeError else None,'serviceCommandsInvoked':False,'customerCommandsInvoked':False,'providerMutationCommandsInvoked':False}));sys.exit(1)
 

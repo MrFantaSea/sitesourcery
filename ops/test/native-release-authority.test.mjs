@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { runInNewContext } from 'node:vm';
 import {
   validateNativeReleaseInput,
   constructNativeReleaseAuthority,
@@ -75,7 +76,7 @@ function input(mode = 'presentation-only') {
     issuedAt: '2026-10-20T18:00:00Z', expiresAt: '2026-10-20T18:25:00Z',
     helperRepository: '/tmp/fixture-repo', outputDirectory: '/tmp/fixture-output',
     databaseIdentity: { db: 'sitesourcery_production', databaseOid: '76816', username: 'mrfantasea',
-      directory: '/tmp/fixture-db', port: '55433', sockets: '/tmp/fixture-sockets' },
+      directory: '/tmp/fixture-db', port: '55433', sockets: '/run/user/1000/sitesourcery-production-postgresql' },
     expectedSchema: { beforeCount: mode === 'presentation-only' ? 110 : 109, afterCount: 110,
       manifestSha256: sha('a'), schemaSha256: sha('b'), tableCount: 309 },
     holdMarker: marker, holdDropin: dropin, baseline,
@@ -188,4 +189,92 @@ test('bad input bytes, symlinks and expired authority create no output directory
   await assert.rejects(emitNativeReleaseAuthority({ path: file,
     sha256: createHash('sha256').update(stale).digest('hex') }), /Emission authority/);
   await assert.rejects(fs.stat(output), { code: 'ENOENT' });
+});
+
+test('isolated releases bind both policy digests and the additional gateway hold in either mode', () => {
+  for (const mode of ['presentation-only', 'schema-changing']) {
+    const a = input(mode);
+    a.runtimeIsolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+    a.databaseIdentity.sockets += ',/run/sitesourcery-database';
+    const gateway = `/etc/systemd/system/sitesourcery-hq-gateway.service.d/${a.holdDropin}`;
+    a.baseline.holdFiles[gateway] = { uid: 0, gid: 0, mode: 0o644, bytes: 30, sha256: sha('d') };
+    assert.equal(validateNativeReleaseInput(a, NOW), a);
+    assert.equal(Object.keys(a.baseline.holdFiles).length, mode === 'presentation-only' ? 11 : 16);
+    delete a.baseline.holdFiles[gateway];
+    assert.throws(() => validateNativeReleaseInput(a, NOW), /hold inventory/);
+  }
+});
+test('isolation cannot add broad paths, omit policy bindings or masquerade as legacy authority', () => {
+  for (const change of [
+    a => { a.runtimeIsolation.policySha256 = 'bad'; },
+    a => { delete a.runtimeIsolation.priorAcceptanceSha256; },
+    a => { a.runtimeIsolation.extra = true; },
+    a => { a.baseline.holdFiles['/etc/systemd/system/unregistered.service.d/hold.conf'] = a.baseline.holdFiles[a.holdMarker]; },
+    a => { delete a.runtimeIsolation; },
+  ]) {
+    const a = input();
+    a.runtimeIsolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+    a.databaseIdentity.sockets += ',/run/sitesourcery-database';
+    a.baseline.holdFiles[`/etc/systemd/system/sitesourcery-hq-gateway.service.d/${a.holdDropin}`] = {
+      uid: 0, gid: 0, mode: 0o644, bytes: 30, sha256: sha('d'),
+    };
+    change(a);
+    assert.throws(() => validateNativeReleaseInput(a, NOW));
+  }
+});
+test('isolation never changes the finite emission or activation boundary', () => {
+  const a = input();
+  a.runtimeIsolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+  a.databaseIdentity.sockets += ',/run/sitesourcery-database';
+  a.baseline.holdFiles[`/etc/systemd/system/sitesourcery-hq-gateway.service.d/${a.holdDropin}`] = {
+    uid: 0, gid: 0, mode: 0o644, bytes: 30, sha256: sha('d'),
+  };
+  a.activationAllowed = true;
+  assert.throws(() => validateNativeReleaseInput(a, NOW));
+  a.activationAllowed = false;
+  assert.throws(() => validateNativeReleaseInput(a, NOW + 3600_000), /Emission authority/);
+});
+
+test('typed authority requires the exact single or dual socket identity for its mode', () => {
+  const legacy = '/run/user/1000/sitesourcery-production-postgresql';
+  const dual = legacy + ',/run/sitesourcery-database';
+  for (const mode of ['presentation-only', 'schema-changing']) {
+    for (const isolated of [false, true]) {
+      const a = input(mode);
+      if (isolated) {
+        a.runtimeIsolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+        a.baseline.holdFiles[`/etc/systemd/system/sitesourcery-hq-gateway.service.d/${a.holdDropin}`] = {
+          uid: 0, gid: 0, mode: 0o644, bytes: 30, sha256: sha('d'),
+        };
+      }
+      a.databaseIdentity.sockets = isolated ? dual : legacy;
+      assert.equal(validateNativeReleaseInput(a, NOW), a);
+      for (const sockets of [isolated ? legacy : dual, '/run/sitesourcery-database',
+        '/run/sitesourcery-database,' + legacy, legacy + ', /run/sitesourcery-database', dual + ',/tmp/extra']) {
+        assert.throws(() => validateNativeReleaseInput({ ...a,
+          databaseIdentity: { ...a.databaseIdentity, sockets } }, NOW), /socket identity/);
+      }
+    }
+  }
+});
+
+test('migration input connects only to the maintenance endpoint while retaining full observed socket identity', async () => {
+  const source = await fs.readFile(new URL('../native-release/migrate-once.mjs', import.meta.url), 'utf8');
+  // Execute the actual early endpoint guard without executing migration startup or I/O.
+  const guards = source.split('\n').filter(line => line.startsWith('assert.deepEqual(input.database,'));
+  assert.equal(guards.length, 1);
+  assert.ok(source.includes('assert.deepEqual(identity,profile.databaseIdentity);'));
+  const host = '/run/user/1000/sitesourcery-production-postgresql';
+  for (const sockets of [host, host + ',/run/sitesourcery-database']) {
+    const profile = { databaseIdentity: { sockets, port: '55433', username: 'mrfantasea',
+      db: 'sitesourcery_production', directory: '/fixture/data' } };
+    const database = { host, port: 55433, user: 'mrfantasea', database: 'sitesourcery_production',
+      dataDirectory: '/fixture/data' };
+    const execute = value => runInNewContext(`const profile=${JSON.stringify(profile)};
+      const input=${JSON.stringify({ database: value })};\n${guards[0]}`, { assert }, { timeout: 1000 });
+    execute(database);
+    for (const badHost of [host + ',/run/sitesourcery-database', '/run/sitesourcery-database', '127.0.0.1']) {
+      assert.throws(() => execute({ ...database, host: badHost }));
+    }
+  }
 });

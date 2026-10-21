@@ -7,6 +7,8 @@ from pathlib import Path
 import importlib.util
 _profile_spec=importlib.util.spec_from_file_location('sitesourcery_release_profile',Path(__file__).with_name('profile.py'))
 _profile=importlib.util.module_from_spec(_profile_spec);_profile_spec.loader.exec_module(_profile)
+_isolation_spec=importlib.util.spec_from_file_location('sitesourcery_release_isolation',Path(__file__).with_name('isolation.py'))
+_isolation=importlib.util.module_from_spec(_isolation_spec);_isolation_spec.loader.exec_module(_isolation)
 require_profile=_profile.require
 require_profile(len(sys.argv)>=4,'PROFILE SHA256 ACTION required')
 PROFILE_REF={'path':sys.argv[1],'sha256':sys.argv[2]}
@@ -63,8 +65,10 @@ def hold_path(p):
 
 def observation(a):
  prior=BASE/'releases'/a['priorCandidate'];old_links=CONFIG/'recovery'/('build-tool-links-c'+a['priorCandidate'][:8]+'.json')
- paths=list(dict.fromkeys(list(PATH_FILES)+[str(CONFIG/n) for n in list(AUTH)+['hosted.env','tenant.env']+PRESERVE]+[str(old_links)]+a['holdPaths']))
- require(set(a['holdPaths'])==set(EXPECTED_HOLD_PATHS) and len(a['holdPaths'])==15 and all(hold_path(p) for p in a['holdPaths']),'Exact fifteen current hold paths required')
+ isolation=_isolation.observe(PROFILE,verify=False)
+ extra=([str(_isolation.POLICY),str(_isolation.MARKER),*_isolation.native_context(PROFILE)[1]['files']] if isolation else [])
+ paths=list(dict.fromkeys(extra+list(PATH_FILES)+[str(CONFIG/n) for n in list(AUTH)+['hosted.env','tenant.env']+PRESERVE]+[str(old_links)]+a['holdPaths']))
+ require(set(a['holdPaths'])==set(EXPECTED_HOLD_PATHS) and len(a['holdPaths'])==(16 if _isolation.enabled(PROFILE) else 15) and all(hold_path(p) for p in a['holdPaths']),'Exact fifteen current hold paths required')
  env=raw(CONFIG/'workers.env').decode();m=re.search(r'^SITESOURCERY_WORKER_CONFIG=(.+)$',env,re.M);require(m,'Worker config absent');worker=json.loads(json.loads(m[1]))
  require(worker['activation']=='owner-approved' and worker['purposes']==PROFILE['workerPurposes'],'Current configured-purpose Care baseline required')
  api=raw(CONFIG/'hosted.env').decode();m=re.search(r'^SITESOURCERY_CARE_MODE=(.+)$',api,re.M)
@@ -72,7 +76,7 @@ def observation(a):
  wm=re.search(r'^SITESOURCERY_CARE_MODE=(.+)$',env,re.M);worker_care_mode=json.loads(wm[1]) if wm else 'held'
  return {'at':now(),'readOnly':True,'currentTarget':str((BASE/'current').resolve()),'ready':None,'files':{p:meta(p) for p in paths},
   'units':states(SYSTEM_NAMES),'userUnits':states(USER_NAMES,True),'timers':states(['sitesourcery-hq-backup.timer','sitesourcery-hq-monitor.timer'],timer=True),
-  'userTimers':states(PRIVATE_HQ_TIMERS,True,True),'workerPurposes':worker['purposes'],'workerActivation':worker['activation'],'careMode':care_mode,'workerCareMode':worker_care_mode}
+  'userTimers':states(PRIVATE_HQ_TIMERS,True,True),'workerPurposes':worker['purposes'],'workerActivation':worker['activation'],'careMode':care_mode,'workerCareMode':worker_care_mode,**({'isolation':isolation} if isolation else {})}
 def held(o,a):
  require(o['currentTarget']==str(BASE/'releases'/a['priorCandidate']),'Current release changed')
  require(o['workerPurposes']==a['baseline']['workerPurposes'] and o['workerActivation']==a['baseline']['workerActivation'],'Worker purpose drift')
@@ -80,7 +84,8 @@ def held(o,a):
  require(o['careMode']==a['baseline']['careMode'] and o['workerCareMode']==a['baseline']['workerCareMode'],'Care configuration drift')
  for n in ('api','tenant','workers','cloudflared','backup','backup-recovery','monitor'):
   u=o['units']['sitesourcery-hq-'+n+'.service'];require(u['LoadState']=='loaded' and u['ActiveState']=='inactive' and u['MainPID']=='0','Writer/operation not held: '+n)
- require(o['units']['sitesourcery-hq-gateway.service']['ActiveState']=='active','Local gateway not active')
+ require(o['units']['sitesourcery-hq-gateway.service']['ActiveState']==('inactive' if _isolation.enabled(PROFILE) else 'active'),'Gateway state changed')
+ if _isolation.enabled(PROFILE):require(o['units']['sitesourcery-hq-gateway.service']['MainPID']=='0','Gateway not held')
  require(o['userUnits']['sitesourcery-production-postgresql.service']==a['baseline']['postgresql'],'PostgreSQL identity/state changed')
  require(a['baseline']['postgresql']['ActiveState']=='active' and int(a['baseline']['postgresql']['MainPID'])>0,'PostgreSQL unavailable')
  expected_hq=a['baseline']['privateHqServices'];require(set(expected_hq)==set(PRIVATE_HQ_SERVICES),'Exact held private HQ service baseline required')
@@ -93,13 +98,17 @@ def held(o,a):
  require(a['baseline']['holdFiles'] and set(a['holdPaths'])==set(a['baseline']['holdFiles'])==set(EXPECTED_HOLD_PATHS),'Exact fifteen durable hold files required')
  for p,v in a['baseline']['holdFiles'].items():require(o['files'][p]==v,'Durable hold changed: '+p)
 
-def atomic(p,b,metadata):
- p=Path(p);temp=p.with_name(p.name+'.native-release-update-tmp');fd=os.open(temp,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,metadata['mode'])
+def atomic(p,b,metadata,effect_gate=None):
+ p=Path(p);temp=p.with_name(p.name+'.native-release-update-'+sha(b)+'.tmp');fd=os.open(temp,os.O_CREAT|os.O_EXCL|os.O_WRONLY|os.O_NOFOLLOW,metadata['mode'])
  with os.fdopen(fd,'wb') as f:os.fchown(f.fileno(),metadata['uid'],metadata['gid']);os.fchmod(f.fileno(),metadata['mode']);f.write(b);f.flush();os.fsync(f.fileno())
+ if effect_gate:effect_gate()
  os.replace(temp,p);fd=os.open(p.parent,os.O_RDONLY|os.O_DIRECTORY);os.fsync(fd);os.close(fd)
 def save(name,value):atomic(OUT/name,(json.dumps(value,indent=2)+'\n').encode(),{'mode':0o600,'uid':0,'gid':0})
-def pointer(target,metadata):
- p=BASE/'current';temp=BASE/'current.native-release-update-tmp';os.symlink(target,temp);os.lchown(temp,metadata['uid'],metadata['gid']);os.replace(temp,p)
+def pointer(target,metadata,effect_gate=None):
+ require(re.fullmatch('[a-f0-9]{40}',target.name),'Invalid pointer candidate')
+ p=BASE/'current';temp=BASE/('current.native-release-update-'+target.name+'.tmp');os.symlink(target,temp);os.lchown(temp,metadata['uid'],metadata['gid'])
+ if effect_gate:effect_gate()
+ os.replace(temp,p)
  fd=os.open(BASE,os.O_RDONLY|os.O_DIRECTORY);os.fsync(fd);os.close(fd)
 def pinned(ref):
  require(isinstance(ref,dict) and isinstance(ref.get('path'),str) and Path(ref['path']).is_absolute() and re.fullmatch('[a-f0-9]{64}',ref.get('sha256') or ''),'Missing pinned receipt')
@@ -155,6 +164,7 @@ def validate_receipts(a,before,expected,n):
  require(authority['activationAllowed'] is False and authority['nativeInstallationPending'] is True and authority['migrationCount']==COUNT,'Authority activation boundary invalid')
  require(binding['candidate']==a['candidate'] and binding['actualNativeFiles']==expected['files'] and binding['productionReceipt']['sha256']==a['productionReceipt']['sha256'] and binding['nativeInstallationPending'] is True,'Native sidecar mismatch')
  require(datetime.datetime.fromisoformat(prod['at'].replace('Z','+00:00'))<=datetime.datetime.fromisoformat(expected['at'].replace('Z','+00:00')),'Observation predates migration')
+ require(authority.get('runtimeIsolation')==PROFILE['runtime'].get('isolation'),'Typed isolation authority/profile mismatch')
  return authority
 
 def main():
@@ -180,12 +190,15 @@ def main():
    except BlockingIOError:require(time.monotonic()<deadline,'Operations lock busy; no effects');time.sleep(0.1)
   locks.append(fd)
  for name in ['BACKUP_QUIESCE','BACKUP_CYCLE_STATE.json']:require(not os.path.lexists('/srv/sitesourcery-storage/production/backup-control/'+name),'Outstanding backup state')
+ _isolation.check_mode(PROFILE)
  before=observation(a);held(before,a);expected=pinned(a['nativeObservation'])
+ if _isolation.enabled(PROFILE):require(before['isolation']==expected['isolation'],'Held isolation changed')
  for key in ('currentTarget','files','units','userUnits','timers','userTimers','workerPurposes','workerActivation','careMode','workerCareMode'):require(before[key]==expected[key],'Held baseline drift: '+key)
  authority=validate_receipts(a,before,expected,n)
  stage=pinned(a['linuxStageReceipt']);require(stage['status']=='staged_inert' and stage['validation']['checkout']=={'projectRoot':str(new),'head':a['candidate'],'tree':a['tree'],'status':''},'Wrong staging receipt')
  measured=json.loads(run(['/usr/sbin/runuser','-u','mrfantasea','--','/usr/bin/python3',str(HERE/'inventory.py'),a['candidate'],a['tree']]))
  require(measured['inventorySha256']==stage['inventory']['inventorySha256'],'Staged bytes/modes drifted')
+ isolation_plan=_isolation.before_install(PROFILE,stage) if _isolation.enabled(PROFILE) else None
  payloads={};digests={}
  for name in AUTH:
   b=raw(HERE/'authority'/name);require(sha(b)==a['authorityFiles'][name]==authority['files'][name]['sha256'],'Authority payload mismatch');digests[name]=sha(b);payloads[str(CONFIG/name)]=b
@@ -195,6 +208,8 @@ def main():
   b=raw(CONFIG/name)
   for auth,key in AUTH.items():b,count=re.subn(rb'(?m)^'+key.encode()+rb'="[a-f0-9]{64}"$',key.encode()+b'="'+digests[auth].encode()+b'"',b);require(count==1,'Missing exact anchor field')
   payloads[str(CONFIG/name)]=b
+ if isolation_plan:
+  payloads.update(_isolation.install_payloads(PROFILE,{AUTH[name]:digests[name] for name in AUTH}))
  expected_units=json.loads(json.dumps(before['units']))
  for name,count in PATH_FILES.items():
   b=raw(name);require(b.count(str(prior).encode())==count,'Unexpected native source operand count: '+name);payloads[name]=b.replace(str(prior).encode(),str(new).encode())
@@ -210,6 +225,12 @@ def main():
     require(new_wd==str(new)+old_wd[len(str(prior)):],'Unexpected new WorkingDirectory: '+unit)
     require(before['units'][unit]['WorkingDirectory']==old_wd,'WorkingDirectory override changed: '+unit)
     expected_units[unit]['WorkingDirectory']=new_wd
+ if isolation_plan:
+  for unit in _isolation.UNITS[:3]:
+   require(expected_units[unit]['WorkingDirectory'] in (str(prior),str(new)),'Isolated working directory drift')
+   expected_units[unit]['WorkingDirectory']=str(new)
+  binding=_isolation.successor_binding(PROFILE,a['linuxStageReceipt'],isolation_plan,payloads)
+  payloads[str(_isolation.MARKER)]=_isolation.encoded(binding)
  payloads[str(new_links)]=links_manifest(prior,new,old_links)
  OUT=Path(PATHS['installation']);require(not os.path.lexists(OUT) and not os.path.lexists(new_links),'Prior attempt evidence exists; no replay')
  _profile.current_window(a);os.umask(0o077);OUT.mkdir(mode=0o700);(OUT/'originals').mkdir(mode=0o700)
@@ -219,12 +240,15 @@ def main():
   existing=before['files'].get(p);m=existing if existing is not None else {'mode':0o640,'uid':0,'gid':1000};old=raw(p) if existing else None
   if old is not None:atomic(OUT/'originals'/str(i),old,{'mode':0o600,'uid':0,'gid':0})
   journal['files'].append({'path':p,'original':str(i) if existing else None,'metadata':m,'afterSha256':sha(b)})
+ if isolation_plan:journal['isolationPlan']=isolation_plan
  save('journal.json',journal)
  try:
-  for e in journal['files']:atomic(e['path'],payloads[e['path']],e['metadata'])
-  pointer(new,journal['pointer']);run(['/usr/bin/systemctl','daemon-reload'])
+  if isolation_plan:_isolation.apply_custody(new,isolation_plan['before'],isolation_plan['after'],lambda:_profile.current_window(a))
+  for e in journal['files']:_profile.current_window(a);atomic(e['path'],payloads[e['path']],e['metadata'],lambda:_profile.current_window(a))
+  _profile.current_window(a);pointer(new,journal['pointer'],lambda:_profile.current_window(a));run(['/usr/bin/systemctl','daemon-reload'])
   verifier=validate_authority(CONFIG,{name:sha(raw(CONFIG/name)) for name in AUTH},new)
   after=observation(a);require(after['currentTarget']==str(new),'Installed pointer mismatch')
+  if isolation_plan:require(_isolation.observe(PROFILE,sha(payloads[str(_isolation.MARKER)]))==after['isolation'],'Installed isolation readback drift')
   require(after['units']==expected_units,'System unit readback differs beyond exact approved WorkingDirectory substitution')
   for key in ('userUnits','timers','userTimers','workerPurposes','workerActivation','careMode','workerCareMode'):require(after[key]==before[key],'Runtime/hold changed during installation: '+key)
   for n in PRESERVE:require(after['files'][str(CONFIG/n)]==before['files'][str(CONFIG/n)],'Unrelated/hold configuration changed: '+n)
@@ -232,6 +256,10 @@ def main():
   for e in journal['files']:require(meta(e['path'])['sha256']==e['afterSha256'],'Installed file drift')
   journal['state']='installed_held';journal['installedAt']=now();journal['actualInstalledVerifier']=verifier;save('journal.json',journal)
   result={'state':'installed_held','candidate':a['candidate'],'tree':a['tree'],'migrationCount':COUNT,'at':now(),'productionReceipt':a['productionReceipt'],'databaseEffectsThisOperation':False,'databaseAlreadyMigrated':True,'customerDataRestored':False,'serviceStartsOrStops':False,'providerModesChanged':False,'activationAllowed':False,'codeOnlyRollbackAllowed':False,'allWritersRemainHeld':True,'siteCodeWritersRemainHeld':True,'privateHqHeldPreserved':True,'nativeFiles':{e['path']:meta(e['path']) for e in journal['files']},'actualInstalledVerifier':verifier,'actualWorkerPurposes':after['workerPurposes'],'after':after}
+  if isolation_plan:
+   result['isolationBinding']=after['isolation']['binding']
+   result['actualInstalledInventory']=binding['inventory']
+   result['actualInstalledCustody']=binding['custody']
   save('result.json',result);print(json.dumps(result))
  except Exception as e:
   journal['state']='failed_install_held';journal['failureAt']=now();save('journal.json',journal)
