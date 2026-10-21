@@ -66,6 +66,8 @@ test("alive API cannot hide unavailable database, stale readiness or wrong insta
     body => { body.ageMs = "0"; },
     body => { body.state = "degraded"; },
     body => { body.release.migrationCount += 1; },
+    body => { body.release.epochId = "automatic-service-mail-20261020"; },
+    body => { body.release.bindingSha256 = "fc6bcb61ca897ab304b4c51d1e553c8283a968beb041a973accaea710fbb8f2d"; },
     body => { body.release.candidateCommitSha = "b".repeat(40); }
   ]) {
     const report = await runPublicAvailability(target, fixture({ mutateReady }));
@@ -103,6 +105,8 @@ test("edge artifact, release and TLS failures remain visible even when database 
   for (const options of [
     { content: Buffer.from("corrupt artifact") },
     { mutateLive: body => { body.release.candidateTreeSha = "b".repeat(40); } },
+    { mutateLive: body => { body.release.epochId = "automatic-service-mail-20261020"; } },
+    { mutateLive: body => { body.release.bindingSha256 = "fc6bcb61ca897ab304b4c51d1e553c8283a968beb041a973accaea710fbb8f2d"; } },
     { tlsFailure: true }
   ]) {
     const report = await runPublicAvailability(target, fixture(options));

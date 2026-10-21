@@ -501,13 +501,54 @@ def local_inputs(profile, refs, prior_stage):
     return policy, binding
 
 
+def systemd_properties(unit, names=PROPERTIES):
+    """Read exact system-manager fields, preserving ordered array entries.
+
+    systemd255 omits empty struct arrays and emits one line per nonempty entry.
+    Only a typed empty D-Bus array may fill either known omitted property.
+    """
+    require(unit in UNITS and (names == PROPERTIES or
+            (unit == 'sitesourcery-hq-workers.service' and names == ('ExecStartPre',))),
+            'unregistered isolation observation')
+    raw = subprocess.check_output(['/usr/bin/systemctl', 'show', unit, '--property=' + ','.join(names)],
+                                  stderr=subprocess.PIPE, timeout=15, text=True)
+    require(type(raw) is str and len(raw) <= 8 * 1024 * 1024, 'invalid systemd property output')
+    values = {}
+    for line in raw.splitlines():
+        row = line.split('=', 1)
+        require(len(row) == 2 and row[0] in names, 'unexpected systemd property')
+        name, value = row
+        if name in values:
+            require(name in ('EnvironmentFiles', 'ExecStart', 'ExecStartPre') and values[name] and value,
+                    'ambiguous scalar or empty array property')
+            values[name] += ' ' + value
+        else:
+            values[name] = value
+    empty_types = {'EnvironmentFiles': 'a(sb)', 'ExecStartPre': 'a(sasbttttuii)'}
+    missing = set(names) - set(values)
+    require(missing <= set(empty_types), 'incomplete effective isolation properties')
+    object_path = '/org/freedesktop/systemd1/unit/' + ''.join(
+        c if c.isascii() and c.isalnum() else '_' + format(ord(c), '02x') for c in unit)
+    for name in sorted(missing):
+        observed = subprocess.check_output(['/usr/bin/busctl', '--system', '--json=short', 'get-property',
+            'org.freedesktop.systemd1', object_path, 'org.freedesktop.systemd1.Service', name],
+            stderr=subprocess.PIPE, timeout=10, text=True)
+        require(type(observed) is str and len(observed) <= 65536, 'invalid D-Bus property output')
+        value = json.loads(observed)
+        require(type(value) is dict and set(value) == {'type', 'data'} and
+                value['type'] == empty_types[name] and type(value['data']) is list and value['data'] == [],
+                'omitted property is not a verified typed empty array')
+        values[name] = ''
+    for name in ('After', 'Requires'):
+        if name in values:
+            values[name] = ' '.join(sorted(values[name].split()))
+    return values
+
+
 def effective_units():
     result = {}
     for unit in UNITS:
-        raw = subprocess.check_output(['/usr/bin/systemctl', 'show', unit, '--property=' + ','.join(PROPERTIES)],
-                                      stderr=subprocess.PIPE, timeout=15, text=True)
-        values = dict(line.split('=', 1) for line in raw.splitlines())
-        require(set(values) == set(PROPERTIES), 'incomplete effective isolation properties')
+        values = systemd_properties(unit)
         for key in ('ExecStart', 'ExecStartPre'):
             # Discard volatile pid/timestamp/status fields, retaining exact ordered argv vectors.
             original = values[key]
@@ -518,9 +559,8 @@ def effective_units():
 
 
 def verify_readiness_operand():
-    raw = subprocess.check_output(['/usr/bin/systemctl', 'show', 'sitesourcery-hq-workers.service',
-                                   '--property=ExecStartPre'], stderr=subprocess.PIPE, timeout=15, text=True)
-    vectors = re.findall(r'argv\[\]=(.*?);', raw)
+    values = systemd_properties('sitesourcery-hq-workers.service', ('ExecStartPre',))
+    vectors = re.findall(r'argv\[\]=(.*?);', values['ExecStartPre'])
     operands = [part for vector in vectors for part in vector.split()
                 if '/sitesourcery-worker-readiness-' in part]
     require(operands == [READINESS_HELPER], 'active worker readiness operand changed')
