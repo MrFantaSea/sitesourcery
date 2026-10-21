@@ -104,7 +104,13 @@ async function syncDirectory(directory) {
   }
 }
 
-async function ensurePrivateDirectory(root, target) {
+function sharedMetadataSafe(info, access, directory) {
+  return access === null || (info.gid === access.groupId &&
+    access.writerUids.includes(info.uid) &&
+    (info.mode & 0o7777) === (directory ? 0o2770 : 0o640));
+}
+
+async function ensurePrivateDirectory(root, target, access = null) {
   const relative = path.relative(root, target);
   invariant(
     relative === "" ||
@@ -117,23 +123,36 @@ async function ensurePrivateDirectory(root, target) {
   let cursor = root;
   for (const part of parts) {
     cursor = path.join(cursor, part);
+    let created = false;
     try {
       await mkdir(cursor, { mode: 0o700 });
+      created = true;
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
     }
-    const info = await lstat(cursor);
+    let info = await lstat(cursor);
     invariant(
       info.isDirectory() && !info.isSymbolicLink(),
       "OBJECT_PATH_UNSAFE",
       "Export directory is unsafe.",
       { status: 500 }
     );
-    await chmod(cursor, 0o700);
+    if (access === null) {
+      await chmod(cursor, 0o700);
+    } else {
+      if (created) {
+        invariant(info.uid === process.getuid() && info.gid === access.groupId,
+          "OBJECT_PATH_UNSAFE", "Export directory identity is invalid.", { status: 500 });
+        await chmod(cursor, 0o2770);
+        info = await lstat(cursor);
+      }
+      invariant(sharedMetadataSafe(info, access, true), "OBJECT_PATH_UNSAFE",
+        "Export directory permissions are invalid.", { status: 500 });
+    }
   }
 }
 
-async function readPrivateFile(root, target, maximumBytes) {
+async function readPrivateFile(root, target, maximumBytes, access = null) {
   const relative = path.relative(root, target);
   invariant(
     relative &&
@@ -160,6 +179,8 @@ async function readPrivateFile(root, target, maximumBytes) {
       "Export path has an invalid file type.",
       { status: 500 }
     );
+    invariant(sharedMetadataSafe(info, access, index !== parts.length - 1),
+      "OBJECT_PATH_UNSAFE", "Export object permissions are invalid.", { status: 500 });
   }
   const flags =
     fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0);
@@ -167,7 +188,7 @@ async function readPrivateFile(root, target, maximumBytes) {
   try {
     const info = await handle.stat();
     invariant(
-      info.isFile() && info.size <= maximumBytes,
+      info.isFile() && info.size <= maximumBytes && sharedMetadataSafe(info, access, false),
       "OBJECT_TOO_LARGE",
       "Export object exceeds its size limit.",
       { status: 500 }
@@ -180,8 +201,17 @@ async function readPrivateFile(root, target, maximumBytes) {
 
 export async function createPrivateExportObjectStore({
   root,
-  maximumBytes = MAXIMUM_EXPORT_BYTES
+  maximumBytes = MAXIMUM_EXPORT_BYTES,
+  sharedGroupId = null,
+  writerUids = null
 } = {}) {
+  const id = value => Number.isSafeInteger(value) && value > 0 && value <= 2_147_483_647;
+  invariant((sharedGroupId === null && writerUids === null) ||
+    (id(sharedGroupId) && Array.isArray(writerUids) && writerUids.length >= 1 &&
+      writerUids.length <= 2 && writerUids.every(id) && new Set(writerUids).size === writerUids.length &&
+      writerUids.includes(process.getuid?.())), "OBJECT_STORE_CONFIGURATION_ERROR",
+    "Shared exports require an exact private group and active writer identities.", { status: 500 });
+  const access = sharedGroupId === null ? null : { groupId: sharedGroupId, writerUids: [...writerUids] };
   invariant(
     typeof root === "string" &&
       path.isAbsolute(root) &&
@@ -198,17 +228,19 @@ export async function createPrivateExportObjectStore({
     "Export object size limit is invalid.",
     { status: 500 }
   );
-  await mkdir(root, { recursive: true, mode: 0o700 });
+  // Shared roots are provisioned by the operator with pinned identities. The
+  // public process cannot turn an arbitrary existing directory into a store.
+  if (access === null) await mkdir(root, { recursive: true, mode: 0o700 });
   const rootInfo = await lstat(root);
   invariant(
-    rootInfo.isDirectory() && !rootInfo.isSymbolicLink(),
+    rootInfo.isDirectory() && !rootInfo.isSymbolicLink() && sharedMetadataSafe(rootInfo, access, true),
     "OBJECT_STORE_CONFIGURATION_ERROR",
     "Export object root is unsafe.",
     { status: 500 }
   );
-  await chmod(root, 0o700);
+  if (access === null) await chmod(root, 0o700);
   const canonicalRoot = await realpath(root);
-  await ensurePrivateDirectory(canonicalRoot, path.join(canonicalRoot, "exports"));
+  await ensurePrivateDirectory(canonicalRoot, path.join(canonicalRoot, "exports"), access);
 
   function targetFor(key) {
     return path.join(canonicalRoot, ...validateKey(key).split("/"));
@@ -219,7 +251,8 @@ export async function createPrivateExportObjectStore({
     const bytes = await readPrivateFile(
       canonicalRoot,
       targetFor(selected),
-      maximumBytes
+      maximumBytes,
+      access
     );
     return {
       key: selected,
@@ -259,7 +292,7 @@ export async function createPrivateExportObjectStore({
       }
       const target = targetFor(key);
       const directory = path.dirname(target);
-      await ensurePrivateDirectory(canonicalRoot, directory);
+      await ensurePrivateDirectory(canonicalRoot, directory, access);
       try {
         const existing = await readByKey(key);
         invariant(
@@ -293,7 +326,13 @@ export async function createPrivateExportObjectStore({
             (fsConstants.O_NOFOLLOW ?? 0),
           0o600
         );
+        if (access !== null) {
+          const metadata = await handle.stat();
+          invariant(metadata.uid === process.getuid() && metadata.gid === access.groupId,
+            "OBJECT_PATH_UNSAFE", "Export object identity is invalid.", { status: 500 });
+        }
         await handle.writeFile(bytes);
+        if (access !== null) await handle.chmod(0o640);
         await handle.sync();
         await handle.close();
         handle = null;
@@ -310,7 +349,7 @@ export async function createPrivateExportObjectStore({
             { status: 409 }
           );
         }
-        await chmod(target, 0o600);
+        if (access === null) await chmod(target, 0o600);
         await syncDirectory(directory);
       } finally {
         if (handle) await handle.close().catch(() => {});
@@ -343,7 +382,7 @@ export async function createPrivateExportObjectStore({
       const selected = validateKey(key);
       const target = targetFor(selected);
       try {
-        await readPrivateFile(canonicalRoot, target, maximumBytes);
+        await readPrivateFile(canonicalRoot, target, maximumBytes, access);
         await unlink(target);
       } catch (error) {
         if (error?.code === "ENOENT") {

@@ -86,8 +86,8 @@ def main():
     if isinstance(x,dict):events.append(x)
    require(not any(x.get('errorCode') or x.get('event')=='sitesourcery.worker.failed' for x in events),'worker_cycle_failed')
    cycles={p:[x for x in events if _profile.worker_cycle_ok(x,p)] for p in PURPOSES if p!='export'}
-   hb,hm=regular(Path('/run/sitesourcery/export-worker-health.json'));health=json.loads(hb);age=int(time.time()*1000)-health.get('checkedAtMs',0)
-   fresh=hm['uid']==1000 and hm['mode']==0o600 and health.get('schema')=='sitesourcery.export-worker-health/v1' and health.get('purpose')=='export' and health.get('successful') is True and health.get('state')=='running' and health.get('cycle',0)>0 and any(x.get('event')=='sitesourcery.worker.export' and x.get('workerId')==health.get('workerId') and x.get('cycle')==health.get('cycle') and x.get('state')=='running' and not x.get('errorCode') for x in events) and 0<=age<120000
+   hb,hm=regular(Path(_profile.worker_health_binding(PROFILE)['path']));health=json.loads(hb);age=int(time.time()*1000)-health.get('checkedAtMs',0)
+   fresh=_profile.worker_health_metadata_ok(PROFILE,hm) and health.get('schema')=='sitesourcery.export-worker-health/v1' and health.get('purpose')=='export' and health.get('successful') is True and health.get('state')=='running' and health.get('cycle',0)>0 and any(x.get('event')=='sitesourcery.worker.export' and x.get('workerId')==health.get('workerId') and x.get('cycle')==health.get('cycle') and x.get('state')=='running' and not x.get('errorCode') for x in events) and 0<=age<120000
    if started and fresh and all(cycles.values()):break
    require(time.monotonic()<end,'fresh_configured_purpose_cycles_missing');time.sleep(1)
   cycleProof={p:{k:values[-1][k] for k in ['event','state','cycle','resultStatus','result','claimed','completed','manualReview','released'] if k in values[-1]} for p,values in cycles.items()}

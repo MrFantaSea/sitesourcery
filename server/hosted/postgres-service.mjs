@@ -5835,8 +5835,8 @@ function createCanonicalPostgresRuntime({
       return identity.completeRegistration(input);
     },
 
-    signIn(input) {
-      return identity.signIn(input);
+    signIn(input, requestContext) {
+      return identity.signIn(input, requestContext);
     },
 
     signOut(actor) {
@@ -6163,8 +6163,8 @@ function createCanonicalPostgresRuntime({
       }
     },
 
-    completeRecovery(input) {
-      return identity.completeRecovery(input.token, input.password);
+    completeRecovery(input, requestContext) {
+      return identity.completeRecovery(input.token, input.password, requestContext);
     },
 
     async me(actor) {

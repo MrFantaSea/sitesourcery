@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   chmod,
+  chown,
   lstat,
   mkdir,
   mkdtemp,
@@ -24,6 +25,38 @@ const identity = Object.freeze({
   exportId: "export_00000001",
   attempt: 1,
   fence: 1
+});
+
+test("shared exports preserve immutable bytes with exact writer/group custody and reject permission drift", async () => {
+  const root = await storeRoot();
+  try {
+    await chown(root, process.getuid(), process.getgid());
+    const sharedGroupId = (await lstat(root)).gid;
+    const options = { root, sharedGroupId, writerUids: [process.getuid()] };
+    await assert.rejects(createPrivateExportObjectStore(options), { code: "OBJECT_STORE_CONFIGURATION_ERROR" });
+    await chmod(root, 0o2770);
+    const store = await createPrivateExportObjectStore(options);
+    const bytes = Buffer.from("shared immutable export");
+    const saved = await store.put({ ...identity, bytes });
+    const file = path.join(root, saved.key), directory = path.dirname(file);
+    assert.equal((await lstat(directory)).mode & 0o7777, 0o2770);
+    assert.equal((await lstat(file)).mode & 0o7777, 0o640);
+    assert.equal((await lstat(file)).gid, sharedGroupId);
+    const reopened = await createPrivateExportObjectStore(options);
+    assert.equal((await reopened.put({ ...identity, bytes })).replay, true);
+    const get = () => reopened.get({ key: saved.key, expectedSha256: saved.sha256, expectedByteLength: saved.byteLength });
+    assert.deepEqual((await get()).bytes, bytes);
+    await chmod(file, 0o660);
+    await assert.rejects(get(), { code: "OBJECT_PATH_UNSAFE" });
+    await chmod(file, 0o640);
+    await chmod(directory, 0o2777);
+    await assert.rejects(get(), { code: "OBJECT_PATH_UNSAFE" });
+    await chmod(directory, 0o2770);
+    await assert.rejects(createPrivateExportObjectStore({ ...options, sharedGroupId: sharedGroupId + 1 }), { code: "OBJECT_STORE_CONFIGURATION_ERROR" });
+    await assert.rejects(createPrivateExportObjectStore({ ...options, writerUids: [process.getuid() + 1] }), { code: "OBJECT_STORE_CONFIGURATION_ERROR" });
+    await reopened.delete({ key: saved.key });
+    await assert.rejects(lstat(file), { code: "ENOENT" });
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
 
 test("private export store atomically persists and verifies exact tenant bytes", async () => {

@@ -81,11 +81,24 @@ def validate_profile(p):
     keys(p['owner'], 'userId organizationId', 'owner')
     for value in p['owner'].values():
         require(type(value) is str and re.fullmatch('[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}', value), 'invalid owner identity')
-    keys(p['runtime'], 'node nodeVersion sharpVersion', 'runtime')
+    keys(p['runtime'], 'node nodeVersion sharpVersion' +
+         (' workerHealth' if 'workerHealth' in p['runtime'] else ''), 'runtime')
     require(p['runtime']['node'].startswith('/home/mrfantasea/.local/share/sitesourcery-'), 'unreviewed runtime root')
     absolute(p['runtime']['node'])
     require(re.fullmatch('v[0-9]+[.][0-9]+[.][0-9]+', p['runtime']['nodeVersion'] or ''), 'invalid node version')
     require(re.fullmatch('[0-9]+[.][0-9]+[.][0-9]+', p['runtime']['sharpVersion'] or ''), 'invalid sharp version')
+    if 'workerHealth' in p['runtime']:
+        health = p['runtime']['workerHealth']
+        keys(health, 'path uid gid mode', 'worker health')
+        require(type(health['path']) is str and re.fullmatch(
+            r'/run/sitesourcery/[a-z][a-z0-9-]{0,31}/export-worker-health[.]json', health['path']),
+            'unreviewed worker health path')
+        for name in ['uid', 'gid']:
+            integer(health[name])
+            require(health[name] <= 2147483647 and health[name] != 1000,
+                    'worker health must use dedicated non-owner identities')
+        require(type(health['mode']) is int and health['mode'] == 0o640,
+                'worker health must be read-only to its API group')
     db = p['databaseIdentity']
     keys(db, 'db databaseOid username directory port sockets', 'database identity')
     require(db['db'] == 'sitesourcery_production' and db['username'] == 'mrfantasea'
@@ -104,6 +117,17 @@ def validate_profile(p):
     keys(p['baselineConfiguration'], '/etc/sitesourcery/hosted.env /etc/sitesourcery/workers.env /etc/sitesourcery/WORKERS_APPROVED', 'configuration baseline')
     for value in p['baselineConfiguration'].values(): digest(value)
     return p
+
+
+def worker_health_binding(p):
+    return p['runtime'].get('workerHealth', {
+        'path': '/run/sitesourcery/export-worker-health.json',
+        'uid': 1000, 'gid': 1000, 'mode': 0o600})
+
+
+def worker_health_metadata_ok(p, metadata):
+    expected = worker_health_binding(p)
+    return all(metadata.get(name) == expected[name] for name in ['uid', 'gid', 'mode'])
 
 
 def read_pinned(filename, sha256):

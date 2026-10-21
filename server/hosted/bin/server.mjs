@@ -276,6 +276,7 @@ import {
 import { ingressPolicyFromEnvironment } from "../ingress-policy.mjs";
 import { createPrivateExportObjectStore } from "../export-object-store.mjs";
 import { createExportWorkerHealthReader } from "../export-worker-health.mjs";
+import { exportStoreAccessFromEnvironment, workerHealthAccessFromEnvironment } from "../runtime-filesystem-policy.mjs";
 import {
   identityPepperConfigurationFromEnvironment
 } from "../identity-pepper-config.mjs";
@@ -880,6 +881,7 @@ async function start() {
     )
   });
   const exportStore = await createPrivateExportObjectStore({
+    ...exportStoreAccessFromEnvironment(process.env),
     root: path.resolve(
       process.env.SITESOURCERY_EXPORT_ROOT ??
         path.join(dataRoot, "private-exports")
@@ -1318,9 +1320,7 @@ async function start() {
     ),
     publicationPort,
     exportStore,
-    exportWorkerHealth: createExportWorkerHealthReader({
-      filePath: process.env.SITESOURCERY_EXPORT_WORKER_HEALTH_PATH
-    }),
+    exportWorkerHealth: createExportWorkerHealthReader(workerHealthAccessFromEnvironment(process.env)),
     recoveryMailPort,
     contactVault,
     paymentProvider: stripeComposition.adapter,

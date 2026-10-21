@@ -3,6 +3,7 @@ import { mkdtemp, readFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { PUBLIC_HTML_CONTENT_SECURITY_POLICY } from "../public-html-security-policy.mjs";
 
 import {
   FIN010_CANDIDATE_COMMIT,
@@ -218,6 +219,10 @@ test("FIN-010 writes new secret-bearing environments exclusively at mode 0600", 
 test("FIN-010 unit and wrapper bytes select only the exact candidate and keep workers held", () => {
   const wrapper = createFin010Wrapper();
   const caddy = createFin010Caddyfile();
+  assert.equal(caddy.split(`Content-Security-Policy "${PUBLIC_HTML_CONTENT_SECURITY_POLICY}"`).length, 2);
+  const publicBranch = caddy.slice(caddy.indexOf("  handle {\n    header {"));
+  assert.ok(publicBranch.includes(`Content-Security-Policy "${PUBLIC_HTML_CONTENT_SECURITY_POLICY}"`));
+  assert.ok(publicBranch.includes("handle_response @not_found"), "404 stays within the policy-bearing public branch");
   const tmpfiles = createFin010TmpfilesConfiguration();
   const units = createFin010UserUnitSet();
   assert.match(wrapper, new RegExp(FIN010_CANDIDATE_COMMIT, "u"));

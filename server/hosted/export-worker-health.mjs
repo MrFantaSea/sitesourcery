@@ -1,7 +1,8 @@
 import { constants } from "node:fs";
-import { lstat, open, rename, unlink, writeFile } from "node:fs/promises";
+import { lstat, open, rename, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { optionalRuntimeId } from "./runtime-filesystem-policy.mjs";
 
 export const EXPORT_WORKER_HEALTH_PATH = "/run/sitesourcery/export-worker-health.json";
 const SCHEMA = "sitesourcery.export-worker-health/v1";
@@ -34,9 +35,13 @@ function validRecord(value) {
 export function createExportWorkerHealthReader({
   filePath = EXPORT_WORKER_HEALTH_PATH,
   now = Date.now,
-  maxAgeMs = 120_000
+  maxAgeMs = 120_000,
+  ownerUid = process.getuid?.(),
+  sharedGroupId = null
 } = {}) {
   configuration(filePath, now);
+  optionalRuntimeId(ownerUid, "Worker health owner");
+  optionalRuntimeId(sharedGroupId, "Worker health reader group");
   if (!Number.isSafeInteger(maxAgeMs) || maxAgeMs < 100 || maxAgeMs > 120_000) {
     throw new TypeError("Export worker health expiry must be bounded by two minutes.");
   }
@@ -47,7 +52,9 @@ export function createExportWorkerHealthReader({
         file = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW);
         const metadata = await file.stat();
         if (!metadata.isFile() || metadata.size > MAX_BYTES ||
-            metadata.uid !== process.getuid() || (metadata.mode & 0o022) !== 0) {
+            metadata.uid !== ownerUid || (metadata.mode & 0o022) !== 0 ||
+            (sharedGroupId !== null && (metadata.gid !== sharedGroupId ||
+              (metadata.mode & 0o777) !== 0o640))) {
           return status(false, "EXPORT_WORKER_HEALTH_INVALID");
         }
         // Bound the read even if an unexpected writer grows the opened inode.
@@ -74,9 +81,16 @@ export function createExportWorkerHealthReader({
 
 export function createExportWorkerHealthRecorder({
   filePath = EXPORT_WORKER_HEALTH_PATH,
-  now = Date.now
+  now = Date.now,
+  ownerUid = process.getuid?.(),
+  sharedGroupId = null
 } = {}) {
   configuration(filePath, now);
+  optionalRuntimeId(ownerUid, "Worker health owner");
+  optionalRuntimeId(sharedGroupId, "Worker health reader group");
+  if (ownerUid !== process.getuid?.()) {
+    throw new TypeError("Worker health must be recorded by its configured owner.");
+  }
   let pending = null;
   let writing = null;
   let failure = null;
@@ -84,14 +98,28 @@ export function createExportWorkerHealthRecorder({
   async function write(value) {
     const parent = await lstat(path.dirname(filePath));
     if (!parent.isDirectory() || parent.isSymbolicLink() ||
-        parent.uid !== process.getuid() || (parent.mode & 0o022) !== 0) {
+        parent.uid !== ownerUid || (parent.mode & 0o022) !== 0 ||
+        (sharedGroupId !== null && (parent.gid !== sharedGroupId ||
+          (parent.mode & 0o2777) !== 0o2750))) {
       throw new Error("Export worker health directory must be private to its service user.");
     }
     const temporary = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    let handle;
     try {
-      await writeFile(temporary, JSON.stringify(value) + "\n", { flag: "wx", mode: 0o600 });
+      handle = await open(temporary, constants.O_WRONLY | constants.O_CREAT |
+        constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      const metadata = await handle.stat();
+      if (metadata.uid !== ownerUid || (sharedGroupId !== null && metadata.gid !== sharedGroupId)) {
+        throw new Error("Worker health file identity does not match its directory.");
+      }
+      await handle.writeFile(JSON.stringify(value) + "\n");
+      // fchmod is intentional: the service umask remains 0077 for every other
+      // file, while this non-secret receipt is readable by the API only.
+      await handle.chmod(sharedGroupId === null ? 0o600 : 0o640);
+      await handle.close(); handle = null;
       await rename(temporary, filePath);
     } finally {
+      await handle?.close().catch(() => {});
       await unlink(temporary).catch((error) => { if (error.code !== "ENOENT") throw error; });
     }
   }

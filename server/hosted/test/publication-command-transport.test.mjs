@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, lstat, mkdtemp, realpath, rm } from "node:fs/promises";
+import { access, chmod, chown, lstat, mkdtemp, realpath, rm } from "node:fs/promises";
 import { request as rawHttpRequest } from "node:http";
 import path from "node:path";
 import test from "node:test";
@@ -34,15 +34,20 @@ function proof(label = "one") {
   };
 }
 
-async function fixture(portOverrides = {}) {
+async function fixture(portOverrides = {}, shared = false) {
   const canonicalTemporaryRoot = await realpath("/tmp");
   const root = await mkdtemp(path.join(canonicalTemporaryRoot, "ss-pub-"));
+  if (shared) {
+    await chown(root, process.getuid(), process.getgid());
+    await chmod(root, 0o2750);
+  }
   const configuration = createPublicationCommandConfiguration({
     allowedSocketRoot: root,
     socketPath: path.join(root, "publication.sock"),
     token: Buffer.alloc(32, 7).toString("base64url"),
     maximumBodyBytes: 1024 * 1024,
-    deadlineMs: 2_000
+    deadlineMs: 2_000,
+    sharedGroupId: shared ? (await lstat(root)).gid : null
   });
   const calls = [];
   const publicationPort = {
@@ -85,6 +90,23 @@ async function fixture(portOverrides = {}) {
     }
   };
 }
+
+test("publication sharing admits only its pinned group and still requires the private token", async () => {
+  const selected = await fixture({}, true);
+  try {
+    const socket = await lstat(selected.configuration.socketPath);
+    assert.equal(socket.mode & 0o777, 0o660);
+    assert.equal(socket.gid, selected.configuration.sharedGroupId);
+    assert.equal((await selected.client.readiness()).ready, true);
+    const bad = createPublicationCommandClient({ configuration: {
+      ...selected.configuration, token: Buffer.alloc(32, 8).toString("base64url")
+    } });
+    assert.equal((await bad.readiness()).ready, false);
+    await selected.server.stop();
+    await chmod(selected.root, 0o2770);
+    await assert.rejects(selected.server.start(), { code: "PUBLICATION_COMMAND_SOCKET_UNSAFE" });
+  } finally { await selected.close(); }
+});
 
 test("publication server rejects a port without terminal erasure before starting", () => {
   const method = async () => {};

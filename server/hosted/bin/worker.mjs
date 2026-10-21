@@ -3,6 +3,7 @@ import "../assert-runtime.mjs";
 
 import { existsSync } from "node:fs";
 import { createExportWorkerHealthRecorder } from "../export-worker-health.mjs";
+import { workerHealthAccessFromEnvironment } from "../runtime-filesystem-policy.mjs";
 
 import {
   postgresBudgetConfigurationFromEnvironment
@@ -62,9 +63,7 @@ function waitForShutdown(signal) {
 
 const selected = workerConfigurationFromEnvironment(process.env);
 if (selected.configuration.purposes.includes("export")) {
-  exportHealth = createExportWorkerHealthRecorder({
-    filePath: process.env.SITESOURCERY_EXPORT_WORKER_HEALTH_PATH
-  });
+  exportHealth = createExportWorkerHealthRecorder(workerHealthAccessFromEnvironment(process.env));
   exportHealth.record({event: "sitesourcery.worker.export",
     workerId: `hosted-export-process-${process.pid}`, state: "held"});
   await exportHealth.flush().catch(() => write({

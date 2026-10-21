@@ -15,7 +15,7 @@ function fakePool(readinessRow = {}) {
   const client = {
     async query(text, values = []) {
       calls.push({ text, values });
-      return { rows: [], rowCount: 0 };
+      return { rows: [readinessRow], rowCount: 1 };
     },
     release() {
       calls.push({ text: "release", values: [] });
@@ -24,8 +24,7 @@ function fakePool(readinessRow = {}) {
   return {
     calls,
     async query(text, values = []) {
-      calls.push({ text, values });
-      return { rows: [readinessRow], rowCount: 1 };
+      throw new Error("Bare login query bypassed the transaction authority");
     },
     async connect() {
       calls.push({ text: "connect", values: [] });
@@ -151,6 +150,29 @@ test("canonical readiness rejects the pre-retention deletion schema", async () =
     pool: fakePool(readyRow({ commerce_v2_retained_purge_contract_ready: false }))
   });
   assert.deepEqual((await authority.readiness()).missing, ["commerce_v2_retained_purge_contract"]);
+});
+
+test("readiness and expected legal constants run only in bounded read-only service transactions", async () => {
+  const pool = fakePool(readyRow({ exact_documents_ready: true, exact_artifacts_ready: true, authority_digest_ready: true }));
+  const authority = createCanonicalPostgresAuthority({ pool });
+  assert.equal((await authority.readiness()).ready, true);
+  const first = pool.calls.map(call => call.text);
+  assert.equal(first[0], "connect");
+  assert.equal(first[1], "begin isolation level SERIALIZABLE read only");
+  assert.equal(first[2], "set local role service_role");
+  assert.match(first[3], /set_config\('statement_timeout'/u);
+  assert.match(first[4], /current_database\(\)/u);
+  assert.deepEqual(first.slice(-2), ["commit", "release"]);
+  const expected = {
+    documents: ["privacy", "product", "website"].map(kind => ({ kind, version: "fixture", contentDigest: "a".repeat(64), contentUri: "https://example.test/legal", effectiveAt: "2026-10-21T00:00:00Z" })),
+    documentBindings: [1,2,3].map(value => ({ id: `00000000-0000-4000-8000-${String(value).padStart(12, "0")}` })),
+    artifactBindings: [{ artifactUri: "https://example.test/privacy", artifactSha256: "a".repeat(64), byteCount: 1, mediaType: "text/html" }, {}, { artifactUri: "https://example.test/terms", artifactSha256: "a".repeat(64), byteCount: 1, mediaType: "text/html" }],
+    schema: "fixture", authorityDigest: "b".repeat(64)
+  };
+  assert.equal(await authority.projectLegalAuthorityMatches(expected), true);
+  assert.equal(pool.calls.filter(call => call.text === "set local role service_role").length, 3);
+  assert.equal(pool.calls.filter(call => call.text === "begin isolation level SERIALIZABLE read only").length, 3);
+  assert.equal(authority.budgetReadiness().telemetry.activeApiTransactions, 0);
 });
 
 test("canonical readiness rejects missing migrations and any ss_hosted shadow", async () => {

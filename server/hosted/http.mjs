@@ -2639,7 +2639,7 @@ export function createHostedApi(
           headers["Set-Cookie"] =
             sessionCookie(sessionToken);
         } else if (method === "POST" && pathname === "/api/v1/auth/sessions") {
-          const signedIn = await service.signIn(write);
+          const signedIn = await service.signIn(write, identityContext);
           const sessionToken = signedIn?.sessionToken;
           invariant(
             typeof sessionToken === "string" &&
@@ -2667,7 +2667,7 @@ export function createHostedApi(
           method === "POST" &&
           pathname === "/api/v1/auth/recovery/complete"
         ) {
-          result = await service.completeRecovery(write);
+          result = await service.completeRecovery(write, identityContext);
         } else if (
           method === "POST" &&
           pathname === ENGAGEMENT_HTTP_ROUTES.claim.path

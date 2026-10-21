@@ -112,6 +112,14 @@ function createContext({
         emailSent: false
       };
     },
+    async signIn(input, requestContext) {
+      calls.identityContexts.push(["sign-in", requestContext]);
+      return { sessionToken: "synthetic-session-token-1234567890123456789", user: ACTOR };
+    },
+    async completeRecovery(input, requestContext) {
+      calls.identityContexts.push(["recovery-complete", requestContext]);
+      return { completed: true };
+    },
     async me(actor) {
       return { user: actor };
     },
@@ -339,6 +347,25 @@ function writeRequest(path, {
     ...(body === undefined ? {} : { body: JSON.stringify(body) })
   });
 }
+
+test("sign-in and recovery completion use trusted ingress identity rather than body fields", async () => {
+  const context = createContext();
+  for (const [path, action, expectedStatus] of [
+    ["/api/v1/auth/sessions", "sign-in", 201],
+    ["/api/v1/auth/recovery/complete", "recovery-complete", 200]
+  ]) {
+    const response = await context.api.fetch(writeRequest(path, {
+      cookie: `ss_csrf=${CSRF}`,
+      body: { email: "fixture@example.test", password: "fixture password only", token: "t".repeat(43), clientAddress: "attacker-selected", throttleKey: "caller-bypass" }
+    }), { clientAddress: "203.0.113.17" });
+    assert.equal(response.status, expectedStatus);
+    assert.deepEqual(context.calls.identityContexts.at(-1), [action, { clientAddress: "203.0.113.17" }]);
+  }
+  await context.api.fetch(writeRequest("/api/v1/auth/sessions", {
+    cookie: `ss_csrf=${CSRF}`, body: { email: "fixture@example.test", password: "fixture password only" }
+  }), { clientAddress: "x".repeat(81) });
+  assert.deepEqual(context.calls.identityContexts.at(-1), ["sign-in", { clientAddress: "unavailable" }]);
+});
 
 test("CSRF bootstrap is same-origin, stable across tabs, and required before writes", async () => {
   const context = createContext();

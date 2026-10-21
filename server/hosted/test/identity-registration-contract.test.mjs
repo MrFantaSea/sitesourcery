@@ -747,10 +747,10 @@ test("registration stages no active identity until exact token activation, then 
         call.values[0] === "sign_in"
     )
     .map((call) => call.values[1]);
-  assert.equal(signInRateDigests.length, 2);
+  assert.equal(signInRateDigests.length, 6);
   assert.equal(
     new Set(signInRateDigests).size,
-    1
+    3
   );
   assert.match(
     signInRateDigests[0],

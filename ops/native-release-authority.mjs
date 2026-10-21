@@ -26,6 +26,11 @@ const MODE_EVIDENCE = {
 };
 const hash = b => createHash('sha256').update(b).digest('hex');
 const execute = promisify(execFile);
+const WORKER_SOURCE_FIELDS = Object.freeze({
+  'server/hosted/bin/server.mjs': 'apiEntrypoint',
+  'server/hosted/bin/worker.mjs': 'workerEntrypoint',
+  'server/hosted/publication-command-transport.mjs': 'publicationCommandTransport',
+});
 function exactKeys(value, keys, label) {
   assert(value && typeof value === 'object' && !Array.isArray(value), label + ' must be an object');
   assert.deepEqual(Object.keys(value).sort(), [...keys].sort(), label + ' has missing or unknown fields');
@@ -38,13 +43,73 @@ function positive(value, label) { assert(Number.isSafeInteger(value) && value > 
 function reference(ref, label) {
   exactKeys(ref, ['path', 'sha256'], label); absolute(ref.path, label + '.path'); hex(ref.sha256, 64, label + '.sha256');
 }
+function validateWorkerSourceDelta(delta) {
+  exactKeys(delta, ['beforeSha256', 'afterSha256', 'files'], 'worker source delta');
+  hex(delta.beforeSha256, 64, 'prior worker manifest');
+  hex(delta.afterSha256, 64, 'candidate worker manifest');
+  assert.notEqual(delta.beforeSha256, delta.afterSha256, 'Worker delta must change source');
+  assert(Array.isArray(delta.files) && delta.files.length > 0 && delta.files.length <= 3);
+  const paths = delta.files.map(file => {
+    exactKeys(file, ['path', 'before', 'after'], 'worker source file');
+    assert(Object.hasOwn(WORKER_SOURCE_FIELDS, file.path), 'Unapproved worker source path');
+    for (const side of ['before', 'after']) {
+      exactKeys(file[side], ['sha256', 'byteCount'], 'worker source bytes');
+      hex(file[side].sha256, 64, 'worker source digest');
+      positive(file[side].byteCount, 'worker source byte count');
+    }
+    assert.notEqual(file.before.sha256, file.after.sha256, 'Worker source must change');
+    return file.path;
+  });
+  assert.deepEqual(paths, [...new Set(paths)].sort(), 'Worker delta must be unique and sorted');
+}
+
+// Both manifests have already passed origin-seal validation and staged byte checks.
+// A same-schema source correction may replace only these exact reviewed files;
+// unit/env/renderer/tenant bytes and worker contract semantics remain unchanged.
+export function assertSameSchemaWorkerChange(prior, candidate, delta) {
+  if (delta === undefined) {
+    assert.deepEqual(candidate, prior, 'Unexpected worker change without pinned source delta');
+    return;
+  }
+  validateWorkerSourceDelta(delta);
+  assert.equal(prior.sha256, delta.beforeSha256, 'Prior worker manifest drift');
+  assert.equal(candidate.sha256, delta.afterSha256, 'Candidate worker manifest drift');
+  assert.deepEqual(Object.keys(candidate).sort(), Object.keys(prior).sort());
+  assert.equal(candidate.domain, prior.domain);
+  assert.equal(candidate.fileCount, prior.fileCount);
+  assert.deepEqual(candidate.files.map(f => f.path), prior.files.map(f => f.path), 'Worker inventory changed');
+  const changes = [];
+  const contract = structuredClone(prior.contract);
+  for (let index = 0; index < prior.files.length; index++) {
+    const before = prior.files[index], after = candidate.files[index];
+    if (before.sha256 === after.sha256) {
+      assert.deepEqual(after, before, 'Unchanged worker metadata drift');
+      continue;
+    }
+    assert(Object.hasOwn(WORKER_SOURCE_FIELDS, before.path), 'Unapproved worker source change');
+    const field = WORKER_SOURCE_FIELDS[before.path];
+    assert.deepEqual(contract[field], { path: before.path, sha256: before.sha256 });
+    contract[field] = { path: after.path, sha256: after.sha256 };
+    changes.push({ path: before.path,
+      before: { sha256: before.sha256, byteCount: before.byteCount },
+      after: { sha256: after.sha256, byteCount: after.byteCount } });
+  }
+  assert.deepEqual(changes, delta.files, 'Worker source delta must match every changed byte binding');
+  assert.equal(candidate.byteCount, candidate.files.reduce((sum, file) => sum + file.byteCount, 0));
+  assert.deepEqual(candidate.contract, contract, 'Worker contract semantics changed');
+}
 export function validateNativeReleaseInput(a, now = Date.now()) {
   exactKeys(a, ['schema', 'mode', 'candidate', 'tree', 'priorCandidate', 'priorTree',
     'workflowCommit', 'workflowRun', 'workflowAttempt', 'emissionApproved', 'activationAllowed',
     'issuedAt', 'expiresAt', 'helperRepository', 'outputDirectory', 'databaseIdentity',
-    'expectedSchema', 'holdMarker', 'holdDropin', 'baseline', 'evidence'], 'input');
+    'expectedSchema', 'holdMarker', 'holdDropin', 'baseline', 'evidence',
+    ...(Object.hasOwn(a, 'workerSourceDelta') ? ['workerSourceDelta'] : [])], 'input');
   assert.equal(a.schema, 'sitesourcery.native-release-authority-input/v1');
   assert(Object.hasOwn(MODE_EVIDENCE, a.mode), 'Unknown release mode');
+  if (Object.hasOwn(a, 'workerSourceDelta')) {
+    assert.equal(a.mode, 'presentation-only', 'Worker source delta is only for same-schema releases');
+    validateWorkerSourceDelta(a.workerSourceDelta);
+  }
   for (const k of ['candidate', 'tree', 'priorCandidate', 'priorTree', 'workflowCommit']) hex(a[k], 40, k);
   assert.notEqual(a.candidate, a.priorCandidate, 'Candidate must be a successor');
   for (const k of ['workflowRun', 'workflowAttempt']) assert.match(a[k] ?? '', /^[1-9][0-9]*$/, k);
@@ -170,8 +235,9 @@ export async function constructNativeReleaseAuthority(inputRef, { now = Date.now
  assert.equal(seal.migration.sha256,target.manifestSha256);
  if(a.mode==='presentation-only') assert.deepEqual(seal.migration,prior.migration,'Presentation mode cannot change any migration bytes');
  else assert.deepEqual(seal.migration.files.slice(0,target.beforeCount),prior.migration.files,'Only appended migrations allowed');
- for(const key of a.mode==='presentation-only'?['units','environmentSchema','worker','legal','ingress']:['units','legal','ingress'])
+ for(const key of a.mode==='presentation-only'?['units','environmentSchema','legal','ingress']:['units','legal','ingress'])
    assert.equal(seal[key].sha256,prior[key].sha256,'Unexpected source template change '+key);
+ if(a.mode==='presentation-only') assertSameSchemaWorkerChange(prior.worker,seal.worker,a.workerSourceDelta);
  const native=v.nativeObservation;held(native,a,now);
  for(const [name,key]of [['origin-seal.json','priorOriginSeal'],['origin-installed-readback.json','priorInstalledReadback'],['final-release-epoch-v2.json','priorEpoch']])
    assert.equal(native.files['/etc/sitesourcery/'+name].sha256,hash(bytes[key]));
@@ -269,6 +335,7 @@ export async function constructNativeReleaseAuthority(inputRef, { now = Date.now
    candidate:C,tree:T,priorCandidate:OLD,migrationCount:target.afterCount,activationAllowed:false,nativeInstallationPending:true,
    databaseMigrationPerformedByThisCommand:false,providerRequests:0,serviceCommands:0,input:inputRef,
    evidence:a.evidence,files:Object.fromEntries(Object.entries(output).map(([name,b])=>[name,{sha256:hash(b),bytes:b.length}]))};
+ if(a.workerSourceDelta) receipt.workerSourceDelta=structuredClone(a.workerSourceDelta);
  Object.assign(receipt,{[productionKey]:a.evidence.productionReceipt,
    productionMigrationInputs:a.evidence.productionMigrationInputs,
    actualNativeObservation:a.evidence.nativeObservation,configurationObservation:a.evidence.configurationObservation});
