@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "c78bb4f23dae60d55d0b4d644e8cb45d8c145c70",
+    "treeSha": "a545ca0fd6a702965586ebad30833f12f32481d5",
+    "baseCommitSha": "fdddc9974eccd24ac362b790c02e9b4477d7ac23"
+  },
+  "provenanceSha256": "7af0e902a7dcbf8eb3290cd69c664e50214e93b630ab0819a5169eb11b8d9b02",
+  "ledger": {
+    "previousByteCount": 65593,
+    "previousSha256": "e580f3691901ba1032c20c2058cc1ced0ca4565c336dd32d763397e4b7a21037",
+    "appendSha256": "7d02aa1002791136561009a8b5c18d478e65a67afdaccbea068fc02d7da2b87e"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/public-availability.test.mjs",
+      "exitCode": 0,
+      "logSha256": "619014f11e9d793336a7221a532c882dc331b7dd3be8ca2bc2910d7995005ec2"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "320466c828f5ed3c9679866fbcc77585a06d48253f4722a9114f092dcd770e37"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root reviewed source-input target preparation; isolated bounded review confirms exact four release-identity fields, unchanged immutable V4 pin/workflow/probes/validators, canonical current V7 validation, and actual final epoch/readiness/runtime gates before merge. No full security audit."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only fixed public observer JSON expectation changes. No application source, SQL, query, schema or database contract changes; retained actual database proofs remain applicable."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Passing full harness closed owned localhost servers, browser and temporary profiles through its checked cleanup path. No test database, customer account or provider transaction was created. Initial sandbox failure and one unchanged-source approved rerun are both retained."
+  }
+}

@@ -833,3 +833,11 @@ three subsequent full security checks remain separate acceptance boundaries.
 
 - [Canonical provenance](../ci-provenance/e345c6bba0dc9b614aacf64cac98fc7aa4fd6218/provenance.md)
 - [Machine-readable proof](../ci-provenance/e345c6bba0dc9b614aacf64cac98fc7aa4fd6218/proof.json)
+
+
+## Public observer release identity — 2026-10-20
+
+Implementation `c78bb4f23dae60d55d0b4d644e8cb45d8c145c70`, tree `a545ca0fd6a702965586ebad30833f12f32481d5`, protected control base `fdddc9974eccd24ac362b790c02e9b4477d7ac23`. Only four expected release-identity fields change; the immutable V4 privacy probe and all five checks remain. Six observer fixtures and full npm2688passed/37existing optionalPGskips/0failed,24routes×6widths, passed. Initial sandbox localhost EPERM failure is retained; unchanged source passed with approved localhost access. Complete122-file hosted artifact remains identical. No deployment, live dispatch or full security check; merge waits for exact real epoch/public/runtime acceptance.
+
+- [Provenance](../ci-provenance/c78bb4f23dae60d55d0b4d644e8cb45d8c145c70/provenance.md)
+- [Machine proof](../ci-provenance/c78bb4f23dae60d55d0b4d644e8cb45d8c145c70/proof.json)
