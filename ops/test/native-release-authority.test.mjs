@@ -10,6 +10,7 @@ import {
   constructNativeReleaseAuthority,
   emitNativeReleaseAuthority,
   assertSameSchemaWorkerChange,
+  assertHistoricalProductionDatabaseIdentity,
 } from '../native-release-authority.mjs';
 
 const NOW = Date.parse('2026-10-20T18:10:00Z');
@@ -277,4 +278,55 @@ test('migration input connects only to the maintenance endpoint while retaining 
       assert.throws(() => execute({ ...database, host: badHost }));
     }
   }
+});
+
+
+test('historical identity bridge accepts only the isolated presentation endpoint transition and preserves exact identities', () => {
+  const legacy = input().databaseIdentity;
+  const current = { ...legacy, sockets: legacy.sockets + ',/run/sitesourcery-database' };
+  const isolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+  const original = structuredClone(legacy);
+  for (const mode of ['presentation-only', 'schema-changing']) {
+    assert.doesNotThrow(() => assertHistoricalProductionDatabaseIdentity(legacy, structuredClone(legacy), mode));
+    assert.doesNotThrow(() => assertHistoricalProductionDatabaseIdentity(current, structuredClone(current), mode, isolation));
+  }
+  assert.doesNotThrow(() => assertHistoricalProductionDatabaseIdentity(legacy, current, 'presentation-only', isolation));
+  assert.deepEqual(legacy, original, 'Historical receipt identity must not be rewritten');
+  assert.equal(current.sockets, original.sockets + ',/run/sitesourcery-database');
+});
+
+test('historical identity bridge refuses core drift, unknown fields, wrong mode and absent or malformed isolation', () => {
+  const legacy = input().databaseIdentity;
+  const current = { ...legacy, sockets: legacy.sockets + ',/run/sitesourcery-database' };
+  const isolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+  for (const field of ['db', 'databaseOid', 'username', 'directory', 'port']) {
+    assert.throws(() => assertHistoricalProductionDatabaseIdentity({ ...legacy, [field]: legacy[field] + '-drift' }, current, 'presentation-only', isolation), /core identity/);
+  }
+  for (const side of ['historical', 'current']) {
+    const h = structuredClone(legacy), c = structuredClone(current), target = side === 'historical' ? h : c;
+    target.unreviewed = true;
+    assert.throws(() => assertHistoricalProductionDatabaseIdentity(h, c, 'presentation-only', isolation), /unknown fields/);
+    delete target.unreviewed; delete target.databaseOid;
+    assert.throws(() => assertHistoricalProductionDatabaseIdentity(h, c, 'presentation-only', isolation), /unknown fields/);
+  }
+  assert.throws(() => assertHistoricalProductionDatabaseIdentity(legacy, current, 'schema-changing', isolation), /presentation-only/);
+  assert.throws(() => assertHistoricalProductionDatabaseIdentity(legacy, current, 'unreviewed', isolation), /Unknown release mode/);
+  for (const missing of [undefined, null, {}, { ...isolation, priorAcceptanceSha256: 'bad' }, { ...isolation, extra: true }]) {
+    assert.throws(() => assertHistoricalProductionDatabaseIdentity(legacy, current, 'presentation-only', missing));
+  }
+});
+
+test('historical identity bridge never accepts arbitrary sockets or downgrades a current isolated identity', () => {
+  const legacy = input().databaseIdentity;
+  const current = { ...legacy, sockets: legacy.sockets + ',/run/sitesourcery-database' };
+  const isolation = { policySha256: sha('1'), priorAcceptanceSha256: sha('2') };
+  const variants = ['/run/sitesourcery-database', '/tmp/socket', current.sockets + ',/tmp/extra',
+    '/run/sitesourcery-database,' + legacy.sockets, legacy.sockets + ', /run/sitesourcery-database'];
+  for (const sockets of variants) {
+    assert.throws(() => assertHistoricalProductionDatabaseIdentity({ ...legacy, sockets }, current, 'presentation-only', isolation));
+    assert.throws(() => assertHistoricalProductionDatabaseIdentity({ ...legacy, sockets }, { ...current, sockets }, 'presentation-only', isolation));
+  }
+  assert.throws(() => assertHistoricalProductionDatabaseIdentity(current, legacy, 'presentation-only'));
+  assert.throws(() => assertHistoricalProductionDatabaseIdentity(current, current, 'presentation-only'));
+  assert.throws(() => assertHistoricalProductionDatabaseIdentity(legacy, legacy, 'presentation-only', isolation));
 });

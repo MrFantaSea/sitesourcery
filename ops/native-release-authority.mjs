@@ -98,6 +98,30 @@ export function assertSameSchemaWorkerChange(prior, candidate, delta) {
   assert.equal(candidate.byteCount, candidate.files.reduce((sum, file) => sum + file.byteCount, 0));
   assert.deepEqual(candidate.contract, contract, 'Worker contract semantics changed');
 }
+// The current held isolation policy/marker must already be checked by held().
+// Only immutable historical migration provenance gets this endpoint bridge;
+// current schema/runtime observations still require their exact full identity.
+export function assertHistoricalProductionDatabaseIdentity(historical, current, mode, runtimeIsolation) {
+  const fields = ['db', 'databaseOid', 'username', 'directory', 'port', 'sockets'];
+  exactKeys(historical, fields, 'historical production database identity');
+  exactKeys(current, fields, 'current database identity');
+  assert(['presentation-only', 'schema-changing'].includes(mode), 'Unknown release mode');
+  const legacy = '/run/user/1000/sitesourcery-production-postgresql';
+  const dual = legacy + ',/run/sitesourcery-database';
+  const isolated = runtimeIsolation !== undefined;
+  if (isolated) {
+    exactKeys(runtimeIsolation, ['policySha256', 'priorAcceptanceSha256'], 'runtime isolation');
+    for (const value of Object.values(runtimeIsolation)) hex(value, 64, 'isolation digest');
+  }
+  assert.equal(current.sockets, isolated ? dual : legacy, 'Current exact socket identity required');
+  assert.deepEqual(fields.filter(k => k !== 'sockets').map(k => historical[k]),
+    fields.filter(k => k !== 'sockets').map(k => current[k]), 'Historical database core identity changed');
+  if (historical.sockets === current.sockets) return;
+  assert.equal(mode, 'presentation-only', 'Historical socket bridge requires presentation-only mode');
+  assert(isolated, 'Historical socket bridge requires current accepted isolation');
+  assert.equal(historical.sockets, legacy, 'Only the exact historical maintenance socket is bridgeable');
+  assert.equal(current.sockets, dual, 'Only the exact isolated dual socket identity is bridgeable');
+}
 export function validateNativeReleaseInput(a, now = Date.now()) {
   exactKeys(a, ['schema', 'mode', 'candidate', 'tree', 'priorCandidate', 'priorTree',
     'workflowCommit', 'workflowRun', 'workflowAttempt', 'emissionApproved', 'activationAllowed',
@@ -261,7 +285,7 @@ export async function constructNativeReleaseAuthority(inputRef, { now = Date.now
  for(const [name,key]of [['origin-seal.json','priorOriginSeal'],['origin-installed-readback.json','priorInstalledReadback'],['final-release-epoch-v2.json','priorEpoch']])
    assert.equal(native.files['/etc/sitesourcery/'+name].sha256,hash(bytes[key]));
  const prod=v.productionReceipt,migrationInput=v.productionMigrationInputs;
- assert.equal(prod.host,'FantaSeaLand');assert.deepEqual(prod.databaseIdentity,a.databaseIdentity);
+ assert.equal(prod.host,'FantaSeaLand');assertHistoricalProductionDatabaseIdentity(prod.databaseIdentity,a.databaseIdentity,a.mode,a.runtimeIsolation);
  assert.deepEqual(migrationInput.candidate,prod.candidate);
  assert.equal(migrationInput.expectedDatabaseOid,prod.databaseIdentity.databaseOid);
  assert.equal(migrationInput.migration.sha256,measured.migration);

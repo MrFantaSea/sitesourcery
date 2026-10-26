@@ -873,3 +873,8 @@ Implementation `4409aaa7fd1b14e866ef78243a2d5124d84afc15`, tree `9bd7423d3e8e0c7
 
 - [Canonical provenance](../ci-provenance/4409aaa7fd1b14e866ef78243a2d5124d84afc15/provenance.md)
 - [Machine-readable proof](../ci-provenance/4409aaa7fd1b14e866ef78243a2d5124d84afc15/proof.json)
+
+
+## Desiderata social-services homepage link — 2026-10-26
+
+Implementation `9b01c7eec9325eb559312f256c8b063e58e22a2b` / tree `1725183637d5a57542d88fbae03635eed1b619c1` from protected `c812515834273ab7db10771cb2cd7e1e636e7c20` adds the approved company-service cross-link and a narrowly verified historical socket-provenance bridge for isolated presentation releases. Full2712-pass npm/browser qualification and independent bridge review are recorded in [provenance](../ci-provenance/9b01c7eec9325eb559312f256c8b063e58e22a2b/provenance.md) and [proof](../ci-provenance/9b01c7eec9325eb559312f256c8b063e58e22a2b/proof.json). Schema110, provider modes and historical receipts remain unchanged; fresh native release gates are still required.
