@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "9b01c7eec9325eb559312f256c8b063e58e22a2b",
+    "treeSha": "1725183637d5a57542d88fbae03635eed1b619c1",
+    "baseCommitSha": "c812515834273ab7db10771cb2cd7e1e636e7c20"
+  },
+  "provenanceSha256": "c407595f8b8a685d223390295a3616cc57a38afb03dfc877af20fb63dc38e6cf",
+  "ledger": {
+    "previousByteCount": 68737,
+    "previousSha256": "3db12e9ca6c4b2a2b74269c94ae1d07fd3014c7f3d6d5d82391d4ea8e6091e10",
+    "appendSha256": "6c7b173f51055c34fcce59165db9b10a5f361c49a3ec900fccc4935091183ca3"
+  },
+  "proofs": {
+    "focused": {
+      "command": "env TMPDIR=/private/tmp python3 -B ops/native-release/test-contracts.py -v",
+      "exitCode": 0,
+      "logSha256": "ff4db5e92a4c3c5e66188180f2c3a3a4f26d9fc107213d49a86f3b34ae66b97e"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "452000a3b00db0d74f4bc15204345a97f6761bb59163fb61f390e350f091462a"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root accepted exact six-file scope; independent bridge review verified genuine historical identity, strict durable fields and current held/isolation/schema checks. Owner approved unchanged homepage copy; desktop and390px views passed."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "No application query, migration, database contract or worker behavior changed. Historical genuine migration receipt and current isolated endpoint are distinguished without modifying data; original schema110 provenance is retained. Fresh real unchanged-schema observation remains mandatory before native install."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Passing test harness closed its owned loopback servers, reviewed browser and temporary profiles. Separate read-only owner-review previews remain intentionally active pending approved publication; no database, provider or customer fixture created."
+  }
+}
