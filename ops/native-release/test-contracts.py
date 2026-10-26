@@ -950,5 +950,94 @@ class Contracts(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'unregistered'):isolation.systemd_properties(unit,names)
 
 
+class HistoricalProductionIdentityBridge(unittest.TestCase):
+    def test_historical_identity_bridge_acceptance_and_immutable_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,_=load_adapter('install-presentation',isolated_profile(),Path(directory).resolve())
+            current=copy.deepcopy(module.PROFILE['databaseIdentity']);legacy=copy.deepcopy(current)
+            legacy['sockets']='/run/user/1000/sitesourcery-production-postgresql'
+            original=copy.deepcopy(legacy);binding=module.PROFILE['runtime']['isolation']
+            with patch.object(module.subprocess,'check_output',side_effect=AssertionError('No native command')):
+                for mode in ('presentation-only','schema-changing'):
+                    module.assert_historical_production_database_identity(legacy,copy.deepcopy(legacy),mode)
+                    module.assert_historical_production_database_identity(current,copy.deepcopy(current),mode,binding)
+                module.assert_historical_production_database_identity(legacy,current,'presentation-only',binding)
+            self.assertEqual(legacy,original)
+            self.assertEqual(current['sockets'],original['sockets']+',/run/sitesourcery-database')
+
+    def test_historical_identity_bridge_rejects_core_unknown_mode_and_missing_isolation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,_=load_adapter('install-presentation',isolated_profile(),Path(directory).resolve())
+            current=copy.deepcopy(module.PROFILE['databaseIdentity']);legacy=copy.deepcopy(current)
+            legacy['sockets']='/run/user/1000/sitesourcery-production-postgresql';binding=module.PROFILE['runtime']['isolation']
+            for field in ('db','databaseOid','username','directory','port'):
+                changed=copy.deepcopy(legacy);changed[field]+='-drift'
+                with self.assertRaisesRegex(RuntimeError,'core identity'):
+                    module.assert_historical_production_database_identity(changed,current,'presentation-only',binding)
+            for side in ('historical','current'):
+                h=copy.deepcopy(legacy);c=copy.deepcopy(current);target=h if side=='historical' else c
+                target['unreviewed']=True
+                with self.assertRaisesRegex(RuntimeError,'fields changed'):module.assert_historical_production_database_identity(h,c,'presentation-only',binding)
+                del target['unreviewed'];del target['databaseOid']
+                with self.assertRaisesRegex(RuntimeError,'fields changed'):module.assert_historical_production_database_identity(h,c,'presentation-only',binding)
+            for mode in ('schema-changing','unreviewed'):
+                with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(legacy,current,mode,binding)
+            for missing in (None,{},dict(binding,priorAcceptanceSha256='bad'),dict(binding,extra=True)):
+                with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(legacy,current,'presentation-only',missing)
+
+    def test_historical_identity_bridge_rejects_arbitrary_sockets_and_isolation_downgrade(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,_=load_adapter('install-presentation',isolated_profile(),Path(directory).resolve())
+            current=copy.deepcopy(module.PROFILE['databaseIdentity']);legacy=copy.deepcopy(current)
+            legacy['sockets']='/run/user/1000/sitesourcery-production-postgresql';binding=module.PROFILE['runtime']['isolation']
+            variants=['/run/sitesourcery-database','/tmp/socket',current['sockets']+',/tmp/extra',
+                      '/run/sitesourcery-database,'+legacy['sockets'],legacy['sockets']+', /run/sitesourcery-database']
+            for sockets in variants:
+                with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(dict(legacy,sockets=sockets),current,'presentation-only',binding)
+                with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(dict(legacy,sockets=sockets),dict(current,sockets=sockets),'presentation-only',binding)
+            with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(current,legacy,'presentation-only')
+            with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(current,current,'presentation-only')
+            with self.assertRaises(RuntimeError):module.assert_historical_production_database_identity(legacy,legacy,'presentation-only',binding)
+
+    def test_historical_identity_bridge_in_receipts_keeps_current_schema_exact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p=isolated_profile();module,_=load_adapter('install-presentation',p,Path(directory).resolve())
+            current=copy.deepcopy(p['databaseIdentity']);legacy=dict(current,sockets='/run/user/1000/sitesourcery-production-postgresql')
+            refs={name:{'path':'/fixture/'+name+'.json','sha256':str(i)*64} for i,name in enumerate(
+                ['productionReceipt','productionMigrationInputs','priorInstallationReceipt','schemaObservation','authorityReceipt','nativeObservationBinding','nativeObservation'],1)}
+            migration=[{'path':'fixture.sql'}];now=datetime.datetime.now(datetime.timezone.utc)
+            prod={'migrationCount':module.COUNT,'tableCount':module.TABLES,'databaseIdentity':legacy,
+                  'schemaSha256':'a'*64,'retainedRowsAndFinancialTotalsPreserved':True,'allExistingFieldsCompared':True,
+                  'postgresRestarted':False,'candidate':{'commitSha':p['priorCandidate']},'appliedMigrations':migration}
+            mi={'schemas':{str(module.COUNT):'a'*64},'candidate':prod['candidate'],'delta':migration,'migration':{'sha256':'b'*64}}
+            files={str(module.CONFIG/name):{'sha256':'9'*64} for name in module.AUTH}
+            installed={'state':'installed_held','candidate':p['priorCandidate'],'tree':p['priorTree'],
+                       'migrationCount':module.COUNT,'historicalProductionReceipt':refs['productionReceipt'],'nativeFiles':files}
+            schema={'schema':'sitesourcery.same-schema-readback/v1','host':'FantaSeaLand','readOnly':True,'databaseWrites':False,
+                    'source':{'commitSha':p['priorCandidate'],'treeSha':p['priorTree']},'databaseIdentity':current,
+                    'schemaSha256':'a'*64,'tableCount':module.TABLES,'migrationCount':module.COUNT,
+                    'migrationManifestSha256':'b'*64,'at':now.isoformat()}
+            authority={'state':'held_same_schema_successor_authority_constructed','candidate':p['candidate'],'tree':p['tree'],
+                       'priorCandidate':p['priorCandidate'],'activationAllowed':False,'nativeInstallationPending':True,
+                       'migrationCount':module.COUNT,'databaseMigrationPerformedByThisCommand':False,
+                       'runtimeIsolation':p['runtime']['isolation'],**{name:refs[name] for name in
+                        ['productionReceipt','productionMigrationInputs','priorInstallationReceipt','schemaObservation']},
+                       'actualNativeObservation':refs['nativeObservation']}
+            binding={'candidate':p['candidate'],'actualNativeFiles':files,'productionReceipt':refs['productionReceipt'],
+                     'actualSchemaObservation':refs['schemaObservation'],'nativeInstallationPending':True}
+            values=dict(productionReceipt=prod,productionMigrationInputs=mi,priorInstallationReceipt=installed,
+                        schemaObservation=schema,authorityReceipt=authority,nativeObservationBinding=binding)
+            lookup={refs[name]['path']:value for name,value in values.items()}
+            a={**refs,'candidate':p['candidate'],'tree':p['tree'],'priorCandidate':p['priorCandidate'],
+               'priorTree':p['priorTree'],'databaseIdentity':current}
+            with patch.object(module,'pinned',side_effect=lambda ref:lookup[ref['path']]),patch.object(module.subprocess,'check_output',side_effect=AssertionError('No native command')):
+                got=module.validate_receipts(a,{'files':files},{'files':files},now)
+                self.assertIs(got[0],authority);self.assertIs(got[1],schema)
+                self.assertEqual(prod['databaseIdentity'],legacy)
+                schema['databaseIdentity']=legacy
+                with self.assertRaisesRegex(RuntimeError,'Actual schema/identity mismatch'):
+                    module.validate_receipts(a,{'files':files},{'files':files},now)
+
+
 if __name__ == '__main__':
     unittest.main()

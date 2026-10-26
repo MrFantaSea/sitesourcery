@@ -248,10 +248,28 @@ def migration_link(installed):
  require(len(links)==1,'One genuine prior migration link required')
  return links[0]
 
+def assert_historical_production_database_identity(historical,current,mode,runtime_isolation=None):
+ # Caller retains current held isolation/marker checks before validate_receipts.
+ # Only historical provenance may use the exact old maintenance-only endpoint.
+ fields={'db','databaseOid','username','directory','port','sockets'}
+ require(type(historical) is dict and set(historical)==fields,'Historical database identity fields changed')
+ require(type(current) is dict and set(current)==fields,'Current database identity fields changed')
+ require(mode in ('presentation-only','schema-changing'),'Unknown release mode')
+ legacy='/run/user/1000/sitesourcery-production-postgresql';dual=legacy+',/run/sitesourcery-database'
+ isolated=runtime_isolation is not None
+ if isolated:
+  require(type(runtime_isolation) is dict and set(runtime_isolation)=={'policySha256','priorAcceptanceSha256'} and all(type(v) is str and re.fullmatch('[a-f0-9]{64}',v) for v in runtime_isolation.values()),'Current accepted isolation binding required')
+ require(current['sockets']==(dual if isolated else legacy),'Current exact socket identity required')
+ require(all(historical[k]==current[k] for k in fields-{'sockets'}),'Historical database core identity changed')
+ if historical['sockets']==current['sockets']:return
+ require(mode=='presentation-only' and isolated,'Historical socket bridge requires isolated presentation-only mode')
+ require(historical['sockets']==legacy and current['sockets']==dual,'Only exact historical maintenance and current isolated dual sockets are bridgeable')
+
 def validate_receipts(a,before,expected,n):
  prod=pinned(a['productionReceipt']);mi=pinned(a['productionMigrationInputs']);installed=pinned(a['priorInstallationReceipt']);schema=pinned(a['schemaObservation']);authority=pinned(a['authorityReceipt']);binding=pinned(a['nativeObservationBinding'])
  require(prod['migrationCount']==COUNT and prod['tableCount']==TABLES,'Wrong historical prior receipt')
- require(prod['databaseIdentity']==a['databaseIdentity'] and prod['schemaSha256']==mi['schemas'][str(COUNT)],'Historical identity/schema mismatch')
+ assert_historical_production_database_identity(prod['databaseIdentity'],a['databaseIdentity'],PROFILE['mode'],PROFILE['runtime'].get('isolation'))
+ require(prod['schemaSha256']==mi['schemas'][str(COUNT)],'Historical schema mismatch')
  require(prod['retainedRowsAndFinancialTotalsPreserved'] is True and prod['allExistingFieldsCompared'] is True and prod['postgresRestarted'] is False,'Historical provenance invalid')
  require(mi['candidate']==prod['candidate'] and prod['appliedMigrations']==mi['delta'] and len(mi['delta'])>0,'Historical migration mismatch')
  require(mi['migration']['sha256']==PROFILE['expectedSchema']['manifestSha256'],'Inventory changed')

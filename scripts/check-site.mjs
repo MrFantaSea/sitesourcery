@@ -73,6 +73,7 @@ const CANONICAL_EXEMPT = new Set(["404.html", "flyer.html"]);
  * a decision someone has to make on purpose.
  */
 const ALLOWED_EXTERNAL = new Set([
+  "https://desideratalabs.guru/social-media.html", // owner-requested company social/livestream services link
   "https://sconesourcery.com/", // real founder-owned venture, cited as proof on /work/
   "https://daarx.money/", // second founder-owned venture, cited as proof on /work/
   "https://developers.cloudflare.com/1.1.1.1/privacy/public-dns-resolver/", // exact resolver privacy notice cited by /legal/privacy/
