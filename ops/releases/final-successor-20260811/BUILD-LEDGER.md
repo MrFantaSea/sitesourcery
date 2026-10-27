@@ -883,3 +883,11 @@ Implementation `9b01c7eec9325eb559312f256c8b063e58e22a2b` / tree `1725183637d5a5
 ## Build-tool custody compatibility — 2026-10-26
 
 Implementation `f42f708d8933334afa0fd80f1c84e1a1d967f08c` preserves accepted isolation metadata when deriving successor build-tool recovery manifests. Prior native attempt refused before installation and prior951 was restored; new exact-source qualification and finite release boundaries remain mandatory. Source proof: [provenance.md](../ci-provenance/f42f708d8933334afa0fd80f1c84e1a1d967f08c/provenance.md), [proof.json](../ci-provenance/f42f708d8933334afa0fd80f1c84e1a1d967f08c/proof.json).
+
+
+## Public observer for the live Desiderata link — 2026-10-27
+
+Implementation `222b36e22ba304376441d6c3b95c8e5ed17b53fc`, tree `000939b12f4552772be840cab16c073ee2b1096d`, base `b5eddcc89faa7602d714813e3b9dabe71af58789` aligns only four outside-observer target values with actual installed C2. Focused6 and real public5 checks pass; full npm2712passed/38existing optionalPGskips/0failed and24routes×6widths pass. Original umask fixture failure retained; unchanged source qualified with expected fixture permissions. All122qualified hosted files and V4privacy pin remain unchanged. Installed application stays C2; no redeploy or provider effect.
+
+- [Canonical provenance](../ci-provenance/222b36e22ba304376441d6c3b95c8e5ed17b53fc/provenance.md)
+- [Machine-readable proof](../ci-provenance/222b36e22ba304376441d6c3b95c8e5ed17b53fc/proof.json)

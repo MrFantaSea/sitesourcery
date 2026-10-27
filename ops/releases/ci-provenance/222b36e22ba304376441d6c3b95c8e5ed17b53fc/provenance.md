@@ -1,0 +1,13 @@
+# Align public availability with the installed company link — October 27, 2026
+
+Implementation `222b36e22ba304376441d6c3b95c8e5ed17b53fc`, tree `000939b12f4552772be840cab16c073ee2b1096d`, protected base `b5eddcc89faa7602d714813e3b9dabe71af58789`.
+
+Only four expected release-identity values in `ops/public-availability-target.json` change to the genuinely installed and public-ready C2: commit `0aa09ee4b9f78133ef29a6051ce185693bbd9500`, tree `8b8f2d2068c98215bbfd5432f186e71504b87dd6`, epoch `company-social-link-retry-20261027`, binding `ddd17c7a8e7e0467ac8bb1bec37251b71448afd3530410f51ad0afcd8e780bdf`. Schema110 and latest migration remain unchanged. The complete V4 privacy artifact block and all five existing checks are unchanged. No application/runtime or provider deployment follows from this observer update.
+
+Six focused observer fixtures passed; log SHA256 `ea09ed68e34965be51736691ee7bbb696d6e5177a045687d67d8445741fda9ed`. The real read-only public observer passed all five checks at15:44:03Z; log SHA256 `3c5d263fb7313762044350d07049d5006a422b9d9b1c1397dd1fbe43462030fe`. This observer's immutable V4 content pin is distinct from the runtime epoch's V7 privacy artifact; each retains its existing contract.
+
+Full `npm test` passed2712 tests,38 existing optional PostgreSQL skips, zero failures, and24 hosted routes at six required widths. Log SHA256 `399f2d8b01fd106608dae34122de3cf34e23e844412de8e7a3f7521178778a19`. The initial run's restore-mode fixture failed because the root wrapper imposed umask077; its original failure/log is retained unchanged. The unchanged implementation passed with fixture umask022. Private evidence logs remained0600. No source or production permission was relaxed.
+
+Independent implementation review SHA256 `2dd3566fa36313970c086861319958eaefabd14da8ac2d24a7c0ba601b2a5c45` accepted the exact four-value delta and matched actual native/public C2 identity. Complete rebuilt122-file hosted output equals every qualified stage packet file; boundary proof SHA256 `8cf4d91c37109d8422d50f8dad401a6f0751cc4a2324b8af9763d66a80473369`. No application, schema, query, helper, workflow or mode changes occur. Existing real PostgreSQL proofs remain applicable; optional skips are not new database passes.
+
+The passing harness exited and closed its owned temporary browser/loopback fixtures; tracked source stayed clean. No customer, database or provider fixture was created. The existing public-repository standard-runner target-change trigger will observe the deployed release after protected merge. No manual workflow dispatch, paid resource or alert email is introduced. GitHub scheduling remains best effort.

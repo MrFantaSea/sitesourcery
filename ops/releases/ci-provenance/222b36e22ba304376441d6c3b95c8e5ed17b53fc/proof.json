@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "222b36e22ba304376441d6c3b95c8e5ed17b53fc",
+    "treeSha": "000939b12f4552772be840cab16c073ee2b1096d",
+    "baseCommitSha": "b5eddcc89faa7602d714813e3b9dabe71af58789"
+  },
+  "provenanceSha256": "99583973c5e4d8ab8c13ada122553577d1d87fb7122d7d0b9f44cf9af323cbd5",
+  "ledger": {
+    "previousByteCount": 70024,
+    "previousSha256": "87004ebf9436f04dda13a48152dfb198c7200351201457dba61692ba984edeb4",
+    "appendSha256": "3d181519f2010fd88b8b74f62bd262b6a7b36ca1c9257cac479e03792f18ad23"
+  },
+  "proofs": {
+    "focused": {
+      "command": "node --test ops/test/public-availability.test.mjs",
+      "exitCode": 0,
+      "logSha256": "ea09ed68e34965be51736691ee7bbb696d6e5177a045687d67d8445741fda9ed"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "399f2d8b01fd106608dae34122de3cf34e23e844412de8e7a3f7521178778a19"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Independent review accepted only4 expected-release values matched to installed/public C2; privacy block unchanged. Real5public checks pass;122qualified hosted files byte-identical. Original umask fixture failure retained; unchanged source passed full qualification with fixture umask022."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only outside availability expected identity changes. No SQL, schema, query, role or database-contract delta; unchanged genuine PostgreSQL proofs retained."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Passing harness exited through checked browser/loopback fixture cleanup; tracked source remained clean. No new database, customer or provider fixture created."
+  }
+}
