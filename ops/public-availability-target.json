@@ -3,10 +3,10 @@
   "hostedRelease": {
     "schema": "sitesourcery.hosted-release-identity/v2",
     "state": "verified_held",
-    "epochId": "security-hardening-20261021",
-    "bindingSha256": "e21564c29314f4b6d2a8b4db077a2265f6cf2fa928734e0ec4f6f509631741ed",
-    "candidateCommitSha": "951581c937f908f3afd26cb73cf9a32778bba2a3",
-    "candidateTreeSha": "433bc8e044a59f0142c38ab1aefca1e37dcf2346",
+    "epochId": "company-social-link-retry-20261027",
+    "bindingSha256": "ddd17c7a8e7e0467ac8bb1bec37251b71448afd3530410f51ad0afcd8e780bdf",
+    "candidateCommitSha": "0aa09ee4b9f78133ef29a6051ce185693bbd9500",
+    "candidateTreeSha": "8b8f2d2068c98215bbfd5432f186e71504b87dd6",
     "migrationCount": 110,
     "latestMigration": "202610190001_care_catalog_notifications.sql"
   },
