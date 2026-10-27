@@ -1,0 +1,38 @@
+{
+  "schema": "sitesourcery.candidate-provenance/v1",
+  "implementation": {
+    "commitSha": "f42f708d8933334afa0fd80f1c84e1a1d967f08c",
+    "treeSha": "087864ed7b6cd436c688c8e533c6546cb7786123",
+    "baseCommitSha": "a24de50e9f84b6c7eba53f2b906ce6901ecf9d88"
+  },
+  "provenanceSha256": "24525e7d3e8af16705b12699a54f5ca4f1ee7214fb867c9ee3a0797fd14d1e87",
+  "ledger": {
+    "previousByteCount": 69476,
+    "previousSha256": "cbb186a716fd493f55439a94fdd895f1101b2d99bbf68d6a423fa37b77f945da",
+    "appendSha256": "fa1b7239187d2eebbd224449969cd99c87103aa71d9aa73b7674497420852c04"
+  },
+  "proofs": {
+    "focused": {
+      "command": "python3 -I -B ops/native-release/test-contracts.py IsolatedBuildToolManifest -v",
+      "exitCode": 0,
+      "logSha256": "26c8b5daee010e0a006a67f23a0c18e78b728aa5302cc2cf33f6e785f31dbbd9"
+    },
+    "fullNpm": {
+      "command": "npm test",
+      "exitCode": 0,
+      "logSha256": "d927aa5c5606857d938ab34721f1dfa607564991c3308c205c679c2b6066f43c"
+    },
+    "review": {
+      "status": "passed",
+      "summary": "Root and independent reviewer accepted exact two-file patch; genuine accepted/staged custody and strict refusal cases passed. Approved public HTML is byte-identical."
+    },
+    "postgres": {
+      "status": "not_applicable",
+      "reason": "Only presentation operator recovery-manifest metadata and tests change. No query, migration, schema, worker or provider behavior changes. Prior genuine PostgreSQL provenance retained; new real unchanged-schema readback remains mandatory before native installation."
+    }
+  },
+  "disposables": {
+    "status": "removed",
+    "summary": "Successful harness closed owned loopback servers, reviewed browser and disposable profiles. Separate read-only owner-review previews intentionally retained for approved publication; no provider/customer fixture created."
+  }
+}

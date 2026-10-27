@@ -171,18 +171,52 @@ console.log(JSON.stringify({databaseIdentity:actual,schemaSha256:snapshot.schema
  require(v['databaseIdentity']['db']=='sitesourcery_production' and v['databaseIdentity']['databaseOid']==PROFILE['databaseIdentity']['databaseOid'],'Unexpected production database')
  return {'schema':'sitesourcery.same-schema-readback/v1','host':'FantaSeaLand','startedAt':started,'at':now(),'readOnly':True,'databaseWrites':False,'source':seal['source'],'migrationCount':COUNT,'migrationManifestSha256':seal['migration']['sha256'],**v}
 
-def links_manifest(old,new,old_links):
+def planned_build_tool_target(legacy,actual,path,plan,prior_custody):
+ require(plan['after']==_isolation.planned_custody(plan['before']),'Build-tool ACL plan changed')
+ require(prior_custody==_isolation.planned_custody(prior_custody),'Prior build-tool ACL policy not installed')
+ before={e['path']:e for e in plan['before']['entries']}[path]
+ after={e['path']:e for e in plan['after']['entries']}[path]
+ prior={e['path']:e for e in prior_custody['entries']}[path]
+ require(before==prior and before['type']==after['type']=='file','Build-tool accepted/staged custody drift')
+ require(int(before['mode'],8)&0o100 and int(after['mode'],8)&0o100,'Build-tool executable custody required')
+ def metadata(e):return {'mode':int(e['mode'],8),'uid':e['uid'],'gid':e['gid'],'size':e['byteCount'],'sha256':e['sha256']}
+ expected=metadata(prior)
+ require(legacy==expected or (expected['mode']==0o750 and legacy==dict(expected,mode=0o700)),'Build-tool historical target drift')
+ require(actual==metadata(before),'Build-tool staged target drift')
+ return metadata(after)
+
+def links_manifest(old,new,old_links,isolation_plan=None):
  v=json.loads(raw(old_links));require(v['candidate']==old.name,'Unexpected prior link manifest');d=new/'node_modules/.bin'
  require(sorted(os.listdir(d))==['html-validate','semver'],'Unexpected build-tool entries')
+ require((isolation_plan is not None)==_isolation.enabled(PROFILE),'Build-tool isolation plan required')
+ if isolation_plan is not None:
+  require(PROFILE['mode']=='presentation-only' and set(isolation_plan)=={'before','after','prior'},'Unexpected build-tool isolation plan')
+  _,accepted,_=_isolation.native_context(PROFILE,PROFILE['runtime']['isolation']['priorAcceptanceSha256'])
+  require((accepted['candidate'],accepted['tree'])==(old.name,PROFILE['priorTree']) and
+          isolation_plan['prior']['binding']['sha256']==PROFILE['runtime']['isolation']['priorAcceptanceSha256'] and
+          isolation_plan['prior']['custodySha256']==accepted['custody']['custodySha256'],'Build-tool isolation predecessor changed')
  v=json.loads(json.dumps(v).replace(old.name,new.name).replace('c'+old.name[:8],'c'+new.name[:8]))
  def m(p,hashed=False):
   s=p.lstat();x={'mode':stat.S_IMODE(s.st_mode),'uid':s.st_uid,'gid':s.st_gid,'inode':s.st_ino,'size':s.st_size}
   if hashed:x.pop('inode');x['sha256']=sha(raw(p))
   return x
  original=d.lstat();v['originalBinDirectory'].update(path=str(d),mode=stat.S_IMODE(original.st_mode),uid=original.st_uid,gid=original.st_gid,inode=original.st_ino)
+ if isolation_plan is not None:
+  entries=[{e['path']:e for e in value['entries']}['node_modules/.bin'] for value in
+           (accepted['custody'],isolation_plan['before'],isolation_plan['after'])]
+  prior_bin,before_bin,after_bin=entries
+  require(prior_bin==before_bin and before_bin['type']==after_bin['type']=='directory' and
+          all(v['originalBinDirectory'][k]==(int(before_bin[k],8) if k=='mode' else before_bin[k]) for k in ('mode','uid','gid')),'Build-tool directory custody drift')
+  v['originalBinDirectory'].update({k:int(after_bin[k],8) if k=='mode' else after_bin[k] for k in ('mode','uid','gid')})
+  instruction='Require restored node_modules/.bin to be a real empty directory. Restore its observed UID/GID1000 and mode0700 from originalBinDirectory before recreating the links.'
+  v['restore']['order']=[s.replace(instruction,'Require restored node_modules/.bin to be a real empty directory. Restore its recorded UID/GID and mode from originalBinDirectory before recreating the links.') for s in v['restore']['order']]
  for e in v['omittedLinks']:
   p=new/e['path'];require(p.is_symlink() and os.readlink(p)==e['linkTarget'],'Build-tool link drift');target=p.resolve(strict=True)
-  require(target==new/e['targetPath'] and target.is_relative_to(new),'Escaping build-tool link');require(m(target,True)==e['target'],'Build-tool target drift');e['symlink']=m(p)
+  require(target==new/e['targetPath'] and target.is_relative_to(new),'Escaping build-tool link')
+  actual=m(target,True)
+  if isolation_plan is None:require(actual==e['target'],'Build-tool target drift')
+  else:e['target']=planned_build_tool_target(e['target'],actual,e['targetPath'],isolation_plan,accepted['custody'])
+  e['symlink']=m(p)
  v['originalReadbackAt']=now();return (json.dumps(v,indent=2)+'\n').encode()
 
 def rollback_held(a,new,prior,new_links):
@@ -360,7 +394,7 @@ def main():
    expected_units[unit]['WorkingDirectory']=str(new)
   binding=_isolation.successor_binding(PROFILE,a['linuxStageReceipt'],isolation_plan,payloads)
   payloads[str(_isolation.MARKER)]=_isolation.encoded(binding)
- payloads[str(new_links)]=links_manifest(prior,new,old_links)
+ payloads[str(new_links)]=links_manifest(prior,new,old_links,isolation_plan)
  OUT=Path(PATHS['installation']);require(not os.path.lexists(OUT) and not os.path.lexists(new_links),'Prior attempt evidence exists; no replay')
  _profile.current_window(a);os.umask(0o077);OUT.mkdir(mode=0o700);(OUT/'originals').mkdir(mode=0o700)
  ps=(BASE/'current').lstat();require(stat.S_ISLNK(ps.st_mode),'Current pointer is not a symlink')
