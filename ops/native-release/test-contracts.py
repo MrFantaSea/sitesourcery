@@ -1039,5 +1039,122 @@ class HistoricalProductionIdentityBridge(unittest.TestCase):
                     module.validate_receipts(a,{'files':files},{'files':files},now)
 
 
+class IsolatedBuildToolManifest(unittest.TestCase):
+    def target_case(self):
+        accepted=isolation.planned_custody(code_custody())
+        plan={'before':copy.deepcopy(accepted),'after':copy.deepcopy(accepted),'prior':{}}
+        entry=next(e for e in accepted['entries'] if e['path']=='bin/main')
+        actual={'mode':int(entry['mode'],8),'uid':1000,'gid':1000,'size':entry['byteCount'],'sha256':entry['sha256']}
+        return accepted,plan,actual,dict(actual,mode=0o700)
+
+    def test_planned_target_accepts_exact_historical_acl_transition_without_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,_=load_adapter('install-presentation',isolated_profile(),Path(directory).resolve())
+            accepted,plan,actual,legacy=self.target_case();original=copy.deepcopy((accepted,plan,actual,legacy))
+            with patch.object(module.subprocess,'check_output',side_effect=AssertionError('No native command')):
+                for prior in (legacy,actual):
+                    result=module.planned_build_tool_target(prior,actual,'bin/main',plan,accepted)
+                    self.assertEqual(result,dict(actual,mode=0o750))
+            self.assertEqual((accepted,plan,actual,legacy),original)
+
+    def test_planned_target_rejects_historical_or_actual_metadata_drift(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,_=load_adapter('install-presentation',isolated_profile(),Path(directory).resolve())
+            accepted,plan,actual,legacy=self.target_case()
+            changes={'mode':0o740,'uid':1001,'gid':1001,'size':4,'sha256':'f'*64,'extra':True}
+            for field,value in changes.items():
+                for side in ('legacy','actual'):
+                    left=copy.deepcopy(legacy);right=copy.deepcopy(actual)
+                    (left if side=='legacy' else right)[field]=value
+                    with self.subTest(field=field,side=side), self.assertRaises(RuntimeError):
+                        module.planned_build_tool_target(left,right,'bin/main',plan,accepted)
+            for mode in (0o600,0o710,0o755,0o770):
+                with self.subTest(mode=mode), self.assertRaises(RuntimeError):
+                    module.planned_build_tool_target(dict(legacy,mode=mode),actual,'bin/main',plan,accepted)
+
+    def test_planned_target_rejects_unsupported_acl_mode_content_and_execution_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module,_=load_adapter('install-presentation',isolated_profile(),Path(directory).resolve())
+            accepted,plan,actual,legacy=self.target_case()
+            for field,value in [('sha256','f'*64),('mode','0o770'),('uid',1001),('gid',1001),('extra',True)]:
+                changed=copy.deepcopy(plan)
+                target=next(e for e in changed['before']['entries'] if e['path']=='bin/main');target[field]=value
+                rehash_custody(changed['before'])
+                with self.subTest(field=field), self.assertRaises((RuntimeError,ValueError)):
+                    module.planned_build_tool_target(legacy,actual,'bin/main',changed,accepted)
+            changed=copy.deepcopy(plan)
+            target=next(e for e in changed['before']['entries'] if e['path']=='bin/main')
+            next(e for e in target['acl']['entries'] if e[0]==8)[1]=4;rehash_custody(changed['before'])
+            with self.assertRaisesRegex(ValueError,'code group permissions'):
+                module.planned_build_tool_target(legacy,actual,'bin/main',changed,accepted)
+            changed=copy.deepcopy(plan);changed['after']['entries'][-2]['mode']='0o755';rehash_custody(changed['after'])
+            with self.assertRaisesRegex(RuntimeError,'ACL plan'):
+                module.planned_build_tool_target(legacy,actual,'bin/main',changed,accepted)
+            # A non-executable regular file cannot become an omitted build-tool target.
+            data=next(e for e in accepted['entries'] if e['path']=='data')
+            metadata={'mode':int(data['mode'],8),'uid':1000,'gid':1000,'size':data['byteCount'],'sha256':data['sha256']}
+            with self.assertRaisesRegex(RuntimeError,'executable custody'):
+                module.planned_build_tool_target(metadata,metadata,'data',plan,accepted)
+
+    def manifest_case(self,directory,isolated=True):
+        p=isolated_profile() if isolated else profile();module,_=load_adapter('install-presentation',p,directory)
+        old=directory/p['priorCandidate'];new=directory/p['candidate'];d=new/'node_modules/.bin';d.mkdir(parents=True)
+        mode=0o750 if isolated else 0o700;d.chmod(mode);links=[];entries=[copy.deepcopy(code_custody()['entries'][0])]
+        entries.append(dict(copy.deepcopy(entries[0]),path='node_modules/.bin'))
+        for name,target in [('html-validate','html-validate/bin/html-validate.mjs'),('semver','semver/bin/semver.js')]:
+            path=new/'node_modules'/target;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'abc');path.chmod(mode)
+            (d/name).symlink_to('../'+target);info=path.lstat()
+            meta={'mode':0o700,'uid':1000 if isolated else info.st_uid,'gid':1000 if isolated else info.st_gid,'size':3,'sha256':isolation.sha(b'abc')}
+            links.append({'path':'node_modules/.bin/'+name,'linkTarget':'../'+target,'targetPath':'node_modules/'+target,'target':meta})
+            file=copy.deepcopy(code_custody()['entries'][2]);file['path']='node_modules/'+target;entries.append(file)
+        accepted=isolation.planned_custody(rehash_custody({'schema':'sitesourcery.release-custody/v1','entries':sorted(entries,key=lambda e:e['path'])}))
+        plan={'before':copy.deepcopy(accepted),'after':copy.deepcopy(accepted),'prior':{'binding':{'sha256':p['runtime'].get('isolation',{}).get('priorAcceptanceSha256')},'custodySha256':accepted['custodySha256']}}
+        instruction='Require restored node_modules/.bin to be a real empty directory. Restore its observed UID/GID1000 and mode0700 from originalBinDirectory before recreating the links.'
+        manifest={'candidate':old.name,'originalBinDirectory':{},'omittedLinks':links,'restore':{'order':[instruction]}}
+        old_links=directory/'old-links.json';write_json(old_links,manifest)
+        binding={'candidate':old.name,'tree':p['priorTree'],'custody':accepted}
+        return module,old,new,old_links,plan,binding
+
+    def call_manifest(self,case,plan=True):
+        module,old,new,old_links,isolation_plan,binding=case;original_lstat=Path.lstat
+        def owner(path,*args,**kwargs):
+            info=original_lstat(path,*args,**kwargs)
+            if module._isolation.enabled(module.PROFILE) and path.is_relative_to(new):
+                values=list(info);values[4]=values[5]=1000;return os.stat_result(values)
+            return info
+        with patch.object(Path,'lstat',owner), patch.object(module._isolation,'native_context',return_value=(None,binding,'2'*64)), patch.object(module.subprocess,'check_output',side_effect=AssertionError('No native command')):
+            return module.links_manifest(old,new,old_links,isolation_plan if plan else None)
+
+    def test_manifest_records_planned_targets_and_directory_preserving_legacy_bytes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            case=self.manifest_case(Path(directory).resolve());prior=case[3].read_bytes();result=json.loads(self.call_manifest(case))
+            self.assertEqual(case[3].read_bytes(),prior)
+            self.assertEqual(result['candidate'],case[2].name)
+            self.assertEqual(result['originalBinDirectory']['mode'],0o750)
+            self.assertNotIn('mode0700',result['restore']['order'][0])
+            for entry in result['omittedLinks']:
+                self.assertEqual(entry['target'],{'mode':0o750,'uid':1000,'gid':1000,'size':3,'sha256':isolation.sha(b'abc')})
+            self.assertFalse((case[2]/'new-links.json').exists())
+
+    def test_manifest_requires_isolation_plan_and_rejects_extra_entries_and_escaping_links(self):
+        with tempfile.TemporaryDirectory() as directory:
+            case=self.manifest_case(Path(directory).resolve())
+            with self.assertRaisesRegex(RuntimeError,'isolation plan required'):self.call_manifest(case,plan=False)
+            d=case[2]/'node_modules/.bin';(d/'extra').write_bytes(b'extra')
+            with self.assertRaisesRegex(RuntimeError,'Unexpected build-tool entries'):self.call_manifest(case)
+            (d/'extra').unlink();link=d/'semver';link.unlink();link.symlink_to('../../../outside');(case[2].parent/'outside').write_bytes(b'abc')
+            manifest=json.loads(case[3].read_bytes());manifest['omittedLinks'][1].update(linkTarget='../../../outside',targetPath='../outside');write_json(case[3],manifest)
+            with self.assertRaisesRegex(RuntimeError,'Escaping build-tool link'):self.call_manifest(case)
+
+    def test_nonisolated_manifest_keeps_exact_legacy_target_comparison(self):
+        with tempfile.TemporaryDirectory() as directory:
+            case=self.manifest_case(Path(directory).resolve(),isolated=False)
+            result=json.loads(self.call_manifest(case,plan=False))
+            self.assertTrue(all(e['target']['mode']==0o700 for e in result['omittedLinks']))
+            with self.assertRaisesRegex(RuntimeError,'isolation plan required'):self.call_manifest(case)
+            (case[2]/'node_modules/semver/bin/semver.js').chmod(0o750)
+            with self.assertRaisesRegex(RuntimeError,'Build-tool target drift'):self.call_manifest(case,plan=False)
+
+
 if __name__ == '__main__':
     unittest.main()
